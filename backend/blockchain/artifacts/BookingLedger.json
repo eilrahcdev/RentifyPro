@@ -1,0 +1,253 @@
+{
+  "contractName": "BookingLedger",
+  "sourceName": "BookingLedger.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "AmountRequired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BatchTooLarge",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BookingAlreadyRecorded",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BookingHashRequired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BookingKeyRequired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EmptyBatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidPaymentStatus",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MismatchedArrayLength",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyOwner",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "RenterHashRequired",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "count",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "recorder",
+          "type": "address"
+        }
+      ],
+      "name": "BookingProofBatchRecorded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "bookingKey",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "bookingHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "renterIdHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint96",
+          "name": "amountInCents",
+          "type": "uint96"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "paymentStatusCode",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "recorder",
+          "type": "address"
+        }
+      ],
+      "name": "BookingProofRecorded",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookingKey",
+          "type": "bytes32"
+        }
+      ],
+      "name": "proofExists",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookingKey",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "bookingHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "renterIdHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint96",
+          "name": "amountInCents",
+          "type": "uint96"
+        },
+        {
+          "internalType": "uint8",
+          "name": "paymentStatusCode",
+          "type": "uint8"
+        }
+      ],
+      "name": "recordBookingProof",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "bookingKeys",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "bookingHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "renterIdHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "uint96[]",
+          "name": "amountInCents",
+          "type": "uint96[]"
+        },
+        {
+          "internalType": "uint8[]",
+          "name": "paymentStatusCodes",
+          "type": "uint8[]"
+        }
+      ],
+      "name": "recordBookingProofBatch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalRecorded",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60a0604052348015600e575f80fd5b503360805260805161075361003f5f395f8181605e0152818161010a015281816102e6015261034501526107535ff3fe608060405234801561000f575f80fd5b5060043610610055575f3560e01c80638da5cb5b14610059578063be7963021461009d578063c5ea7327146100b2578063d08bbc26146100c5578063d938d202146100dc575b5f80fd5b6100807f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020015b60405180910390f35b6100b06100ab366004610547565b6100ff565b005b6100b06100c036600461066d565b6102db565b6100ce60015481565b604051908152602001610094565b6100ef6100ea3660046106b9565b610339565b6040519015158152602001610094565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461014857604051635fc483c560e01b815260040160405180910390fd5b885f81900361016a5760405163c2e5347d60e01b815260040160405180910390fd5b60c881111561018c576040516305beb17160e11b815260040160405180910390fd5b808814158061019b5750808614155b806101a65750808414155b806101b15750808214155b156101cf576040516373d4509160e11b815260040160405180910390fd5b425f5b828110156102845761027c8d8d838181106101ef576101ef6106d0565b905060200201358c8c84818110610208576102086106d0565b905060200201358b8b85818110610221576102216106d0565b905060200201358a8a8681811061023a5761023a6106d0565b905060200201602081019061024f91906106e4565b898987818110610261576102616106d0565b90506020020160208101906102769190610704565b8761039b565b6001016101d2565b506040805183815267ffffffffffffffff83166020820152338183015290517f89ab1ca890226389351a624b277b8cb77b4e4e593291837ca80512866afe1efe9181900360600190a1505050505050505050505050565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461032457604051635fc483c560e01b815260040160405180910390fd5b61033285858585854261039b565b5050505050565b5f336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461038357604051635fc483c560e01b815260040160405180910390fd5b505f8181526020819052604090205460ff165b919050565b856103b95760405163043e594f60e51b815260040160405180910390fd5b846103d75760405163c945328560e01b815260040160405180910390fd5b836103f5576040516361a9cfaf60e01b815260040160405180910390fd5b826001600160601b03165f0361041e5760405163d43e607560e01b815260040160405180910390fd5b600460ff83161115610443576040516311d8c9dd60e11b815260040160405180910390fd5b5f8681526020819052604090205460ff161561047257604051630989e4cb60e01b815260040160405180910390fd5b5f86815260208181526040918290208054600160ff19909116811790915580548101905581516001600160601b038616815260ff85169181019190915267ffffffffffffffff83168183015233606082015290518591879189917ffb0e82c4757771aa016d7298966f516b9ef84e890d94c4ce1b337e39b5224fa6919081900360800190a4505050505050565b5f8083601f84011261050f575f80fd5b50813567ffffffffffffffff811115610526575f80fd5b6020830191508360208260051b8501011115610540575f80fd5b9250929050565b5f805f805f805f805f8060a08b8d031215610560575f80fd5b8a3567ffffffffffffffff811115610576575f80fd5b6105828d828e016104ff565b909b5099505060208b013567ffffffffffffffff8111156105a1575f80fd5b6105ad8d828e016104ff565b90995097505060408b013567ffffffffffffffff8111156105cc575f80fd5b6105d88d828e016104ff565b90975095505060608b013567ffffffffffffffff8111156105f7575f80fd5b6106038d828e016104ff565b90955093505060808b013567ffffffffffffffff811115610622575f80fd5b61062e8d828e016104ff565b915080935050809150509295989b9194979a5092959850565b80356001600160601b0381168114610396575f80fd5b803560ff81168114610396575f80fd5b5f805f805f60a08688031215610681575f80fd5b85359450602086013593506040860135925061069f60608701610647565b91506106ad6080870161065d565b90509295509295909350565b5f602082840312156106c9575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b5f602082840312156106f4575f80fd5b6106fd82610647565b9392505050565b5f60208284031215610714575f80fd5b6106fd8261065d56fea2646970667358221220ba2666afc2514653a7f398ea34794215eecf16073603fb8cf07a367ee302bd8e64736f6c634300081a0033",
+  "deployedBytecode": "0x608060405234801561000f575f80fd5b5060043610610055575f3560e01c80638da5cb5b14610059578063be7963021461009d578063c5ea7327146100b2578063d08bbc26146100c5578063d938d202146100dc575b5f80fd5b6100807f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020015b60405180910390f35b6100b06100ab366004610547565b6100ff565b005b6100b06100c036600461066d565b6102db565b6100ce60015481565b604051908152602001610094565b6100ef6100ea3660046106b9565b610339565b6040519015158152602001610094565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461014857604051635fc483c560e01b815260040160405180910390fd5b885f81900361016a5760405163c2e5347d60e01b815260040160405180910390fd5b60c881111561018c576040516305beb17160e11b815260040160405180910390fd5b808814158061019b5750808614155b806101a65750808414155b806101b15750808214155b156101cf576040516373d4509160e11b815260040160405180910390fd5b425f5b828110156102845761027c8d8d838181106101ef576101ef6106d0565b905060200201358c8c84818110610208576102086106d0565b905060200201358b8b85818110610221576102216106d0565b905060200201358a8a8681811061023a5761023a6106d0565b905060200201602081019061024f91906106e4565b898987818110610261576102616106d0565b90506020020160208101906102769190610704565b8761039b565b6001016101d2565b506040805183815267ffffffffffffffff83166020820152338183015290517f89ab1ca890226389351a624b277b8cb77b4e4e593291837ca80512866afe1efe9181900360600190a1505050505050505050505050565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461032457604051635fc483c560e01b815260040160405180910390fd5b61033285858585854261039b565b5050505050565b5f336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461038357604051635fc483c560e01b815260040160405180910390fd5b505f8181526020819052604090205460ff165b919050565b856103b95760405163043e594f60e51b815260040160405180910390fd5b846103d75760405163c945328560e01b815260040160405180910390fd5b836103f5576040516361a9cfaf60e01b815260040160405180910390fd5b826001600160601b03165f0361041e5760405163d43e607560e01b815260040160405180910390fd5b600460ff83161115610443576040516311d8c9dd60e11b815260040160405180910390fd5b5f8681526020819052604090205460ff161561047257604051630989e4cb60e01b815260040160405180910390fd5b5f86815260208181526040918290208054600160ff19909116811790915580548101905581516001600160601b038616815260ff85169181019190915267ffffffffffffffff83168183015233606082015290518591879189917ffb0e82c4757771aa016d7298966f516b9ef84e890d94c4ce1b337e39b5224fa6919081900360800190a4505050505050565b5f8083601f84011261050f575f80fd5b50813567ffffffffffffffff811115610526575f80fd5b6020830191508360208260051b8501011115610540575f80fd5b9250929050565b5f805f805f805f805f8060a08b8d031215610560575f80fd5b8a3567ffffffffffffffff811115610576575f80fd5b6105828d828e016104ff565b909b5099505060208b013567ffffffffffffffff8111156105a1575f80fd5b6105ad8d828e016104ff565b90995097505060408b013567ffffffffffffffff8111156105cc575f80fd5b6105d88d828e016104ff565b90975095505060608b013567ffffffffffffffff8111156105f7575f80fd5b6106038d828e016104ff565b90955093505060808b013567ffffffffffffffff811115610622575f80fd5b61062e8d828e016104ff565b915080935050809150509295989b9194979a5092959850565b80356001600160601b0381168114610396575f80fd5b803560ff81168114610396575f80fd5b5f805f805f60a08688031215610681575f80fd5b85359450602086013593506040860135925061069f60608701610647565b91506106ad6080870161065d565b90509295509295909350565b5f602082840312156106c9575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b5f602082840312156106f4575f80fd5b6106fd82610647565b9392505050565b5f60208284031215610714575f80fd5b6106fd8261065d56fea2646970667358221220ba2666afc2514653a7f398ea34794215eecf16073603fb8cf07a367ee302bd8e64736f6c634300081a0033",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.26+commit.8a97fa7a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"AmountRequired\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"BatchTooLarge\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"BookingAlreadyRecorded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"BookingHashRequired\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"BookingKeyRequired\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"EmptyBatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidPaymentStatus\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"MismatchedArrayLength\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"OnlyOwner\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"RenterHashRequired\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"count\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"timestamp\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"recorder\",\"type\":\"address\"}],\"name\":\"BookingProofBatchRecorded\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"bookingKey\",\"type\":\"bytes32\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"bookingHash\",\"type\":\"bytes32\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"renterIdHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint96\",\"name\":\"amountInCents\",\"type\":\"uint96\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"paymentStatusCode\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"timestamp\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"recorder\",\"type\":\"address\"}],\"name\":\"BookingProofRecorded\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"bookingKey\",\"type\":\"bytes32\"}],\"name\":\"proofExists\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"bookingKey\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"bookingHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"renterIdHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint96\",\"name\":\"amountInCents\",\"type\":\"uint96\"},{\"internalType\":\"uint8\",\"name\":\"paymentStatusCode\",\"type\":\"uint8\"}],\"name\":\"recordBookingProof\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32[]\",\"name\":\"bookingKeys\",\"type\":\"bytes32[]\"},{\"internalType\":\"bytes32[]\",\"name\":\"bookingHashes\",\"type\":\"bytes32[]\"},{\"internalType\":\"bytes32[]\",\"name\":\"renterIdHashes\",\"type\":\"bytes32[]\"},{\"internalType\":\"uint96[]\",\"name\":\"amountInCents\",\"type\":\"uint96[]\"},{\"internalType\":\"uint8[]\",\"name\":\"paymentStatusCodes\",\"type\":\"uint8[]\"}],\"name\":\"recordBookingProofBatch\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalRecorded\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"title\":\"BookingLedger\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"notice\":\"Gas-optimized booking proof ledger.         Full booking/payment details remain in MongoDB.         This contract stores only minimal tamper-proof proofs.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"BookingLedger.sol\":\"BookingLedger\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"BookingLedger.sol\":{\"keccak256\":\"0xf88bd60440d0a0b51d7ba309db071e7bd89cabe69d98f0165376e3cf3a7ecec4\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://301f2ea101e8dcb3deca19509b29f52a6c1e892509b86884c2ce141343bdd089\",\"dweb:/ipfs/QmaWbR8MF2VqGndV9o9LsDMykuXNddVtUVNunk2aq46Rbj\"]}},\"version\":1}",
+  "compiler": {
+    "version": "0.8.26+commit.8a97fa7a.Emscripten.clang"
+  },
+  "updatedAt": "2026-03-06T16:11:51.003Z"
+}

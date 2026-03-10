@@ -1,0 +1,214 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rp-primary: #0b75e7;
+  --rp-primary-strong: #045fc3;
+  --rp-ink: #0f172a;
+  --rp-muted: #64748b;
+  --rp-border: #e2e8f0;
+  --rp-surface: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Plus Jakarta Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--rp-ink);
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(11, 117, 231, 0.15), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(37, 99, 235, 0.1), transparent 56%),
+    #f8fafc;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Sora", "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #edf2f7;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes rpFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rpPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.rp-animate-fade-up {
+  animation: rpFadeUp 0.55s ease both;
+}
+
+.rp-surface {
+  background: var(--rp-surface);
+  border: 1px solid var(--rp-border);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 30px rgba(2, 20, 46, 0.06),
+    0 2px 10px rgba(2, 20, 46, 0.04);
+}
+
+.rp-glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.rp-hover-lift {
+  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+}
+
+.rp-hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 18px 36px rgba(2, 20, 46, 0.12),
+    0 6px 14px rgba(2, 20, 46, 0.08);
+  border-color: rgba(11, 117, 231, 0.24);
+}
+
+.rp-image-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+
+.rp-btn-primary {
+  background: linear-gradient(135deg, var(--rp-primary) 0%, var(--rp-primary-strong) 100%);
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.rp-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(11, 117, 231, 0.28);
+}
+
+.rp-btn-primary:active {
+  transform: translateY(0);
+}
+
+.rp-btn-secondary {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid var(--rp-border);
+  border-radius: 12px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.rp-btn-secondary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(11, 117, 231, 0.32);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.rp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rp-input {
+  width: 100%;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rp-input:focus {
+  border-color: rgba(11, 117, 231, 0.6);
+  box-shadow: 0 0 0 4px rgba(11, 117, 231, 0.13);
+  outline: none;
+}
+
+.rp-link-pill {
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.rp-link-pill[data-active="true"] {
+  background: rgba(11, 117, 231, 0.13);
+  color: var(--rp-primary);
+}
+
+.rp-link-pill[data-active="false"]:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.rp-badge-live {
+  animation: rpPulse 1.4s ease infinite;
+}

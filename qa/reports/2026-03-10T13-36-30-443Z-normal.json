@@ -1,0 +1,88 @@
+{
+  "summary": {
+    "stage": "normal",
+    "baseUrl": "http://localhost:5000",
+    "totals": {
+      "total": 6,
+      "pass": 0,
+      "fail": 0,
+      "skip": 6
+    },
+    "startedAt": "2026-03-10T13:36:30.432Z",
+    "endedAt": "2026-03-10T13:36:30.443Z"
+  },
+  "results": [
+    {
+      "id": "N-AUTH-01",
+      "stage": "normal",
+      "module": "authentication",
+      "name": "Renter token can fetch /api/auth/me",
+      "status": "SKIP",
+      "details": "Missing config.tokens.renter",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.441Z",
+      "endedAt": "2026-03-10T13:36:30.442Z",
+      "durationMs": 1
+    },
+    {
+      "id": "N-VEHICLE-01",
+      "stage": "normal",
+      "module": "vehicle_management",
+      "name": "Owner can list /api/owner/vehicles",
+      "status": "SKIP",
+      "details": "Missing config.tokens.owner",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.442Z",
+      "endedAt": "2026-03-10T13:36:30.442Z",
+      "durationMs": 0
+    },
+    {
+      "id": "N-BOOKPAY-01",
+      "stage": "normal",
+      "module": "booking_payment",
+      "name": "Renter can list /api/bookings/me",
+      "status": "SKIP",
+      "details": "Missing config.tokens.renter",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.442Z",
+      "endedAt": "2026-03-10T13:36:30.442Z",
+      "durationMs": 0
+    },
+    {
+      "id": "N-CHATNOTIF-01",
+      "stage": "normal",
+      "module": "chat_notifications",
+      "name": "Owner can list conversations and notifications",
+      "status": "SKIP",
+      "details": "Missing config.tokens.owner",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.442Z",
+      "endedAt": "2026-03-10T13:36:30.443Z",
+      "durationMs": 1
+    },
+    {
+      "id": "N-OWNER-01",
+      "stage": "normal",
+      "module": "owner_dashboard",
+      "name": "Owner dashboard APIs return success",
+      "status": "SKIP",
+      "details": "Missing config.tokens.owner",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.443Z",
+      "endedAt": "2026-03-10T13:36:30.443Z",
+      "durationMs": 0
+    },
+    {
+      "id": "N-BLOCKCHAIN-01",
+      "stage": "normal",
+      "module": "blockchain_logging",
+      "name": "Owner booking payload exposes blockchain fields",
+      "status": "SKIP",
+      "details": "Missing config.tokens.owner",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T13:36:30.443Z",
+      "endedAt": "2026-03-10T13:36:30.443Z",
+      "durationMs": 0
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+{
+  "summary": {
+    "stage": "all",
+    "baseUrl": "http://localhost:5000",
+    "totals": {
+      "total": 18,
+      "pass": 18,
+      "fail": 0,
+      "skip": 0
+    },
+    "startedAt": "2026-03-10T13:45:52.910Z",
+    "endedAt": "2026-03-10T13:45:53.473Z"
+  },
+  "results": [
+    {
+      "id": "N-AUTH-01",
+      "stage": "normal",
+      "module": "authentication",
+      "name": "Renter token can fetch /api/auth/me",
+      "status": "PASS",
+      "details": "Authenticated renter profile returned.",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:52.911Z",
+      "endedAt": "2026-03-10T13:45:52.952Z",
+      "durationMs": 41
+    },
+    {
+      "id": "N-VEHICLE-01",
+      "stage": "normal",
+      "module": "vehicle_management",
+      "name": "Owner can list /api/owner/vehicles",
+      "status": "PASS",
+      "details": "Owner vehicles listed (3 records).",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:52.952Z",
+      "endedAt": "2026-03-10T13:45:52.963Z",
+      "durationMs": 11
+    },
+    {
+      "id": "N-BOOKPAY-01",
+      "stage": "normal",
+      "module": "booking_payment",
+      "name": "Renter can list /api/bookings/me",
+      "status": "PASS",
+      "details": "Renter bookings listed (8 records).",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:52.963Z",
+      "endedAt": "2026-03-10T13:45:53.047Z",
+      "durationMs": 84
+    },
+    {
+      "id": "N-CHATNOTIF-01",
+      "stage": "normal",
+      "module": "chat_notifications",
+      "name": "Owner can list conversations and notifications",
+      "status": "PASS",
+      "details": "Loaded conversations (1) and notifications (26).",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:53.047Z",
+      "endedAt": "2026-03-10T13:45:53.095Z",
+      "durationMs": 48
+    },
+    {
+      "id": "N-OWNER-01",
+      "stage": "normal",
+      "module": "owner_dashboard",
+      "name": "Owner dashboard APIs return success",
+      "status": "PASS",
+      "details": "All owner dashboard endpoints returned 200.",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:53.095Z",
+      "endedAt": "2026-03-10T13:45:53.235Z",
+      "durationMs": 140
+    },
+    {
+      "id": "N-BLOCKCHAIN-01",
+      "stage": "normal",
+      "module": "blockchain_logging",
+      "name": "Owner booking payload exposes blockchain fields",
+      "status": "PASS",
+      "details": "Validated blockchainStatus field on 8 booking records.",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:53.235Z",
+      "endedAt": "2026-03-10T13:45:53.295Z",
+      "durationMs": 60
+    },
+    {
+      "id": "A-AUTH-01",
+      "stage": "attack",
+      "module": "authentication",
+      "name": "Invalid token is rejected on protected endpoint",
+      "status": "PASS",
+      "details": "Invalid bearer token rejected with 401.",
+      "httpStatus": 401,
+      "startedAt": "2026-03-10T13:45:53.295Z",
+      "endedAt": "2026-03-10T13:45:53.300Z",
+      "durationMs": 5
+    },
+    {
+      "id": "A-VEHICLE-01",
+      "stage": "attack",
+      "module": "vehicle_management",
+      "name": "Renter cannot access owner vehicle endpoint",
+      "status": "PASS",
+      "details": "RBAC correctly blocked renter from owner vehicles endpoint.",
+      "httpStatus": 403,
+      "startedAt": "2026-03-10T13:45:53.300Z",
+      "endedAt": "2026-03-10T13:45:53.311Z",
+      "durationMs": 11
+    },
+    {
+      "id": "A-BOOKPAY-01",
+      "stage": "attack",
+      "module": "booking_payment",
+      "name": "Manual owner paymentStatus=paid is blocked",
+      "status": "PASS",
+      "details": "Manual paid update blocked as expected.",
+      "httpStatus": 403,
+      "startedAt": "2026-03-10T13:45:53.311Z",
+      "endedAt": "2026-03-10T13:45:53.327Z",
+      "durationMs": 16
+    },
+    {
+      "id": "A-CHATNOTIF-01",
+      "stage": "attack",
+      "module": "chat_notifications",
+      "name": "Chat without valid booking relation is blocked",
+      "status": "PASS",
+      "details": "Unauthorized chat relation blocked with 403.",
+      "httpStatus": 403,
+      "startedAt": "2026-03-10T13:45:53.327Z",
+      "endedAt": "2026-03-10T13:45:53.347Z",
+      "durationMs": 20
+    },
+    {
+      "id": "A-OWNER-01",
+      "stage": "attack",
+      "module": "owner_dashboard",
+      "name": "Renter cannot access owner earnings endpoint",
+      "status": "PASS",
+      "details": "RBAC correctly blocked renter on owner earnings.",
+      "httpStatus": 403,
+      "startedAt": "2026-03-10T13:45:53.347Z",
+      "endedAt": "2026-03-10T13:45:53.358Z",
+      "durationMs": 11
+    },
+    {
+      "id": "A-BLOCKCHAIN-01",
+      "stage": "attack",
+      "module": "blockchain_logging",
+      "name": "Blockchain record endpoint rejects unknown booking",
+      "status": "PASS",
+      "details": "Unknown booking ID correctly returned 404.",
+      "httpStatus": 404,
+      "startedAt": "2026-03-10T13:45:53.358Z",
+      "endedAt": "2026-03-10T13:45:53.367Z",
+      "durationMs": 9
+    },
+    {
+      "id": "E-AUTH-01",
+      "stage": "edge",
+      "module": "authentication",
+      "name": "Login payload validation catches malformed input",
+      "status": "PASS",
+      "details": "Malformed login payload rejected with 400.",
+      "httpStatus": 400,
+      "startedAt": "2026-03-10T13:45:53.367Z",
+      "endedAt": "2026-03-10T13:45:53.370Z",
+      "durationMs": 3
+    },
+    {
+      "id": "E-VEHICLE-01",
+      "stage": "edge",
+      "module": "vehicle_management",
+      "name": "Vehicle create validation rejects missing images",
+      "status": "PASS",
+      "details": "Missing image validation triggered as expected.",
+      "httpStatus": 400,
+      "startedAt": "2026-03-10T13:45:53.370Z",
+      "endedAt": "2026-03-10T13:45:53.378Z",
+      "durationMs": 8
+    },
+    {
+      "id": "E-BOOKPAY-01",
+      "stage": "edge",
+      "module": "booking_payment",
+      "name": "Booking rejects past pickup/return schedule",
+      "status": "PASS",
+      "details": "Past booking schedule blocked with 400.",
+      "httpStatus": 400,
+      "startedAt": "2026-03-10T13:45:53.378Z",
+      "endedAt": "2026-03-10T13:45:53.388Z",
+      "durationMs": 10
+    },
+    {
+      "id": "E-CHATNOTIF-01",
+      "stage": "edge",
+      "module": "chat_notifications",
+      "name": "Chat endpoint rejects invalid partner ID format",
+      "status": "PASS",
+      "details": "Invalid chat receiver ID rejected with 400.",
+      "httpStatus": 400,
+      "startedAt": "2026-03-10T13:45:53.388Z",
+      "endedAt": "2026-03-10T13:45:53.399Z",
+      "durationMs": 11
+    },
+    {
+      "id": "E-OWNER-01",
+      "stage": "edge",
+      "module": "owner_dashboard",
+      "name": "Owner bookings endpoint handles unknown status filter",
+      "status": "PASS",
+      "details": "Unknown status filter handled without server error.",
+      "httpStatus": 200,
+      "startedAt": "2026-03-10T13:45:53.399Z",
+      "endedAt": "2026-03-10T13:45:53.464Z",
+      "durationMs": 65
+    },
+    {
+      "id": "E-BLOCKCHAIN-01",
+      "stage": "edge",
+      "module": "blockchain_logging",
+      "name": "Blockchain record on unknown booking returns controlled 404",
+      "status": "PASS",
+      "details": "Unknown booking blockchain record request handled with 404.",
+      "httpStatus": 404,
+      "startedAt": "2026-03-10T13:45:53.464Z",
+      "endedAt": "2026-03-10T13:45:53.473Z",
+      "durationMs": 9
+    }
+  ]
+}

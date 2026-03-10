@@ -1,0 +1,375 @@
+{
+  "source": "For AI chatbot model.pdf",
+  "language": "English + Filipino",
+  "format": "FAQ_QA",
+  "items": [
+    {
+      "id": "chat_greeting",
+      "english": {
+        "question": "Hello or good day.",
+        "answers": [
+          "Hello! I am RentifyPro AI. I can help you with available vehicles, booking steps, rental requirements, payments, and recommendations. What would you like to know?",
+          "Hi! Welcome to RentifyPro. You can ask me about vehicle availability, booking, payment methods, rental requirements, or recommendations.",
+          "Good day! I am here to help with bookings, vehicle options, rental policies, and payment questions. How can I assist you today?"
+        ]
+      },
+      "filipino": {
+        "question": "Hello o magandang araw.",
+        "answers": [
+          "Hello! Ako si RentifyPro AI. Maaari kitang tulungan sa available na sasakyan, booking, requirements, bayad, at recommendations. Ano ang gusto mong malaman?",
+          "Hi! Maligayang pagdating sa RentifyPro. Maaari kang magtanong tungkol sa available na sasakyan, booking, paraan ng bayad, requirements, o recommendations.",
+          "Magandang araw! Nandito ako para tumulong sa booking, pagpili ng sasakyan, rental policies, at mga tanong tungkol sa bayad. Paano kita matutulungan?"
+        ]
+      }
+    },
+    {
+      "id": "chat_wellbeing",
+      "english": {
+        "question": "How are you?",
+        "answers": [
+          "I'm doing well and ready to help you with bookings, vehicle availability, payments, or rental requirements.",
+          "I'm here and ready to assist. You can ask me about available vehicles, booking steps, or rental policies.",
+          "I'm doing great, thank you. Let me know if you need help with booking, payments, or finding a vehicle."
+        ]
+      },
+      "filipino": {
+        "question": "Kamusta ka?",
+        "answers": [
+          "Mabuti naman ako at handang tumulong sa booking, available na sasakyan, bayad, o rental requirements.",
+          "Ayos lang ako at handa akong tumulong. Maaari kang magtanong tungkol sa available na sasakyan, booking steps, o rental policies.",
+          "Mabuti ako, salamat. Sabihin mo lang kung kailangan mo ng tulong sa booking, bayad, o paghahanap ng sasakyan."
+        ]
+      }
+    },
+    {
+      "id": "chat_identity",
+      "english": {
+        "question": "Who are you?",
+        "answers": [
+          "I am RentifyPro AI, your assistant for vehicle rentals, booking steps, payments, rental requirements, and vehicle recommendations.",
+          "I'm the RentifyPro AI assistant. I can help you find available vehicles and answer booking-related questions.",
+          "I am RentifyPro AI. You can ask me about vehicle availability, booking, payments, and rental policies."
+        ]
+      },
+      "filipino": {
+        "question": "Sino ka?",
+        "answers": [
+          "Ako si RentifyPro AI, ang assistant mo para sa vehicle rentals, booking steps, bayad, rental requirements, at vehicle recommendations.",
+          "Ako ang RentifyPro AI assistant. Maaari kitang tulungan sa paghahanap ng available na sasakyan at pagsagot sa mga tanong tungkol sa booking.",
+          "Ako si RentifyPro AI. Maaari kang magtanong tungkol sa availability ng sasakyan, booking, bayad, at rental policies."
+        ]
+      }
+    },
+    {
+      "id": "chat_capabilities",
+      "english": {
+        "question": "What can you help me with?",
+        "answers": [
+          "I can help you check vehicle availability, recommendations, booking steps, rental requirements, payment methods, insurance, deposits, and rental policies.",
+          "You can ask me about available vehicles, booking process, payments, requirements, insurance, and other rental-related questions.",
+          "I can assist with finding a vehicle, understanding booking steps, checking payment options, and explaining rental requirements."
+        ]
+      },
+      "filipino": {
+        "question": "Ano ang maitutulong mo?",
+        "answers": [
+          "Maaari kitang tulungan sa pag-check ng available na sasakyan, recommendations, booking steps, rental requirements, paraan ng bayad, insurance, deposito, at rental policies.",
+          "Maaari kang magtanong tungkol sa available na sasakyan, booking process, bayad, requirements, insurance, at iba pang tanong tungkol sa renta.",
+          "Matutulungan kitang maghanap ng sasakyan, unawain ang booking steps, alamin ang payment options, at ipaliwanag ang rental requirements."
+        ]
+      }
+    },
+    {
+      "id": "chat_gratitude",
+      "english": {
+        "question": "Thank you.",
+        "answers": [
+          "You're welcome. If you need help with booking, vehicle availability, or rental requirements, just let me know.",
+          "Glad to help. Feel free to ask about vehicles, payments, or bookings anytime.",
+          "You're welcome. I'm here if you still need assistance with any RentifyPro rental question."
+        ]
+      },
+      "filipino": {
+        "question": "Salamat.",
+        "answers": [
+          "Walang anuman. Kung kailangan mo pa ng tulong sa booking, available na sasakyan, o rental requirements, sabihin mo lang.",
+          "Masaya akong makatulong. Maaari ka pang magtanong tungkol sa sasakyan, bayad, o booking anumang oras.",
+          "Walang anuman. Nandito lang ako kung kailangan mo pa ng tulong sa anumang tanong tungkol sa RentifyPro rentals."
+        ]
+      }
+    },
+    {
+      "id": "rental_rate",
+      "english": {
+        "question": "How much is the rental per day or hour?",
+        "answers": [
+          "Rental rates depend on the vehicle you choose and the rental duration. Which vehicle are you interested in, and for how many hours or days?",
+          "Prices vary depending on the vehicle type and rental period. Please let me know your preferred vehicle and schedule.",
+          "The rental cost depends on the selected vehicle and dates. Kindly share your preferred unit and rental duration.",
+          "Please choose the vehicle type such as Car, Van, or Motorcycle and indicate whether you need hourly or daily rental."
+        ]
+      },
+      "filipino": {
+        "question": "Magkano ang renta bawat araw o oras?",
+        "answers": [
+          "Ang presyo ng renta ay nakadepende sa sasakyang pipiliin at sa tagal ng pagrenta. Anong sasakyan ang gusto mo at ilang oras o araw ito gagamitin?",
+          "Nag-iiba ang presyo batay sa uri ng sasakyan at haba ng pagrenta. Sabihin ang napiling sasakyan at iskedyul para maibigay ang halaga.",
+          "Depende ang bayad sa sasakyan at petsa ng renta. Ibahagi ang napili mong unit at tagal ng pagrenta upang makapagbigay kami ng eksaktong presyo.",
+          "Pumili ng uri ng sasakyan tulad ng Kotse, Van, o Motorsiklo at sabihin kung hourly o daily ang gusto mong renta."
+        ]
+      }
+    },
+    {
+      "id": "insurance_included",
+      "english": {
+        "question": "Is insurance included?",
+        "answers": [
+          "Yes, insurance is included in all vehicle rentals.",
+          "All vehicles are insured for your peace of mind.",
+          "Yes, every rental comes with insurance coverage.",
+          "Insurance coverage is included in all vehicles. Let me know if you would like details about the coverage."
+        ]
+      },
+      "filipino": {
+        "question": "Kasama ba ang insurance?",
+        "answers": [
+          "Oo, kasama ang insurance sa lahat ng nirentahang sasakyan.",
+          "Ang lahat ng sasakyan ay may kasamang insurance para sa inyong seguridad.",
+          "Oo, may kasamang insurance coverage ang bawat renta.",
+          "Kasama ang insurance sa lahat ng sasakyan. Sabihin lang kung gusto mong malaman ang detalye ng coverage."
+        ]
+      }
+    },
+    {
+      "id": "security_deposit",
+      "english": {
+        "question": "Is there a security deposit? How much?",
+        "answers": [
+          "Yes, there is a refundable security deposit of ₱1,000.",
+          "A ₱1,000 security deposit is required and will be refunded once the vehicle is returned without damage and with a full tank of fuel.",
+          "The required deposit is ₱1,000. It will be returned if the vehicle is in good condition and fully refueled.",
+          "A ₱1,000 deposit is required as assurance. It is refundable upon proper vehicle return."
+        ]
+      },
+      "filipino": {
+        "question": "May security deposit ba? Magkano?",
+        "answers": [
+          "Oo, may ₱1,000 na refundable na security deposit.",
+          "Kinakailangan ang ₱1,000 na deposito at ibinabalik ito kapag naibalik ang sasakyan na walang sira at may full tank ng gasolina.",
+          "Ang deposito ay ₱1,000. Maibabalik ito kung maayos ang kondisyon ng sasakyan at puno ang tangke sa oras ng pagbabalik.",
+          "May ₱1,000 na deposito bilang garantiya. Refundable ito kapag maayos ang pagbabalik ng sasakyan."
+        ]
+      }
+    },
+    {
+      "id": "payment_methods",
+      "english": {
+        "question": "What payment methods are accepted?",
+        "answers": [
+          "We accept Cash, GCash, and Bank Transfer.",
+          "Payment can be made via Cash, GCash, or Bank Transfer.",
+          "Available payment options include Cash, GCash, and Bank Transfer."
+        ]
+      },
+      "filipino": {
+        "question": "Anong mga paraan ng pagbabayad ang tinatanggap?",
+        "answers": [
+          "Tumatanggap kami ng Cash, GCash, at Bank Transfer.",
+          "Maaaring magbayad gamit ang Cash, GCash, o Bank Transfer.",
+          "Ang mga opsyon sa pagbabayad ay Cash, GCash, at Bank Transfer."
+        ]
+      }
+    },
+    {
+      "id": "rental_requirements",
+      "english": {
+        "question": "What are the requirements to rent a car?",
+        "answers": [
+          "You must present at least one valid ID, preferably a Driver’s License.",
+          "A valid government-issued ID is required. A Driver’s License is preferred.",
+          "Please provide one valid ID to process your booking."
+        ]
+      },
+      "filipino": {
+        "question": "Ano ang mga kinakailangan upang makapag-renta ng sasakyan?",
+        "answers": [
+          "Kinakailangan ang isang valid ID, mas mainam kung Driver’s License.",
+          "Kailangan ang balidong pagkakakilanlan. Mas mainam kung Driver’s License ang ipapakita.",
+          "Magbigay ng isang valid ID upang maproseso ang booking o pagrenta."
+        ]
+      }
+    },
+    {
+      "id": "minimum_age",
+      "english": {
+        "question": "What is the minimum age to rent?",
+        "answers": [
+          "The minimum age requirement is 18 years old.",
+          "You must be at least 18 years old to rent a vehicle."
+        ]
+      },
+      "filipino": {
+        "question": "Ano ang minimum na edad upang makapag-renta?",
+        "answers": [
+          "Ang minimum na edad ay labing-walong (18) taong gulang.",
+          "Kinakailangang 18 taong gulang pataas upang makapag-renta ng sasakyan."
+        ]
+      }
+    },
+    {
+      "id": "id_or_proof_of_address",
+      "english": {
+        "question": "Do I need an ID or proof of address?",
+        "answers": [
+          "Yes, a valid ID or proof of address is required for verification.",
+          "Identification documents are required to approve your booking."
+        ]
+      },
+      "filipino": {
+        "question": "Kailangan ba ng ID o patunay ng tirahan?",
+        "answers": [
+          "Oo, kinakailangan ang valid ID o patunay ng tirahan para sa beripikasyon.",
+          "Kailangan ang mga dokumento para maaprubahan ang iyong booking."
+        ]
+      }
+    },
+    {
+      "id": "available_vehicles",
+      "english": {
+        "question": "What vehicles are available?",
+        "answers": [
+          "We offer Sedan, Van, SUV, and Pickup Truck options.",
+          "Available vehicles include Sedans, Vans, SUVs, and Pickup Trucks.",
+          "You may choose from Sedan, Van, SUV, or Pickup Truck."
+        ]
+      },
+      "filipino": {
+        "question": "Anong mga sasakyan ang available?",
+        "answers": [
+          "Mayroon kaming Sedan, Van, SUV, at Pickup Truck.",
+          "Maaaring pumili mula sa Sedan, Van, SUV, o Pickup Truck.",
+          "Available ang Sedan, Van, SUV, at Pickup Truck na pagpipilian."
+        ]
+      }
+    },
+    {
+      "id": "available_transmission",
+      "english": {
+        "question": "What transmission types are available?",
+        "answers": [
+          "We offer both Automatic and Manual transmission vehicles.",
+          "Automatic and Manual transmission options are available."
+        ]
+      },
+      "filipino": {
+        "question": "Anong uri ng transmission ang available?",
+        "answers": [
+          "Mayroong Automatic at Manual na transmission.",
+          "Maaaring pumili sa pagitan ng Automatic at Manual na transmission."
+        ]
+      }
+    },
+    {
+      "id": "full_tank_return",
+      "english": {
+        "question": "Should I return the vehicle with a full tank?",
+        "answers": [
+          "Yes, the vehicle must be returned with a full tank of fuel.",
+          "Please return the vehicle fully refueled to avoid additional charges."
+        ]
+      },
+      "filipino": {
+        "question": "Kailangan bang ibalik na full tank ang sasakyan?",
+        "answers": [
+          "Oo, kinakailangang ibalik ang sasakyan na may full tank ng gasolina.",
+          "Dapat puno ang tangke ng gasolina sa oras ng pagbabalik upang maiwasan ang dagdag singil."
+        ]
+      }
+    },
+    {
+      "id": "passenger_capacity",
+      "english": {
+        "question": "How many passengers can the vehicles accommodate?",
+        "answers": [
+          "Our vehicles can accommodate between 5 to 15 passengers depending on the type.",
+          "Passenger capacity varies by vehicle, ranging from 5 to 15 persons."
+        ]
+      },
+      "filipino": {
+        "question": "Ilang pasahero ang kayang isakay?",
+        "answers": [
+          "Depende sa uri ng sasakyan, maaaring magsakay ng 5 hanggang 15 pasahero.",
+          "Nag-iiba ang kapasidad ng sasakyan mula 5 hanggang 15 katao depende sa modelo."
+        ]
+      }
+    },
+    {
+      "id": "choose_specific_model",
+      "english": {
+        "question": "Can I choose a specific vehicle model?",
+        "answers": [
+          "Yes, you may choose a specific model subject to availability.",
+          "Specific models are available upon request depending on availability."
+        ]
+      },
+      "filipino": {
+        "question": "Maaari bang pumili ng partikular na modelo?",
+        "answers": [
+          "Oo, maaaring pumili ng partikular na modelo depende sa availability.",
+          "Puwedeng mag-request ng tiyak na modelo kung ito ay available sa napiling petsa at oras."
+        ]
+      }
+    },
+    {
+      "id": "how_to_book",
+      "english": {
+        "question": "How do I book?",
+        "answers": [
+          "To book, you must first verify your account and submit your personal information and Driver’s License for verification.",
+          "Complete the account verification process, choose your preferred vehicle and dates, and confirm your booking."
+        ]
+      },
+      "filipino": {
+        "question": "Paano mag-book?",
+        "answers": [
+          "Upang makapag-book, kailangan munang i-verify ang account at magsumite ng personal na impormasyon at Driver’s License para sa beripikasyon.",
+          "Tapusin ang proseso ng beripikasyon, pumili ng sasakyan at petsa, at kumpirmahin ang booking."
+        ]
+      }
+    },
+    {
+      "id": "same_day_rental",
+      "english": {
+        "question": "Is same-day rental allowed?",
+        "answers": [
+          "Yes, same-day rentals are allowed subject to vehicle availability.",
+          "You may book a vehicle on the same day if it is still available."
+        ]
+      },
+      "filipino": {
+        "question": "Pinapayagan ba ang same-day rental?",
+        "answers": [
+          "Oo, pinapayagan ang same-day rental kung may available na sasakyan.",
+          "Maaaring magrenta sa parehong araw kung available pa ang sasakyan."
+        ]
+      }
+    },
+    {
+      "id": "advance_booking_discount",
+      "english": {
+        "question": "Is there an advance booking discount?",
+        "answers": [
+          "We currently do not offer discounts for advance bookings.",
+          "There are no advance booking discounts at this time."
+        ]
+      },
+      "filipino": {
+        "question": "May discount ba sa advance booking?",
+        "answers": [
+          "Sa kasalukuyan, wala kaming discount para sa advance booking.",
+          "Wala pang diskwento para sa advance booking sa ngayon."
+        ]
+      }
+    }
+  ]
+}

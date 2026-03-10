@@ -1,0 +1,88 @@
+{
+  "summary": {
+    "stage": "normal",
+    "baseUrl": "http://localhost:5000",
+    "totals": {
+      "total": 6,
+      "pass": 0,
+      "fail": 6,
+      "skip": 0
+    },
+    "startedAt": "2026-02-26T05:35:15.802Z",
+    "endedAt": "2026-02-26T05:35:16.011Z"
+  },
+  "results": [
+    {
+      "id": "N-AUTH-01",
+      "stage": "normal",
+      "module": "authentication",
+      "name": "Renter token can fetch /api/auth/me",
+      "status": "FAIL",
+      "details": "Expected 200, got 401 (Invalid token.)",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:15.804Z",
+      "endedAt": "2026-02-26T05:35:15.959Z",
+      "durationMs": 155
+    },
+    {
+      "id": "N-VEHICLE-01",
+      "stage": "normal",
+      "module": "vehicle_management",
+      "name": "Owner can list /api/owner/vehicles",
+      "status": "FAIL",
+      "details": "Expected 200, got 401 (Invalid token.)",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:15.959Z",
+      "endedAt": "2026-02-26T05:35:15.972Z",
+      "durationMs": 13
+    },
+    {
+      "id": "N-BOOKPAY-01",
+      "stage": "normal",
+      "module": "booking_payment",
+      "name": "Renter can list /api/bookings/me",
+      "status": "FAIL",
+      "details": "Expected 200, got 401 (Invalid token.)",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:15.972Z",
+      "endedAt": "2026-02-26T05:35:15.983Z",
+      "durationMs": 11
+    },
+    {
+      "id": "N-CHATNOTIF-01",
+      "stage": "normal",
+      "module": "chat_notifications",
+      "name": "Owner can list conversations and notifications",
+      "status": "FAIL",
+      "details": "Conversations failed (401: Invalid token.)",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:15.983Z",
+      "endedAt": "2026-02-26T05:35:15.992Z",
+      "durationMs": 9
+    },
+    {
+      "id": "N-OWNER-01",
+      "stage": "normal",
+      "module": "owner_dashboard",
+      "name": "Owner dashboard APIs return success",
+      "status": "FAIL",
+      "details": "Endpoint /api/owner/bookings?status=all failed (401).",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:15.992Z",
+      "endedAt": "2026-02-26T05:35:16.001Z",
+      "durationMs": 9
+    },
+    {
+      "id": "N-BLOCKCHAIN-01",
+      "stage": "normal",
+      "module": "blockchain_logging",
+      "name": "Owner booking payload exposes blockchain fields",
+      "status": "FAIL",
+      "details": "Expected 200, got 401.",
+      "httpStatus": 401,
+      "startedAt": "2026-02-26T05:35:16.001Z",
+      "endedAt": "2026-02-26T05:35:16.011Z",
+      "durationMs": 10
+    }
+  ]
+}

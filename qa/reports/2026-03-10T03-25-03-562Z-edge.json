@@ -1,0 +1,88 @@
+{
+  "summary": {
+    "stage": "edge",
+    "baseUrl": "http://localhost:5000",
+    "totals": {
+      "total": 6,
+      "pass": 0,
+      "fail": 5,
+      "skip": 1
+    },
+    "startedAt": "2026-03-10T03:25:03.497Z",
+    "endedAt": "2026-03-10T03:25:03.562Z"
+  },
+  "results": [
+    {
+      "id": "E-AUTH-01",
+      "stage": "edge",
+      "module": "authentication",
+      "name": "Login payload validation catches malformed input",
+      "status": "FAIL",
+      "details": "Expected 400, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.497Z",
+      "endedAt": "2026-03-10T03:25:03.553Z",
+      "durationMs": 56
+    },
+    {
+      "id": "E-VEHICLE-01",
+      "stage": "edge",
+      "module": "vehicle_management",
+      "name": "Vehicle create validation rejects missing images",
+      "status": "FAIL",
+      "details": "Expected 400, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.553Z",
+      "endedAt": "2026-03-10T03:25:03.555Z",
+      "durationMs": 2
+    },
+    {
+      "id": "E-BOOKPAY-01",
+      "stage": "edge",
+      "module": "booking_payment",
+      "name": "Booking rejects past pickup/return schedule",
+      "status": "SKIP",
+      "details": "Missing or invalid config.ids.vehicleId",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.555Z",
+      "endedAt": "2026-03-10T03:25:03.555Z",
+      "durationMs": 0
+    },
+    {
+      "id": "E-CHATNOTIF-01",
+      "stage": "edge",
+      "module": "chat_notifications",
+      "name": "Chat endpoint rejects invalid partner ID format",
+      "status": "FAIL",
+      "details": "Expected 400, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.555Z",
+      "endedAt": "2026-03-10T03:25:03.557Z",
+      "durationMs": 2
+    },
+    {
+      "id": "E-OWNER-01",
+      "stage": "edge",
+      "module": "owner_dashboard",
+      "name": "Owner bookings endpoint handles unknown status filter",
+      "status": "FAIL",
+      "details": "Expected 200, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.557Z",
+      "endedAt": "2026-03-10T03:25:03.560Z",
+      "durationMs": 3
+    },
+    {
+      "id": "E-BLOCKCHAIN-01",
+      "stage": "edge",
+      "module": "blockchain_logging",
+      "name": "Blockchain record on unknown booking returns controlled 404",
+      "status": "FAIL",
+      "details": "Expected 404, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-03-10T03:25:03.560Z",
+      "endedAt": "2026-03-10T03:25:03.562Z",
+      "durationMs": 2
+    }
+  ]
+}

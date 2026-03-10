@@ -1,0 +1,88 @@
+{
+  "summary": {
+    "stage": "normal",
+    "baseUrl": "http://localhost:5000",
+    "totals": {
+      "total": 6,
+      "pass": 0,
+      "fail": 6,
+      "skip": 0
+    },
+    "startedAt": "2026-02-26T05:21:29.166Z",
+    "endedAt": "2026-02-26T05:21:29.320Z"
+  },
+  "results": [
+    {
+      "id": "N-AUTH-01",
+      "stage": "normal",
+      "module": "authentication",
+      "name": "Renter token can fetch /api/auth/me",
+      "status": "FAIL",
+      "details": "Expected 200, got no response (fetch failed)",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.168Z",
+      "endedAt": "2026-02-26T05:21:29.301Z",
+      "durationMs": 133
+    },
+    {
+      "id": "N-VEHICLE-01",
+      "stage": "normal",
+      "module": "vehicle_management",
+      "name": "Owner can list /api/owner/vehicles",
+      "status": "FAIL",
+      "details": "Expected 200, got no response (fetch failed)",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.301Z",
+      "endedAt": "2026-02-26T05:21:29.305Z",
+      "durationMs": 4
+    },
+    {
+      "id": "N-BOOKPAY-01",
+      "stage": "normal",
+      "module": "booking_payment",
+      "name": "Renter can list /api/bookings/me",
+      "status": "FAIL",
+      "details": "Expected 200, got no response (fetch failed)",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.305Z",
+      "endedAt": "2026-02-26T05:21:29.309Z",
+      "durationMs": 4
+    },
+    {
+      "id": "N-CHATNOTIF-01",
+      "stage": "normal",
+      "module": "chat_notifications",
+      "name": "Owner can list conversations and notifications",
+      "status": "FAIL",
+      "details": "Conversations failed (no response: fetch failed)",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.309Z",
+      "endedAt": "2026-02-26T05:21:29.313Z",
+      "durationMs": 4
+    },
+    {
+      "id": "N-OWNER-01",
+      "stage": "normal",
+      "module": "owner_dashboard",
+      "name": "Owner dashboard APIs return success",
+      "status": "FAIL",
+      "details": "Endpoint /api/owner/bookings?status=all failed (no response).",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.313Z",
+      "endedAt": "2026-02-26T05:21:29.316Z",
+      "durationMs": 3
+    },
+    {
+      "id": "N-BLOCKCHAIN-01",
+      "stage": "normal",
+      "module": "blockchain_logging",
+      "name": "Owner booking payload exposes blockchain fields",
+      "status": "FAIL",
+      "details": "Expected 200, got no response.",
+      "httpStatus": null,
+      "startedAt": "2026-02-26T05:21:29.316Z",
+      "endedAt": "2026-02-26T05:21:29.320Z",
+      "durationMs": 4
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "baseUrl": "http://localhost:5000",
+  "tokens": {
+    "owner": "PASTE_OWNER_TOKEN_HERE",
+    "renter": "PASTE_RENTER_TOKEN_HERE",
+    "ownerB": ""
+  },
+  "ids": {
+    "vehicleId": "PASTE_VALID_VEHICLE_ID_FOR_EDGE_BOOKING_TEST",
+    "bookingId": "PASTE_VALID_BOOKING_ID_FOR_ATTACK_PAYMENT_TEST"
+  },
+  "options": {
+    "timeoutMs": 15000
+  }
+}

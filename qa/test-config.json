@@ -1,0 +1,15 @@
+{
+  "baseUrl": "http://localhost:5000",
+  "tokens": {
+    "owner": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWM3ZGQ2NjA3NjBiYWE3ZDlkODlmMiIsInJvbGUiOiJvd25lciIsImlhdCI6MTc3MzE1MDMzNywiZXhwIjoxNzczNzU1MTM3fQ.QzMyZFDv6nuUtaTUrSaQkb0fAbJ9sOAGPGsiASnQUeg",
+    "renter": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OTY2NjEwMDcyODM0OWM0YTUwMzhlZCIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzczMTUwMzM3LCJleHAiOjE3NzM3NTUxMzd9.tgCRBBCPHzJTsvo64tdrqAYy5P_kL8LIin1EGZ0f5GM",
+    "ownerB": ""
+  },
+  "ids": {
+    "vehicleId": "699c905e60760baa7d9d8a99",
+    "bookingId": "699f076174af17ed860c67b8"
+  },
+  "options": {
+    "timeoutMs": 15000
+  }
+}
