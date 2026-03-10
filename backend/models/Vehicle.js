@@ -1,5 +1,16 @@
 import mongoose from "mongoose";
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+const vehicleSchema = new mongoose.Schema({
+  name: String,
+  type: String,
+  pricePerDay: Number,
+  available: { type: Boolean, default: true },
+}, { timestamps: true });
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
 const vehicleSpecsSchema = new mongoose.Schema(
   {
     type: {
@@ -104,5 +115,9 @@ vehicleSchema.index({ availabilityStatus: 1, createdAt: -1 });
 vehicleSchema.index({ name: 1, createdAt: -1 });
 vehicleSchema.index({ location: 1, createdAt: -1 });
 vehicleSchema.index({ "specs.plateNumber": 1 });
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 
 export default mongoose.model("Vehicle", vehicleSchema);

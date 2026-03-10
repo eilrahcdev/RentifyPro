@@ -1,6 +1,21 @@
+<<<<<<< HEAD
 import React, { useEffect, useState } from "react";
 import {
   Bot,
+=======
+<<<<<<< HEAD
+import React, { useState, useEffect } from "react";
+import {
+  Bot,
+  Bell,
+  MessageCircle,
+  Settings,
+=======
+import React, { useEffect, useState } from "react";
+import {
+  Bot,
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   Car,
   ShieldCheck,
   User,
@@ -9,7 +24,15 @@ import {
   BadgeCheck,
   Shield,
   Camera,
+<<<<<<< HEAD
 } from "lucide-react";
+=======
+<<<<<<< HEAD
+  MessageCircle as ChatIcon,
+} from "lucide-react";
+=======
+} from "lucide-react";
+>>>>>>> 8422a2f (fixed bugs and updates)
 import Navbar from "../components/Navbar";
 import ChatWidget from "../components/ChatWidget";
 import API from "../utils/api";
@@ -78,6 +101,10 @@ const getAgeFromDate = (birthDate, today) => {
   if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age -= 1;
   return age;
 };
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 
 const InputField = React.memo(function InputField({
   label,
@@ -115,10 +142,25 @@ const RadioGroupField = React.memo(function RadioGroupField({
   return (
     <div className="mt-1">
       <label className="text-xs text-gray-500 block mb-2">{label}</label>
+<<<<<<< HEAD
       <div className="flex flex-wrap gap-6 items-center mt-1">
         {options.map((option) => (
           <label
             key={option}
+=======
+<<<<<<< HEAD
+
+      <div className="flex gap-6 items-center mt-1">
+        {options.map((opt) => (
+          <label
+            key={opt}
+=======
+      <div className="flex flex-wrap gap-6 items-center mt-1">
+        {options.map((option) => (
+          <label
+            key={option}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             className={`flex items-center gap-2 text-sm ${
               disabled ? "text-gray-400 cursor-not-allowed" : "text-gray-700"
             }`}
@@ -126,6 +168,23 @@ const RadioGroupField = React.memo(function RadioGroupField({
             <input
               type="radio"
               name={name || label}
+<<<<<<< HEAD
+              value={option}
+              checked={value === option}
+=======
+<<<<<<< HEAD
+              value={opt}
+              checked={value === opt}
+>>>>>>> 8422a2f (fixed bugs and updates)
+              disabled={disabled}
+              onChange={() => onChange(option)}
+              className="accent-[#017FE6] translate-y-[1px]"
+            />
+<<<<<<< HEAD
+            {option}
+=======
+            {opt}
+=======
               value={option}
               checked={value === option}
               disabled={disabled}
@@ -133,6 +192,8 @@ const RadioGroupField = React.memo(function RadioGroupField({
               className="accent-[#017FE6] translate-y-[1px]"
             />
             {option}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           </label>
         ))}
       </div>
@@ -146,7 +207,14 @@ const SelectField = React.memo(function SelectField({
   onChange,
   disabled,
   options,
+<<<<<<< HEAD
   placeholder = "Select",
+=======
+<<<<<<< HEAD
+=======
+  placeholder = "Select",
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 }) {
   return (
     <div>
@@ -159,10 +227,23 @@ const SelectField = React.memo(function SelectField({
           disabled ? "bg-gray-100" : "bg-white"
         }`}
       >
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+        <option value="">Select</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
         <option value="">{placeholder}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           </option>
         ))}
       </select>
@@ -170,6 +251,14 @@ const SelectField = React.memo(function SelectField({
   );
 });
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
 const buildAddressFromSelections = (profile, lists) => {
   const regionName = lists.regions.find((region) => region.code === profile.region)?.name || "";
   const provinceName =
@@ -212,6 +301,10 @@ const buildProfilePayload = (sectionKey, profile, lists) => {
   return payload;
 };
 
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 const AccountSettings = ({
   onNavigateToHome,
   onNavigateToSignIn,
@@ -219,8 +312,16 @@ const AccountSettings = ({
   onNavigateToRegister,
   onNavigateToAbout,
   onNavigateToBookingHistory,
+<<<<<<< HEAD
   onNavigateToChat,
   onNavigateToNotifications,
+=======
+<<<<<<< HEAD
+=======
+  onNavigateToChat,
+  onNavigateToNotifications,
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   onNavigateToAccountSettings,
   onNavigateToVehicleOwnerProceed,
   isLoggedIn,
@@ -228,6 +329,14 @@ const AccountSettings = ({
   onLogout,
 }) => {
   const [showAI, setShowAI] = useState(false);
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  const [userMessage, setUserMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+>>>>>>> 8422a2f (fixed bugs and updates)
   const [activeTab, setActiveTab] = useState("Profile Settings");
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(
@@ -246,11 +355,127 @@ const AccountSettings = ({
   const [statusError, setStatusError] = useState("");
   const [isAddressEdited, setIsAddressEdited] = useState(false);
 
+<<<<<<< HEAD
+=======
+  // PSGC lists
+=======
+  const [activeTab, setActiveTab] = useState("Profile Settings");
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(
+    getUserProfileFromStorage().avatar || null
+  );
+
+  const [profile, setProfile] = useState(() => ({
+    ...DEFAULT_PROFILE,
+    ...getUserProfileFromStorage(),
+  }));
+  const [draftProfile, setDraftProfile] = useState(null);
+  const [editingSection, setEditingSection] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingSection, setSavingSection] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const [isAddressEdited, setIsAddressEdited] = useState(false);
+
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   const [regions, setRegions] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
 
+<<<<<<< HEAD
+  const current = draftProfile || profile;
+  const activeUserIdentity = String(user?._id || user?.email || "").trim().toLowerCase();
+=======
+<<<<<<< HEAD
+  // Basic profile (read-only from localStorage users)
+  const [profile, setProfile] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+  });
+>>>>>>> 8422a2f (fixed bugs and updates)
+
+  useEffect(() => {
+    let mounted = true;
+
+    const storedUser = getStoredUser();
+    const localSeed = normalizeUserProfile(user || storedUser, user || storedUser);
+    setProfile({ ...DEFAULT_PROFILE, ...localSeed });
+    setProfilePhoto(localSeed.avatar || null);
+
+    const syncProfile = async () => {
+      setLoadingProfile(true);
+      try {
+        const response = await API.getProfile();
+        if (!mounted || !response?.user) return;
+        const normalized = persistUserProfile(response.user);
+        setProfile({ ...DEFAULT_PROFILE, ...normalized });
+        setProfilePhoto(normalized.avatar || null);
+        window.dispatchEvent(new Event("user-profile-updated"));
+      } catch {
+        if (!mounted) return;
+        const storedProfile = getUserProfileFromStorage();
+        setProfile({ ...DEFAULT_PROFILE, ...storedProfile });
+        setProfilePhoto(storedProfile.avatar || null);
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    };
+
+    syncProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [activeUserIdentity]);
+
+  const syncAvatarAcrossApp = async (avatarValue = "") => {
+    const normalizedAvatar = String(avatarValue || "").trim();
+    const persisted = persistUserProfile({
+      ...getStoredUser(),
+      ...profile,
+      avatar: normalizedAvatar,
+    });
+
+    setProfile((prev) => ({ ...prev, ...persisted, avatar: normalizedAvatar }));
+    setProfilePhoto(normalizedAvatar || null);
+    window.dispatchEvent(new Event("user-profile-updated"));
+
+    try {
+      const response = await API.updateProfile({ avatar: normalizedAvatar });
+      const synced = persistUserProfile(response?.user || { ...persisted, avatar: normalizedAvatar });
+      setProfile((prev) => ({ ...prev, ...synced }));
+      setProfilePhoto(synced.avatar || null);
+      window.dispatchEvent(new Event("user-profile-updated"));
+      setStatusMessage("Profile photo updated.");
+      setStatusError("");
+    } catch (error) {
+      setStatusError(error.message || "Profile photo saved locally. Cloud sync failed.");
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${PSGC_BASE_URL}/regions/`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setRegions(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setRegions([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+<<<<<<< HEAD
+=======
+  // Region -> Provinces
+=======
   const current = draftProfile || profile;
   const activeUserIdentity = String(user?._id || user?.email || "").trim().toLowerCase();
 
@@ -328,6 +553,8 @@ const AccountSettings = ({
     };
   }, []);
 
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   useEffect(() => {
     if (!current.region) {
       setProvinces([]);
@@ -336,6 +563,84 @@ const AccountSettings = ({
       return;
     }
 
+<<<<<<< HEAD
+    let active = true;
+
+    const loadProvincesOrCities = async () => {
+      try {
+        const provinceResponse = await fetch(`${PSGC_BASE_URL}/regions/${current.region}/provinces/`);
+        if (!provinceResponse.ok) throw new Error("Failed to load provinces.");
+        const provinceData = await provinceResponse.json();
+        const provinceList = Array.isArray(provinceData) ? provinceData : [];
+        if (!active) return;
+
+        setProvinces(provinceList);
+        setBarangays([]);
+
+        if (provinceList.length === 0) {
+          const cityResponse = await fetch(
+            `${PSGC_BASE_URL}/regions/${current.region}/cities-municipalities/`
+          );
+          if (!cityResponse.ok) throw new Error("Failed to load cities.");
+          const cityData = await cityResponse.json();
+          if (!active) return;
+          setCities(Array.isArray(cityData) ? cityData : []);
+        } else if (!current.province) {
+          setCities([]);
+        }
+      } catch {
+        if (!active) return;
+        setProvinces([]);
+=======
+<<<<<<< HEAD
+    fetch(`https://psgc.gitlab.io/api/regions/${current.region}/provinces/`)
+      .then((res) => res.json())
+      .then((data) => {
+        setProvinces(data);
+>>>>>>> 8422a2f (fixed bugs and updates)
+        setCities([]);
+        setBarangays([]);
+      }
+    };
+
+    loadProvincesOrCities();
+    return () => {
+      active = false;
+    };
+  }, [current.region, current.province]);
+
+  useEffect(() => {
+    if (!current.region || provinces.length === 0 || !current.province) {
+      if (!current.province && provinces.length > 0) {
+        setCities([]);
+        setBarangays([]);
+      }
+      return;
+    }
+
+    let active = true;
+    fetch(`${PSGC_BASE_URL}/provinces/${current.province}/cities-municipalities/`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return;
+        setCities(Array.isArray(data) ? data : []);
+        setBarangays([]);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCities([]);
+        setBarangays([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [current.province, current.region, provinces.length]);
+
+<<<<<<< HEAD
+=======
+  // City -> Barangays
+=======
     let active = true;
 
     const loadProvincesOrCities = async () => {
@@ -402,12 +707,101 @@ const AccountSettings = ({
     };
   }, [current.province, current.region, provinces.length]);
 
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   useEffect(() => {
     if (!current.city) {
       setBarangays([]);
       return;
     }
 
+<<<<<<< HEAD
+    let active = true;
+    fetch(`${PSGC_BASE_URL}/cities-municipalities/${current.city}/barangays/`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setBarangays(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setBarangays([]);
+      });
+
+    return () => {
+      active = false;
+    };
+=======
+<<<<<<< HEAD
+    fetch(
+      `https://psgc.gitlab.io/api/cities-municipalities/${current.city}/barangays/`
+    )
+      .then((res) => res.json())
+      .then((data) => setBarangays(data))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+>>>>>>> 8422a2f (fixed bugs and updates)
+  }, [current.city]);
+
+  useEffect(() => {
+    if (editingSection !== "location" || isAddressEdited || !draftProfile) return;
+
+    const nextAddress = buildAddressFromSelections(draftProfile, {
+      regions,
+      provinces,
+      cities,
+      barangays,
+    });
+
+    setDraftProfile((prev) => {
+      if (!prev || prev.address === nextAddress) return prev;
+      return { ...prev, address: nextAddress };
+    });
+  }, [barangays, cities, draftProfile, editingSection, isAddressEdited, provinces, regions]);
+
+  const handlePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      await syncAvatarAcrossApp(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    syncAvatarAcrossApp("");
+  };
+
+  const updateDraftField = (field, value) => {
+    setDraftProfile((prev) => ({
+      ...(prev || profile),
+      [field]: value,
+    }));
+    setStatusMessage("");
+    setStatusError("");
+  };
+
+  const openEdit = (sectionKey) => {
+    setEditingSection(sectionKey);
+    setDraftProfile({ ...profile });
+    setIsAddressEdited(Boolean(profile.address));
+    setStatusMessage("");
+    setStatusError("");
+  };
+
+  const saveSection = async (sectionKey) => {
+    if (!draftProfile) return;
+    if (sectionKey === "contact") {
+      const phone = String(draftProfile.phone || "").trim();
+      if (!PHONE_REGEX.test(phone)) {
+        setStatusError("Please enter a valid 11-digit phone number.");
+        setStatusMessage("");
+        return;
+      }
+    }
+<<<<<<< HEAD
+=======
+=======
     let active = true;
     fetch(`${PSGC_BASE_URL}/cities-municipalities/${current.city}/barangays/`)
       .then((response) => response.json())
@@ -481,6 +875,7 @@ const AccountSettings = ({
         return;
       }
     }
+>>>>>>> 8422a2f (fixed bugs and updates)
 
     if (sectionKey === "personal") {
       const effectiveRole = String(profile.role || user?.role || "user").toLowerCase();
@@ -560,10 +955,52 @@ const AccountSettings = ({
       return;
     }
     openEdit(sectionKey);
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   };
 
   return (
     <div className="min-h-screen bg-white">
+<<<<<<< HEAD
+      <Navbar
+        activePage=""
+        isLoggedIn={isLoggedIn}
+        user={user}
+        onNavigateToHome={onNavigateToHome}
+        onNavigateToSignIn={onNavigateToSignIn}
+        onNavigateToRegister={onNavigateToRegister}
+        onNavigateToVehicles={onNavigateToVehicles}
+        onNavigateToBookingHistory={onNavigateToBookingHistory}
+        onNavigateToAbout={onNavigateToAbout}
+        onNavigateToChat={onNavigateToChat}
+        onNavigateToNotifications={onNavigateToNotifications}
+        onNavigateToAccountSettings={onNavigateToAccountSettings}
+        onLogout={onLogout}
+      />
+=======
+<<<<<<< HEAD
+      {/* NAVBAR */}
+      <nav className="bg-white shadow-sm fixed w-full top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
+          <button
+            onClick={onNavigateToHome}
+            className="text-2xl font-bold hover:opacity-90 transition"
+          >
+            Rentify<span className="text-[#017FE6]">Pro</span>
+          </button>
+>>>>>>> 8422a2f (fixed bugs and updates)
+
+      <div className="pt-24 bg-gray-50 min-h-screen">
+<<<<<<< HEAD
+        <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-6">
+          <aside className="w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
+=======
+        <div className="max-w-7xl mx-auto px-6 flex gap-6">
+          {/* LEFT SIDEBAR */}
+          <aside className="w-72 space-y-6 sticky top-24 self-start mt-4">
+=======
       <Navbar
         activePage=""
         isLoggedIn={isLoggedIn}
@@ -583,6 +1020,8 @@ const AccountSettings = ({
       <div className="pt-24 bg-gray-50 min-h-screen">
         <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-6">
           <aside className="w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             <div className="bg-white rounded-xl shadow p-5 space-y-1">
               {[
                 { label: "Profile Settings", icon: User },
@@ -611,6 +1050,13 @@ const AccountSettings = ({
                 <div className="w-9 h-9 rounded-lg bg-[#E6F2FF] flex items-center justify-center">
                   <Car size={18} className="text-[#017FE6]" />
                 </div>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                 <h4 className="font-semibold text-m text-gray-900 leading-none">
                   Become a Vehicle Owner
                 </h4>
@@ -630,17 +1076,42 @@ const AccountSettings = ({
               >
                 Register as Vehicle Owner
               </button>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+>>>>>>> 8422a2f (fixed bugs and updates)
+            </div>
+          </aside>
+
+          <main className="flex-1 space-y-8 pb-12">
+            <div className="pb-6 mb-6 border-b">
+<<<<<<< HEAD
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
+=======
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Account Settings
+              </h1>
+=======
             </div>
           </aside>
 
           <main className="flex-1 space-y-8 pb-12">
             <div className="pb-6 mb-6 border-b">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
               <p className="text-base text-gray-500 max-w-xl">
                 Manage your personal information and account preferences
               </p>
             </div>
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+            {/* HEADER CARD */}
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
             {loadingProfile && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
                 Loading your latest profile details...
@@ -657,6 +1128,10 @@ const AccountSettings = ({
               </div>
             )}
 
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             <div className="bg-white rounded-xl shadow p-6 flex items-center gap-4">
               <div className="relative">
                 <div className="relative">
@@ -669,7 +1144,15 @@ const AccountSettings = ({
                       />
                     ) : (
                       <span className="text-white text-2xl font-bold">
+<<<<<<< HEAD
                         {profile.initials || user?.initials || "U"}
+=======
+<<<<<<< HEAD
+                        {user?.initials}
+=======
+                        {profile.initials || user?.initials || "U"}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                       </span>
                     )}
                   </div>
@@ -688,8 +1171,18 @@ const AccountSettings = ({
                         <input
                           type="file"
                           accept="image/*"
+<<<<<<< HEAD
                           onChange={(event) => {
                             handlePhotoUpload(event);
+=======
+<<<<<<< HEAD
+                          onChange={(e) => {
+                            handlePhotoUpload(e);
+=======
+                          onChange={(event) => {
+                            handlePhotoUpload(event);
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                             setShowPhotoMenu(false);
                           }}
                           className="hidden"
@@ -714,6 +1207,23 @@ const AccountSettings = ({
 
               <div>
                 <h2 className="text-xl font-semibold flex items-center gap-2">
+<<<<<<< HEAD
+                  {profile.name || user?.name || "User"}
+=======
+<<<<<<< HEAD
+                  {user?.name}
+>>>>>>> 8422a2f (fixed bugs and updates)
+                  <BadgeCheck size={18} className="text-[#017FE6]" />
+                </h2>
+
+                <p className="text-m text-gray-500">{profile.email || user?.email}</p>
+
+                <span className="text-sm text-[#017FE6] font-medium">
+<<<<<<< HEAD
+                  {profile.isVerified ? "Verified User" : "Verification Pending"}
+=======
+                  Verified User
+=======
                   {profile.name || user?.name || "User"}
                   <BadgeCheck size={18} className="text-[#017FE6]" />
                 </h2>
@@ -722,10 +1232,19 @@ const AccountSettings = ({
 
                 <span className="text-sm text-[#017FE6] font-medium">
                   {profile.isVerified ? "Verified User" : "Verification Pending"}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                 </span>
               </div>
             </div>
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+            {/* INFO CARDS */}
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             {[
               {
                 key: "personal",
@@ -734,28 +1253,76 @@ const AccountSettings = ({
                   <>
                     <InputField label="First Name" value={profile.firstName} disabled />
                     <InputField label="Last Name" value={profile.lastName} disabled />
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <InputField
                       label="Date of Birth"
                       type="date"
                       max={new Date().toISOString().split("T")[0]}
                       value={
                         editingSection === "personal"
+<<<<<<< HEAD
+                          ? draftProfile?.dateOfBirth ?? profile.dateOfBirth
+                          : profile.dateOfBirth
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.dob ?? extraProfile.dob)
+                          : extraProfile.dob
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "personal"}
+                      onChange={(event) => updateDraftField("dateOfBirth", event.target.value)}
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.dateOfBirth ?? profile.dateOfBirth
                           : profile.dateOfBirth
                       }
                       disabled={editingSection !== "personal"}
                       onChange={(event) => updateDraftField("dateOfBirth", event.target.value)}
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <RadioGroupField
                       label="Gender"
                       value={
                         editingSection === "personal"
+<<<<<<< HEAD
                           ? draftProfile?.gender ?? profile.gender
                           : profile.gender
                       }
                       disabled={editingSection !== "personal"}
                       options={GENDER_OPTIONS}
                       onChange={(value) => updateDraftField("gender", value)}
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.gender ?? extraProfile.gender)
+                          : extraProfile.gender
+                      }
+                      disabled={editingSection !== "personal"}
+                      options={["Male", "Female"]}
+                      onChange={(val) =>
+                        setDraftProfile((prev) => ({
+                          ...(prev || extraProfile),
+                          gender: val,
+                        }))
+                      }
+=======
+                          ? draftProfile?.gender ?? profile.gender
+                          : profile.gender
+                      }
+                      disabled={editingSection !== "personal"}
+                      options={GENDER_OPTIONS}
+                      onChange={(value) => updateDraftField("gender", value)}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                       name="gender"
                     />
                   </>
@@ -767,6 +1334,12 @@ const AccountSettings = ({
                 content: (
                   <>
                     <InputField label="Email" value={profile.email} disabled />
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+                    <InputField label="Phone Number" value={profile.phone} disabled />
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <InputField
                       label="Phone Number"
                       type="tel"
@@ -785,6 +1358,10 @@ const AccountSettings = ({
                         )
                       }
                     />
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                   </>
                 ),
               },
@@ -793,10 +1370,36 @@ const AccountSettings = ({
                 title: "Location Information",
                 content: (
                   <>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+                    {/* ✅ This is the one that was losing focus - now fixed */}
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <InputField
                       label="Full Address"
                       value={
                         editingSection === "location"
+<<<<<<< HEAD
+                          ? draftProfile?.address ?? profile.address
+                          : profile.address
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.address ?? extraProfile.address)
+                          : extraProfile.address
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "location"}
+                      onChange={(event) => {
+                        setIsAddressEdited(event.target.value.trim() !== "");
+                        updateDraftField("address", event.target.value);
+                      }}
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.address ?? profile.address
                           : profile.address
                       }
@@ -806,10 +1409,66 @@ const AccountSettings = ({
                         updateDraftField("address", event.target.value);
                       }}
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <SelectField
                       label="Region"
                       value={
                         editingSection === "location"
+<<<<<<< HEAD
+                          ? draftProfile?.region ?? profile.region
+                          : profile.region
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.region ?? extraProfile.region)
+                          : extraProfile.region
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "location"}
+                      options={regions.map((region) => ({
+                        label: region.name,
+                        value: region.code,
+                      }))}
+                      onChange={(event) => {
+                        setIsAddressEdited(false);
+                        setDraftProfile((prev) => ({
+                          ...(prev || profile),
+                          region: event.target.value,
+                          province: "",
+                          city: "",
+                          barangay: "",
+                          address: "",
+                        }));
+                      }}
+                    />
+                    <SelectField
+                      label={provinces.length > 0 ? "Province" : "Province (Not required)"}
+                      value={
+                        editingSection === "location"
+                          ? draftProfile?.province ?? profile.province
+                          : profile.province
+                      }
+                      disabled={editingSection !== "location" || !current.region || provinces.length === 0}
+                      options={provinces.map((province) => ({
+                        label: province.name,
+                        value: province.code,
+                      }))}
+                      onChange={(event) => {
+                        setIsAddressEdited(false);
+                        setDraftProfile((prev) => ({
+                          ...(prev || profile),
+                          province: event.target.value,
+                          city: "",
+                          barangay: "",
+                          address: "",
+                        }));
+                      }}
+                      placeholder={provinces.length > 0 ? "Select" : "Not required"}
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.region ?? profile.region
                           : profile.region
                       }
@@ -854,10 +1513,44 @@ const AccountSettings = ({
                       }}
                       placeholder={provinces.length > 0 ? "Select" : "Not required"}
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <SelectField
                       label="City / Municipality"
                       value={
                         editingSection === "location"
+<<<<<<< HEAD
+                          ? draftProfile?.city ?? profile.city
+                          : profile.city
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.city ?? extraProfile.city)
+                          : extraProfile.city
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={
+                        editingSection !== "location" ||
+                        !current.region ||
+                        (provinces.length > 0 && !current.province)
+                      }
+                      options={cities.map((city) => ({
+                        label: city.name,
+                        value: city.code,
+                      }))}
+                      onChange={(event) => {
+                        setIsAddressEdited(false);
+                        setDraftProfile((prev) => ({
+                          ...(prev || profile),
+                          city: event.target.value,
+                          barangay: "",
+                          address: "",
+                        }));
+                      }}
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.city ?? profile.city
                           : profile.city
                       }
@@ -880,10 +1573,36 @@ const AccountSettings = ({
                         }));
                       }}
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <SelectField
                       label="Barangay"
                       value={
                         editingSection === "location"
+<<<<<<< HEAD
+                          ? draftProfile?.barangay ?? profile.barangay
+                          : profile.barangay
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.barangay ?? extraProfile.barangay)
+                          : extraProfile.barangay
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "location" || !current.city}
+                      options={barangays.map((barangay) => ({
+                        label: barangay.name,
+                        value: barangay.code,
+                      }))}
+                      onChange={(event) => {
+                        setIsAddressEdited(false);
+                        setDraftProfile((prev) => ({
+<<<<<<< HEAD
+=======
+                          ...(prev || extraProfile),
+                          barangay: e.target.value,
+                        }))
+                      }
+=======
                           ? draftProfile?.barangay ?? profile.barangay
                           : profile.barangay
                       }
@@ -895,11 +1614,16 @@ const AccountSettings = ({
                       onChange={(event) => {
                         setIsAddressEdited(false);
                         setDraftProfile((prev) => ({
+>>>>>>> 8422a2f (fixed bugs and updates)
                           ...(prev || profile),
                           barangay: event.target.value,
                           address: "",
                         }));
                       }}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     />
                   </>
                 ),
@@ -913,6 +1637,24 @@ const AccountSettings = ({
                       label="Contact Name"
                       value={
                         editingSection === "emergency"
+<<<<<<< HEAD
+                          ? draftProfile?.emergencyContactName ?? profile.emergencyContactName
+                          : profile.emergencyContactName
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.emergencyName ?? extraProfile.emergencyName)
+                          : extraProfile.emergencyName
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "emergency"}
+                      onChange={(event) =>
+                        updateDraftField("emergencyContactName", event.target.value)
+                      }
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.emergencyContactName ?? profile.emergencyContactName
                           : profile.emergencyContactName
                       }
@@ -921,10 +1663,30 @@ const AccountSettings = ({
                         updateDraftField("emergencyContactName", event.target.value)
                       }
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <InputField
                       label="Phone Number"
                       value={
                         editingSection === "emergency"
+<<<<<<< HEAD
+                          ? draftProfile?.emergencyContactPhone ?? profile.emergencyContactPhone
+                          : profile.emergencyContactPhone
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.emergencyPhone ?? extraProfile.emergencyPhone)
+                          : extraProfile.emergencyPhone
+>>>>>>> 8422a2f (fixed bugs and updates)
+                      }
+                      disabled={editingSection !== "emergency"}
+                      onChange={(event) =>
+                        updateDraftField("emergencyContactPhone", event.target.value)
+                      }
+                    />
+<<<<<<< HEAD
+=======
+
+=======
                           ? draftProfile?.emergencyContactPhone ?? profile.emergencyContactPhone
                           : profile.emergencyContactPhone
                       }
@@ -933,21 +1695,52 @@ const AccountSettings = ({
                         updateDraftField("emergencyContactPhone", event.target.value)
                       }
                     />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                     <SelectField
                       label="Relationship"
                       value={
                         editingSection === "emergency"
+<<<<<<< HEAD
                           ? draftProfile?.emergencyContactRelationship ??
                             profile.emergencyContactRelationship
                           : profile.emergencyContactRelationship
                       }
                       disabled={editingSection !== "emergency"}
+=======
+<<<<<<< HEAD
+                          ? (draftProfile?.emergencyRelation ??
+                              extraProfile.emergencyRelation)
+                          : extraProfile.emergencyRelation
+                      }
+                      disabled={editingSection !== "emergency"}
+                      options={[
+                        { label: "Friend", value: "Friend" },
+                        { label: "Family", value: "Family" },
+                        { label: "Spouse", value: "Spouse" },
+                      ]}
+                      onChange={(e) =>
+                        setDraftProfile((prev) => ({
+                          ...(prev || extraProfile),
+                          emergencyRelation: e.target.value,
+                        }))
+=======
+                          ? draftProfile?.emergencyContactRelationship ??
+                            profile.emergencyContactRelationship
+                          : profile.emergencyContactRelationship
+                      }
+                      disabled={editingSection !== "emergency"}
+>>>>>>> 8422a2f (fixed bugs and updates)
                       options={RELATIONSHIP_OPTIONS.map((option) => ({
                         label: option,
                         value: option,
                       }))}
                       onChange={(event) =>
                         updateDraftField("emergencyContactRelationship", event.target.value)
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                       }
                     />
                   </>
@@ -960,6 +1753,27 @@ const AccountSettings = ({
 
                   <button
                     onClick={() => toggleEdit(section.key)}
+<<<<<<< HEAD
+                    disabled={savingSection === section.key}
+                    className="text-sm border px-4 py-1 rounded-full hover:bg-gray-100 disabled:opacity-60"
+=======
+<<<<<<< HEAD
+                    className="text-sm border px-4 py-1 rounded-full hover:bg-gray-100"
+>>>>>>> 8422a2f (fixed bugs and updates)
+                  >
+                    {savingSection === section.key
+                      ? "Saving..."
+                      : editingSection === section.key
+                        ? "Save"
+                        : "Edit"}
+                  </button>
+                </div>
+
+<<<<<<< HEAD
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{section.content}</div>
+=======
+                <div className="grid grid-cols-2 gap-4">{section.content}</div>
+=======
                     disabled={savingSection === section.key}
                     className="text-sm border px-4 py-1 rounded-full hover:bg-gray-100 disabled:opacity-60"
                   >
@@ -972,12 +1786,15 @@ const AccountSettings = ({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{section.content}</div>
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
               </div>
             ))}
           </main>
         </div>
       </div>
 
+<<<<<<< HEAD
       {!showAI && (
         <button
           onClick={() => setShowAI(true)}
@@ -990,8 +1807,117 @@ const AccountSettings = ({
       )}
 
       <ChatWidget isOpen={showAI} onClose={() => setShowAI(false)} />
+=======
+<<<<<<< HEAD
+      {/* AI CHAT */}
+      {showAI && (
+        <div className="fixed bottom-4 right-4 w-[95vw] sm:w-[400px] h-[70vh] sm:h-[450px] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col">
+          <div className="bg-[#017FE6] text-white px-4 py-3 flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold text-sm">RentifyPro AI</h3>
+              <p className="text-xs opacity-80">Online • Ready to help</p>
+            </div>
+            <button onClick={() => setShowAI(false)}>✕</button>
+          </div>
+
+          <div className="p-4 flex-1 overflow-y-auto bg-gray-50 space-y-4">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`flex items-end gap-2 ${
+                  msg.sender === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                {msg.sender === "ai" && (
+                  <img src="/robot-ai.png" className="w-8 h-8 rounded-full" alt="AI" />
+                )}
+
+                <div
+                  className={`px-4 py-2 rounded-2xl text-sm max-w-[75%] shadow ${
+                    msg.sender === "user"
+                      ? "bg-[#017FE6] text-white rounded-br-sm"
+                      : "bg-white text-gray-800 rounded-bl-sm"
+                  }`}
+                >
+                  {msg.text}
+                </div>
+
+                {msg.sender === "user" && (
+                  <div className="w-8 h-8 rounded-full bg-[#017FE6] text-white flex items-center justify-center text-xs">
+                    U
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="flex items-center gap-2">
+                <img src="/robot-ai.png" className="w-8 h-8 rounded-full" alt="AI" />
+                <div className="bg-white px-4 py-2 rounded-2xl shadow text-sm text-gray-500 flex gap-1">
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce delay-150">.</span>
+                  <span className="animate-bounce delay-300">.</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t bg-white px-3 py-2 flex items-center gap-2">
+            <input
+              value={userMessage}
+              onChange={(e) => setUserMessage(e.target.value)}
+              placeholder="Ask me about vehicles, bookings..."
+              className="flex-1 border rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-[#017FE6]"
+            />
+
+            <button
+              onClick={() => {
+                if (!userMessage.trim()) return;
+
+                setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
+                setUserMessage("");
+                setIsTyping(true);
+
+                setTimeout(() => {
+                  setMessages((prev) => [
+                    ...prev,
+                    { sender: "ai", text: "Got it! 😊 Let me help you with that." },
+                  ]);
+                  setIsTyping(false);
+                }, 1200);
+              }}
+              className="bg-[#017FE6] text-white w-9 h-9 rounded-full"
+            >
+              ➤
+            </button>
+          </div>
+        </div>
+      )}
+=======
+      {!showAI && (
+        <button
+          onClick={() => setShowAI(true)}
+          aria-label="AI Assistant"
+          className="fixed bottom-6 right-6 z-[70] w-14 h-14 flex items-center justify-center rounded-full bg-[#017FE6] hover:bg-[#0165B8] text-white shadow-2xl transition-all duration-300 hover:scale-105"
+        >
+          <Bot size={24} />
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white" />
+        </button>
+      )}
+
+      <ChatWidget isOpen={showAI} onClose={() => setShowAI(false)} />
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
     </div>
   );
 };
 
 export default AccountSettings;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

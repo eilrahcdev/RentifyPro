@@ -4,6 +4,22 @@ import { CheckCircle, ArrowLeft } from "lucide-react";
 const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }) => {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+<<<<<<< HEAD
+      {/* container */}
+=======
+<<<<<<< HEAD
+      {/* OUTER CONTAINER */}
+>>>>>>> 8422a2f (fixed bugs and updates)
+      <div className="bg-white rounded-2xl shadow-lg max-w-5xl w-full overflow-hidden">
+        
+        {/* header */}
+        <div className="relative h-16 flex items-center border-b px-6">
+
+<<<<<<< HEAD
+          {/* logo */}
+=======
+          {/* Center Logo */}
+=======
       {/* container */}
       <div className="bg-white rounded-2xl shadow-lg max-w-5xl w-full overflow-hidden">
         
@@ -11,6 +27,8 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
         <div className="relative h-16 flex items-center border-b px-6">
 
           {/* logo */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           <button
             onClick={onNavigateToHome}
             className="absolute left-1/2 -translate-x-1/2 text-xl font-bold hover:opacity-80 transition"
@@ -20,10 +38,24 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
 
         </div>
 
+<<<<<<< HEAD
         {/* content */}
         <div className="p-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             {/* illustration */}
+=======
+<<<<<<< HEAD
+        {/* CONTENT */}
+        <div className="p-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            {/* LEFT – Illustration */}
+=======
+        {/* content */}
+        <div className="p-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            {/* illustration */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             <div className="flex justify-center">
               <img
                 src="/vehicle-owner-verify.png"
@@ -32,7 +64,15 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
               />
             </div>
 
+<<<<<<< HEAD
             {/* details */}
+=======
+<<<<<<< HEAD
+            {/* RIGHT – Content */}
+=======
+            {/* details */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-4">
                 Proceed as Vehicle Owner

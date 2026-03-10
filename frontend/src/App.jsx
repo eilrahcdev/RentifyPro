@@ -1,28 +1,192 @@
+<<<<<<< HEAD
 import React, { useEffect, useRef, useState } from "react";
 import { getCurrentTime, getTodayDate, getTomorrowDate } from "./utils/dateUtils";
 
 // Main pages
+=======
+<<<<<<< HEAD
+import React, { useEffect, useState } from "react";
+
+// USER PAGES (inside src/pages)
+=======
+import React, { useEffect, useRef, useState } from "react";
+import { getCurrentTime, getTodayDate, getTomorrowDate } from "./utils/dateUtils";
+
+// Main pages
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 import RentifyPro from "./pages/RentifyPro";
 import SignInPage from "./components/SignInPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
+<<<<<<< HEAD
 import BookingsPage from "./pages/BookingsPage";
 import RealtimeChatPage from "./pages/RealtimeChatPage";
 import NotificationsPage from "./pages/NotificationsPage";
+=======
+<<<<<<< HEAD
+import AboutPage from "./pages/AboutPage";
+=======
+import BookingsPage from "./pages/BookingsPage";
+import RealtimeChatPage from "./pages/RealtimeChatPage";
+import NotificationsPage from "./pages/NotificationsPage";
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 import AccountSettings from "./pages/AccountSettings";
 import ProceedVehicleOwner from "./pages/ProceedVehicleOwner";
 import VehicleOwnerVerification from "./pages/VehicleOwnerVerification";
 
+<<<<<<< HEAD
+// Registration pages
+=======
+<<<<<<< HEAD
+// REGISTER PAGES (inside src/components in your screenshot)
+>>>>>>> 8422a2f (fixed bugs and updates)
+import RegisterPage from "./components/RegisterPage";
+import RegisterOwnerPage from "./pages/RegisterOwnerPage";
+
+<<<<<<< HEAD
+// Verification pages
+=======
+// VERIFICATION (make sure folder name matches exactly: verification vs Verification)
+=======
 // Registration pages
 import RegisterPage from "./components/RegisterPage";
 import RegisterOwnerPage from "./pages/RegisterOwnerPage";
 
 // Verification pages
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 import RegisterOTP from "./verification/RegisterOTP";
 import ForgotPasswordEmail from "./verification/ForgotPasswordEmail";
 import ForgotPasswordOTP from "./verification/ForgotPasswordOTP";
 import ResetPassword from "./verification/ResetPassword";
 
+<<<<<<< HEAD
+// Owner pages
+=======
+<<<<<<< HEAD
+// OWNER UI (after moving into src/owner)
+>>>>>>> 8422a2f (fixed bugs and updates)
+import OwnerLayout from "./owner/OwnerLayout";
+
+// Shared parts
+import LogoutModal from "./components/LogoutModal";
+import { disconnectSocket } from "./utils/socket";
+import API from "./utils/api";
+
+const ROUTE_TO_PAGE = {
+  "/": "home",
+  "/vehicles": "vehicles",
+  "/about": "about",
+  "/bookings": "booking-history",
+  "/signin": "signin",
+  "/register": "register",
+  "/chat": "realtime-chat",
+  "/notifications": "notifications",
+  "/account-settings": "account-settings",
+};
+
+const PAGE_TO_ROUTE = Object.entries(ROUTE_TO_PAGE).reduce((map, [route, page]) => {
+  map[page] = route;
+  return map;
+}, {});
+
+const resolvePageFromPath = (pathname) => {
+  const normalized = String(pathname || "/").toLowerCase();
+  return ROUTE_TO_PAGE[normalized] || "home";
+};
+
+const getInitialsFromName = (name) => {
+  const cleaned = String(name || "").trim();
+  if (!cleaned) return "U";
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  const first = parts[0]?.charAt(0) || "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.charAt(0) || "" : "";
+  return `${first}${last}`.toUpperCase() || "U";
+};
+
+const PROFILE_PHOTO_KEY = "profilePhoto";
+const PROFILE_PHOTO_USER_KEY = "profilePhotoUserId";
+const getScopedProfilePhoto = (storedUser = {}) => {
+  const photo = String(localStorage.getItem(PROFILE_PHOTO_KEY) || "").trim();
+  if (!photo) return "";
+
+  const owner = String(localStorage.getItem(PROFILE_PHOTO_USER_KEY) || "").trim();
+  if (!owner) return photo;
+
+  const userId = String(storedUser?._id || "").trim();
+  const email = String(storedUser?.email || "").trim().toLowerCase();
+  if (owner === userId) return photo;
+  if (email && owner.toLowerCase() === email) return photo;
+  return "";
+};
+
+const hydrateStoredUser = (storedUser = {}) => {
+  if (!storedUser || typeof storedUser !== "object") return null;
+
+  const displayName =
+    String(storedUser.name || "").trim() ||
+    String(storedUser.email || "").split("@")[0] ||
+    "User";
+  const profilePhoto = getScopedProfilePhoto(storedUser);
+  const avatar = String(storedUser.avatar || profilePhoto || "").trim();
+
+  return {
+    ...storedUser,
+    _id: storedUser._id,
+    name: displayName,
+    initials: String(storedUser.initials || "").trim() || getInitialsFromName(displayName),
+    avatar,
+  };
+};
+
+const App = () => {
+  const getDefaultBookingData = () => {
+    return {
+      vehicleType: "",
+      location: "",
+      pickupDate: getTodayDate(),
+      pickupTime: getCurrentTime(),
+      returnDate: getTomorrowDate(),
+      returnTime: getCurrentTime(),
+    };
+  };
+
+  const [currentPage, setCurrentPage] = useState(() =>
+    resolvePageFromPath(window.location.pathname)
+  );
+  const [bookingData, setBookingData] = useState(getDefaultBookingData());
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState("");
+
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [registeredPhone, setRegisteredPhone] = useState("");
+  const [registeredName, setRegisteredName] = useState("");
+  const [registerRole, setRegisterRole] = useState("user");
+
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotResetToken, setForgotResetToken] = useState("");
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isOwnerLoggedIn, setIsOwnerLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
+  const attemptedAvatarBackfillByUserRef = useRef(new Set());
+
+  // Logout modal state
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      setIsOwnerLoggedIn(false);
+      localStorage.removeItem("isNewOwner");
+    }
+  }, []);
+
+<<<<<<< HEAD
+=======
+  // Allow owner dashboard to switch back to user UI
+=======
 // Owner pages
 import OwnerLayout from "./owner/OwnerLayout";
 
@@ -139,6 +303,7 @@ const App = () => {
     }
   }, []);
 
+>>>>>>> 8422a2f (fixed bugs and updates)
   useEffect(() => {
     const storedToken = localStorage.getItem("token");
     const storedUserRaw = localStorage.getItem("user");
@@ -255,15 +420,147 @@ const App = () => {
     window.history.pushState({ page: currentPage }, "", targetRoute);
   }, [currentPage]);
 
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
   useEffect(() => {
     const switchToUser = () => {
       setIsOwnerLoggedIn(false);
       setCurrentPage("home");
     };
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
     window.addEventListener("switch-to-user", switchToUser);
     return () => window.removeEventListener("switch-to-user", switchToUser);
   }, []);
 
+<<<<<<< HEAD
+  // Open the logout modal
+  const requestLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  // Finish logout
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    try {
+      await API.logout();
+    } catch {
+      // Local cleanup still runs below.
+    }
+=======
+<<<<<<< HEAD
+  const logoutEverywhere = () => {
+>>>>>>> 8422a2f (fixed bugs and updates)
+    setIsLoggedIn(false);
+    setIsOwnerLoggedIn(false);
+    setUser(null);
+    setPendingScrollTarget("");
+    disconnectSocket();
+    localStorage.removeItem("isNewOwner");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem(PROFILE_PHOTO_KEY);
+    localStorage.removeItem(PROFILE_PHOTO_USER_KEY);
+    setCurrentPage("home");
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
+  };
+
+  // Build initials from the full name
+  const buildUserData = (name, email, role) => {
+    const parts = name.trim().split(" ");
+    const firstName = parts[0] || "";
+    const lastName = parts.slice(1).join(" ") || "";
+    return {
+      name,
+      initials: firstName.charAt(0).toUpperCase() + (lastName.charAt(0) || "").toUpperCase(),
+      email,
+      role,
+      isVerified: true,
+    };
+  };
+
+  const goToBookingHistory = () => {
+    setCurrentPage("booking-history");
+  };
+
+  const goToRealtimeChat = () => {
+    if (!isLoggedIn) {
+      setCurrentPage("signin");
+      return;
+    }
+    setCurrentPage("realtime-chat");
+  };
+
+  const goToNotifications = () => {
+    if (!isLoggedIn) {
+      setCurrentPage("signin");
+      return;
+    }
+    setCurrentPage("notifications");
+  };
+
+  const navigateToContacts = () => {
+    if (currentPage === "home") {
+      const contactsSection = document.getElementById("contacts");
+      if (contactsSection) {
+        contactsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    }
+
+    setPendingScrollTarget("contacts");
+    setCurrentPage("home");
+  };
+
+  const navigateToAbout = () => {
+    if (currentPage === "home") {
+      const aboutSection = document.getElementById("about");
+      if (aboutSection) {
+        aboutSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    }
+
+    setPendingScrollTarget("about");
+    setCurrentPage("home");
+  };
+
+  useEffect(() => {
+    if (!pendingScrollTarget) return undefined;
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(pendingScrollTarget);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      setPendingScrollTarget("");
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [currentPage, pendingScrollTarget]);
+
+  useEffect(() => {
+    if (currentPage !== "about") return;
+    setPendingScrollTarget("about");
+    setCurrentPage("home");
+  }, [currentPage]);
+
+  return (
+    <>
+<<<<<<< HEAD
+=======
+      {/* HOME */}
+=======
   // Open the logout modal
   const requestLogout = () => {
     setShowLogoutModal(true);
@@ -376,6 +673,7 @@ const App = () => {
 
   return (
     <>
+>>>>>>> 8422a2f (fixed bugs and updates)
       {/* logout modal */}
       <LogoutModal
         isOpen={showLogoutModal}
@@ -384,23 +682,49 @@ const App = () => {
       />
 
       {/* home */}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "home" && (
         <RentifyPro
           isLoggedIn={isLoggedIn}
           user={user}
+<<<<<<< HEAD
           onNavigateToHome={() => setCurrentPage("home")}
+=======
+<<<<<<< HEAD
+=======
+          onNavigateToHome={() => setCurrentPage("home")}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
           onNavigateToVehicles={() => {
             setBookingData(getDefaultBookingData());
             setCurrentPage("vehicles");
           }}
+<<<<<<< HEAD
           onNavigateToBookingHistory={goToBookingHistory}
           onNavigateToChat={goToRealtimeChat}
           onNavigateToNotifications={goToNotifications}
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToAbout={navigateToAbout}
           onNavigateToContacts={navigateToContacts}
+=======
+<<<<<<< HEAD
+          onNavigateToBookingHistory={() => setCurrentPage("signin")}
+          onNavigateToRegister={() => setCurrentPage("register")}
+          onNavigateToAbout={() => setCurrentPage("about")}
+=======
+          onNavigateToBookingHistory={goToBookingHistory}
+          onNavigateToChat={goToRealtimeChat}
+          onNavigateToNotifications={goToNotifications}
+          onNavigateToRegister={() => setCurrentPage("register")}
+          onNavigateToAbout={navigateToAbout}
+          onNavigateToContacts={navigateToContacts}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           onSearch={(data) => {
             setBookingData(data);
             setCurrentPage("vehicles");
@@ -409,11 +733,27 @@ const App = () => {
             setSelectedVehicle(vehicle);
             setCurrentPage("vehicle-details");
           }}
+<<<<<<< HEAD
           onLogout={requestLogout}
         />
       )}
 
       {/* sign in */}
+=======
+<<<<<<< HEAD
+          onLogout={logoutEverywhere}
+        />
+      )}
+
+      {/* SIGN IN */}
+=======
+          onLogout={requestLogout}
+        />
+      )}
+
+      {/* sign in */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "signin" && (
         <SignInPage
           onNavigateToHome={() => setCurrentPage("home")}
@@ -436,12 +776,27 @@ const App = () => {
         />
       )}
 
+<<<<<<< HEAD
       {/* forgot password */}
+=======
+<<<<<<< HEAD
+      {/* FORGOT PASSWORD FLOW */}
+=======
+      {/* forgot password */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "forgot-email" && (
         <ForgotPasswordEmail
           onNavigateToOTP={(email) => {
             setForgotEmail(email);
+<<<<<<< HEAD
             setForgotResetToken("");
+=======
+<<<<<<< HEAD
+=======
+            setForgotResetToken("");
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             setCurrentPage("forgot-otp");
           }}
           onNavigateToSignIn={() => setCurrentPage("signin")}
@@ -451,16 +806,32 @@ const App = () => {
       {currentPage === "forgot-otp" && (
         <ForgotPasswordOTP
           email={forgotEmail}
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+          onVerified={() => setCurrentPage("reset-password")}
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
           onVerified={(resetToken) => {
             setForgotResetToken(resetToken);
             setCurrentPage("reset-password");
           }}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           onNavigateToForgotPassword={() => setCurrentPage("forgot-email")}
         />
       )}
 
       {currentPage === "reset-password" && (
         <ResetPassword
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+          onSuccess={() => setCurrentPage("signin")}
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
           email={forgotEmail}
           token={forgotResetToken}
           onSuccess={() => {
@@ -468,11 +839,23 @@ const App = () => {
             setForgotResetToken("");
             setCurrentPage("signin");
           }}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           onBack={() => setCurrentPage("forgot-otp")}
         />
       )}
 
+<<<<<<< HEAD
       {/* vehicles */}
+=======
+<<<<<<< HEAD
+      {/* VEHICLES */}
+=======
+      {/* vehicles */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "vehicles" && (
         <VehiclesPage
           bookingData={bookingData}
@@ -481,6 +864,7 @@ const App = () => {
           user={user}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+<<<<<<< HEAD
           onNavigateToVehicles={() => setCurrentPage("vehicles")}
           onNavigateToBookingHistory={goToBookingHistory}
           onNavigateToChat={goToRealtimeChat}
@@ -488,16 +872,47 @@ const App = () => {
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToAbout={navigateToAbout}
           onNavigateToContacts={navigateToContacts}
+=======
+<<<<<<< HEAD
+          onNavigateToBookingHistory={() => setCurrentPage("signin")}
+          onNavigateToRegister={() => setCurrentPage("register")}
+          onNavigateToAbout={() => setCurrentPage("about")}
+=======
+          onNavigateToVehicles={() => setCurrentPage("vehicles")}
+          onNavigateToBookingHistory={goToBookingHistory}
+          onNavigateToChat={goToRealtimeChat}
+          onNavigateToNotifications={goToNotifications}
+          onNavigateToRegister={() => setCurrentPage("register")}
+          onNavigateToAbout={navigateToAbout}
+          onNavigateToContacts={navigateToContacts}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
           onViewDetails={(vehicle) => {
             setSelectedVehicle(vehicle);
             setCurrentPage("vehicle-details");
           }}
+<<<<<<< HEAD
           onLogout={requestLogout}
         />
       )}
 
       {/* vehicle details */}
+=======
+<<<<<<< HEAD
+          onLogout={logoutEverywhere}
+        />
+      )}
+
+      {/* VEHICLE DETAILS */}
+=======
+          onLogout={requestLogout}
+        />
+      )}
+
+      {/* vehicle details */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "vehicle-details" && selectedVehicle && (
         <VehicleDetailsPage
           vehicle={selectedVehicle}
@@ -508,6 +923,28 @@ const App = () => {
           onBack={() => setCurrentPage("vehicles")}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+<<<<<<< HEAD
+          onNavigateToRegister={() => setCurrentPage("register")}
+          onNavigateToVehicles={() => setCurrentPage("vehicles")}
+          onNavigateToBookingHistory={goToBookingHistory}
+          onNavigateToChat={goToRealtimeChat}
+          onNavigateToNotifications={goToNotifications}
+          onNavigateToAbout={navigateToAbout}
+          onNavigateToContacts={navigateToContacts}
+=======
+<<<<<<< HEAD
+          onNavigateToAbout={() => setCurrentPage("about")}
+>>>>>>> 8422a2f (fixed bugs and updates)
+          onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
+          onLogout={requestLogout}
+        />
+      )}
+
+<<<<<<< HEAD
+      {/* user registration */}
+=======
+      {/* REGISTER USER */}
+=======
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToVehicles={() => setCurrentPage("vehicles")}
           onNavigateToBookingHistory={goToBookingHistory}
@@ -521,14 +958,29 @@ const App = () => {
       )}
 
       {/* user registration */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "register" && (
         <RegisterPage
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+<<<<<<< HEAD
           onNavigateToRegisterOTP={(email, phone, name) => {
             setRegisteredEmail(email);
             setRegisteredPhone(phone);
             setRegisteredName(name || "");
+=======
+<<<<<<< HEAD
+          onNavigateToRegisterOTP={(email, phone) => {
+            setRegisteredEmail(email);
+            setRegisteredPhone(phone);
+=======
+          onNavigateToRegisterOTP={(email, phone, name) => {
+            setRegisteredEmail(email);
+            setRegisteredPhone(phone);
+            setRegisteredName(name || "");
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             setRegisterRole("user");
             setCurrentPage("registerotp");
           }}
@@ -536,23 +988,53 @@ const App = () => {
         />
       )}
 
+<<<<<<< HEAD
       {/* owner registration */}
+=======
+<<<<<<< HEAD
+      {/* REGISTER OWNER */}
+=======
+      {/* owner registration */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "register-owner" && (
         <RegisterOwnerPage
           onBack={() => setCurrentPage("register")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+<<<<<<< HEAD
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToRegisterOTP={(email, phone, name) => {
             setRegisteredEmail(email);
             setRegisteredPhone(phone);
             setRegisteredName(name || "");
+=======
+<<<<<<< HEAD
+          onNavigateToRegisterOTP={(email, phone) => {
+            setRegisteredEmail(email);
+            setRegisteredPhone(phone);
+=======
+          onNavigateToHome={() => setCurrentPage("home")}
+          onNavigateToRegisterOTP={(email, phone, name) => {
+            setRegisteredEmail(email);
+            setRegisteredPhone(phone);
+            setRegisteredName(name || "");
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             setRegisterRole("owner");
             setCurrentPage("registerotp");
           }}
         />
       )}
 
+<<<<<<< HEAD
       {/* OTP verification */}
+=======
+<<<<<<< HEAD
+      {/* REGISTER OTP */}
+=======
+      {/* OTP verification */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "registerotp" && (
         <RegisterOTP
           email={registeredEmail}
@@ -560,6 +1042,48 @@ const App = () => {
           role={registerRole}
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToRegister={() => setCurrentPage("register")}
+<<<<<<< HEAD
+          onVerificationSuccess={(role, verifiedUser) => {
+            const fallbackUser = buildUserData(
+              registeredName || registeredEmail,
+              registeredEmail,
+              role
+            );
+            const userData = verifiedUser
+              ? {
+                  ...verifiedUser,
+                  initials:
+                    String(verifiedUser.initials || "").trim() ||
+                    getInitialsFromName(verifiedUser.name || verifiedUser.email),
+                }
+              : fallbackUser;
+=======
+<<<<<<< HEAD
+        />
+      )}
+>>>>>>> 8422a2f (fixed bugs and updates)
+
+            if (role === "owner") {
+              setIsOwnerLoggedIn(true);
+              setIsLoggedIn(false);
+              localStorage.setItem("isNewOwner", "true");
+              setUser(userData);
+              setCurrentPage("owner-dashboard");
+            } else {
+              setIsLoggedIn(true);
+              setIsOwnerLoggedIn(false);
+              setUser(userData);
+              setCurrentPage("home");
+            }
+          }}
+        />
+      )}
+
+<<<<<<< HEAD
+      {/* account settings */}
+=======
+      {/* ACCOUNT SETTINGS */}
+=======
           onVerificationSuccess={(role, verifiedUser) => {
             const fallbackUser = buildUserData(
               registeredName || registeredEmail,
@@ -592,12 +1116,34 @@ const App = () => {
       )}
 
       {/* account settings */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "account-settings" && (
         <AccountSettings
           isLoggedIn={isLoggedIn}
           user={user}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToVehicles={() => setCurrentPage("vehicles")}
+<<<<<<< HEAD
+          onNavigateToBookingHistory={goToBookingHistory}
+          onNavigateToChat={goToRealtimeChat}
+          onNavigateToNotifications={goToNotifications}
+=======
+<<<<<<< HEAD
+          onNavigateToBookingHistory={() => setCurrentPage("signin")}
+>>>>>>> 8422a2f (fixed bugs and updates)
+          onNavigateToSignIn={() => setCurrentPage("signin")}
+          onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
+          onNavigateToVehicleOwnerProceed={() => setCurrentPage("vehicle-owner-proceed")}
+          onNavigateToAbout={navigateToAbout}
+          onLogout={requestLogout}
+        />
+      )}
+
+<<<<<<< HEAD
+=======
+      {/* VEHICLE OWNER UPGRADE FLOW */}
+=======
           onNavigateToBookingHistory={goToBookingHistory}
           onNavigateToChat={goToRealtimeChat}
           onNavigateToNotifications={goToNotifications}
@@ -609,6 +1155,7 @@ const App = () => {
         />
       )}
 
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "booking-history" && (
         <BookingsPage
           isLoggedIn={isLoggedIn}
@@ -664,6 +1211,10 @@ const App = () => {
       )}
 
       {/* owner upgrade */}
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "vehicle-owner-proceed" && (
         <ProceedVehicleOwner
           onBack={() => setCurrentPage("account-settings")}
@@ -686,11 +1237,26 @@ const App = () => {
         />
       )}
 
+<<<<<<< HEAD
       {/* owner dashboard */}
+=======
+<<<<<<< HEAD
+      {/* OWNER DASHBOARD */}
+=======
+      {/* owner dashboard */}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
       {currentPage === "owner-dashboard" && isOwnerLoggedIn && <OwnerLayout />}
     </>
   );
 };
 
 export default App;
+<<<<<<< HEAD
 
+=======
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

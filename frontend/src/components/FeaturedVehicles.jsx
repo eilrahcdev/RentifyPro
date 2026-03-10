@@ -61,12 +61,33 @@ function VehicleCard({ vehicle, index, isLoggedIn, onViewDetails, onSignIn }) {
           ₱{vehicle.price.toLocaleString()} / day
         </div>
 
+<<<<<<< HEAD
         <div>
           <button onClick={() => (isLoggedIn ? onViewDetails(vehicle) : onSignIn())} className="w-full bg-[#017FE6] text-white py-2 rounded-lg hover:bg-[#0165B8] transition-all duration-300 hover:shadow-lg">
+=======
+<<<<<<< HEAD
+        <div className="flex gap-2">
+          <button onClick={() => onViewDetails(vehicle)} className="flex-1 border-2 border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition-all duration-300 hover:border-[#017FE6]">
+            View Details
+          </button>
+          <button onClick={() => (isLoggedIn ? onViewDetails(vehicle) : onSignIn())} className="flex-1 bg-[#017FE6] text-white py-2 rounded-lg hover:bg-[#0165B8] transition-all duration-300 hover:shadow-lg">
+=======
+        <div>
+          <button onClick={() => (isLoggedIn ? onViewDetails(vehicle) : onSignIn())} className="w-full bg-[#017FE6] text-white py-2 rounded-lg hover:bg-[#0165B8] transition-all duration-300 hover:shadow-lg">
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
             Book Now
           </button>
         </div>
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+<<<<<<< HEAD
+}
+=======
+}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

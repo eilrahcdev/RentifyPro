@@ -1,3 +1,47 @@
+<<<<<<< HEAD
+const pad = (value) => String(value).padStart(2, "0");
+
+export const formatDateInput = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+=======
+<<<<<<< HEAD
+export const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
+>>>>>>> 8422a2f (fixed bugs and updates)
+};
+
+export const formatTimeInput = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+export const getTodayDate = () => formatDateInput(new Date());
+
+export const getTomorrowDate = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return formatDateInput(tomorrow);
+};
+
+export const getCurrentTime = () => formatTimeInput(new Date());
+
+export const getDateTime = (date, time) => {
+  if (!date || !time) return null;
+  const value = new Date(`${date}T${time}`);
+  return Number.isNaN(value.getTime()) ? null : value;
+};
+
+<<<<<<< HEAD
+=======
+export const getInitials = (firstName, lastName) => {
+  if (!firstName || !lastName) return "";
+  return `${firstName[0]}${lastName[0]}`.toUpperCase();
+};
+=======
 const pad = (value) => String(value).padStart(2, "0");
 
 export const formatDateInput = (value = new Date()) => {
@@ -28,6 +72,7 @@ export const getDateTime = (date, time) => {
   return Number.isNaN(value.getTime()) ? null : value;
 };
 
+>>>>>>> 8422a2f (fixed bugs and updates)
 export const sanitizeBookingRange = (bookingData = {}) => {
   const today = getTodayDate();
   const nowTime = getCurrentTime();
@@ -86,3 +131,7 @@ export const getInitialsFromName = (name = "") => {
   const second = parts[1]?.[0] || parts[0][1] || "";
   return `${first}${second}`.toUpperCase() || "O";
 };
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

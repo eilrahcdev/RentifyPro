@@ -1,3 +1,37 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.pnp.*
+
+# Environment files and secrets
+.env
+.env.*
+*.env.local
+*.local
+*.secret
+*.secrets
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+!.env.example
+!.env.sample
+!.env.template
+!**/.env.example
+!**/.env.sample
+!**/.env.template
+
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 # Logs
 logs/
 *.log
@@ -7,6 +41,68 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+<<<<<<< HEAD
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Node / JS dependencies
+node_modules/
+.npm/
+.pnpm-store/
+.pnp/
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
+# Build output
+=======
+<<<<<<< HEAD
+# Build output and coverage
+>>>>>>> 8422a2f (fixed bugs and updates)
+dist/
+dist-ssr/
+build/
+out/
+coverage/
+*.tsbuildinfo
+.vite/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+coverage.xml
+htmlcov/
+
+<<<<<<< HEAD
+# IDE / OS
+.vscode/
+=======
+# Editor and OS files
+.vscode/*
+=======
 # Environment files (keep examples)
 .env
 .env.*
@@ -59,12 +155,28 @@ htmlcov/
 
 # IDE / OS
 .vscode/
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 !.vscode/extensions.json
 .idea/
 .DS_Store
 Thumbs.db
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+=======
+>>>>>>> 8422a2f (fixed bugs and updates)
 
 # Local runtime data
 uploads/
 temp/
 tmp/
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

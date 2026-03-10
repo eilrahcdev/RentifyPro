@@ -10,7 +10,15 @@ export default function PasswordInput({
   required = false,
   showStrength = false,
   inputRef,
+<<<<<<< HEAD
   placeholder = "eg. johndoe@134",
+=======
+<<<<<<< HEAD
+  placeholder = "eg. johndoe@134", // default placeholder
+=======
+  placeholder = "eg. johndoe@134",
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -45,12 +53,27 @@ export default function PasswordInput({
 
   return (
     <div className="space-y-2">
+<<<<<<< HEAD
+      <label className="block text-sm font-semibold text-slate-700">
+=======
+<<<<<<< HEAD
+      <label className="block text-sm font-semibold text-gray-700">
+>>>>>>> 8422a2f (fixed bugs and updates)
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+      </label>
+
+      <div className="relative">
+<<<<<<< HEAD
+=======
+=======
       <label className="block text-sm font-semibold text-slate-700">
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
 
       <div className="relative">
+>>>>>>> 8422a2f (fixed bugs and updates)
         <div
           className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${
             error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-slate-500"
@@ -59,6 +82,10 @@ export default function PasswordInput({
           <Lock size={16} />
         </div>
 
+<<<<<<< HEAD
+=======
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
         <input
           ref={inputRef}
           type={showPassword ? "text" : "password"}
@@ -66,15 +93,60 @@ export default function PasswordInput({
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
+<<<<<<< HEAD
           className={`w-full rounded-xl border bg-white px-4 py-3 pl-12 pr-12 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
             error
               ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
               : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
           } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
+=======
+<<<<<<< HEAD
+          className={`w-full px-4 py-3 pl-12 rounded-xl border-2 transition-all duration-300 focus:outline-none ${
+            error
+              ? "border-red-500 focus:border-red-600 bg-red-50"
+              : "border-gray-300 focus:border-[#017FE6] hover:border-gray-400"
+          } disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60`}
+        />
+
+        <Lock
+          size={20}
+          className={`absolute left-3.5 top-1/2 transform -translate-y-1/2 ${
+            error ? "text-red-500" : "text-gray-400"
+          }`}
+=======
+          className={`w-full rounded-xl border bg-white px-4 py-3 pl-12 pr-12 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
+            error
+              ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+              : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
+          } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
         />
 
         <button
           type="button"
+<<<<<<< HEAD
+          onClick={() => setShowPassword((prev) => !prev)}
+=======
+<<<<<<< HEAD
+          onClick={() => setShowPassword(!showPassword)}
+>>>>>>> 8422a2f (fixed bugs and updates)
+          disabled={disabled}
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+
+      {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+
+      {showStrength && value && (
+<<<<<<< HEAD
+        <div className="space-y-1.5">
+=======
+        <div className="space-y-1">
+=======
           onClick={() => setShowPassword((prev) => !prev)}
           disabled={disabled}
           className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -88,12 +160,24 @@ export default function PasswordInput({
 
       {showStrength && value && (
         <div className="space-y-1.5">
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
           <div className="flex gap-1">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
+<<<<<<< HEAD
                 className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${
                   i < strength ? getStrengthColor() : "bg-slate-200"
+=======
+<<<<<<< HEAD
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                  i < strength ? getStrengthColor() : "bg-gray-300"
+=======
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${
+                  i < strength ? getStrengthColor() : "bg-slate-200"
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
                 }`}
               />
             ))}
@@ -117,4 +201,12 @@ export default function PasswordInput({
       )}
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+<<<<<<< HEAD
+}
+=======
+}
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)

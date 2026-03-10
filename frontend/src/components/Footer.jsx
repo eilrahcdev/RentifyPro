@@ -15,7 +15,15 @@ export default function Footer({ onScrollToTop, onNavigateToVehicles, onNavigate
             <ul className="space-y-3">
               <li><button onClick={onScrollToTop} className="text-blue-100 hover:text-white transition-colors duration-300">Home</button></li>
               <li><button onClick={onNavigateToVehicles} className="text-blue-100 hover:text-white transition-colors duration-300">Vehicles</button></li>
+<<<<<<< HEAD
               <li><button onClick={onNavigateToBookingHistory} className="text-blue-100 hover:text-white transition-colors duration-300">Bookings</button></li>
+=======
+<<<<<<< HEAD
+              <li><button onClick={onNavigateToBookingHistory} className="text-blue-100 hover:text-white transition-colors duration-300">Booking History</button></li>
+=======
+              <li><button onClick={onNavigateToBookingHistory} className="text-blue-100 hover:text-white transition-colors duration-300">Bookings</button></li>
+>>>>>>> 8745d21 (fixed bugs and updates)
+>>>>>>> 8422a2f (fixed bugs and updates)
               <li><button onClick={onNavigateToAbout} className="text-blue-100 hover:text-white transition-colors duration-300">About Us</button></li>
             </ul>
           </div>
