@@ -1,25 +1,9 @@
-<<<<<<< HEAD
-export const API_BASE_URL = "http://localhost:5000/api";
-=======
-<<<<<<< HEAD
-  const API_BASE_URL = "http://localhost:5000/api";
->>>>>>> 8422a2f (fixed bugs and updates)
-
-function getToken() {
-  return localStorage.getItem("token");
-}
-
-<<<<<<< HEAD
-=======
-export default API;
-=======
 export const API_BASE_URL = "http://localhost:5000/api";
 
 function getToken() {
   return localStorage.getItem("token");
 }
 
->>>>>>> 8422a2f (fixed bugs and updates)
 function buildQueryString(params = {}) {
   const searchParams = new URLSearchParams();
 
@@ -167,7 +151,3 @@ const API = {
 };
 
 export default API;
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

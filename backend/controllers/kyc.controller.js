@@ -1,72 +1,3 @@
-<<<<<<< HEAD
-// KYC controller
-// Handles logged-in and pre-registration flows
-import axios from "axios";
-import crypto from "crypto";
-import User from "../models/User.js";
-import KycVerification from "../models/KycVerification.js";
-import { auditLog } from "../middleware/auditLogger.middleware.js";
-import { ensureFaceServiceReady, isFaceServiceConnectionError } from "../utils/faceServiceManager.js";
-
-const FACE_SERVICE = process.env.FACE_SERVICE_URL || "http://localhost:8000";
-const INTERNAL_KEY = process.env.INTERNAL_API_KEY || "";
-
-const safeKeyMatch = (provided, expected) => {
-  const providedBuffer = Buffer.from(String(provided || ""), "utf8");
-  const expectedBuffer = Buffer.from(String(expected || ""), "utf8");
-  if (!providedBuffer.length || !expectedBuffer.length) return false;
-  if (providedBuffer.length !== expectedBuffer.length) return false;
-  return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
-};
-
-// Send a request to the face service
-const proxyToFaceService = async (endpoint, body) => {
-  const url = `${FACE_SERVICE}${endpoint}`;
-  auditLog.info("KYC", `Proxying to Python: ${url}`);
-  const doRequest = () =>
-    axios.post(url, body, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 60000, // Face checks can take a while
-    });
-=======
-<<<<<<< HEAD
-import { verifyFaceMatchWithGemini } from "../services/geminiKyc.service.js";
->>>>>>> 8422a2f (fixed bugs and updates)
-
-  try {
-    const response = await doRequest();
-    return response.data;
-  } catch (err) {
-    if (isFaceServiceConnectionError(err)) {
-      try {
-        const started = await ensureFaceServiceReady();
-        if (started) {
-          auditLog.warn("KYC", `Face service unreachable, retrying once: ${url}`);
-          const retryResponse = await doRequest();
-          return retryResponse.data;
-        }
-      } catch (bootErr) {
-        auditLog.error("KYC", "Face service startup/retry failed", { detail: bootErr.message, url });
-      }
-    }
-
-    // Log the face service error for debugging
-    const status = err.response?.status || "no response";
-    const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
-    auditLog.error("KYC", `Python service error: status=${status}`, { detail, url });
-
-    if (isFaceServiceConnectionError(err)) {
-      throw new Error(`Python face service is not running at ${FACE_SERVICE}. Start it with: python face-service/main.py`);
-    }
-    if (err.code === "ETIMEDOUT" || err.code === "ECONNABORTED") {
-      throw new Error("Face service timed out. The image may be too large or the service is overloaded.");
-    }
-    throw new Error(detail || "Face service error.");
-  }
-<<<<<<< HEAD
-=======
-}
-=======
 // KYC controller
 // Handles logged-in and pre-registration flows
 import axios from "axios";
@@ -127,7 +58,6 @@ const proxyToFaceService = async (endpoint, body) => {
     }
     throw new Error(detail || "Face service error.");
   }
->>>>>>> 8422a2f (fixed bugs and updates)
 };
 
 // Step 1: face quality check
@@ -350,7 +280,3 @@ export const preSelfieVerify = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

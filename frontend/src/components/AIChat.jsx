@@ -30,15 +30,7 @@ export default function AIChat({ isOpen, onClose }) {
 
   return (
     <div className="fixed bottom-4 right-4 w-[95vw] sm:w-[400px] h-[70vh] sm:h-[450px] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col animate-slideUp">
-<<<<<<< HEAD
       {/* header */}
-=======
-<<<<<<< HEAD
-      {/* Header */}
-=======
-      {/* header */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
       <div className="bg-[#017FE6] text-white px-4 py-3 flex justify-between items-center">
         <div>
           <h3 className="font-semibold text-sm">RentifyPro AI</h3>
@@ -49,15 +41,7 @@ export default function AIChat({ isOpen, onClose }) {
         </button>
       </div>
 
-<<<<<<< HEAD
       {/* messages */}
-=======
-<<<<<<< HEAD
-      {/* Messages */}
-=======
-      {/* messages */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
       <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4">
         {messages.map((msg, index) => (
           <Message key={index} message={msg} />
@@ -65,15 +49,7 @@ export default function AIChat({ isOpen, onClose }) {
         {isTyping && <TypingIndicator />}
       </div>
 
-<<<<<<< HEAD
       {/* input */}
-=======
-<<<<<<< HEAD
-      {/* Input */}
-=======
-      {/* input */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
       <div className="border-t bg-white px-3 py-2 flex items-center gap-2">
         <input
           value={userMessage}
@@ -125,12 +101,4 @@ function TypingIndicator() {
       </div>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-<<<<<<< HEAD
-}
-=======
-}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

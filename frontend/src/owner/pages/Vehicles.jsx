@@ -1,134 +1,3 @@
-<<<<<<< HEAD
-import { useEffect, useMemo, useState } from "react";
-import { CarFront, ImagePlus, Settings2, UploadCloud, X } from "lucide-react";
-import API from "../../utils/api";
-=======
-<<<<<<< HEAD
-import React, { useEffect, useMemo, useState } from "react";
->>>>>>> 8422a2f (fixed bugs and updates)
-
-const initialForm = {
-  name: "",
-  description: "",
-  dailyRentalRate: "",
-  location: "",
-  availabilityStatus: "available",
-  specType: "car",
-  specSubType: "",
-  specSeats: 4,
-  specTransmission: "Automatic",
-  specFuel: "Gasoline",
-  specPlateNumber: "",
-  driverOptionEnabled: false,
-  driverDailyRate: "",
-  existingImages: [],
-  existingImagePaths: [],
-  newImageFiles: [],
-};
-
-const formatCurrency = (value) => `\u20b1${Number(value || 0).toLocaleString("en-PH")}`;
-
-function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }) {
-  const newImagePreviews = useMemo(
-    () =>
-      form.newImageFiles.map((file) => ({
-        key: `${file.name}-${file.lastModified}`,
-        name: file.name,
-        url: URL.createObjectURL(file),
-      })),
-    [form.newImageFiles]
-  );
-
-  useEffect(() => {
-    return () => {
-      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
-    };
-  }, [newImagePreviews]);
-
-  const inputClass =
-    "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus:border-[#017FE6] focus:outline-none focus:ring-4 focus:ring-blue-100";
-  const selectClass =
-    "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-800 shadow-sm transition focus:border-[#017FE6] focus:outline-none focus:ring-4 focus:ring-blue-100";
-  const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
-        <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.35)]">
-          <div className="border-b border-slate-200 bg-gradient-to-r from-[#eef6ff] via-white to-[#f7fbff] px-6 py-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#017FE6] text-white shadow-sm">
-                  <CarFront size={20} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    {mode === "edit" ? "Edit Vehicle" : "Add Vehicle"}
-                  </h2>
-                  <p className="mt-0.5 text-sm text-slate-600">
-                    Complete the details below to publish your listing with a premium look.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/40 px-6 py-6">
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {error}
-              </div>
-            )}
-
-            <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <CarFront size={16} className="text-[#017FE6]" />
-                Basic Details
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Vehicle Name</label>
-                  <input
-                    className={inputClass}
-                    placeholder="Ex. Honda Civic RS"
-                    value={form.name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Location</label>
-                  <input
-                    className={inputClass}
-                    placeholder="Ex. Quezon City"
-                    value={form.location}
-                    onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Description</label>
-                <textarea
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus:border-[#017FE6] focus:outline-none focus:ring-4 focus:ring-blue-100"
-                  rows={3}
-                  placeholder="Describe the vehicle condition, notable features, and renter expectations."
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-              </div>
-
-<<<<<<< HEAD
-=======
-=======
 import { useEffect, useMemo, useState } from "react";
 import { CarFront, ImagePlus, Settings2, UploadCloud, X } from "lucide-react";
 import API from "../../utils/api";
@@ -252,7 +121,6 @@ function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }
                 />
               </div>
 
->>>>>>> 8422a2f (fixed bugs and updates)
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className={labelClass}>Daily Rate</label>
@@ -361,161 +229,11 @@ function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }
                 Driver Option
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                 <button
                   type="button"
                   onClick={() =>
                     setForm((prev) => ({
                       ...prev,
-<<<<<<< HEAD
-                      driverOptionEnabled: true,
-=======
-<<<<<<< HEAD
-                      interiorImages: prev.interiorImages.filter((_, x) => x !== i),
->>>>>>> 8422a2f (fixed bugs and updates)
-                    }))
-                  }
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    form.driverOptionEnabled
-                      ? "border-[#017FE6] bg-blue-50 text-blue-700 ring-2 ring-blue-100"
-                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-[#017FE6]"
-                  }`}
-                >
-                  <p className="text-sm font-semibold">With driver</p>
-                  <p className="mt-0.5 text-xs text-slate-500">Driver service enabled for this vehicle.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      driverOptionEnabled: false,
-                      driverDailyRate: "",
-                    }))
-                  }
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    !form.driverOptionEnabled
-                      ? "border-[#017FE6] bg-blue-50 text-blue-700 ring-2 ring-blue-100"
-                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-[#017FE6]"
-                  }`}
-                >
-                  <p className="text-sm font-semibold">Without driver</p>
-                  <p className="mt-0.5 text-xs text-slate-500">Self-drive only for this vehicle.</p>
-                </button>
-              </div>
-            </section>
-
-            <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <ImagePlus size={16} className="text-[#017FE6]" />
-                  Vehicle Images
-                </div>
-                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                  Up to 8 photos
-                </span>
-              </div>
-
-              <label className="group flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 transition hover:border-[#017FE6] hover:bg-blue-50/40">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[#017FE6] shadow-sm ring-1 ring-slate-200">
-                    <UploadCloud size={16} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">Upload vehicle photos</p>
-                    <p className="text-xs text-slate-500">PNG, JPG, or WEBP format</p>
-                  </div>
-                </div>
-                <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
-                  Choose Files
-                </span>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.files || []);
-                    if (!selected.length) return;
-                    setForm((prev) => ({
-                      ...prev,
-                      newImageFiles: [...prev.newImageFiles, ...selected].slice(0, 8),
-                    }));
-                  }}
-                />
-              </label>
-
-              {form.newImageFiles.length > 0 && (
-                <p className="text-xs text-slate-500">
-                  {form.newImageFiles.length} new image(s) selected
-                </p>
-              )}
-
-              {(form.existingImages.length > 0 || newImagePreviews.length > 0) && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {form.existingImages.map((image, index) => (
-                    <div key={`existing-${index}`} className="group relative overflow-hidden rounded-xl border border-slate-200">
-                      <img src={image} alt="vehicle" className="h-24 w-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-red-500 hover:text-white"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            existingImages: prev.existingImages.filter((_, idx) => idx !== index),
-                            existingImagePaths: prev.existingImagePaths.filter((_, idx) => idx !== index),
-                          }))
-                        }
-                        aria-label="Remove existing image"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-
-                  {newImagePreviews.map((preview, index) => (
-                    <div key={preview.key} className="group relative overflow-hidden rounded-xl border border-slate-200">
-                      <img src={preview.url} alt={preview.name} className="h-24 w-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-red-500 hover:text-white"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            newImageFiles: prev.newImageFiles.filter((_, idx) => idx !== index),
-                          }))
-                        }
-                        aria-label="Remove new image"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-
-          <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSubmit}
-              disabled={loading}
-              className="rounded-xl bg-[#017FE6] px-5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(1,127,230,0.35)] transition hover:bg-[#016fc8] disabled:opacity-70"
-            >
-<<<<<<< HEAD
-              {loading ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Vehicle"}
-=======
-              Add Vehicle
-=======
                       driverOptionEnabled: true,
                     }))
                   }
@@ -653,20 +371,12 @@ function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }
               className="rounded-xl bg-[#017FE6] px-5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(1,127,230,0.35)] transition hover:bg-[#016fc8] disabled:opacity-70"
             >
               {loading ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Vehicle"}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
             </button>
           </div>
         </div>
       </div>
     </>
   );
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
- }
-=======
->>>>>>> 8422a2f (fixed bugs and updates)
 }
 
 export default function Vehicles() {
@@ -938,7 +648,3 @@ export default function Vehicles() {
     </div>
   );
 }
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

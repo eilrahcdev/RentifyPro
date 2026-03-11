@@ -1,31 +1,3 @@
-<<<<<<< HEAD
-# RentifyPro
-=======
-<<<<<<< HEAD
-# React + Vite
->>>>>>> 8422a2f (fixed bugs and updates)
-
-A full-stack vehicle rental platform with face verification KYC, built with React, Node.js, and Python.
-
----
-
-## Prerequisites
-
-Make sure you have the following installed before running the project:
-
-| Tool | Version | Download |
-|------|---------|----------|
-| Node.js | v18 or higher | [nodejs.org](https://nodejs.org/) |
-| Python | v3.10 or higher | [python.org](https://www.python.org/) |
-| MongoDB | v6 or higher | [mongodb.com](https://www.mongodb.com/try/download/community) |
-| Git | Latest | [git-scm.com](https://git-scm.com/) |
-
----
-
-<<<<<<< HEAD
-=======
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-=======
 # RentifyPro
 
 A full-stack vehicle rental platform with face verification KYC, built with React, Node.js, and Python.
@@ -45,7 +17,6 @@ Make sure you have the following installed before running the project:
 
 ---
 
->>>>>>> 8422a2f (fixed bugs and updates)
 ## Project Structure
 
 ```
@@ -303,9 +274,4 @@ npm run dev
 
 ## License
 
-<<<<<<< HEAD
 This project is for academic purposes only — BSIT Capstone Project.
-=======
-This project is for academic purposes only — BSIT Capstone Project.
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

@@ -1,53 +1,3 @@
-<<<<<<< HEAD
-// Owner signup routes
-=======
-<<<<<<< HEAD
->>>>>>> 8422a2f (fixed bugs and updates)
-import express from "express";
-import {
-  requestOwnerOtp,
-  resendOwnerOtp,
-  verifyOwnerOtp,
-} from "../controllers/owner.controller.js";
-import {
-  createOwnerVehicle,
-  deleteOwnerVehicle,
-  getOwnerVehicles,
-  setOwnerVehicleAvailability,
-  updateOwnerVehicle,
-} from "../controllers/ownerVehicle.controller.js";
-import { protect } from "../middleware/auth.middleware.js";
-import { authorize } from "../middleware/rbac.middleware.js";
-import {
-  uploadVehicleImages,
-  validateUploadedVehicleImages,
-} from "../middleware/upload.middleware.js";
-import {
-  validateBookingStatusUpdate,
-  validatePaymentStatusUpdate,
-  validateObjectIdParam,
-  validateVehicleAvailability,
-  validateVehicleCreate,
-  validateVehicleUpdate,
-} from "../middleware/validate.middleware.js";
-import {
-  getOwnerBookings,
-  getOwnerEarnings,
-  getOwnerReviews,
-  getOwnerAnalytics,
-  updateOwnerBookingStatus,
-  updateOwnerBookingPaymentStatus,
-} from "../controllers/ownerDashboard.controller.js";
-import { otpLimiter } from "../middleware/security.middleware.js";
-
-const router = express.Router();
-
-<<<<<<< HEAD
-=======
-router.post("/register/request-otp", requestOwnerOtp);
-router.post("/register/resend-otp", resendOwnerOtp);
-router.post("/register/verify-otp", verifyOwnerOtp);
-=======
 // Owner signup routes
 import express from "express";
 import {
@@ -88,7 +38,6 @@ import { otpLimiter } from "../middleware/security.middleware.js";
 
 const router = express.Router();
 
->>>>>>> 8422a2f (fixed bugs and updates)
 router.post("/register", otpLimiter, requestOwnerOtp);
 router.post("/resend-otp", otpLimiter, resendOwnerOtp);
 router.post("/verify-otp", otpLimiter, verifyOwnerOtp);
@@ -142,9 +91,5 @@ router.patch(
 router.get("/reviews", protect, authorize("owner"), getOwnerReviews);
 router.get("/earnings", protect, authorize("owner"), getOwnerEarnings);
 router.get("/analytics", protect, authorize("owner"), getOwnerAnalytics);
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
 
 export default router;
