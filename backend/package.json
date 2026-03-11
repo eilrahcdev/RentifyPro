@@ -1,46 +1,4 @@
 {
-<<<<<<< HEAD
-  "name": "rentifypro-backend",
-=======
-<<<<<<< HEAD
-  "name": "backend",
->>>>>>> 8422a2f (fixed bugs and updates)
-  "version": "1.0.0",
-  "description": "RentifyPro Backend API",
-  "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "blockchain:compile": "node blockchain/scripts/compile-booking-ledger.cjs",
-    "blockchain:deploy:sepolia": "node blockchain/scripts/deploy-booking-ledger.cjs",
-    "blockchain:compile:hardhat": "node blockchain/scripts/run-hardhat.cjs compile --config blockchain/hardhat.config.cjs",
-    "blockchain:deploy:hardhat:sepolia": "node blockchain/scripts/run-hardhat.cjs run blockchain/scripts/deploy-booking-ledger-hardhat.cjs --network sepolia --config blockchain/hardhat.config.cjs"
-  },
-  "dependencies": {
-    "axios": "^1.13.5",
-    "bcryptjs": "^3.0.3",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "ethers": "^6.15.0",
-    "express": "^5.2.1",
-    "express-rate-limit": "^8.2.1",
-    "form-data": "^4.0.5",
-    "helmet": "^8.1.0",
-    "hpp": "^0.2.3",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.2.1",
-    "multer": "^2.0.2",
-    "nodemailer": "^8.0.1",
-    "socket.io": "^4.8.1"
-  },
-  "devDependencies": {
-<<<<<<< HEAD
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "hardhat": "^2.28.6",
-=======
-=======
   "name": "rentifypro-backend",
   "version": "1.0.0",
   "description": "RentifyPro Backend API",
@@ -75,8 +33,6 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
     "hardhat": "^2.28.6",
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     "nodemon": "^3.1.11"
   }
 }
