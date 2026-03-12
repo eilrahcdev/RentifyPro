@@ -11,6 +11,7 @@ export default function PasswordInput({
   showStrength = false,
   inputRef,
   placeholder = "eg. johndoe@134",
+  maxLength,
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -66,6 +67,7 @@ export default function PasswordInput({
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
+          maxLength={maxLength}
           className={`w-full rounded-xl border bg-white px-4 py-3 pl-12 pr-12 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
             error
               ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"

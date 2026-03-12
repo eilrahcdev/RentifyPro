@@ -11,48 +11,47 @@ export default function BookingAccessModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6">
+      <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" onClick={onClose} />
 
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-6 sm:p-8 animate-fadeIn">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition"
-        >
-          <X size={16} className="text-gray-500" />
-        </button>
-
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-gray-900">Bookings require an account</h3>
-          <p className="text-sm text-gray-500 mt-2">
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+        <div className="px-6 pt-5 pb-4 sm:px-7 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+          <h3 className="text-xl font-bold text-slate-900">Bookings require an account</h3>
+          <p className="text-sm text-slate-600 mt-1">
             Sign in or register to view your booking history, status updates, and notifications.
           </p>
         </div>
 
-        <div className="mt-6 space-y-3">
-          <button
-            onClick={onSignIn}
-            className="w-full py-3 rounded-xl font-semibold text-white bg-[#017FE6] hover:bg-[#0165B8] transition flex items-center justify-center gap-2"
-          >
-            <LogIn size={18} />
-            Sign In
-          </button>
+        <div className="px-6 py-5 sm:px-7">
+          <div className="space-y-3">
+            <button onClick={onSignIn} className="rp-btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2">
+              <LogIn size={18} />
+              Sign In
+            </button>
 
-          <button
-            onClick={onRegister}
-            className="w-full py-3 rounded-xl font-semibold border border-[#017FE6] text-[#017FE6] hover:bg-[#017FE6]/5 transition flex items-center justify-center gap-2"
-          >
-            <UserPlus size={18} />
-            Register
-          </button>
+            <button
+              onClick={onRegister}
+              className="rp-btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+            >
+              <UserPlus size={18} />
+              Register
+            </button>
 
-          <button
-            onClick={onBrowseVehicles}
-            className="w-full py-3 rounded-xl font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 transition flex items-center justify-center gap-2"
-          >
-            <Car size={18} />
-            Continue Browsing Vehicles
-          </button>
+            <button
+              onClick={onBrowseVehicles}
+              className="rp-btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+            >
+              <Car size={18} />
+              Continue Browsing Vehicles
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -13,6 +13,9 @@ export default function FormInput({
   showEmailHint = false,
   onlyLetters = false,
   onlyNumbers = false,
+  inputMode,
+  pattern,
+  maxLength,
   inputRef,
 }) {
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
@@ -124,6 +127,9 @@ export default function FormInput({
           disabled={disabled}
           placeholder={placeholder}
           required={required}
+          inputMode={inputMode}
+          pattern={pattern}
+          maxLength={maxLength}
           autoComplete={type === "email" ? "email" : "off"}
           className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
             Icon ? "pr-12" : ""

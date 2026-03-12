@@ -11,6 +11,7 @@ import {
   preRegisterIdFace,
   preSelfieChallenge,
   preSelfieVerify,
+  preVerifySupportingDocument,
 } from "../controllers/kyc.controller.js";
 import {
   kycLimiter,
@@ -30,6 +31,7 @@ router.get("/me", protect, getMyKyc);
 router.post("/pre/id-register", preKycLimiter, preRegisterIdFace);
 router.post("/pre/selfie/challenge", preKycLimiter, preSelfieChallenge);
 router.post("/pre/selfie/verify", preKycLimiter, preSelfieVerify);
+router.post("/pre/supporting-doc/verify", preKycLimiter, preVerifySupportingDocument);
 
 // Internal callback from the Python service
 router.patch("/internal/update-status", internalUpdateStatus);

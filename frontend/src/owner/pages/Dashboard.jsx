@@ -3,6 +3,7 @@ import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { formatDisplayName } from "../../utils/dateUtils";
 import { resolveAssetUrl } from "../../utils/media";
+import { getTransactionFee } from "../../utils/fees";
 
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
@@ -30,15 +31,26 @@ const formatDateTime = (value) => {
   return date ? date.toLocaleString() : "-";
 };
 
-const getPayableAmount = (booking) => {
-  const payable = Number(booking?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
+const getRentalTotal = (booking) => {
+  const total = Number(booking?.totalAmount);
+  if (Number.isFinite(total) && total >= 0) return total;
+
+  const baseAmount = Number(booking?.baseAmount);
+  if (Number.isFinite(baseAmount) && baseAmount >= 0) return baseAmount;
+
+  const dailyRate = Number(booking?.vehicleDailyRate);
+  const bookingDays = Number(booking?.bookingDays || 1);
+  if (Number.isFinite(dailyRate) && dailyRate >= 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
+    return dailyRate * bookingDays;
   }
-  const total = Number(booking?.totalAmount || 0);
-  const gasFee = Number(booking?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
+
+  const payable = Number(booking?.amountPayable);
+  if (Number.isFinite(payable) && payable >= 0) return payable;
+
+  return 0;
 };
+
+const getPayableAmount = (booking) => getRentalTotal(booking) + getTransactionFee();
 
 const getRangeStart = (range) => {
   const start = new Date();

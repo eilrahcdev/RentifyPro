@@ -19,16 +19,23 @@ import {
 } from "lucide-react";
 
 import {
-  captureBase64FromStream,
+  captureFramesFromStream,
   fileToBase64,
+  getMimeFromDataUrl,
   startCamera,
   stopCamera,
   stripDataUrlPrefix,
 } from "../utils/cameraKyc";
-import { preRegisterIdFace, preSelfieChallenge, preSelfieVerify } from "../utils/kycApi";
+import {
+  preRegisterIdFace,
+  preSelfieChallenge,
+  preSelfieVerify,
+  preVerifySupportingDocument,
+} from "../utils/kycApi";
 import AuthShell from "../components/AuthShell";
 import API from "../utils/api";
 import { persistOwnerProfile } from "../owner/utils/ownerProfile";
+import { ALLOWED_EMAIL_DOMAINS } from "../data/registerValidation";
 
 const TOTAL_STEPS = 4;
 const STEP_LABELS = ["Personal Details", "Account & Documents", "Face Verification", "Review"];
@@ -87,6 +94,8 @@ function friendlyError(msg) {
   if (lower.includes("not running") || lower.includes("econnrefused")) return "Verification service is temporarily unavailable.";
   if (lower.includes("timeout") || lower.includes("etimedout")) return "Request timed out. Please try again.";
   if (lower.includes("too many")) return msg;
+  if (/^[A-Z]/.test(msg) && !lower.includes("error") && !lower.includes("exception") && !lower.includes("500"))
+    return msg;
   return "Something went wrong. Please try again.";
 }
 
@@ -99,6 +108,7 @@ export default function RegisterOwnerPage({
   const [form, setForm] = useState(initialForm);
   const [files, setFiles] = useState(initialFiles);
   const [kyc, setKyc] = useState(initialKyc);
+  const [supportingDocStatus, setSupportingDocStatus] = useState({ verified: false, message: "" });
 
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
@@ -301,6 +311,10 @@ export default function RegisterOwnerPage({
       [name]: name === "businessEmail" ? value.toLowerCase().trim() : type === "checkbox" ? checked : value,
     }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (name === "businessEmail") {
+      setSupportingDocStatus({ verified: false, message: "" });
+      setErrors((prev) => ({ ...prev, supportingDocument: "" }));
+    }
   }, []);
 
   const handleRegionChange = useCallback((e) => {
@@ -353,6 +367,9 @@ export default function RegisterOwnerPage({
     const { name, files: picked } = e.target;
     setFiles((prev) => ({ ...prev, [name]: picked?.[0] || null }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (name === "supportingDocument") {
+      setSupportingDocStatus({ verified: false, message: "" });
+    }
   }, []);
 
   const validateStep1 = useCallback(() => {
@@ -361,28 +378,41 @@ export default function RegisterOwnerPage({
     if (!form.firstName.trim()) next.firstName = "First name is required.";
     else if (!/^[A-Za-z]+$/.test(form.firstName)) next.firstName = "Letters only (A-Z).";
     else if (EMOJI_REGEX.test(form.firstName)) next.firstName = "No emoji allowed.";
+    else if (form.firstName.length > 50) next.firstName = "First name is too long (max 50 characters).";
 
     if (!form.lastName.trim()) next.lastName = "Last name is required.";
     else if (!/^[A-Za-z]+$/.test(form.lastName)) next.lastName = "Letters only (A-Z).";
     else if (EMOJI_REGEX.test(form.lastName)) next.lastName = "No emoji allowed.";
+    else if (form.lastName.length > 50) next.lastName = "Last name is too long (max 50 characters).";
 
     if (!form.businessEmail.trim()) next.businessEmail = "Email is required.";
     else if (/\s/.test(form.businessEmail)) next.businessEmail = "Email must not contain spaces.";
     else if (EMOJI_REGEX.test(form.businessEmail)) next.businessEmail = "Email must not contain emoji.";
+    else if (form.businessEmail.length > 254) next.businessEmail = "Email is too long (max 254 characters).";
     else if (!EMAIL_REGEX.test(form.businessEmail)) next.businessEmail = "Enter a valid email.";
+    else {
+      const domain = form.businessEmail.split("@")[1]?.toLowerCase() || "";
+      if (!ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+        next.businessEmail = "Please use a valid email address from a supported provider.";
+      }
+    }
 
     if (!form.phone.trim()) next.phone = "Phone number is required.";
     else if (!/^[0-9]{11}$/.test(form.phone)) next.phone = "Phone number must be exactly 11 digits.";
+    else if (form.phone.length > 11) next.phone = "Phone number is too long (max 11 digits).";
 
     if (!form.region) next.region = "Region is required.";
     if (provinces.length > 0 && !form.province) next.province = "Province is required.";
     if (!form.city) next.city = "City / Municipality is required.";
     if (!form.barangay) next.barangay = "Barangay is required.";
     if (!form.address.trim()) next.address = "Complete your address selection.";
+    else if (form.address.length > 255) next.address = "Address is too long (max 255 characters).";
 
     if (canShowBusinessFields) {
       if (!form.businessName.trim()) next.businessName = "Business name is required.";
+      else if (form.businessName.length > 120) next.businessName = "Business name is too long (max 120 characters).";
       if (!form.permitNumber.trim()) next.permitNumber = "Permit number is required.";
+      else if (form.permitNumber.length > 50) next.permitNumber = "Permit number is too long (max 50 characters).";
     }
 
     if (!form.password) next.password = "Password is required.";
@@ -412,6 +442,52 @@ export default function RegisterOwnerPage({
     return Object.keys(next).length === 0;
   }, [files.supportingDocument]);
 
+  const verifySupportingDoc = async () => {
+    if (supportingDocStatus.verified) return true;
+    if (!files.supportingDocument) {
+      setErrors((prev) => ({ ...prev, supportingDocument: "Please upload a supporting document." }));
+      return false;
+    }
+    if (!form.businessEmail) {
+      setErrors((prev) => ({ ...prev, supportingDocument: "Please enter your email first." }));
+      return false;
+    }
+    const maxBytes = 4 * 1024 * 1024;
+    if (files.supportingDocument.size > maxBytes) {
+      setErrors((prev) => ({
+        ...prev,
+        supportingDocument: "Document file is too large. Please upload a smaller file.",
+      }));
+      return false;
+    }
+
+    setIsLoading(true);
+    setSuccessMessage("");
+    try {
+      const dataUrl = await fileToBase64(files.supportingDocument);
+      const clean = stripDataUrlPrefix(dataUrl);
+      const mime = getMimeFromDataUrl(dataUrl);
+      const result = await preVerifySupportingDocument(form.businessEmail, clean, mime, "owner");
+      if (!result.success) throw new Error(result.message || "Supporting document verification failed.");
+
+      setSupportingDocStatus({
+        verified: true,
+        message: result.message || "Supporting document verified.",
+      });
+      setErrors((prev) => ({ ...prev, supportingDocument: "" }));
+      return true;
+    } catch (error) {
+      setSupportingDocStatus({ verified: false, message: "" });
+      setErrors((prev) => ({
+        ...prev,
+        supportingDocument: error?.message || "Supporting document verification failed.",
+      }));
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const validateStep3 = useCallback(() => {
     const next = {};
     if (!kyc.idCardFile) next.idCardFile = "Please upload your government ID.";
@@ -421,11 +497,15 @@ export default function RegisterOwnerPage({
     return Object.keys(next).length === 0;
   }, [kyc]);
 
-  const goNext = () => {
+  const goNext = async () => {
     if (!canAct()) return;
     setSuccessMessage("");
     if (step === 1 && !validateStep1()) return;
-    if (step === 2 && !validateStep2()) return;
+    if (step === 2) {
+      if (!validateStep2()) return;
+      const verified = await verifySupportingDoc();
+      if (!verified) return;
+    }
     if (step === 3 && !validateStep3()) return;
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
@@ -452,7 +532,8 @@ export default function RegisterOwnerPage({
     try {
       const dataUrl = await fileToBase64(kyc.idCardFile);
       const clean = stripDataUrlPrefix(dataUrl);
-      const result = await preRegisterIdFace(form.businessEmail, fullName, "owner", clean);
+      const mime = getMimeFromDataUrl(dataUrl);
+      const result = await preRegisterIdFace(form.businessEmail, fullName, "owner", clean, mime);
       if (!result.success) throw new Error(result.message || "Failed to register ID.");
 
       setKyc((prev) => ({
@@ -544,14 +625,16 @@ export default function RegisterOwnerPage({
     setKycUi((prev) => ({ ...prev, statusText: "Capturing selfie..." }));
 
     try {
-      const dataUrl = await captureBase64FromStream(cameraStream);
-      if (!dataUrl) throw new Error("Failed to capture selfie.");
-      const clean = stripDataUrlPrefix(dataUrl);
+      const frames = await captureFramesFromStream(cameraStream, { count: 3, intervalMs: 220 });
+      if (!frames.length) throw new Error("Failed to capture selfie.");
+      const cleanFrames = frames.map(stripDataUrlPrefix);
+      const lastDataUrl = frames[frames.length - 1];
+      const lastClean = cleanFrames[cleanFrames.length - 1];
 
-      setKyc((prev) => ({ ...prev, selfieDataUrl: dataUrl, selfieBase64Clean: clean }));
-      setKycUi((prev) => ({ ...prev, statusText: "Checking selfie quality..." }));
+      setKyc((prev) => ({ ...prev, selfieDataUrl: lastDataUrl, selfieBase64Clean: lastClean }));
+      setKycUi((prev) => ({ ...prev, statusText: "Checking selfie motion... please blink or move slightly." }));
 
-      const result = await preSelfieChallenge(form.businessEmail, [clean]);
+      const result = await preSelfieChallenge(form.businessEmail, cleanFrames);
       if (!result.passed) throw new Error(result.message || "Selfie challenge failed.");
 
       setKyc((prev) => ({ ...prev, challengeId: result.challenge_id }));
@@ -577,7 +660,7 @@ export default function RegisterOwnerPage({
     setKycUi((prev) => ({ ...prev, statusText: "Verifying face match..." }));
 
     try {
-      const result = await preSelfieVerify(form.businessEmail, kyc.challengeId, kyc.selfieBase64Clean);
+      const result = await preSelfieVerify(form.businessEmail, kyc.challengeId, kyc.selfieBase64Clean, "owner");
       if (!result.verified) throw new Error(result.message || "Face does not match ID.");
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((prev) => ({ ...prev, selfieVerified: "" }));
@@ -652,10 +735,13 @@ export default function RegisterOwnerPage({
       setTimeout(() => onNavigateToRegisterOTP(form.businessEmail, form.phone, fullName), 1200);
     } catch (error) {
       const lower = (error?.message || "").toLowerCase();
+      const raw = error?.message || "";
       const msg = lower.includes("already")
         ? "This email is already registered."
         : lower.includes("too many")
-        ? error.message
+        ? raw
+        : /^[A-Z]/.test(raw) && !/request failed/i.test(raw)
+        ? raw
         : "Registration failed. Please try again.";
       if (lower.includes("password")) setErrors({ password: msg });
       else setErrors({ businessEmail: msg });
@@ -745,6 +831,7 @@ export default function RegisterOwnerPage({
                   icon={User}
                   placeholder="Juan"
                   helper="Use your legal first name as shown on your government ID."
+                  maxLength={50}
                 />
                 <Field
                   label="Last Name"
@@ -757,6 +844,7 @@ export default function RegisterOwnerPage({
                   icon={User}
                   placeholder="Dela Cruz"
                   helper="Use your legal last name for matching during verification."
+                  maxLength={50}
                 />
               </div>
 
@@ -772,6 +860,7 @@ export default function RegisterOwnerPage({
                   icon={Mail}
                   placeholder="owner@email.com"
                   helper="OTP and security updates will be sent to this email."
+                  maxLength={254}
                 />
                 <Field
                   label="Phone Number"
@@ -784,6 +873,7 @@ export default function RegisterOwnerPage({
                   icon={Phone}
                   placeholder="09123456789"
                   helper="Enter an active 11-digit mobile number."
+                  maxLength={11}
                 />
               </div>
 
@@ -870,6 +960,7 @@ export default function RegisterOwnerPage({
                     icon={Building2}
                     placeholder="Sample Transport Services Inc."
                     helper="Use your registered business name."
+                    maxLength={120}
                   />
                   <Field
                     label="Permit Number"
@@ -881,6 +972,7 @@ export default function RegisterOwnerPage({
                     icon={Building2}
                     placeholder="DTI/SEC Permit No."
                     helper="Enter your official permit or registration number."
+                    maxLength={50}
                   />
                 </div>
               )}
@@ -897,6 +989,7 @@ export default function RegisterOwnerPage({
                   toggle={() => setShowPw((prev) => !prev)}
                   helper="Use at least 8 characters with upper/lowercase, number, and symbol."
                   placeholder="Create a strong password"
+                  maxLength={128}
                 />
                 <PasswordField
                   label="Confirm Password"
@@ -909,6 +1002,7 @@ export default function RegisterOwnerPage({
                   toggle={() => setShowCpw((prev) => !prev)}
                   helper="Re-enter your password exactly."
                   placeholder="Repeat your password"
+                  maxLength={128}
                 />
               </div>
 
@@ -938,13 +1032,20 @@ export default function RegisterOwnerPage({
 
               <FileInput
                 label={canShowBusinessFields ? "Business Permit / DTI / SEC Registration" : "Supporting Document"}
-                helper={canShowBusinessFields ? "Upload a document proving your business is registered." : "Upload a document proving your legitimacy as a vehicle owner."}
+                helper={
+                  canShowBusinessFields
+                    ? "Upload a Philippines-issued document proving your business is registered."
+                    : "Upload a Philippines-issued document proving your legitimacy as a vehicle owner."
+                }
                 name="supportingDocument"
                 onChange={handleFile}
                 error={errors.supportingDocument}
                 file={files.supportingDocument}
                 disabled={isLoading}
               />
+              {supportingDocStatus.verified && !errors.supportingDocument && (
+                <p className="text-xs text-emerald-600">{supportingDocStatus.message}</p>
+              )}
             </>
           )}
 
@@ -962,7 +1063,7 @@ export default function RegisterOwnerPage({
 
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <p className="font-semibold text-gray-900">Government ID (front side)</p>
-                <p className="text-sm text-gray-600 mt-1">Upload a clear photo of the entire ID card.</p>
+                <p className="text-sm text-gray-600 mt-1">Upload a clear photo of a Philippine government ID.</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <input
                     ref={idInputRef}
@@ -1132,6 +1233,7 @@ function Field({
   icon: Icon,
   placeholder = "",
   helper = "",
+  maxLength,
 }) {
   const handleInputChange = (e) => {
     let nextValue = e.target.value;
@@ -1154,6 +1256,7 @@ function Field({
           onChange={handleInputChange}
           disabled={disabled}
           placeholder={placeholder}
+          maxLength={maxLength}
           className={`w-full h-11 rounded-xl border px-4 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${Icon ? "pr-11" : ""} ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
         {Icon && <Icon size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
@@ -1215,6 +1318,7 @@ function PasswordField({
   toggle,
   helper = "",
   placeholder = "",
+  maxLength,
 }) {
   return (
     <div className="space-y-1.5">
@@ -1234,6 +1338,7 @@ function PasswordField({
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
+          maxLength={maxLength}
           className={`w-full h-11 rounded-xl border px-4 pr-11 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
         <button type="button" onClick={toggle} disabled={disabled} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">

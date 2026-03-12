@@ -5,9 +5,13 @@
   import ChatWidget from "../components/ChatWidget";
   import InfoModal from "../components/InfoModal";
   import {
-    getCurrentTime,
     getDateTime,
-    getTodayDate,
+    getMinPickupDate,
+    getMinPickupDateTime,
+    getMinPickupTime,
+    getMinReturnDate,
+    getMinReturnDateTime,
+    getMinReturnTime,
     sanitizeBookingRange,
   } from "../utils/dateUtils";
 
@@ -122,13 +126,13 @@
     }, [combinedSearch]);
 
     const isValidDateTime = () => {
-      const now = new Date();
-      now.setSeconds(0, 0);
+      const minPickup = getMinPickupDateTime();
 
       const pickup = getDateTime(pickupDate, pickupTime);
       const dropoff = getDateTime(returnDate, returnTime);
+      const minReturn = getMinReturnDateTime(pickupDate, pickupTime);
 
-      return Boolean(pickup && dropoff && pickup >= now && dropoff > pickup);
+      return Boolean(pickup && dropoff && minReturn && pickup >= minPickup && dropoff >= minReturn);
     };
 
     const updateBookingRange = (patch) => {
@@ -222,16 +226,16 @@
               <div>
                 <label className="text-sm font-medium mb-1 block text-slate-600">Pickup</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    min={getTodayDate()}
-                    value={pickupDate || ""}
-                    onChange={(event) => updateBookingRange({ pickupDate: event.target.value })}
-                    className="rp-input text-sm"
-                  />
+                    <input
+                      type="date"
+                      min={getMinPickupDate()}
+                      value={pickupDate || ""}
+                      onChange={(event) => updateBookingRange({ pickupDate: event.target.value })}
+                      className="rp-input text-sm"
+                    />
                   <input
                     type="time"
-                    min={pickupDate === getTodayDate() ? getCurrentTime() : undefined}
+                    min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
                     value={pickupTime || ""}
                     onChange={(event) => updateBookingRange({ pickupTime: event.target.value })}
                     className="rp-input text-sm"
@@ -242,20 +246,24 @@
               <div>
                 <label className="text-sm font-medium mb-1 block text-slate-600">Return</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    min={pickupDate || getTodayDate()}
-                    value={returnDate || ""}
-                    onChange={(event) => updateBookingRange({ returnDate: event.target.value })}
-                    className="rp-input text-sm"
-                  />
-                  <input
-                    type="time"
-                    min={returnDate === pickupDate ? pickupTime : undefined}
-                    value={returnTime || ""}
-                    onChange={(event) => updateBookingRange({ returnTime: event.target.value })}
-                    className="rp-input text-sm"
-                  />
+                    <input
+                      type="date"
+                      min={getMinReturnDate(pickupDate, pickupTime) || getMinPickupDate()}
+                      value={returnDate || ""}
+                      onChange={(event) => updateBookingRange({ returnDate: event.target.value })}
+                      className="rp-input text-sm"
+                    />
+                    <input
+                      type="time"
+                      min={
+                        returnDate === getMinReturnDate(pickupDate, pickupTime)
+                          ? getMinReturnTime(pickupDate, pickupTime)
+                          : undefined
+                      }
+                      value={returnTime || ""}
+                      onChange={(event) => updateBookingRange({ returnTime: event.target.value })}
+                      className="rp-input text-sm"
+                    />
                 </div>
               </div>
 
@@ -303,7 +311,7 @@
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredVehicles.map((vehicle) => (
-                  <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden">
+                  <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden flex flex-col">
                   <div className="px-4 pt-4">
                     <div className="relative h-48 bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center overflow-hidden rp-image-frame">
                       <img
@@ -326,7 +334,7 @@
                     </div>
                   </div>
 
-                    <div className="p-5 space-y-2">
+                    <div className="p-5 flex flex-col gap-2 flex-1">
                       <h3 className="text-lg font-bold">{vehicle.name}</h3>
                       <p className="text-sm text-slate-600 line-clamp-2">{vehicle.description}</p>
 
@@ -361,13 +369,13 @@
                         <span className="text-sm text-slate-500 font-medium"> / day</span>
                       </div>
 
-                      <div className="pt-2">
+                      <div className="pt-4 mt-auto">
                         <button
                           onClick={() => {
                             if (!vehicle.available) return;
                             if (!isValidDateTime()) {
                               setValidationModalMessage(
-                                "Pickup must be in the future and return must be after pickup."
+                                "Pickup must be at least 10 minutes from now and return must be at least 1 hour after pickup."
                               );
                               return;
                             }

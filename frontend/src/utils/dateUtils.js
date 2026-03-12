@@ -22,6 +22,34 @@ export const getTomorrowDate = () => {
 
 export const getCurrentTime = () => formatTimeInput(new Date());
 
+export const getMinPickupDateTime = (minutes = 10) => {
+  const minDateTime = new Date();
+  minDateTime.setSeconds(0, 0);
+  minDateTime.setMinutes(minDateTime.getMinutes() + minutes);
+  return minDateTime;
+};
+
+export const getMinPickupDate = (minutes = 10) => formatDateInput(getMinPickupDateTime(minutes));
+
+export const getMinPickupTime = (minutes = 10) => formatTimeInput(getMinPickupDateTime(minutes));
+
+export const getMinReturnDateTime = (pickupDate, pickupTime, minutes = 60) => {
+  const pickup = getDateTime(pickupDate, pickupTime);
+  if (!pickup) return null;
+  const minReturn = new Date(pickup.getTime() + minutes * 60 * 1000);
+  minReturn.setSeconds(0, 0);
+  return minReturn;
+};
+
+export const getMinReturnDate = (pickupDate, pickupTime, minutes = 60) => {
+  const minReturn = getMinReturnDateTime(pickupDate, pickupTime, minutes);
+  return minReturn ? formatDateInput(minReturn) : "";
+};
+
+export const getMinReturnTime = (pickupDate, pickupTime, minutes = 60) => {
+  const minReturn = getMinReturnDateTime(pickupDate, pickupTime, minutes);
+  return minReturn ? formatTimeInput(minReturn) : "";
+};
 export const getDateTime = (date, time) => {
   if (!date || !time) return null;
   const value = new Date(`${date}T${time}`);
@@ -29,31 +57,41 @@ export const getDateTime = (date, time) => {
 };
 
 export const sanitizeBookingRange = (bookingData = {}) => {
-  const today = getTodayDate();
-  const nowTime = getCurrentTime();
+  const minPickupDateTime = getMinPickupDateTime();
+  const minPickupDate = formatDateInput(minPickupDateTime);
+  const minPickupTime = formatTimeInput(minPickupDateTime);
 
-  let pickupDate = bookingData.pickupDate || today;
-  let pickupTime = bookingData.pickupTime || nowTime;
+  let pickupDate = bookingData.pickupDate || minPickupDate;
+  let pickupTime = bookingData.pickupTime || minPickupTime;
   let returnDate = bookingData.returnDate || pickupDate;
   let returnTime = bookingData.returnTime || pickupTime;
 
-  if (pickupDate < today) pickupDate = today;
-  if (pickupDate === today && pickupTime < nowTime) pickupTime = nowTime;
+  if (pickupDate < minPickupDate) pickupDate = minPickupDate;
+  if (pickupDate === minPickupDate && pickupTime < minPickupTime) pickupTime = minPickupTime;
 
   let pickupDateTime = getDateTime(pickupDate, pickupTime);
   if (!pickupDateTime) {
-    pickupDate = today;
-    pickupTime = nowTime;
+    pickupDate = minPickupDate;
+    pickupTime = minPickupTime;
     pickupDateTime = getDateTime(pickupDate, pickupTime);
   }
 
   if (returnDate < pickupDate) returnDate = pickupDate;
 
-  const returnDateTime = getDateTime(returnDate, returnTime);
-  if (!returnDateTime || returnDateTime <= pickupDateTime) {
-    const minimumReturn = new Date(pickupDateTime.getTime() + 60 * 60 * 1000);
-    returnDate = formatDateInput(minimumReturn);
-    returnTime = formatTimeInput(minimumReturn);
+  const minReturnDateTime = getMinReturnDateTime(pickupDate, pickupTime);
+  if (minReturnDateTime) {
+    const minReturnDate = formatDateInput(minReturnDateTime);
+    const minReturnTime = formatTimeInput(minReturnDateTime);
+
+    if (returnDate < minReturnDate) returnDate = minReturnDate;
+    if (returnDate === minReturnDate && returnTime < minReturnTime) returnTime = minReturnTime;
+    if (returnDate > minReturnDate && returnTime < minReturnTime) returnTime = minReturnTime;
+
+    const returnDateTime = getDateTime(returnDate, returnTime);
+    if (!returnDateTime || returnDateTime < minReturnDateTime) {
+      returnDate = minReturnDate;
+      returnTime = minReturnTime;
+    }
   }
 
   return {

@@ -151,3 +151,23 @@ export async function captureBase64FromStream(stream, { mime = "image/jpeg", qua
     return "";
   }
 }
+
+/**
+ * Capture multiple frames from a MediaStream with a short delay.
+ * Returns an array of data URLs.
+ */
+export async function captureFramesFromStream(
+  stream,
+  { count = 3, intervalMs = 220, mime = "image/jpeg", quality = 0.92 } = {}
+) {
+  if (!stream) return [];
+  const frames = [];
+  for (let i = 0; i < count; i += 1) {
+    const dataUrl = await captureBase64FromStream(stream, { mime, quality });
+    if (dataUrl) frames.push(dataUrl);
+    if (i < count - 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+  return frames;
+}

@@ -15,12 +15,13 @@ async function postJson(url, body) {
 }
 
 // Step 1: save the ID face
-export async function preRegisterIdFace(email, fullName, role, idImageBase64) {
+export async function preRegisterIdFace(email, fullName, role, idImageBase64, idImageMime) {
   return postJson(`${BASE_URL}/api/kyc/pre/id-register`, {
     email,
     full_name: fullName,
     role,
     id_image_base64: idImageBase64,
+    id_image_mime: idImageMime,
   });
 }
 
@@ -33,10 +34,21 @@ export async function preSelfieChallenge(email, framesBase64) {
 }
 
 // Step 3: match the selfie with the ID
-export async function preSelfieVerify(email, challengeId, selfieImageBase64) {
+export async function preSelfieVerify(email, challengeId, selfieImageBase64, role) {
   return postJson(`${BASE_URL}/api/kyc/pre/selfie/verify`, {
     email,
     challenge_id: challengeId,
     selfie_image_base64: selfieImageBase64,
+    role,
+  });
+}
+
+// Supporting document verification (owner)
+export async function preVerifySupportingDocument(email, docImageBase64, docImageMime, role = "owner") {
+  return postJson(`${BASE_URL}/api/kyc/pre/supporting-doc/verify`, {
+    email,
+    role,
+    doc_image_base64: docImageBase64,
+    doc_image_mime: docImageMime,
   });
 }

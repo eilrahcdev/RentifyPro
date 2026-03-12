@@ -17,11 +17,14 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ChatWidget from "../components/ChatWidget";
+import API from "../utils/api";
 import {
   formatDateInput,
-  getCurrentTime,
   getDateTime,
-  getTodayDate,
+  getMinPickupDate,
+  getMinPickupDateTime,
+  getMinPickupTime,
+  getMinReturnDateTime,
   getTomorrowDate,
 } from "../utils/dateUtils";
 import InfoModal from "../components/InfoModal";
@@ -69,50 +72,34 @@ const categories = [
   },
 ];
 
-const featuredVehicles = [
-  {
-    id: 1,
-    name: "BMW X5",
-    location: "Dagupan City, Pangasinan",
-    image: "/bmw-x5.png",
-    category: "BMW - SUV",
-    seats: 7,
-    transmission: "Automatic",
-    fuel: "Gasoline",
-    price: 5500,
-    rating: 4.8,
-    available: true,
-    codingDay: "Wednesday",
-  },
-  {
-    id: 2,
-    name: "Yamaha R3",
-    location: "Lingayen, Pangasinan",
-    image: "/yamaha-r3.png",
-    category: "Yamaha - Sport",
-    seats: 2,
-    transmission: "Manual",
-    fuel: "Gasoline",
-    price: 1200,
-    rating: 4.6,
-    available: true,
-    codingDay: "Thursday",
-  },
-  {
-    id: 3,
-    name: "Toyota HiAce",
-    location: "San Carlos City, Pangasinan",
-    image: "/toyota-hiAce.png",
-    category: "Toyota - Van",
-    seats: 12,
-    transmission: "Manual",
-    fuel: "Diesel",
-    price: 4800,
-    rating: 4.7,
-    available: true,
-    codingDay: "Saturday",
-  },
-];
+const pickRandom = (list, count) => {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, count);
+};
+
+const normalizeFeaturedVehicle = (vehicle) => ({
+  id: vehicle._id,
+  _id: vehicle._id,
+  name: vehicle.name,
+  location: vehicle.location,
+  image: vehicle.imageUrl || vehicle.images?.[0] || "/bmw-x5.png",
+  category: vehicle.specs?.subType
+    ? `${vehicle.specs?.type || "Vehicle"} · ${vehicle.specs.subType}`
+    : "Owner-listed Vehicle",
+  seats: vehicle.specs?.seats || 4,
+  transmission: vehicle.specs?.transmission || "Automatic",
+  fuel: vehicle.specs?.fuel || "Gasoline",
+  price: Number(vehicle.dailyRentalRate || 0),
+  rating: Number.isFinite(Number(vehicle.averageRating ?? vehicle.rating))
+    ? Number(Number(vehicle.averageRating ?? vehicle.rating).toFixed(1))
+    : 0,
+  available: vehicle.availabilityStatus === "available",
+  codingDay: "",
+});
 
 const featureItems = [
   {
@@ -198,15 +185,18 @@ export default function RentifyPro({
   user,
   onLogout,
 }) {
+  const [featuredVehicles, setFeaturedVehicles] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [featuredError, setFeaturedError] = useState("");
   const [location, setLocation] = useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [vehicleType, setVehicleType] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [validationModalMessage, setValidationModalMessage] = useState("");
-  const [pickupDate, setPickupDate] = useState(() => getTodayDate());
-  const [pickupTime, setPickupTime] = useState(() => getCurrentTime());
+  const [pickupDate, setPickupDate] = useState(() => getMinPickupDate());
+  const [pickupTime, setPickupTime] = useState(() => getMinPickupTime());
   const [returnDate, setReturnDate] = useState(() => getTomorrowDate());
-  const [returnTime, setReturnTime] = useState(() => getCurrentTime());
+  const [returnTime, setReturnTime] = useState(() => getMinPickupTime());
 
   useEffect(() => {
     if (returnDate <= pickupDate) {
@@ -217,10 +207,10 @@ export default function RentifyPro({
   }, [pickupDate, returnDate]);
 
   useEffect(() => {
-    const today = getTodayDate();
-    const now = getCurrentTime();
-    if (pickupDate === today && pickupTime < now) {
-      setPickupTime(now);
+    const minPickupDate = getMinPickupDate();
+    const minPickupTime = getMinPickupTime();
+    if (pickupDate === minPickupDate && pickupTime < minPickupTime) {
+      setPickupTime(minPickupTime);
     }
   }, [pickupDate, pickupTime]);
 
@@ -233,21 +223,23 @@ export default function RentifyPro({
   );
 
   const isValidDateTime = () => {
-    const now = new Date();
-    now.setSeconds(0, 0);
+    const minPickup = getMinPickupDateTime();
 
     const pickup = getDateTime(pickupDate, pickupTime);
     const dropoff = getDateTime(returnDate, returnTime);
+    const minReturn = getMinReturnDateTime(pickupDate, pickupTime);
 
     if (!pickup || !dropoff) return false;
-    if (pickup < now) return false;
-    if (dropoff <= pickup) return false;
+    if (pickup < minPickup) return false;
+    if (!minReturn || dropoff < minReturn) return false;
     return true;
   };
 
   const handleSearch = (typeOverride = vehicleType) => {
     if (!isValidDateTime()) {
-      setValidationModalMessage("Pickup must be in the future and return must be after pickup.");
+      setValidationModalMessage(
+        "Pickup must be at least 10 minutes from now and return must be at least 1 hour after pickup."
+      );
       return;
     }
 
@@ -255,6 +247,30 @@ export default function RentifyPro({
       mapSearchPayload(location, typeOverride, pickupDate, pickupTime, returnDate, returnTime)
     );
   };
+
+  useEffect(() => {
+    let active = true;
+    const loadFeatured = async () => {
+      setFeaturedLoading(true);
+      setFeaturedError("");
+      try {
+        const response = await API.getPublicVehicles({ page: 1, limit: 24 });
+        if (!active) return;
+        const normalized = (response.vehicles || []).map(normalizeFeaturedVehicle);
+        setFeaturedVehicles(pickRandom(normalized, 3));
+      } catch (err) {
+        if (!active) return;
+        setFeaturedError(err.message || "Failed to load featured vehicles.");
+      } finally {
+        if (active) setFeaturedLoading(false);
+      }
+    };
+
+    loadFeatured();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div id="home" className="min-h-screen">
@@ -377,7 +393,7 @@ export default function RentifyPro({
               <label className="text-xs font-semibold text-slate-500">Pick-up Date</label>
               <input
                 type="date"
-                min={getTodayDate()}
+                min={getMinPickupDate()}
                 value={pickupDate}
                 onChange={(event) => setPickupDate(event.target.value)}
                 className="rp-input mt-1.5"
@@ -389,7 +405,7 @@ export default function RentifyPro({
               <input
                 type="time"
                 value={pickupTime}
-                min={pickupDate === getTodayDate() ? getCurrentTime() : undefined}
+                min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
                 onChange={(event) => setPickupTime(event.target.value)}
                 className="rp-input mt-1.5"
               />
@@ -473,9 +489,20 @@ export default function RentifyPro({
             <span className="text-[#0B75E7]">Featured</span> Vehicles
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {featuredVehicles.map((vehicle) => (
-              <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden">
+          {featuredLoading && (
+            <div className="rp-surface p-6 text-sm text-slate-600">Loading featured vehicles...</div>
+          )}
+          {featuredError && (
+            <div className="rp-surface p-6 text-sm text-rose-600">{featuredError}</div>
+          )}
+          {!featuredLoading && !featuredError && featuredVehicles.length === 0 && (
+            <div className="rp-surface p-6 text-sm text-slate-600">No featured vehicles yet.</div>
+          )}
+
+          {!featuredLoading && !featuredError && featuredVehicles.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {featuredVehicles.map((vehicle) => (
+                <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden">
                 <div className="relative h-52 bg-slate-100">
                   <img src={vehicle.image} alt={vehicle.name} className="w-full h-full object-contain p-4" />
                   {vehicle.available && (
@@ -497,11 +524,13 @@ export default function RentifyPro({
                     {vehicle.location}
                   </div>
 
-                  <div className="mt-2">
-                    <span className="rp-chip bg-slate-100 text-slate-600">
-                      {formatCoding(vehicle.codingDay)}
-                    </span>
-                  </div>
+                  {formatCoding(vehicle.codingDay) && (
+                    <div className="mt-2">
+                      <span className="rp-chip bg-slate-100 text-slate-600">
+                        {formatCoding(vehicle.codingDay)}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-4 mt-4 text-sm text-slate-600">
                     <span className="flex items-center gap-1">
@@ -532,9 +561,10 @@ export default function RentifyPro({
                     </button>
                   </div>
                 </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

@@ -13,6 +13,7 @@ export const SIGN_IN_VALIDATION_RULES = {
     if (!value) return "Email is required.";
     if (EMOJI_REGEX.test(value)) return "Email must not contain emoji.";
     if (/\s/.test(value)) return "Email must not contain spaces.";
+    if (value.length > 254) return "Email is too long (max 254 characters).";
     if (!EMAIL_REGEX.test(value)) return "Enter a valid email format.";
     const domain = value.split("@")[1];
     if (!ALLOWED_EMAIL_DOMAINS.includes(domain))
@@ -28,6 +29,14 @@ export const SIGN_IN_VALIDATION_RULES = {
     if (!/[0-9]/.test(value)) return "Password must contain at least one number.";
     if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(value))
       return "Password must contain at least one special character (!@#$%^&*).";
+    return "";
+  },
+  captcha: (value) => {
+    if (!value) return "Security check answer is required.";
+    if (EMOJI_REGEX.test(value)) return "Security check must not contain emoji.";
+    if (/\s/.test(value)) return "Security check must not contain spaces.";
+    if (!/^[0-9]+$/.test(value)) return "Security check answer must be a number.";
+    if (value.length > 3) return "Security check answer must be at most 3 digits.";
     return "";
   },
 };

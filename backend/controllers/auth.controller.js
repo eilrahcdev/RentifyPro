@@ -2,10 +2,17 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import fs from "fs/promises";
+import path from "path";
 import Otp from "../models/Otp.js";
+import LoginChallenge from "../models/LoginChallenge.js";
+import LoginActivity from "../models/LoginActivity.js";
 import sendEmail from "../utils/sendEmail.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { isValidWalletAddress, normalizeAddress } from "../utils/blockchainBooking.js";
+import { getMissingPreKycDocs, clearPreKycDocs } from "../utils/preKycDocs.js";
+import { isPreKycFaceVerified, clearPreKycFace } from "../utils/preKycFace.js";
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_EXPIRE = process.env.PASSWORD_RESET_TOKEN_EXPIRE || "15m";
@@ -13,6 +20,13 @@ const PASSWORD_RESET_TOKEN_SECRET = process.env.PASSWORD_RESET_TOKEN_SECRET || p
 const tokenBlacklist = new Set();
 const MIN_RENTER_AGE = 18;
 const PHONE_REGEX = /^[0-9]{11}$/;
+const LOGIN_CHALLENGE_TTL_MINUTES = Number(process.env.LOGIN_CHALLENGE_TTL_MINUTES || 180);
+const LOGIN_CHALLENGE_MAX_ATTEMPTS = Number(process.env.LOGIN_CHALLENGE_MAX_ATTEMPTS || 5);
+const CLEAR_PREKYC_ON_REGISTER =
+  String(process.env.PREKYC_CLEAR_ON_REGISTER || "").trim().toLowerCase() === "true";
+const AVATAR_UPLOAD_DIR = process.env.AVATAR_UPLOAD_DIR || path.resolve("uploads", "avatars");
+const AVATAR_MAX_BYTES = Number(process.env.AVATAR_MAX_BYTES || 2 * 1024 * 1024);
+const UPLOADS_SEGMENT = "/uploads/";
 
 export const isTokenBlacklisted = (token) => tokenBlacklist.has(token);
 
@@ -48,6 +62,15 @@ const clearAuthCookie = (res) => {
 };
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const toBool = (value, fallback = false) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return fallback;
+};
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const createOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 const parseDateOfBirth = (value) => {
@@ -144,6 +167,113 @@ const buildDuplicateKeyMessage = (error) => {
   return "A unique field already exists.";
 };
 
+const getPublicBaseUrl = (req) => {
+  const configured = String(process.env.BACKEND_PUBLIC_URL || "").trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  if (!req) return "";
+  return `${req.protocol}://${req.get("host")}`;
+};
+
+const normalizeUploadPath = (value = "") => {
+  const raw = String(value || "").trim().replace(/\\/g, "/");
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) {
+    const uploadsIndex = raw.toLowerCase().lastIndexOf(UPLOADS_SEGMENT);
+    if (uploadsIndex >= 0) return raw.slice(uploadsIndex + 1);
+    return "";
+  }
+  if (raw.toLowerCase().startsWith("uploads/")) return raw;
+  if (raw.startsWith("./")) return raw.slice(2);
+  if (raw.startsWith("/")) return raw.slice(1);
+  if (/^[a-z]:\//i.test(raw)) return raw;
+  return raw;
+};
+
+const removeLocalAvatarIfExists = async (avatarValue = "") => {
+  const normalized = normalizeUploadPath(avatarValue);
+  if (!normalized) return;
+  if (!normalized.toLowerCase().includes("/avatars/")) return;
+
+  const absolutePath = path.isAbsolute(normalized)
+    ? normalized
+    : path.resolve(normalized);
+  try {
+    await fs.unlink(absolutePath);
+  } catch {
+    // Ignore missing files or unlink errors.
+  }
+};
+
+const extractAvatarPayload = (rawValue) => {
+  const value = String(rawValue || "").trim();
+  if (!value) return null;
+
+  if (value.startsWith("data:")) {
+    const match = value.match(/^data:(.*?);base64,(.*)$/);
+    if (!match) return null;
+    return { base64: match[2], mimeType: match[1] || "image/jpeg" };
+  }
+
+  const isLong = value.length > 10000;
+  const isBase64 = /^[A-Za-z0-9+/=]+$/.test(value);
+  if (isLong && isBase64) {
+    return { base64: value, mimeType: "image/jpeg" };
+  }
+
+  return null;
+};
+
+const saveAvatarBase64 = async ({ base64, mimeType = "image/jpeg", req }) => {
+  const clean = String(base64 || "");
+  if (!clean) throw new Error("Avatar image is empty.");
+
+  const approxBytes = Math.floor(clean.length * 0.75);
+  if (approxBytes > AVATAR_MAX_BYTES) {
+    throw new Error("Avatar image is too large.");
+  }
+
+  const buffer = Buffer.from(clean, "base64");
+  if (!buffer.length) {
+    throw new Error("Avatar image is invalid.");
+  }
+
+  const safeExt = mimeType?.includes("png")
+    ? "png"
+    : mimeType?.includes("webp")
+    ? "webp"
+    : mimeType?.includes("gif")
+    ? "gif"
+    : "jpg";
+  const fileName = `avatar-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${safeExt}`;
+
+  await fs.mkdir(AVATAR_UPLOAD_DIR, { recursive: true });
+  const filePath = path.join(AVATAR_UPLOAD_DIR, fileName);
+  await fs.writeFile(filePath, buffer);
+
+  const baseUrl = getPublicBaseUrl(req);
+  const publicUrl = baseUrl ? `${baseUrl}/uploads/avatars/${fileName}` : `uploads/avatars/${fileName}`;
+
+  return { fileName, filePath, publicUrl };
+};
+
+const generateLoginChallenge = () => {
+  const a = crypto.randomInt(10, 100);
+  const b = crypto.randomInt(10, 100);
+  const useAddition = crypto.randomInt(0, 2) === 0;
+  let left = a;
+  let right = b;
+  let operator = "+";
+  if (!useAddition) {
+    operator = "-";
+    if (right > left) {
+      [left, right] = [right, left];
+    }
+  }
+  const answer = operator === "+" ? left + right : left - right;
+  const question = `What is ${left} ${operator} ${right}?`;
+  return { question, answer: String(answer) };
+};
+
 const createOtpRecord = async ({ email, otp, purpose }) => {
   await Otp.deleteMany({ email, purpose });
   await Otp.create({
@@ -161,6 +291,32 @@ const findOtpRecord = async ({ email, otp, purpose }) =>
     otp: String(otp || "").trim(),
     purpose,
   });
+
+export const getLoginChallenge = async (_req, res) => {
+  try {
+    const { question, answer } = generateLoginChallenge();
+    const answerHash = await bcrypt.hash(answer, 10);
+    const challengeId = crypto.randomBytes(18).toString("hex");
+    const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MINUTES * 60 * 1000);
+
+    await LoginChallenge.create({
+      challengeId,
+      question,
+      answerHash,
+      maxAttempts: LOGIN_CHALLENGE_MAX_ATTEMPTS,
+      expiresAt,
+    });
+
+    res.json({
+      challengeId,
+      question,
+      expiresInMinutes: LOGIN_CHALLENGE_TTL_MINUTES,
+    });
+  } catch (error) {
+    auditLog.error("AUTH", "Login challenge error", { detail: error.message });
+    res.status(500).json({ message: "Failed to create login challenge." });
+  }
+};
 
 export const registerUser = async (req, res) => {
   try {
@@ -195,12 +351,35 @@ export const registerUser = async (req, res) => {
     }
 
     const normalizedEmail = normalizeEmail(email);
+    const requestedRole = role === "owner" ? "owner" : "user";
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       auditLog.warn("AUTH", `Register with existing email: ${normalizedEmail}`, { ip: req.ip });
       return res.status(400).json({
         success: false,
         message: "This email is already registered.",
+      });
+    }
+
+    const requiredDocs = requestedRole === "owner" ? ["id", "supporting"] : ["id"];
+    const missingDocs = await getMissingPreKycDocs(normalizedEmail, requiredDocs);
+    if (missingDocs.length) {
+      const needsId = missingDocs.includes("id");
+      const needsSupporting = missingDocs.includes("supporting");
+      let message = "Please verify your ID before registering.";
+      if (needsId && needsSupporting) {
+        message = "Please verify your ID and supporting document before registering.";
+      } else if (needsSupporting) {
+        message = "Please verify your supporting document before registering.";
+      }
+      return res.status(400).json({ success: false, message });
+    }
+
+    const faceVerified = await isPreKycFaceVerified(normalizedEmail);
+    if (!faceVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Please verify your selfie matches your ID before registering.",
       });
     }
 
@@ -223,8 +402,6 @@ export const registerUser = async (req, res) => {
 
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const requestedRole = role === "owner" ? "owner" : "user";
-
     const user = await User.create({
       name: toText(name),
       email: normalizedEmail,
@@ -251,6 +428,10 @@ export const registerUser = async (req, res) => {
     clearAuthCookie(res);
 
     auditLog.info("AUTH", `Registered: ${normalizedEmail}`, { userId: user._id.toString() });
+    if (CLEAR_PREKYC_ON_REGISTER) {
+      await clearPreKycDocs(normalizedEmail);
+      await clearPreKycFace(normalizedEmail);
+    }
 
     res.status(201).json({
       success: true,
@@ -281,6 +462,8 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const captchaId = String(req.body.captchaId || "").trim();
+    const captchaAnswer = String(req.body.captchaAnswer || "").trim();
 
     if (!email || !password) {
       return res.status(400).json({
@@ -288,6 +471,61 @@ export const loginUser = async (req, res) => {
         message: "Please provide email and password.",
       });
     }
+
+    if (!captchaId || !captchaAnswer) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha is required.",
+      });
+    }
+    if (!/^[0-9]+$/.test(captchaAnswer)) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha answer must be a number.",
+      });
+    }
+    if (captchaAnswer.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha answer must be at most 3 digits.",
+      });
+    }
+
+    const challenge = await LoginChallenge.findOne({ challengeId: captchaId }).select("+answerHash");
+    if (!challenge) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha expired. Please refresh and try again.",
+      });
+    }
+    if (challenge.usedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha expired. Please refresh and try again.",
+      });
+    }
+    if (challenge.attempts >= challenge.maxAttempts) {
+      if (!challenge.usedAt) {
+        challenge.usedAt = new Date();
+        await challenge.save();
+      }
+      return res.status(429).json({
+        success: false,
+        message: "Too many captcha attempts. Please refresh and try again.",
+      });
+    }
+
+    const captchaOk = await bcrypt.compare(captchaAnswer, challenge.answerHash);
+    challenge.attempts += 1;
+    if (!captchaOk) {
+      await challenge.save();
+      return res.status(400).json({
+        success: false,
+        message: "Captcha answer is incorrect.",
+      });
+    }
+    challenge.usedAt = new Date();
+    await challenge.save();
 
     const normalizedEmail = normalizeEmail(email);
     const user = await User.findOne({ email: normalizedEmail }).select("+password");
@@ -327,6 +565,13 @@ export const loginUser = async (req, res) => {
     setAuthCookie(res, token);
 
     auditLog.info("AUTH", `Logged in: ${normalizedEmail}`, { userId: user._id.toString() });
+    LoginActivity.create({
+      user: user._id,
+      ip: req.ip || "",
+      userAgent: req.get("user-agent") || "",
+    }).catch((err) => {
+      auditLog.warn("AUTH", "Login activity write failed", { detail: err.message });
+    });
 
     res.json({
       success: true,
@@ -631,6 +876,163 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+export const changePassword = async (req, res) => {
+  try {
+    const currentPassword = String(req.body.currentPassword || "");
+    const newPassword = String(req.body.newPassword || "");
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password and new password are required.",
+      });
+    }
+
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Current password is incorrect." });
+    }
+
+    const passwordMessage = validatePasswordStrength(newPassword);
+    if (passwordMessage) {
+      return res.status(400).json({ success: false, message: passwordMessage });
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    auditLog.info("AUTH", "Password changed", { userId: user._id.toString() });
+
+    res.json({ success: true, message: "Password updated successfully." });
+  } catch (error) {
+    auditLog.error("AUTH", "Change password error", { detail: error.message });
+    res.status(500).json({ success: false, message: "Failed to change password." });
+  }
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  email: true,
+  sms: false,
+  bookingUpdates: true,
+  promotions: false,
+};
+
+export const getNotificationSettings = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("notificationSettings");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    res.json({
+      success: true,
+      settings: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...(user.notificationSettings || {}),
+      },
+    });
+  } catch (error) {
+    auditLog.error("AUTH", "Get notification settings error", { detail: error.message });
+    res.status(500).json({ success: false, message: "Failed to load notification settings." });
+  }
+};
+
+export const updateNotificationSettings = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("notificationSettings");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const current = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(user.notificationSettings || {}) };
+    const nextSettings = {
+      email: toBool(req.body.email, current.email),
+      sms: toBool(req.body.sms, current.sms),
+      bookingUpdates: toBool(req.body.bookingUpdates, current.bookingUpdates),
+      promotions: toBool(req.body.promotions, current.promotions),
+    };
+
+    user.notificationSettings = nextSettings;
+    await user.save();
+
+    res.json({ success: true, settings: nextSettings });
+  } catch (error) {
+    auditLog.error("AUTH", "Update notification settings error", { detail: error.message });
+    res.status(500).json({ success: false, message: "Failed to update notification settings." });
+  }
+};
+
+export const getLoginActivity = async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit || 10), 50);
+    const activity = await LoginActivity.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({ success: true, activity });
+  } catch (error) {
+    auditLog.error("AUTH", "Get login activity error", { detail: error.message });
+    res.status(500).json({ success: false, message: "Failed to load login activity." });
+  }
+};
+
+export const upgradeToOwner = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+    if (user.role === "owner") {
+      return res.json({ success: true, message: "You are already a vehicle owner.", user: buildSafeUserResponse(user) });
+    }
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email before upgrading to a vehicle owner.",
+      });
+    }
+
+    const missingDocs = await getMissingPreKycDocs(user.email, ["supporting"]);
+    if (missingDocs.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Please verify your supporting business document before upgrading to a vehicle owner.",
+      });
+    }
+
+    const ownerType = toText(req.body.ownerType);
+    const businessName = toText(req.body.businessName);
+    const licenseNumber = toText(req.body.licenseNumber);
+    const permitNumber = toText(req.body.permitNumber);
+
+    if (ownerType) user.ownerType = ownerType;
+    if (businessName) user.businessName = businessName;
+    if (licenseNumber) user.licenseNumber = licenseNumber;
+    if (permitNumber) user.permitNumber = permitNumber;
+
+    user.role = "owner";
+    await user.save();
+
+    auditLog.info("AUTH", "Upgraded to owner", { userId: user._id.toString() });
+
+    res.json({
+      success: true,
+      message: "You are now registered as a vehicle owner.",
+      user: buildSafeUserResponse(user),
+    });
+  } catch (error) {
+    auditLog.error("AUTH", "Upgrade to owner error", { detail: error.message });
+    res.status(500).json({ success: false, message: "Failed to upgrade account." });
+  }
+};
+
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("-password");
@@ -710,7 +1112,6 @@ export const updateProfile = async (req, res) => {
     }
 
     const profileFields = [
-      "avatar",
       "phone",
       "dateOfBirth",
       "gender",
@@ -727,6 +1128,34 @@ export const updateProfile = async (req, res) => {
       "emergencyContactPhone",
       "emergencyContactRelationship",
     ];
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "avatar")) {
+      try {
+        const avatarInput = toText(req.body.avatar);
+        if (!avatarInput) {
+          await removeLocalAvatarIfExists(user.avatar);
+          user.avatar = "";
+        } else {
+          const avatarPayload = extractAvatarPayload(avatarInput);
+          if (avatarPayload) {
+            await removeLocalAvatarIfExists(user.avatar);
+            const stored = await saveAvatarBase64({
+              base64: avatarPayload.base64,
+              mimeType: avatarPayload.mimeType,
+              req,
+            });
+            user.avatar = stored.publicUrl;
+          } else {
+            user.avatar = avatarInput;
+          }
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error?.message || "Avatar image is invalid.",
+        });
+      }
+    }
 
     profileFields.forEach((field) => {
       if (Object.prototype.hasOwnProperty.call(req.body, field)) {

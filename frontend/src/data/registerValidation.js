@@ -74,6 +74,7 @@ export const VALIDATION_RULES = {
     if (!value) return "Email address is required.";
     if (EMOJI_REGEX.test(value)) return "Email must not contain emoji.";
     if (/\s/.test(value)) return "Email must not contain spaces.";
+    if (value.length > 254) return "Email is too long (max 254 characters).";
     if (!EMAIL_REGEX.test(value)) return "Please enter a valid email address.";
     const domain = value.split("@")[1];
     if (!ALLOWED_EMAIL_DOMAINS.includes(domain))
@@ -86,6 +87,7 @@ export const VALIDATION_RULES = {
     if (/\s/.test(value)) return "Phone number must not contain spaces.";
     if (!/^[0-9]+$/.test(value)) return "Phone number can only contain digits (0-9).";
     if (!PHONE_REGEX.test(value)) return "Phone number must be exactly 11 digits.";
+    if (value.length > 11) return "Phone number is too long (max 11 digits).";
     return "";
   },
   dateOfBirth: (value) => {

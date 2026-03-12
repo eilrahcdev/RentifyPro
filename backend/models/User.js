@@ -53,6 +53,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    notificationSettings: {
+      email: { type: Boolean, default: true },
+      sms: { type: Boolean, default: false },
+      bookingUpdates: { type: Boolean, default: true },
+      promotions: { type: Boolean, default: false },
+    },
 
     // Shared profile fields
     phone: { type: String },

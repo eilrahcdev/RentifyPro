@@ -7,9 +7,10 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import {
   fileToBase64,
   stripDataUrlPrefix,
+  getMimeFromDataUrl,
   startCamera,
   stopCamera,
-  captureBase64FromStream,
+  captureFramesFromStream,
 } from "../utils/cameraKyc";
 
 import {
@@ -533,7 +534,8 @@ export default function RegisterPage({
     try {
       const dataUrl = await fileToBase64(kyc.idCardFile);
       const clean = stripDataUrlPrefix(dataUrl);
-      const result = await preRegisterIdFace(form.email, fullName, "user", clean);
+      const mime = getMimeFromDataUrl(dataUrl);
+      const result = await preRegisterIdFace(form.email, fullName, "user", clean, mime);
       if (!result.success) throw new Error(result.message || "We couldn't register your ID. Please try a clearer photo.");
       setKyc((prev) => ({
         ...prev,
@@ -565,14 +567,16 @@ export default function RegisterPage({
     setIsLoading(true);
     setKycUi((p) => ({ ...p, statusText: "Capturing selfie..." }));
     try {
-      const dataUrl = await captureBase64FromStream(cameraStream);
-      if (!dataUrl) throw new Error("Failed to capture selfie.");
-      const clean = stripDataUrlPrefix(dataUrl);
+      const frames = await captureFramesFromStream(cameraStream, { count: 3, intervalMs: 220 });
+      if (!frames.length) throw new Error("Failed to capture selfie.");
+      const cleanFrames = frames.map(stripDataUrlPrefix);
+      const lastDataUrl = frames[frames.length - 1];
+      const lastClean = cleanFrames[cleanFrames.length - 1];
 
-      setKyc((prev) => ({ ...prev, selfieDataUrl: dataUrl, selfieBase64Clean: clean }));
+      setKyc((prev) => ({ ...prev, selfieDataUrl: lastDataUrl, selfieBase64Clean: lastClean }));
 
-      setKycUi((p) => ({ ...p, statusText: "Checking selfie quality..." }));
-      const result = await preSelfieChallenge(form.email, [clean]);
+      setKycUi((p) => ({ ...p, statusText: "Checking selfie motion... please blink or move slightly." }));
+      const result = await preSelfieChallenge(form.email, cleanFrames);
 
       if (!result.passed) {
         throw new Error(result.message || "Selfie check failed. Please try again.");
@@ -602,7 +606,7 @@ export default function RegisterPage({
     setIsLoading(true);
     setKycUi((p) => ({ ...p, statusText: "Verifying face match..." }));
     try {
-      const result = await preSelfieVerify(form.email, kyc.challengeId, kyc.selfieBase64Clean);
+      const result = await preSelfieVerify(form.email, kyc.challengeId, kyc.selfieBase64Clean, "user");
       if (!result.verified) throw new Error(result.message || "Face does not match ID.");
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((p) => ({ ...p, selfieVerified: "" }));
@@ -653,10 +657,13 @@ export default function RegisterPage({
       await API.sendOTP(form.email).catch(() => {});
       setTimeout(() => { onNavigateToRegisterOTP(form.email, form.phone, fullName); }, 1500);
     } catch (error) {
-      const msg = error?.message?.includes("already")
+      const raw = error?.message || "";
+      const msg = raw.includes("already")
         ? "This email address is already registered."
-        : error?.message?.includes("Too many")
-        ? error.message
+        : raw.includes("Too many")
+        ? raw
+        : /^[A-Z]/.test(raw) && !/request failed/i.test(raw)
+        ? raw
         : "Registration failed. Please try again.";
       setErrors({ email: msg });
       setStep(1);
@@ -833,12 +840,12 @@ export default function RegisterPage({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="First Name" value={form.firstName} onChange={(e) => handleChange("firstName", e.target.value)} error={errors.firstName} disabled={isLoading} placeholder="John" required icon={User} onlyLetters inputRef={firstNameRef} />
-                      <FormInput label="Last Name" value={form.lastName} onChange={(e) => handleChange("lastName", e.target.value)} error={errors.lastName} disabled={isLoading} placeholder="Doe" required icon={User} onlyLetters inputRef={lastNameRef} />
+                      <FormInput label="First Name" value={form.firstName} onChange={(e) => handleChange("firstName", e.target.value)} error={errors.firstName} disabled={isLoading} placeholder="John" required icon={User} onlyLetters inputRef={firstNameRef} maxLength={50} />
+                      <FormInput label="Last Name" value={form.lastName} onChange={(e) => handleChange("lastName", e.target.value)} error={errors.lastName} disabled={isLoading} placeholder="Doe" required icon={User} onlyLetters inputRef={lastNameRef} maxLength={50} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="Email Address" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} error={errors.email} disabled={isLoading} placeholder="john@gmail.com" required icon={Mail} inputRef={emailRef} showEmailHint />
-                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} error={errors.phone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={phoneRef} />
+                      <FormInput label="Email Address" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} error={errors.email} disabled={isLoading} placeholder="john@gmail.com" required icon={Mail} inputRef={emailRef} showEmailHint maxLength={254} />
+                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} error={errors.phone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={phoneRef} maxLength={11} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <FormInput label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(e) => handleChange("dateOfBirth", e.target.value)} error={errors.dateOfBirth} disabled={isLoading} required icon={Calendar} inputRef={dobRef} />
@@ -917,14 +924,14 @@ export default function RegisterPage({
                         <p className="text-sm text-gray-500 mt-1">Add someone we can reach if you need urgent support during a booking.</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <FormInput label="Contact Name" value={form.emergencyContactName} onChange={(e) => handleChange("emergencyContactName", e.target.value)} error={errors.emergencyContactName} disabled={isLoading} placeholder="Maria Dela Cruz" required icon={User} inputRef={emergencyNameRef} />
-                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", e.target.value)} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} />
+                        <FormInput label="Contact Name" value={form.emergencyContactName} onChange={(e) => handleChange("emergencyContactName", e.target.value)} error={errors.emergencyContactName} disabled={isLoading} placeholder="Maria Dela Cruz" required icon={User} inputRef={emergencyNameRef} maxLength={100} />
+                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", e.target.value)} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} maxLength={11} />
                       </div>
                       <SelectField label="Relationship" value={form.emergencyContactRelationship} onChange={(value) => handleChange("emergencyContactRelationship", value)} options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option, label: option }))} error={errors.emergencyContactRelationship} disabled={isLoading} required inputRef={emergencyRelationshipRef} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <PasswordInput label="Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} required showStrength inputRef={passwordRef} />
-                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} required showStrength={false} inputRef={confirmPasswordRef} />
+                      <PasswordInput label="Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} required showStrength inputRef={passwordRef} maxLength={128} />
+                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} required showStrength={false} inputRef={confirmPasswordRef} maxLength={128} />
                     </div>
                     <div className="space-y-2">
                       <label className="flex items-center gap-3 cursor-pointer group">
@@ -955,9 +962,9 @@ export default function RegisterPage({
                       </div>
                     </div>
 
-                    <FileCard
-                      title="Government ID (Front — full card)"
-                      description="Upload a clear photo showing the entire ID card with readable text and no cropped edges."
+                      <FileCard
+                        title="Government ID (Front — full card)"
+                        description="Upload a clear photo of a Philippine government ID showing the entire card with readable text and no cropped edges."
                       file={kyc.idCardFile}
                       onPick={(f) => {
                         setKyc((prev) => ({ ...prev, idCardFile: f, idRegistered: false, challengeId: "", selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));

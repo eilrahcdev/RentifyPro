@@ -13,6 +13,7 @@ import {
   getPayMongoPaymentIntentId,
   isPayMongoCheckoutPaid,
 } from "../utils/paymongo.js";
+import { getTransactionFee } from "../utils/fees.js";
 import { syncVehicleAvailabilityByBookingState } from "../utils/vehicleAvailability.js";
 import {
   applyLedgerRecordToBooking,
@@ -61,11 +62,7 @@ const buildReferenceNumber = (bookingId) => {
   return `BOOK-${shortId}-${suffix}`;
 };
 
-const getBlockchainRecordingFee = () => {
-  const configured = Number(process.env.BOOKING_BLOCKCHAIN_RECORDING_FEE || 0);
-  if (!Number.isFinite(configured) || configured < 0) return 0;
-  return Math.round(configured * 100) / 100;
-};
+const getBlockchainRecordingFee = () => getTransactionFee();
 
 const DOWNPAYMENT_RATE = 0.3;
 const PAYMENT_SCOPES = new Set(["downpayment", "full"]);
@@ -99,14 +96,19 @@ const shouldApplyConfiguredFeeFallback = (booking) => {
 };
 
 const getEffectiveBlockchainGasFee = (booking) => {
+  const configured = getBlockchainRecordingFee();
   const persisted = Number(booking?.blockchainGasFee);
   if (Number.isFinite(persisted) && persisted > 0) {
-    return Math.round(persisted * 100) / 100;
+    const roundedPersisted = Math.round(persisted * 100) / 100;
+    if (!shouldApplyConfiguredFeeFallback(booking)) {
+      return roundedPersisted;
+    }
+    return Math.round(Math.max(roundedPersisted, configured) * 100) / 100;
   }
   if (!shouldApplyConfiguredFeeFallback(booking)) {
     return 0;
   }
-  return getBlockchainRecordingFee();
+  return configured;
 };
 
 const getBookingRentalAmountForPayment = (booking) => {
@@ -590,8 +592,9 @@ export const createBookingPayment = async (req, res) => {
     }
 
     const effectiveBlockchainGasFee = getEffectiveBlockchainGasFee(booking);
+    const persistedGasFee = Number(booking.blockchainGasFee);
     if (
-      (!Number.isFinite(Number(booking.blockchainGasFee)) || Number(booking.blockchainGasFee) <= 0) &&
+      (!Number.isFinite(persistedGasFee) || persistedGasFee < effectiveBlockchainGasFee) &&
       effectiveBlockchainGasFee > 0
     ) {
       booking.blockchainGasFee = effectiveBlockchainGasFee;
@@ -649,18 +652,32 @@ export const createBookingPayment = async (req, res) => {
     const referenceNumber = buildReferenceNumber(booking._id);
     const amountInCentavos = Math.round(amountToCharge * 100);
     const { successUrl, cancelUrl } = buildPaymentRedirectUrls(booking._id);
+    const renterProfile = booking?.renter || {};
+    const renterName = String(req.user?.name || renterProfile.name || "Renter").trim() || "Renter";
+    const vehicleName = booking.vehicle?.name || "vehicle rental";
+    const description = `Booking ${effectiveScope} payment for ${vehicleName} (Renter: ${renterName})`;
+    const lineItemBaseName = booking.vehicle?.name || "Vehicle Booking";
+    const itemName = renterName ? `${lineItemBaseName} - ${renterName}` : lineItemBaseName;
+    const billing = {
+      name: renterName,
+      email: req.user?.email || renterProfile.email || "",
+      phone: req.user?.phone || renterProfile.phone || "",
+    };
 
     const checkoutSession = await createPayMongoCheckoutSession({
       amountInCentavos,
-      itemName: booking.vehicle?.name || "Vehicle Booking",
-      description: `Booking ${effectiveScope} payment for ${booking.vehicle?.name || "vehicle rental"}`,
+      itemName,
+      description,
       referenceNumber,
       successUrl,
       cancelUrl,
+      billing,
       paymentMethodTypes: methodTypes,
       metadata: {
         bookingId: String(booking._id),
         renterId: String(req.user._id),
+        renterName,
+        renterEmail: billing.email,
         ownerId: String(booking.owner?._id || booking.owner || ""),
         paymentScope: effectiveScope,
         paymentChannel: requestedChannel,

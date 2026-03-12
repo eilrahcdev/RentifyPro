@@ -18,16 +18,33 @@ import {
   formatDisplayName,
   getCurrentTime,
   getDateTime,
+  getMinPickupDate,
+  getMinPickupDateTime,
+  getMinPickupTime,
+  getMinReturnDate,
+  getMinReturnDateTime,
+  getMinReturnTime,
   getTodayDate,
   getTomorrowDate,
   getInitialsFromName,
   sanitizeBookingRange,
 } from "../utils/dateUtils";
 import { resolveAssetUrl } from "../utils/media";
+import { getTransactionFee } from "../utils/fees";
 
 const DEFAULT_IMAGE = "/bmw-x5.png";
 const DOWNPAYMENT_RATE = 0.3;
 const money = (value) => `P${Number(value || 0).toLocaleString()}`;
+const moneyWithCents = (value) =>
+  `P${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+const roundCurrency = (value) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round(numeric * 100) / 100;
+};
 
 function normalizeAvailability(vehicle) {
   if (typeof vehicle?.availabilityStatus === "string") return vehicle.availabilityStatus.toLowerCase();
@@ -162,8 +179,9 @@ export default function VehicleDetailsPage({
 
   const vehicleCost = durationDays * dailyRate;
   const driverCost = driverSelected ? durationDays * driverDailyRate : 0;
-  const estimatedTotal = vehicleCost + driverCost;
-  const downpaymentFee = Math.round(estimatedTotal * DOWNPAYMENT_RATE);
+  const transactionFee = getTransactionFee();
+  const estimatedTotal = roundCurrency(vehicleCost + driverCost + transactionFee);
+  const downpaymentFee = roundCurrency(estimatedTotal * DOWNPAYMENT_RATE);
 
   const averageRating = useMemo(() => {
     const fromVehicle = Number(currentVehicle?.averageRating ?? currentVehicle?.rating);
@@ -186,19 +204,19 @@ export default function VehicleDetailsPage({
   }, [reviews, sortOption]);
 
   const validateBookingRange = () => {
-    const now = new Date();
-    now.setSeconds(0, 0);
+    const minPickup = getMinPickupDateTime();
     const pickup = getDateTime(pickupDate, pickupTime);
     const dropoff = getDateTime(returnDate, returnTime);
+    const minReturn = getMinReturnDateTime(pickupDate, pickupTime);
 
     if (!pickup || !dropoff) {
       return "Please provide valid pickup and return date/time.";
     }
-    if (pickup < now) {
-      return "Pickup must be in the future.";
+    if (pickup < minPickup) {
+      return "Pickup must be at least 10 minutes from now.";
     }
-    if (dropoff <= pickup) {
-      return "Return must be after pickup.";
+    if (!minReturn || dropoff < minReturn) {
+      return "Return must be at least 1 hour after pickup.";
     }
     return "";
   };
@@ -489,13 +507,13 @@ export default function VehicleDetailsPage({
                     <input
                       type="date"
                       value={pickupDate || ""}
-                      min={getTodayDate()}
+                      min={getMinPickupDate()}
                       onChange={(event) => updateBookingRange({ pickupDate: event.target.value })}
                       className="rp-input text-sm"
                     />
                     <input
                       type="time"
-                      min={pickupDate === getTodayDate() ? getCurrentTime() : undefined}
+                      min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
                       value={pickupTime || ""}
                       onChange={(event) => updateBookingRange({ pickupTime: event.target.value })}
                       className="rp-input text-sm"
@@ -509,13 +527,17 @@ export default function VehicleDetailsPage({
                     <input
                       type="date"
                       value={returnDate || ""}
-                      min={pickupDate || getTodayDate()}
+                      min={getMinReturnDate(pickupDate, pickupTime) || getMinPickupDate()}
                       onChange={(event) => updateBookingRange({ returnDate: event.target.value })}
                       className="rp-input text-sm"
                     />
                     <input
                       type="time"
-                      min={returnDate === pickupDate ? pickupTime : undefined}
+                      min={
+                        returnDate === getMinReturnDate(pickupDate, pickupTime)
+                          ? getMinReturnTime(pickupDate, pickupTime)
+                          : undefined
+                      }
                       value={returnTime || ""}
                       onChange={(event) => updateBookingRange({ returnTime: event.target.value })}
                       className="rp-input text-sm"
@@ -563,10 +585,10 @@ export default function VehicleDetailsPage({
                     value={`${durationDays} ${durationDays > 1 ? "days" : "day"}`}
                   />
                   <SummaryRow label="Vehicle subtotal" value={money(vehicleCost)} />
-                  <SummaryRow label="Driver subtotal" value={money(driverCost)} />
-                  <SummaryRow label="Downpayment (30%)" value={money(downpaymentFee)} muted />
+                  <SummaryRow label="Transaction fee" value={moneyWithCents(transactionFee)} />
+                  <SummaryRow label="Downpayment (30%)" value={moneyWithCents(downpaymentFee)} muted />
                   <div className="h-px bg-slate-200 my-2" />
-                  <SummaryRow label="Estimated total" value={money(estimatedTotal)} strong />
+                  <SummaryRow label="Estimated total" value={moneyWithCents(estimatedTotal)} strong />
                 </div>
 
                 <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700 flex items-start gap-2">

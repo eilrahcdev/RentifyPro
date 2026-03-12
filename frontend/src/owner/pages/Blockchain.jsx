@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { getSepoliaEtherscanTxUrl } from "../../blockchain/config";
+import { getTransactionFee } from "../../utils/fees";
 
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
@@ -15,15 +16,26 @@ const toTitleCase = (value = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 const normalizeBookingStatus = (booking) =>
   booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
-const getPayableAmount = (record) => {
-  const payable = Number(record?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
+const getRentalTotal = (record) => {
+  const total = Number(record?.totalAmount);
+  if (Number.isFinite(total) && total >= 0) return total;
+
+  const baseAmount = Number(record?.baseAmount);
+  if (Number.isFinite(baseAmount) && baseAmount >= 0) return baseAmount;
+
+  const dailyRate = Number(record?.vehicleDailyRate);
+  const bookingDays = Number(record?.bookingDays || 1);
+  if (Number.isFinite(dailyRate) && dailyRate >= 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
+    return dailyRate * bookingDays;
   }
-  const total = Number(record?.totalAmount || 0);
-  const gasFee = Number(record?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
+
+  const payable = Number(record?.amountPayable);
+  if (Number.isFinite(payable) && payable >= 0) return payable;
+
+  return 0;
 };
+
+const getPayableAmount = (record) => getRentalTotal(record) + getTransactionFee();
 
 const shortenHash = (value = "") => {
   const hash = String(value || "").trim();

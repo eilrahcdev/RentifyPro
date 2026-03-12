@@ -3,6 +3,7 @@ import Vehicle from "../models/Vehicle.js";
 import { createNotification } from "../utils/notification.js";
 import { emitToUser } from "../socket/index.js";
 import { syncVehicleAvailabilityByBookingState } from "../utils/vehicleAvailability.js";
+import { getTransactionFee } from "../utils/fees.js";
 import {
   applyLedgerRecordToBooking,
   getBookingLedgerConfig,
@@ -20,11 +21,7 @@ const getImageUrl = (req, pathValue) => {
   return `${req.protocol}://${req.get("host")}/${String(pathValue).replace(/\\/g, "/")}`;
 };
 
-const getConfiguredBlockchainRecordingFee = () => {
-  const configured = Number(process.env.BOOKING_BLOCKCHAIN_RECORDING_FEE || 0);
-  if (!Number.isFinite(configured) || configured < 0) return 0;
-  return Math.round(configured * 100) / 100;
-};
+const getConfiguredBlockchainRecordingFee = () => getTransactionFee();
 
 const shouldUseConfiguredGasFeeFallback = (booking) => {
   const paymentStatus = String(booking?.paymentStatus || "").trim().toLowerCase();
@@ -32,12 +29,17 @@ const shouldUseConfiguredGasFeeFallback = (booking) => {
 };
 
 const getOwnerBookingGasFee = (booking) => {
+  const configured = getConfiguredBlockchainRecordingFee();
   const persisted = Number(booking?.blockchainGasFee);
   if (Number.isFinite(persisted) && persisted > 0) {
-    return Math.round(persisted * 100) / 100;
+    const roundedPersisted = Math.round(persisted * 100) / 100;
+    if (!shouldUseConfiguredGasFeeFallback(booking)) {
+      return roundedPersisted;
+    }
+    return Math.round(Math.max(roundedPersisted, configured) * 100) / 100;
   }
   if (shouldUseConfiguredGasFeeFallback(booking)) {
-    return getConfiguredBlockchainRecordingFee();
+    return configured;
   }
   return 0;
 };

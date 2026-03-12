@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CarFront, ImagePlus, Settings2, UploadCloud, X } from "lucide-react";
+import { CarFront, Fuel, ImagePlus, MapPin, Settings, Settings2, UploadCloud, Users, X } from "lucide-react";
 import API from "../../utils/api";
+import { isPhilippineLocation } from "../../utils/locationValidation";
 
 const initialForm = {
   name: "",
@@ -23,7 +24,17 @@ const initialForm = {
 
 const formatCurrency = (value) => `\u20b1${Number(value || 0).toLocaleString("en-PH")}`;
 
-function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }) {
+function VehicleModal({
+  mode,
+  form,
+  setForm,
+  loading,
+  error,
+  locationError,
+  onLocationChange,
+  onClose,
+  onSubmit,
+}) {
   const newImagePreviews = useMemo(
     () =>
       form.newImageFiles.map((file) => ({
@@ -105,8 +116,11 @@ function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }
                     className={inputClass}
                     placeholder="Ex. Quezon City"
                     value={form.location}
-                    onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+                    onChange={(e) => onLocationChange(e.target.value)}
                   />
+                  {locationError && (
+                    <p className="mt-2 text-xs font-semibold text-rose-600">{locationError}</p>
+                  )}
                 </div>
               </div>
 
@@ -379,7 +393,7 @@ function VehicleModal({ mode, form, setForm, loading, error, onClose, onSubmit }
   );
 }
 
-export default function Vehicles() {
+function Vehicles() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -390,6 +404,7 @@ export default function Vehicles() {
   const [modalMode, setModalMode] = useState("create");
   const [modalError, setModalError] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(initialForm);
 
@@ -441,6 +456,7 @@ export default function Vehicles() {
     setEditingId(null);
     setForm(initialForm);
     setModalError("");
+    setLocationError("");
     setModalOpen(true);
   };
 
@@ -466,7 +482,15 @@ export default function Vehicles() {
       newImageFiles: [],
     });
     setModalError("");
+    setLocationError("");
     setModalOpen(true);
+  };
+
+  const handleLocationChange = (value) => {
+    setForm((prev) => ({ ...prev, location: value }));
+    if (locationError && (!value.trim() || isPhilippineLocation(value))) {
+      setLocationError("");
+    }
   };
 
   const buildFormData = () => {
@@ -493,7 +517,21 @@ export default function Vehicles() {
   const submitModal = async () => {
     setModalLoading(true);
     setModalError("");
+    setLocationError("");
     try {
+      const trimmedLocation = form.location.trim();
+      if (!trimmedLocation) {
+        setModalError("Please enter a vehicle location.");
+        setLocationError("Location is required.");
+        return;
+      }
+      if (!isPhilippineLocation(trimmedLocation)) {
+        const message = "Only vehicle locations within the Philippines are allowed.";
+        setModalError(message);
+        setLocationError(message);
+        return;
+      }
+
       if (modalMode === "create") {
         await API.createOwnerVehicle(buildFormData());
       } else {
@@ -539,9 +577,6 @@ export default function Vehicles() {
             Manage vehicle details, multiple images, availability, and driver options.
           </p>
         </div>
-        <button onClick={openCreateModal} className="px-4 py-2 rounded-lg bg-[#017FE6] text-white font-semibold">
-          Add Vehicle
-        </button>
       </div>
 
       <div className="bg-white border rounded-xl p-4 flex flex-col md:flex-row gap-3">
@@ -571,69 +606,87 @@ export default function Vehicles() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredVehicles.map((vehicle) => (
-          <div key={vehicle._id} className="bg-white border rounded-xl overflow-hidden">
-            <div className="h-44 bg-gray-100 flex items-center justify-center">
-              {vehicle.imageUrl ? (
-                <img src={vehicle.imageUrl} alt={vehicle.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-sm text-gray-500">No image</span>
-              )}
-            </div>
-            <div className="p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-gray-900">{vehicle.name}</h3>
+          <article key={vehicle._id} className="rp-surface rp-hover-lift overflow-hidden">
+            <div className="px-4 pt-4">
+              <div className="relative h-48 bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center overflow-hidden rp-image-frame">
+                {vehicle.imageUrl ? (
+                  <img
+                    src={vehicle.imageUrl}
+                    alt={vehicle.name}
+                    className="relative z-0 h-full w-full object-cover object-center drop-shadow-sm"
+                  />
+                ) : (
+                  <span className="text-sm text-slate-500">No image</span>
+                )}
                 <span
-                  className={`text-xs px-2 py-1 rounded-full ${
+                  className={`absolute top-3 left-3 z-10 rp-chip ${
                     vehicle.availabilityStatus === "available"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-200 text-gray-700"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-200 text-slate-700"
                   }`}
                 >
-                  {vehicle.availabilityStatus}
+                  {vehicle.availabilityStatus === "available" ? "Available" : "Unavailable"}
+                </span>
+                <span className="absolute top-3 right-3 z-10 rp-chip bg-slate-900 text-white">
+                  {(vehicle.images || []).length} photo(s)
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-2">
+              <h3 className="text-lg font-bold">{vehicle.name}</h3>
+              <p className="text-sm text-slate-600 line-clamp-2">{vehicle.description}</p>
+
+              <div className="flex items-center gap-1 text-sm text-slate-500">
+                <MapPin size={14} className="text-[#0B75E7]" />
+                <span>{vehicle.location}</span>
+              </div>
+
+              <div className="flex gap-4 text-sm text-slate-600">
+                <span className="flex items-center gap-1">
+                  <Users size={14} className="text-[#0B75E7]" />
+                  {vehicle.specs?.seats || "-"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Settings size={14} className="text-[#0B75E7]" />
+                  {vehicle.specs?.transmission || "-"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Fuel size={14} className="text-[#0B75E7]" />
+                  {vehicle.specs?.fuel || "-"}
                 </span>
               </div>
 
-              <p className="text-sm text-gray-600 line-clamp-2">{vehicle.description}</p>
-              <p className="text-sm text-gray-700">{vehicle.location}</p>
-              <p className="text-sm text-gray-600">
-                {vehicle.specs?.type || "vehicle"} {vehicle.specs?.subType ? `• ${vehicle.specs.subType}` : ""}
-              </p>
-              <p className="text-sm text-gray-600">
-                Seats: {vehicle.specs?.seats || "-"} • {vehicle.specs?.transmission || "-"} • {vehicle.specs?.fuel || "-"}
-              </p>
-              <p className="text-sm text-gray-600">Plate: {vehicle.specs?.plateNumber || "-"}</p>
+              {vehicle.driverOptionEnabled && <p className="text-sm text-blue-700">Driver available</p>}
 
-              <p className="font-bold text-[#017FE6]">{formatCurrency(vehicle.dailyRentalRate)} / day</p>
-              <p className="text-sm text-blue-700">
-                Driver option: {vehicle.driverOptionEnabled ? "With driver" : "Without driver"}
-              </p>
+              <div className="text-xl font-bold text-[#0B75E7]">
+                {formatCurrency(vehicle.dailyRentalRate)}
+                <span className="text-sm text-slate-500 font-medium"> / day</span>
+              </div>
 
-              <p className="text-xs text-gray-500">{(vehicle.images || []).length} image(s)</p>
-
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <button onClick={() => openEditModal(vehicle)} className="px-2 py-2 rounded-lg border text-sm">
+              <div className="pt-2 grid grid-cols-3 gap-2">
+                <button onClick={() => openEditModal(vehicle)} className="rp-btn-secondary py-2 text-sm">
                   Edit
                 </button>
                 <button
                   onClick={() => toggleAvailability(vehicle)}
-                  className="px-2 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm"
+                  className="py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold transition hover:bg-blue-100"
                 >
                   Toggle
                 </button>
                 <button
                   onClick={() => deleteVehicle(vehicle._id)}
-                  className="px-2 py-2 rounded-lg bg-red-50 text-red-700 text-sm"
+                  className="py-2 rounded-xl bg-rose-50 text-rose-700 text-sm font-semibold transition hover:bg-rose-100"
                 >
                   Delete
                 </button>
               </div>
             </div>
-          </div>
+          </article>
         ))}
       </div>
-
       {modalOpen && (
         <VehicleModal
           mode={modalMode}
@@ -641,6 +694,8 @@ export default function Vehicles() {
           setForm={setForm}
           loading={modalLoading}
           error={modalError}
+          locationError={locationError}
+          onLocationChange={handleLocationChange}
           onClose={() => setModalOpen(false)}
           onSubmit={submitModal}
         />
@@ -648,3 +703,5 @@ export default function Vehicles() {
     </div>
   );
 }
+
+export default Vehicles;
