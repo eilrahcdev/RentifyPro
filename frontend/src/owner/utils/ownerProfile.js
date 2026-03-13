@@ -1,14 +1,9 @@
-const OWNER_PROFILE_KEY = "ownerProfile";
-const USER_KEY = "user";
-
-const readJson = (key) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
+import {
+  getSessionOwnerProfile,
+  getSessionUser,
+  setSessionOwnerProfile,
+  setSessionUser,
+} from "../../utils/sessionStore";
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 
@@ -62,9 +57,9 @@ export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
   };
 };
 
-export const getStoredUser = () => readJson(USER_KEY) || {};
+export const getStoredUser = () => getSessionUser() || {};
 
-export const getStoredOwnerProfile = () => readJson(OWNER_PROFILE_KEY) || {};
+export const getStoredOwnerProfile = () => getSessionOwnerProfile() || {};
 
 export const getOwnerProfileFromStorage = () => {
   const user = getStoredUser();
@@ -76,7 +71,7 @@ export const persistOwnerProfile = (profile) => {
   const currentUser = getStoredUser();
   const normalized = normalizeOwnerProfile(profile, currentUser);
 
-  localStorage.setItem(OWNER_PROFILE_KEY, JSON.stringify(normalized));
+  setSessionOwnerProfile(normalized);
 
   const mergedUser = {
     ...currentUser,
@@ -86,7 +81,7 @@ export const persistOwnerProfile = (profile) => {
     walletAddress: normalized.walletAddress || currentUser.walletAddress || null,
     role: currentUser.role || "owner",
   };
-  localStorage.setItem(USER_KEY, JSON.stringify(mergedUser));
+  setSessionUser(mergedUser);
 
   return normalized;
 };

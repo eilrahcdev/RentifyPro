@@ -1,7 +1,7 @@
 // API server
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
+import "dotenv/config";
 import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
 import http from "http";
@@ -33,7 +33,6 @@ import { initSocket } from "./socket/index.js";
 import { warmupFaceService } from "./utils/faceServiceManager.js";
 import { warmupChatbotService } from "./utils/chatbotServiceManager.js";
 
-dotenv.config();
 const app = express();
 connectDB();
 const __filename = fileURLToPath(import.meta.url);

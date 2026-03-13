@@ -41,6 +41,7 @@ MONGO_URI        = os.getenv("MONGO_URI", "mongodb://localhost:27017/rentifypro"
 FRONTEND_URL     = os.getenv("FRONTEND_URL", "http://localhost:5173")
 NODE_BACKEND_URL = os.getenv("NODE_BACKEND_URL", "http://localhost:5000")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "rentifypro-internal-secret")
+FACE_SERVICE_PORT = int(os.getenv("FACE_SERVICE_PORT", "8000"))
 
 if INTERNAL_API_KEY == "rentifypro-internal-secret":
     logger.warning("INTERNAL_API_KEY is using the default value. Set a strong secret in your environment.")
@@ -52,10 +53,14 @@ DISTANCE_METRIC  = "cosine"
 ENFORCE_DETECTION = False
 
 # Thresholds
-MAX_ACCEPT_DISTANCE = 0.68
+MAX_ACCEPT_DISTANCE = float(os.getenv("KYC_MAX_ACCEPT_DISTANCE", "0.60"))
 MAX_IMAGE_WIDTH     = 800          # Smaller images process faster
-MIN_FACE_AREA_RATIO = 0.01
-MAX_FACE_AREA_RATIO = 0.85
+MIN_FACE_AREA_RATIO = float(os.getenv("KYC_MIN_FACE_AREA_RATIO", "0.02"))
+MIN_ID_FACE_RATIO   = float(os.getenv("KYC_MIN_ID_FACE_RATIO", "0.01"))
+MAX_FACE_AREA_RATIO = float(os.getenv("KYC_MAX_FACE_AREA_RATIO", "0.85"))
+MIN_FACE_CONFIDENCE = float(os.getenv("KYC_MIN_FACE_CONFIDENCE", "0.40"))
+ID_FACE_COUNT_MIN_AREA_RATIO = float(os.getenv("KYC_ID_COUNT_MIN_AREA_RATIO", "0.006"))
+ID_FACE_COUNT_MIN_RELATIVE_RATIO = float(os.getenv("KYC_ID_COUNT_MIN_RELATIVE_RATIO", "0.25"))
 BLUR_THRESHOLD      = 15
 BRIGHTNESS_MIN      = 15
 BRIGHTNESS_MAX      = 245
@@ -316,6 +321,24 @@ def extract_best_face(image: np.ndarray) -> Dict[str, Any]:
 
     best = sorted(faces, key=area, reverse=True)[0]
     fa = best.get("facial_area", {})
+    face_boxes = []
+    for detected in faces:
+        box = detected.get("facial_area", {})
+        w = max(0, int(box.get("w", 0)))
+        h = max(0, int(box.get("h", 0)))
+        if w <= 0 or h <= 0:
+            continue
+        face_boxes.append(
+            {
+                "x": int(box.get("x", 0)),
+                "y": int(box.get("y", 0)),
+                "w": w,
+                "h": h,
+                "confidence": float(detected.get("confidence", 0.0)),
+            }
+        )
+    if not face_boxes:
+        raise ValueError("We couldn't find a valid face region in your image. Please try again.")
 
     return {
         "face": best.get("face"),
@@ -326,7 +349,8 @@ def extract_best_face(image: np.ndarray) -> Dict[str, Any]:
             "h": int(fa.get("h", 0)),
         },
         "confidence": float(best.get("confidence", 0.0)),
-        "face_count": len(faces),
+        "face_count": len(face_boxes),
+        "faces": face_boxes,
     }
 
 
@@ -335,6 +359,109 @@ def face_area_ratio(bbox: Dict[str, int], image: np.ndarray) -> float:
     face_pixels = bbox["w"] * bbox["h"]
     total_pixels = w * h
     return float(face_pixels / total_pixels) if total_pixels > 0 else 0.0
+
+
+def count_faces_opencv(image: np.ndarray) -> Optional[int]:
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape[:2]
+        min_size = max(24, int(min(h, w) * 0.05))
+        counts = []
+        for cascade_name in ("haarcascade_frontalface_default.xml", "haarcascade_profileface.xml"):
+            cascade_path = os.path.join(cv2.data.haarcascades, cascade_name)
+            cascade = cv2.CascadeClassifier(cascade_path)
+            if cascade.empty():
+                continue
+            faces = cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=4,
+                minSize=(min_size, min_size),
+            )
+            counts.append(int(len(faces)))
+        if not counts:
+            return None
+        return max(counts)
+    except Exception:
+        return None
+
+
+def validate_face_constraints(
+    best: Dict[str, Any],
+    image: np.ndarray,
+    *,
+    min_ratio: float,
+    max_ratio: float,
+    min_confidence: Optional[float],
+    multi_face_message: str,
+    small_face_message: str,
+    large_face_message: str,
+    low_conf_message: str,
+    max_faces_allowed: Optional[int] = 1,
+    use_secondary_count: bool = True,
+    count_min_area_ratio: Optional[float] = None,
+    count_min_relative_to_largest: Optional[float] = None,
+) -> Optional[str]:
+    primary_count = int(best.get("face_count", 0))
+    face_count = primary_count
+    candidate_faces = best.get("faces") or []
+    if candidate_faces and (
+        count_min_area_ratio is not None or count_min_relative_to_largest is not None
+    ):
+        img_h, img_w = image.shape[:2]
+        image_area = max(1, img_h * img_w)
+        areas = [
+            max(0, int(face.get("w", 0)) * int(face.get("h", 0)))
+            for face in candidate_faces
+        ]
+        largest_area = max(areas) if areas else 0
+        filtered_count = 0
+        largest_index = 0
+        if areas:
+            largest_index = int(np.argmax(np.array(areas)))
+        for idx, area_value in enumerate(areas):
+            if area_value <= 0:
+                continue
+            # Always count the largest detected face as the primary face candidate.
+            if idx == largest_index:
+                filtered_count += 1
+                continue
+            if (
+                count_min_area_ratio is not None
+                and (area_value / float(image_area)) < count_min_area_ratio
+            ):
+                continue
+            if (
+                count_min_relative_to_largest is not None
+                and largest_area > 0
+                and (area_value / float(largest_area)) < count_min_relative_to_largest
+            ):
+                continue
+            filtered_count += 1
+        if filtered_count != primary_count:
+            logger.info(
+                f"Filtered face count from {primary_count} to {filtered_count} "
+                "based on face-size thresholds."
+            )
+        face_count = filtered_count
+    if use_secondary_count:
+        alt_count = count_faces_opencv(image)
+        if alt_count is not None:
+            face_count = max(face_count, alt_count)
+            if alt_count > primary_count:
+                logger.info(f"Alt face detector saw {alt_count} faces (primary={primary_count}).")
+    if face_count < 1 or (
+        max_faces_allowed is not None and face_count > max_faces_allowed
+    ):
+        return multi_face_message
+    ratio = face_area_ratio(best["bbox"], image)
+    if ratio < min_ratio:
+        return small_face_message
+    if ratio > max_ratio:
+        return large_face_message
+    if min_confidence is not None and best.get("confidence", 0.0) < min_confidence:
+        return low_conf_message
+    return None
 
 
 def get_embedding_fast(image: np.ndarray) -> np.ndarray:
@@ -441,6 +568,29 @@ async def post_face_detect(req: FaceDetectRequest):
             )
 
         best = extract_best_face(img)
+        constraint_err = validate_face_constraints(
+            best,
+            img,
+            min_ratio=MIN_FACE_AREA_RATIO,
+            max_ratio=MAX_FACE_AREA_RATIO,
+            min_confidence=MIN_FACE_CONFIDENCE,
+            multi_face_message="Multiple faces detected. Please make sure only your face is visible.",
+            small_face_message="Your face is too small. Please move closer to the camera.",
+            large_face_message="Your face is too close. Please move slightly farther away.",
+            low_conf_message="We're having trouble detecting your face. Please improve the lighting.",
+        )
+        if constraint_err:
+            return FaceDetectResponse(
+                ok=False,
+                message=constraint_err,
+                face_count=best["face_count"],
+                bounding_box=best["bbox"],
+                quality={
+                    "blur": round(b, 2),
+                    "brightness": round(br, 2),
+                    "face_area_ratio": round(face_area_ratio(best["bbox"], img), 4),
+                },
+            )
         return FaceDetectResponse(
             ok=True,
             message="Face detected. Looking good!",
@@ -467,22 +617,15 @@ async def post_kyc_id_register(req: KycIdRegisterRequest):
     try:
         img = resize_if_needed(decode_base64_image(req.id_image_base64))
 
-        b = blur_score(img)
-        br = brightness_score(img)
-        if b < BLUR_THRESHOLD * 0.3:
-            return KycIdRegisterResponse(success=False, message="Your ID photo is a bit blurry. Please retake it in better lighting.")
-        if br < BRIGHTNESS_MIN * 0.5:
-            return KycIdRegisterResponse(success=False, message="Your ID photo is too dark. Please take it in a brighter area.")
-        if br > BRIGHTNESS_MAX * 1.1:
-            return KycIdRegisterResponse(success=False, message="Your ID photo has too much glare. Please retake it without direct light.")
-
         best = extract_best_face(img)
 
-        if best["face_count"] > 5:
-            return KycIdRegisterResponse(success=False, message="Too many faces detected. Please upload only your ID card.")
-
-        if best["face_count"] > 1:
-            logger.info(f"Multiple faces on ID ({best['face_count']}), using largest for user_id={req.user_id}")
+        # For ID uploads we only require that a face exists on the ID image.
+        # Do not reject for multi-face detections, quality, size, or confidence.
+        if int(best.get("face_count", 0)) < 1:
+            return KycIdRegisterResponse(
+                success=False,
+                message="We couldn't find a face on your ID. Please retake the photo clearly.",
+            )
 
         # Get embeddings from both versions
         orig_emb, norm_emb = get_embedding_with_normalization(img)
@@ -558,25 +701,21 @@ async def post_selfie_challenge(req: SelfieChallengeRequest):
                     user_id=req.user_id,
                 )
 
-            if best["face_count"] > 2:
+            constraint_err = validate_face_constraints(
+                best,
+                img,
+                min_ratio=MIN_FACE_AREA_RATIO,
+                max_ratio=MAX_FACE_AREA_RATIO,
+                min_confidence=MIN_FACE_CONFIDENCE,
+                multi_face_message="Multiple people detected. Please make sure only you are in the frame.",
+                small_face_message="Your face is too small. Please move closer to the camera.",
+                large_face_message="Your face is too close. Please move slightly farther away.",
+                low_conf_message="We're having trouble detecting your face. Please improve the lighting.",
+            )
+            if constraint_err:
                 return SelfieChallengeResponse(
                     passed=False,
-                    message="Multiple people detected. Please make sure only you are in the frame.",
-                    user_id=req.user_id,
-                )
-
-            ratio = face_area_ratio(best["bbox"], img)
-            if ratio < 0.02:
-                return SelfieChallengeResponse(
-                    passed=False,
-                    message="Your face is too small. Please move closer to the camera.",
-                    user_id=req.user_id,
-                )
-
-            if best["confidence"] < 0.40:
-                return SelfieChallengeResponse(
-                    passed=False,
-                    message="We're having trouble detecting your face. Please improve the lighting.",
+                    message=constraint_err,
                     user_id=req.user_id,
                 )
 
@@ -678,10 +817,10 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
             "confidence": 0.0,
         }
 
-        # Quick quality check for logs only
+        # Quality check (fail fast to avoid poor matches)
         quality_err = check_image_quality(img)
         if quality_err:
-            logger.warning(f"Verify quality note for {req.user_id}: {quality_err}")
+            return KycSelfieVerifyResponse(verified=False, message=quality_err, **base_resp)
 
         # Quick face check
         try:
@@ -689,8 +828,19 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
         except ValueError:
             return KycSelfieVerifyResponse(verified=False, message="We couldn't find your face. Please try again with better lighting.", **base_resp)
 
-        if best["face_count"] > 2:
-            return KycSelfieVerifyResponse(verified=False, message="Multiple people detected. Please make sure only you are in the frame.", **base_resp)
+        constraint_err = validate_face_constraints(
+            best,
+            img,
+            min_ratio=MIN_FACE_AREA_RATIO,
+            max_ratio=MAX_FACE_AREA_RATIO,
+            min_confidence=MIN_FACE_CONFIDENCE,
+            multi_face_message="Multiple people detected. Please make sure only you are in the frame.",
+            small_face_message="Your face is too small. Please move closer to the camera.",
+            large_face_message="Your face is too close. Please move slightly farther away.",
+            low_conf_message="We're having trouble detecting your face. Please improve the lighting.",
+        )
+        if constraint_err:
+            return KycSelfieVerifyResponse(verified=False, message=constraint_err, **base_resp)
 
         id_emb = np.array(record["id_embedding"], dtype=np.float32)
 
@@ -786,7 +936,8 @@ async def root():
         "detector": DETECTOR_BACKEND,
         "match_threshold": MAX_ACCEPT_DISTANCE,
         "registered_users": count,
-        "docs": "http://localhost:8000/docs",
+        "docs": f"http://localhost:{FACE_SERVICE_PORT}/docs",
+        "id_policy": "at_least_one_face_required",
     }
 
 
@@ -802,6 +953,6 @@ if __name__ == "__main__":
     print(f"  Threshold: {MAX_ACCEPT_DISTANCE}")
     print(f"  Max width: {MAX_IMAGE_WIDTH}px")
     print(f"  MongoDB:   {MONGO_URI}")
-    print(f"  Docs:      http://localhost:8000/docs")
+    print(f"  Docs:      http://localhost:{FACE_SERVICE_PORT}/docs")
     print("=" * 50 + "\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=FACE_SERVICE_PORT, reload=True)

@@ -8,7 +8,6 @@ const preKycFaceSchema = new mongoose.Schema(
       required: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
     role: {
       type: String,

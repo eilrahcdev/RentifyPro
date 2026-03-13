@@ -3,8 +3,38 @@ import axios from "axios";
 const PAYMONGO_API_BASE = "https://api.paymongo.com/v1";
 const DEFAULT_PAYMENT_METHOD_TYPES = ["gcash", "paymaya", "card"];
 const ALLOWED_PAYMENT_METHOD_TYPES = new Set(DEFAULT_PAYMENT_METHOD_TYPES);
+const NETWORK_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
+]);
 
 const normalizeText = (value) => String(value || "").trim();
+
+const isNetworkError = (error) =>
+  NETWORK_ERROR_CODES.has(String(error?.code || error?.errno || "").toUpperCase());
+
+const getUserFriendlyMessage = (error, fallbackMessage) => {
+  if (isNetworkError(error)) {
+    return "Payment service is temporarily unavailable. Please try again later.";
+  }
+
+  const status = error?.response?.status;
+  if (status >= 500) {
+    return "Payment service is temporarily unavailable. Please try again later.";
+  }
+
+  if (status >= 400) {
+    return "We could not start the payment. Please review the details and try again.";
+  }
+
+  return fallbackMessage || "We could not complete the payment request. Please try again.";
+};
 
 const toPayMongoError = (error, fallbackMessage) => {
   const message =
@@ -15,7 +45,9 @@ const toPayMongoError = (error, fallbackMessage) => {
     fallbackMessage;
   const wrapped = new Error(message);
   wrapped.isPayMongoError = true;
-  wrapped.statusCode = error?.response?.status || 500;
+  wrapped.statusCode = error?.response?.status || (isNetworkError(error) ? 503 : 500);
+  wrapped.code = error?.code || error?.errno || null;
+  wrapped.userMessage = getUserFriendlyMessage(error, fallbackMessage);
   return wrapped;
 };
 

@@ -29,6 +29,16 @@ export const authLimiter = rateLimit({
   skip: () => !rateLimitingEnabled,
 });
 
+// Login challenge limit
+export const loginChallengeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: "Too many security check requests. Try again in a few minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => !rateLimitingEnabled,
+});
+
 // Stricter login limit
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

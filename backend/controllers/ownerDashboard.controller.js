@@ -14,6 +14,8 @@ import {
 
 const STATUSES = new Set(["pending", "confirmed", "completed", "cancelled", "rejected"]);
 const PAYMENT_STATUSES = new Set(["unpaid", "partial", "paid", "refunded"]);
+const WALK_IN_PAYMENT_STATUSES = new Set(["none", "requested", "approved", "rejected", "completed"]);
+const WALK_IN_REVIEW_ACTIONS = new Set(["approve", "reject"]);
 
 const getImageUrl = (req, pathValue) => {
   if (!pathValue) return "";
@@ -48,6 +50,114 @@ const getOwnerBookingPayableAmount = (booking) => {
   const bookingTotal = Number(booking?.totalAmount || 0);
   const total = Number.isFinite(bookingTotal) && bookingTotal > 0 ? bookingTotal : 0;
   return Math.round((total + getOwnerBookingGasFee(booking)) * 100) / 100;
+};
+
+const roundCurrency = (value) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round(numeric * 100) / 100;
+};
+
+const toDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeWalkInStatus = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (WALK_IN_PAYMENT_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+const toOptionalText = (value, maxLength = 500) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return trimmed.slice(0, maxLength);
+};
+
+const toIdString = (value) => {
+  const raw = value?._id || value;
+  const normalized = String(raw || "").trim();
+  return normalized || null;
+};
+
+const getOwnerBookingPaidAmount = (booking) => {
+  const status = String(booking?.paymentStatus || "").trim().toLowerCase();
+  if (status === "refunded") return 0;
+
+  const totalPayable = getOwnerBookingPayableAmount(booking);
+  const paid = Number(booking?.paymentAmountPaid);
+  if (Number.isFinite(paid) && paid > 0) {
+    return Math.min(roundCurrency(paid), totalPayable);
+  }
+
+  if (status === "paid") return totalPayable;
+  return 0;
+};
+
+const getOwnerBookingRemainingAmount = (booking) => {
+  const totalPayable = getOwnerBookingPayableAmount(booking);
+  const paidAmount = getOwnerBookingPaidAmount(booking);
+  return roundCurrency(Math.max(totalPayable - paidAmount, 0));
+};
+
+const resetWalkInPaymentState = (booking, { clearBalancePaymentMethod = true } = {}) => {
+  if (!booking) return;
+  if (clearBalancePaymentMethod) {
+    booking.balancePaymentMethod = null;
+  }
+  booking.walkInPaymentStatus = "none";
+  booking.walkInRequestedAt = null;
+  booking.walkInRequestedBy = null;
+  booking.walkInRequestNote = "";
+  booking.walkInReviewedAt = null;
+  booking.walkInReviewedBy = null;
+  booking.walkInReviewNote = "";
+  booking.walkInConfirmedAt = null;
+  booking.walkInConfirmedBy = null;
+  booking.walkInConfirmationNote = "";
+};
+
+const serializeWalkInPayment = (booking) => ({
+  status: normalizeWalkInStatus(booking?.walkInPaymentStatus, "none"),
+  requestedAt: booking?.walkInRequestedAt || null,
+  requestedBy: toIdString(booking?.walkInRequestedBy),
+  requestNote: toOptionalText(booking?.walkInRequestNote),
+  reviewedAt: booking?.walkInReviewedAt || null,
+  reviewedBy: toIdString(booking?.walkInReviewedBy),
+  reviewNote: toOptionalText(booking?.walkInReviewNote),
+  confirmedAt: booking?.walkInConfirmedAt || null,
+  confirmedBy: toIdString(booking?.walkInConfirmedBy),
+  confirmationNote: toOptionalText(booking?.walkInConfirmationNote),
+});
+
+const getOwnerBookingEarnedAt = (booking) => {
+  const status = String(booking?.paymentStatus || "").trim().toLowerCase();
+  if (status === "paid") {
+    return toDate(booking?.paidAt || booking?.paymentUpdatedAt || booking?.updatedAt);
+  }
+  if (status === "partial") {
+    return toDate(booking?.paymentUpdatedAt || booking?.updatedAt);
+  }
+  return null;
+};
+
+const getOwnerBookingEarningsBreakdown = (booking) => {
+  const amountPayable = getOwnerBookingPayableAmount(booking);
+  const amountEarned = getOwnerBookingPaidAmount(booking);
+  const ratio = amountPayable > 0 ? Math.min(amountEarned / amountPayable, 1) : 0;
+
+  const baseAmount = Number(booking?.baseAmount);
+  const driverAmount = Number(booking?.driverAmount);
+  const safeBase = Number.isFinite(baseAmount) ? baseAmount : 0;
+  const safeDriver = Number.isFinite(driverAmount) ? driverAmount : 0;
+
+  return {
+    amountPayable,
+    amountEarned: roundCurrency(amountEarned),
+    vehicleIncome: roundCurrency(safeBase * ratio),
+    driverIncome: roundCurrency(safeDriver * ratio),
+  };
 };
 
 const getOwnerBookingBlockchainStatus = (booking) => {
@@ -103,6 +213,10 @@ const serializeOwnerBooking = (req, booking) => {
     payment_status: booking.paymentStatus,
     paymentMethod: booking.paymentMethod || null,
     payment_method: booking.paymentMethod || null,
+    balancePaymentMethod: booking.balancePaymentMethod || null,
+    balance_payment_method: booking.balancePaymentMethod || null,
+    walkInPayment: serializeWalkInPayment(booking),
+    walk_in_payment: serializeWalkInPayment(booking),
     paymongoReference: booking.paymongoReference || null,
     paymongo_reference: booking.paymongoReference || null,
     paymongoCheckoutId: booking.paymongoCheckoutId || null,
@@ -144,6 +258,8 @@ const serializeOwnerBooking = (req, booking) => {
     totalAmount: booking.totalAmount,
     blockchainGasFee: getOwnerBookingGasFee(booking),
     amountPayable: getOwnerBookingPayableAmount(booking),
+    paymentAmountPaid: getOwnerBookingPaidAmount(booking),
+    paymentAmountDue: getOwnerBookingRemainingAmount(booking),
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
     renter: booking.renter || null,
@@ -271,15 +387,15 @@ export const updateOwnerBookingStatus = async (req, res) => {
 
 export const updateOwnerBookingPaymentStatus = async (req, res) => {
   try {
-    const { paymentStatus } = req.body;
-    if (!PAYMENT_STATUSES.has(paymentStatus)) {
+    const requestedPaymentStatus = String(req.body?.paymentStatus || "").trim().toLowerCase();
+    if (!PAYMENT_STATUSES.has(requestedPaymentStatus)) {
       return res.status(400).json({ success: false, message: "Invalid payment status." });
     }
-
-    if (paymentStatus === "paid") {
+    if (requestedPaymentStatus === "paid") {
       return res.status(403).json({
         success: false,
-        message: "Manual 'paid' updates are blocked. Payment must be verified server-side via PayMongo.",
+        message:
+          "Manual paid updates are blocked. Use walk-in confirmation or renter payment verification instead.",
       });
     }
 
@@ -288,10 +404,19 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
 
-    booking.paymentStatus = paymentStatus;
+    booking.paymentStatus = requestedPaymentStatus;
     booking.paymentUpdatedAt = new Date();
-    if (paymentStatus === "paid") {
-      booking.paidAt = booking.paidAt || new Date();
+    if (requestedPaymentStatus === "partial") {
+      booking.paidAt = null;
+    } else if (requestedPaymentStatus === "unpaid" || requestedPaymentStatus === "refunded") {
+      const totalPayable = getOwnerBookingPayableAmount(booking);
+      booking.paymentAmountPaid = 0;
+      booking.paymentAmountDue = totalPayable;
+      booking.paymentCheckoutAmount = 0;
+      booking.paymentScope = null;
+      booking.paymentChannel = null;
+      booking.paidAt = null;
+      resetWalkInPaymentState(booking);
     }
     await booking.save();
     const blockchainResult = await autoRecordOwnerBookingOnChain(booking);
@@ -300,8 +425,8 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
       user: booking.renter._id,
       type: "booking_payment",
       title: "Payment status updated",
-      message: `Payment status is now ${paymentStatus}.`,
-      data: { bookingId: booking._id, paymentStatus },
+      message: `Payment status is now ${requestedPaymentStatus}.`,
+      data: { bookingId: booking._id, paymentStatus: requestedPaymentStatus },
     });
 
     const payload = serializeOwnerBooking(req, booking);
@@ -320,6 +445,190 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
     });
   } catch {
     res.status(500).json({ success: false, message: "Failed to update payment status." });
+  }
+};
+
+export const reviewOwnerWalkInPaymentRequest = async (req, res) => {
+  try {
+    const action = String(req.body?.action || "").trim().toLowerCase();
+    if (!WALK_IN_REVIEW_ACTIONS.has(action)) {
+      return res.status(400).json({ success: false, message: "Invalid walk-in review action." });
+    }
+
+    const booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found." });
+    }
+
+    if (["cancelled", "rejected"].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled bookings cannot be updated for walk-in payment.",
+      });
+    }
+    if (booking.status !== "confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: "Booking must be confirmed before reviewing walk-in payment.",
+      });
+    }
+
+    const normalizedPaymentStatus = String(booking.paymentStatus || "").trim().toLowerCase();
+    if (normalizedPaymentStatus !== "partial") {
+      return res.status(400).json({
+        success: false,
+        message: "Walk-in payment review is only available after downpayment.",
+      });
+    }
+
+    const remainingAmount = getOwnerBookingRemainingAmount(booking);
+    if (!Number.isFinite(remainingAmount) || remainingAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This booking has no remaining walk-in balance.",
+      });
+    }
+
+    const walkInStatus = normalizeWalkInStatus(booking.walkInPaymentStatus, "none");
+    if (walkInStatus !== "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "No pending walk-in payment request was found for this booking.",
+      });
+    }
+
+    const note = toOptionalText(req.body?.note, 500);
+    booking.walkInPaymentStatus = action === "approve" ? "approved" : "rejected";
+    booking.walkInReviewedAt = new Date();
+    booking.walkInReviewedBy = req.user._id;
+    booking.walkInReviewNote = note;
+    booking.walkInConfirmedAt = null;
+    booking.walkInConfirmedBy = null;
+    booking.walkInConfirmationNote = "";
+    booking.balancePaymentMethod = action === "approve" ? "Walk-in" : null;
+    booking.paymentUpdatedAt = new Date();
+    await booking.save();
+
+    const refreshed = await Booking.findById(booking._id).populate(populateFields);
+    const payload = serializeOwnerBooking(req, refreshed);
+    const walkInLabel = action === "approve" ? "approved" : "rejected";
+
+    await createNotification({
+      user: refreshed.renter?._id || refreshed.renter,
+      type: "booking_payment",
+      title: action === "approve" ? "Walk-in payment approved" : "Walk-in payment rejected",
+      message:
+        action === "approve"
+          ? "Your walk-in payment request was approved by the owner."
+          : "Your walk-in payment request was rejected by the owner.",
+      data: { bookingId: refreshed._id, walkInPaymentStatus: walkInLabel },
+    });
+
+    emitToUser(String(refreshed.renter?._id || refreshed.renter), "booking:updated", payload);
+    emitToUser(String(refreshed.owner?._id || refreshed.owner), "booking:updated", payload);
+
+    return res.json({
+      success: true,
+      message:
+        action === "approve"
+          ? "Walk-in payment request approved."
+          : "Walk-in payment request rejected.",
+      booking: payload,
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Failed to review walk-in payment request." });
+  }
+};
+
+export const confirmOwnerWalkInPayment = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found." });
+    }
+
+    if (["cancelled", "rejected"].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled bookings cannot be settled via walk-in payment.",
+      });
+    }
+    if (!["confirmed", "completed"].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only confirmed or completed bookings can be settled via walk-in payment.",
+      });
+    }
+
+    const normalizedPaymentStatus = String(booking.paymentStatus || "").trim().toLowerCase();
+    if (normalizedPaymentStatus !== "partial") {
+      return res.status(400).json({
+        success: false,
+        message: "Walk-in confirmation is only available for partially paid bookings.",
+      });
+    }
+
+    const walkInStatus = normalizeWalkInStatus(booking.walkInPaymentStatus, "none");
+    if (walkInStatus !== "approved") {
+      return res.status(409).json({
+        success: false,
+        message: "Walk-in payment must be approved before confirmation.",
+      });
+    }
+
+    const remainingAmount = getOwnerBookingRemainingAmount(booking);
+    if (!Number.isFinite(remainingAmount) || remainingAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This booking has no remaining balance.",
+      });
+    }
+
+    const note = toOptionalText(req.body?.note, 500);
+    const totalPayable = getOwnerBookingPayableAmount(booking);
+
+    booking.paymentStatus = "paid";
+    booking.paymentAmountPaid = totalPayable;
+    booking.paymentAmountDue = 0;
+    booking.paymentCheckoutAmount = 0;
+    booking.paymentScope = "full";
+    booking.paymentChannel = null;
+    booking.paidAt = booking.paidAt || new Date();
+    booking.paymentUpdatedAt = new Date();
+    booking.balancePaymentMethod = "Walk-in";
+    booking.walkInPaymentStatus = "completed";
+    booking.walkInConfirmedAt = new Date();
+    booking.walkInConfirmedBy = req.user._id;
+    booking.walkInConfirmationNote = note;
+    await booking.save();
+
+    const blockchainResult = await autoRecordOwnerBookingOnChain(booking);
+    const refreshed = await Booking.findById(booking._id).populate(populateFields);
+    const payload = serializeOwnerBooking(req, refreshed);
+
+    await createNotification({
+      user: refreshed.renter?._id || refreshed.renter,
+      type: "booking_payment",
+      title: "Walk-in payment confirmed",
+      message: "The owner confirmed your remaining balance payment.",
+      data: { bookingId: refreshed._id, paymentStatus: "paid", walkInPaymentStatus: "completed" },
+    });
+
+    emitToUser(String(refreshed.renter?._id || refreshed.renter), "booking:updated", payload);
+    emitToUser(String(refreshed.owner?._id || refreshed.owner), "booking:updated", payload);
+
+    const message = blockchainResult?.warning
+      ? `Walk-in payment confirmed. Blockchain recording is pending: ${blockchainResult.warning}`
+      : "Walk-in payment confirmed successfully.";
+
+    return res.json({
+      success: true,
+      message,
+      blockchainWarning: blockchainResult?.warning || null,
+      booking: payload,
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Failed to confirm walk-in payment." });
   }
 };
 
@@ -353,70 +662,99 @@ export const getOwnerReviews = async (req, res) => {
 
 export const getOwnerEarnings = async (req, res) => {
   try {
-    const completedBookings = await Booking.find({
+    const paidBookings = await Booking.find({
       owner: req.user._id,
-      status: "completed",
+      paymentStatus: { $in: ["partial", "paid"] },
     })
       .populate("vehicle", "name")
       .populate("renter", "name email")
-      .sort({ createdAt: -1 })
+      .sort({ paymentUpdatedAt: -1, updatedAt: -1 })
       .lean();
 
-    const bookings = completedBookings.map((booking) => ({
-      _id: booking._id,
-      vehicle: booking.vehicle || null,
-      renter: booking.renter || null,
-      bookingDays: booking.bookingDays,
-      vehicleDailyRate: booking.vehicleDailyRate,
-      driverSelected: booking.driverSelected,
-      driverDailyRate: booking.driverDailyRate,
-      baseAmount: booking.baseAmount,
-      driverAmount: booking.driverAmount,
-      totalAmount: booking.totalAmount,
-      blockchainGasFee: getOwnerBookingGasFee(booking),
-      amountPayable: getOwnerBookingPayableAmount(booking),
-      paymentStatus: booking.paymentStatus,
-      completedAt: booking.updatedAt,
-    }));
+    const bookings = paidBookings.map((booking) => {
+      const earnings = getOwnerBookingEarningsBreakdown(booking);
+      const earnedAt = getOwnerBookingEarnedAt(booking);
+
+      return {
+        _id: booking._id,
+        vehicle: booking.vehicle || null,
+        renter: booking.renter || null,
+        bookingDays: booking.bookingDays,
+        vehicleDailyRate: booking.vehicleDailyRate,
+        driverSelected: booking.driverSelected,
+        driverDailyRate: booking.driverDailyRate,
+        baseAmount: booking.baseAmount,
+        driverAmount: booking.driverAmount,
+        totalAmount: booking.totalAmount,
+        blockchainGasFee: getOwnerBookingGasFee(booking),
+        amountPayable: earnings.amountPayable,
+        amountEarned: earnings.amountEarned,
+        vehicleIncome: earnings.vehicleIncome,
+        driverIncome: earnings.driverIncome,
+        paymentStatus: booking.paymentStatus,
+        paymentAmountPaid: booking.paymentAmountPaid,
+        paymentAmountDue: booking.paymentAmountDue,
+        earnedAt,
+        completedAt: earnedAt || booking.updatedAt,
+      };
+    });
 
     const totals = bookings.reduce(
       (acc, booking) => {
-        acc.totalEarnings += booking.amountPayable || 0;
-        acc.vehicleIncome += booking.baseAmount || 0;
-        acc.driverIncome += booking.driverAmount || 0;
+        acc.totalEarnings += booking.amountEarned || 0;
+        acc.vehicleIncome += booking.vehicleIncome || 0;
+        acc.driverIncome += booking.driverIncome || 0;
         return acc;
       },
       { totalEarnings: 0, vehicleIncome: 0, driverIncome: 0 }
     );
 
-    const monthlyEarnings = await Booking.aggregate([
-      { $match: { owner: req.user._id, status: "completed" } },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$updatedAt" },
-            month: { $month: "$updatedAt" },
-          },
-          totalEarnings: {
-            $sum: {
-              $add: [
-                { $ifNull: ["$totalAmount", 0] },
-                { $ifNull: ["$blockchainGasFee", 0] },
-              ],
-            },
-          },
-          vehicleIncome: { $sum: "$baseAmount" },
-          driverIncome: { $sum: "$driverAmount" },
-          bookings: { $sum: 1 },
-        },
-      },
-      { $sort: { "_id.year": -1, "_id.month": -1 } },
-      { $limit: 12 },
-    ]);
+    const monthlyMap = new Map();
+    bookings.forEach((booking) => {
+      const earnedAt = toDate(booking.earnedAt);
+      if (!earnedAt) return;
+
+      const year = earnedAt.getFullYear();
+      const month = earnedAt.getMonth() + 1;
+      const key = `${year}-${month}`;
+
+      const entry =
+        monthlyMap.get(key) || {
+          _id: { year, month },
+          totalEarnings: 0,
+          vehicleIncome: 0,
+          driverIncome: 0,
+          bookings: 0,
+        };
+
+      entry.totalEarnings += booking.amountEarned || 0;
+      entry.vehicleIncome += booking.vehicleIncome || 0;
+      entry.driverIncome += booking.driverIncome || 0;
+      entry.bookings += 1;
+
+      monthlyMap.set(key, entry);
+    });
+
+    const monthlyEarnings = Array.from(monthlyMap.values())
+      .map((entry) => ({
+        ...entry,
+        totalEarnings: roundCurrency(entry.totalEarnings),
+        vehicleIncome: roundCurrency(entry.vehicleIncome),
+        driverIncome: roundCurrency(entry.driverIncome),
+      }))
+      .sort((a, b) => {
+        if (a._id.year !== b._id.year) return b._id.year - a._id.year;
+        return b._id.month - a._id.month;
+      })
+      .slice(0, 12);
 
     res.json({
       success: true,
-      totals,
+      totals: {
+        totalEarnings: roundCurrency(totals.totalEarnings),
+        vehicleIncome: roundCurrency(totals.vehicleIncome),
+        driverIncome: roundCurrency(totals.driverIncome),
+      },
       monthlyEarnings,
       bookings,
     });

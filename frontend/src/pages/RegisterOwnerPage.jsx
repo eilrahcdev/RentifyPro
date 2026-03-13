@@ -34,8 +34,7 @@ import {
 } from "../utils/kycApi";
 import AuthShell from "../components/AuthShell";
 import API from "../utils/api";
-import { persistOwnerProfile } from "../owner/utils/ownerProfile";
-import { ALLOWED_EMAIL_DOMAINS } from "../data/registerValidation";
+import { ALLOWED_EMAIL_DOMAINS, NAME_REGEX } from "../data/registerValidation";
 
 const TOTAL_STEPS = 4;
 const STEP_LABELS = ["Personal Details", "Account & Documents", "Face Verification", "Review"];
@@ -45,6 +44,20 @@ const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const EMOJI_REGEX =
   /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
+
+const normalizeNameInput = (value = "") => {
+  let nextValue = String(value);
+  nextValue = nextValue.replace(/[^A-Za-z ]/g, "");
+  nextValue = nextValue.replace(/\s+/g, " ");
+  if (nextValue.startsWith(" ")) nextValue = nextValue.slice(1);
+  const firstSpace = nextValue.indexOf(" ");
+  if (firstSpace !== -1) {
+    const before = nextValue.slice(0, firstSpace);
+    const after = nextValue.slice(firstSpace + 1).replace(/ /g, "");
+    nextValue = `${before} ${after}`;
+  }
+  return nextValue;
+};
 
 const initialForm = {
   firstName: "",
@@ -134,7 +147,10 @@ export default function RegisterOwnerPage({
   const idInputRef = useRef(null);
   const lastActionRef = useRef(0);
 
-  const fullName = useMemo(() => `${form.firstName} ${form.lastName}`.trim(), [form.firstName, form.lastName]);
+  const fullName = useMemo(
+    () => `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
+    [form.firstName, form.lastName]
+  );
   const canShowBusinessFields = useMemo(() => form.ownerType === "business", [form.ownerType]);
 
   const canAct = useCallback(() => {
@@ -375,15 +391,20 @@ export default function RegisterOwnerPage({
   const validateStep1 = useCallback(() => {
     const next = {};
 
-    if (!form.firstName.trim()) next.firstName = "First name is required.";
-    else if (!/^[A-Za-z]+$/.test(form.firstName)) next.firstName = "Letters only (A-Z).";
-    else if (EMOJI_REGEX.test(form.firstName)) next.firstName = "No emoji allowed.";
-    else if (form.firstName.length > 50) next.firstName = "First name is too long (max 50 characters).";
+    const trimmedFirstName = form.firstName.trim();
+    const trimmedLastName = form.lastName.trim();
 
-    if (!form.lastName.trim()) next.lastName = "Last name is required.";
-    else if (!/^[A-Za-z]+$/.test(form.lastName)) next.lastName = "Letters only (A-Z).";
-    else if (EMOJI_REGEX.test(form.lastName)) next.lastName = "No emoji allowed.";
-    else if (form.lastName.length > 50) next.lastName = "Last name is too long (max 50 characters).";
+    if (!trimmedFirstName) next.firstName = "First name is required.";
+    else if (!NAME_REGEX.test(trimmedFirstName)) {
+      next.firstName = "Letters only, with one optional space for a second name.";
+    } else if (EMOJI_REGEX.test(form.firstName)) next.firstName = "No emoji allowed.";
+    else if (trimmedFirstName.length > 50) next.firstName = "First name is too long (max 50 characters).";
+
+    if (!trimmedLastName) next.lastName = "Last name is required.";
+    else if (!NAME_REGEX.test(trimmedLastName)) {
+      next.lastName = "Letters only, with one optional space for a second name.";
+    } else if (EMOJI_REGEX.test(form.lastName)) next.lastName = "No emoji allowed.";
+    else if (trimmedLastName.length > 50) next.lastName = "Last name is too long (max 50 characters).";
 
     if (!form.businessEmail.trim()) next.businessEmail = "Email is required.";
     else if (/\s/.test(form.businessEmail)) next.businessEmail = "Email must not contain spaces.";
@@ -711,39 +732,24 @@ export default function RegisterOwnerPage({
         permitNumber: canShowBusinessFields ? form.permitNumber : "",
       });
 
-      const profile = {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        name: fullName,
-        email: form.businessEmail,
-        phone: form.phone,
-        address: form.address,
-        region: form.region,
-        province: form.province,
-        city: form.city,
-        barangay: form.barangay,
-        ownerType: form.ownerType,
-        businessName: canShowBusinessFields ? form.businessName : "",
-        permitNumber: canShowBusinessFields ? form.permitNumber : "",
-      };
-
-      persistOwnerProfile(profile);
-      window.dispatchEvent(new Event("owner-profile-updated"));
-
       setSuccessMessage(response?.message || "Registration successful. Redirecting to OTP verification...");
       await API.sendOTP(form.businessEmail).catch(() => {});
       setTimeout(() => onNavigateToRegisterOTP(form.businessEmail, form.phone, fullName), 1200);
     } catch (error) {
       const lower = (error?.message || "").toLowerCase();
       const raw = error?.message || "";
+      const phoneConflict = lower.includes("phone") && lower.includes("already");
       const msg = lower.includes("already")
-        ? "This email is already registered."
+        ? phoneConflict
+          ? "This phone number is already registered."
+          : "This email is already registered."
         : lower.includes("too many")
         ? raw
         : /^[A-Z]/.test(raw) && !/request failed/i.test(raw)
         ? raw
         : "Registration failed. Please try again.";
       if (lower.includes("password")) setErrors({ password: msg });
+      else if (phoneConflict) setErrors({ phone: msg });
       else setErrors({ businessEmail: msg });
       setStep(1);
     } finally {
@@ -850,7 +856,7 @@ export default function RegisterOwnerPage({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
-                  label="Email Address"
+                  label="Enter Email"
                   type="email"
                   name="businessEmail"
                   value={form.businessEmail}
@@ -858,8 +864,8 @@ export default function RegisterOwnerPage({
                   error={errors.businessEmail}
                   disabled={isLoading}
                   icon={Mail}
-                  placeholder="owner@email.com"
-                  helper="OTP and security updates will be sent to this email."
+                  placeholder="Enter Email"
+                  helper="Enter Email"
                   maxLength={254}
                 />
                 <Field
@@ -871,8 +877,8 @@ export default function RegisterOwnerPage({
                   disabled={isLoading}
                   onlyNumbers
                   icon={Phone}
-                  placeholder="09123456789"
-                  helper="Enter an active 11-digit mobile number."
+                  placeholder="Enter Phone Number"
+                  helper="Enter Phone Number"
                   maxLength={11}
                 />
               </div>
@@ -979,7 +985,7 @@ export default function RegisterOwnerPage({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <PasswordField
-                  label="Password"
+                  label="Create Password"
                   name="password"
                   value={form.password}
                   onChange={handleChange}
@@ -987,8 +993,8 @@ export default function RegisterOwnerPage({
                   disabled={isLoading}
                   show={showPw}
                   toggle={() => setShowPw((prev) => !prev)}
-                  helper="Use at least 8 characters with upper/lowercase, number, and symbol."
-                  placeholder="Create a strong password"
+                  helper="Create Password"
+                  placeholder="Create Password"
                   maxLength={128}
                 />
                 <PasswordField
@@ -1000,8 +1006,8 @@ export default function RegisterOwnerPage({
                   disabled={isLoading}
                   show={showCpw}
                   toggle={() => setShowCpw((prev) => !prev)}
-                  helper="Re-enter your password exactly."
-                  placeholder="Repeat your password"
+                  helper="Confirm Password"
+                  placeholder="Confirm Password"
                   maxLength={128}
                 />
               </div>
@@ -1237,7 +1243,7 @@ function Field({
 }) {
   const handleInputChange = (e) => {
     let nextValue = e.target.value;
-    if (onlyLetters) nextValue = nextValue.replace(/[^A-Za-z]/g, "");
+    if (onlyLetters) nextValue = normalizeNameInput(nextValue);
     if (onlyNumbers) nextValue = nextValue.replace(/[^0-9]/g, "");
     onChange({ target: { name, value: nextValue, type } });
   };

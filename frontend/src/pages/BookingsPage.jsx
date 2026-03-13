@@ -6,6 +6,7 @@ import BookingAccessModal from "../components/BookingAccessModal";
 import ChatWidget from "../components/ChatWidget";
 import { requestLiveCountersRefresh } from "../utils/liveCounters";
 import { getTransactionFee } from "../utils/fees";
+import { getSessionUser } from "../utils/sessionStore";
 
 const statusStyles = {
   pending: "bg-amber-100 text-amber-800 border border-amber-200",
@@ -97,6 +98,28 @@ const getPaymentRemainingAmount = (booking) => {
   return roundCurrency(Math.max(totalPayable - getPaymentPaidAmount(booking), 0));
 };
 
+const getWalkInStatus = (booking) =>
+  String(booking?.walkInPayment?.status || booking?.walk_in_payment?.status || "none")
+    .trim()
+    .toLowerCase();
+
+const getWalkInStatusMessage = (booking) => {
+  const status = getWalkInStatus(booking);
+  if (status === "requested") {
+    return "Walk-in request pending owner approval.";
+  }
+  if (status === "approved") {
+    return "Walk-in request approved. Settle remaining balance with owner, then wait for owner confirmation.";
+  }
+  if (status === "rejected") {
+    return "Walk-in request was rejected by owner. You can request again or pay online.";
+  }
+  if (status === "completed") {
+    return "Walk-in payment confirmed by owner.";
+  }
+  return "";
+};
+
 export default function BookingsPage({
   isLoggedIn,
   user,
@@ -133,7 +156,7 @@ export default function BookingsPage({
     channel: "ewallet",
   });
   const [showAI, setShowAI] = useState(false);
-  const currentUserId = user?._id || JSON.parse(localStorage.getItem("user") || "{}")._id || "";
+  const currentUserId = user?._id || getSessionUser()?._id || "";
 
   const load = async () => {
     setLoading(true);
@@ -302,6 +325,27 @@ export default function BookingsPage({
     }
   };
 
+  const setWalkInPayment = async (bookingId) => {
+    if (!bookingId) return;
+    setPaymentNotice("");
+    setPaymentErrors((prev) => ({ ...prev, [bookingId]: "" }));
+    setPayingBookingId(bookingId);
+    try {
+      const response = await API.requestWalkInPayment(bookingId, { method: "walkin" });
+      if (response.booking) {
+        upsertBooking(response.booking);
+      }
+      setPaymentNotice(response.message || "Walk-in payment request submitted. Waiting for owner approval.");
+    } catch (err) {
+      setPaymentErrors((prev) => ({
+        ...prev,
+        [bookingId]: err.message || "Failed to request walk-in payment.",
+      }));
+    } finally {
+      setPayingBookingId("");
+    }
+  };
+
   const handlePayNow = (booking) => {
     if (!booking?._id) return;
     if (booking.status !== "confirmed") {
@@ -309,17 +353,37 @@ export default function BookingsPage({
       return;
     }
     const isPartial = String(booking.paymentStatus || "").toLowerCase() === "partial";
+    const walkInStatus = getWalkInStatus(booking);
+    const hasActiveWalkIn = ["requested", "approved"].includes(walkInStatus);
     setPaymentPreferences({
       scope: isPartial ? "full" : "downpayment",
-      channel: "ewallet",
+      channel: isPartial && !hasActiveWalkIn ? "walkin" : "ewallet",
     });
     setPaymentConfirmBooking(booking);
   };
 
-  const confirmAndStartPayment = () => {
+  const confirmAndStartPayment = async () => {
     const bookingId = paymentConfirmBooking?._id;
     if (!bookingId) return;
     const isPartial = String(paymentConfirmBooking?.paymentStatus || "").toLowerCase() === "partial";
+    const walkInStatus = getWalkInStatus(paymentConfirmBooking);
+    if (isPartial && paymentPreferences.channel === "walkin") {
+      setPaymentConfirmBooking(null);
+      if (walkInStatus === "requested") {
+        setPaymentNotice("Walk-in request is already pending owner approval.");
+        return;
+      }
+      if (walkInStatus === "approved") {
+        setPaymentNotice("Walk-in request already approved. Please settle with owner for confirmation.");
+        return;
+      }
+      if (walkInStatus === "completed") {
+        setPaymentNotice("Walk-in payment is already confirmed for this booking.");
+        return;
+      }
+      await setWalkInPayment(bookingId);
+      return;
+    }
     const scope = isPartial ? "full" : paymentPreferences.scope;
     const channel = paymentPreferences.channel;
     setPaymentConfirmBooking(null);
@@ -429,6 +493,10 @@ export default function BookingsPage({
 
   const confirmIsPartial =
     String(paymentConfirmBooking?.paymentStatus || "").trim().toLowerCase() === "partial";
+  const confirmWalkInStatus = getWalkInStatus(paymentConfirmBooking);
+  const confirmCanRequestWalkIn =
+    confirmIsPartial && (confirmWalkInStatus === "none" || confirmWalkInStatus === "rejected");
+  const confirmIsWalkIn = confirmIsPartial && paymentPreferences.channel === "walkin";
   const confirmTotalPayable = paymentConfirmBooking ? getAmountPayable(paymentConfirmBooking) : 0;
   const confirmPaidAmount = paymentConfirmBooking ? getPaymentPaidAmount(paymentConfirmBooking) : 0;
   const confirmRemainingAmount = paymentConfirmBooking
@@ -436,12 +504,20 @@ export default function BookingsPage({
     : 0;
   const confirmScope = confirmIsPartial ? "full" : paymentPreferences.scope;
   const confirmChargeAmount = paymentConfirmBooking
-    ? confirmScope === "downpayment"
-      ? roundCurrency(confirmTotalPayable * DOWNPAYMENT_RATE)
-      : confirmRemainingAmount
+    ? confirmIsWalkIn
+      ? confirmCanRequestWalkIn
+        ? 0
+        : confirmRemainingAmount
+      : confirmScope === "downpayment"
+        ? roundCurrency(confirmTotalPayable * DOWNPAYMENT_RATE)
+        : confirmRemainingAmount
     : 0;
   const confirmRemainingAfterPayment = paymentConfirmBooking
-    ? roundCurrency(Math.max(confirmRemainingAmount - confirmChargeAmount, 0))
+    ? confirmIsWalkIn
+      ? confirmCanRequestWalkIn
+        ? confirmRemainingAmount
+        : 0
+      : roundCurrency(Math.max(confirmRemainingAmount - confirmChargeAmount, 0))
     : 0;
 
   if (!isLoggedIn) {
@@ -690,6 +766,20 @@ export default function BookingsPage({
                   </span>
                 )}
 
+                {getWalkInStatus(booking) !== "none" && (
+                  <p
+                    className={`w-full text-xs ${
+                      getWalkInStatus(booking) === "approved"
+                        ? "text-emerald-700"
+                        : getWalkInStatus(booking) === "rejected"
+                          ? "text-rose-700"
+                          : "text-amber-700"
+                    }`}
+                  >
+                    {getWalkInStatusMessage(booking)}
+                  </p>
+                )}
+
                 {paymentErrors[booking._id] && (
                   <p className="w-full text-xs text-red-600">{paymentErrors[booking._id]}</p>
                 )}
@@ -830,7 +920,8 @@ export default function BookingsPage({
                 <p className="text-sm font-semibold text-gray-800">Pay Now Option</p>
                 {confirmIsPartial ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    A downpayment is already recorded. Please pay the remaining balance in full.
+                    A downpayment is already recorded. You may pay the remaining balance online or request walk-in
+                    payment approval.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -879,11 +970,48 @@ export default function BookingsPage({
                     />
                     <span className="text-sm text-gray-700">Credit / Debit Card</span>
                   </label>
+                  {confirmIsPartial && (
+                    <label
+                      className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
+                        confirmCanRequestWalkIn ? "cursor-pointer" : "opacity-70 cursor-not-allowed"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        checked={paymentPreferences.channel === "walkin"}
+                        disabled={!confirmCanRequestWalkIn}
+                        onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "walkin" }))}
+                      />
+                      <span className="text-sm text-gray-700">
+                        Request Walk-in Payment (owner must approve before confirmation)
+                      </span>
+                    </label>
+                  )}
                 </div>
+                {confirmWalkInStatus === "requested" && (
+                  <p className="text-xs text-amber-700">
+                    Walk-in request is already pending owner approval.
+                  </p>
+                )}
+                {confirmWalkInStatus === "approved" && (
+                  <p className="text-xs text-emerald-700">
+                    Walk-in request already approved. Settle with owner and wait for owner confirmation.
+                  </p>
+                )}
+                {confirmWalkInStatus === "rejected" && (
+                  <p className="text-xs text-rose-700">
+                    Your previous walk-in request was rejected. You may submit a new request.
+                  </p>
+                )}
+                {confirmIsWalkIn && confirmCanRequestWalkIn && (
+                  <p className="text-xs text-amber-700">
+                    This will send a walk-in payment request to the owner. No online charge will happen now.
+                  </p>
+                )}
               </div>
 
               <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm space-y-1">
-                <Line label="Amount to Charge Now" value={moneyWithCents(confirmChargeAmount)} strong />
+                <Line label="Amount to Pay Now" value={moneyWithCents(confirmChargeAmount)} strong />
                 <Line
                   label="Balance After This Payment"
                   value={moneyWithCents(confirmRemainingAfterPayment)}
@@ -903,7 +1031,11 @@ export default function BookingsPage({
                   disabled={Boolean(payingBookingId)}
                   className="rp-btn-primary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {payingBookingId ? "Processing..." : "Proceed to Pay"}
+                  {payingBookingId
+                    ? "Processing..."
+                    : confirmIsWalkIn
+                      ? "Request Walk-in Approval"
+                      : "Proceed to Pay"}
                 </button>
               </div>
               </div>

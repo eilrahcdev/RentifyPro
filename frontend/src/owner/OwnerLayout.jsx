@@ -17,6 +17,7 @@ import { normalizeOwnerProfile, persistOwnerProfile } from "./utils/ownerProfile
 
 export default function OwnerLayout() {
   const [activePage, setActivePage] = useState("Dashboard");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const handler = (event) => {
@@ -49,26 +50,51 @@ export default function OwnerLayout() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [activePage]);
+
   return (
-    <div className="flex h-screen bg-gray-100">
-      
+    <div className="relative flex min-h-screen bg-gray-100 lg:h-screen">
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/45 lg:hidden"
+        />
+      )}
+
       {/* sidebar */}
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}
+        isMobileOpen={isSidebarOpen}
+        onCloseMobile={() => setIsSidebarOpen(false)}
       />
 
       {/* main area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        
+      <div className="flex min-h-screen flex-1 flex-col overflow-hidden lg:h-screen">
         {/* top bar */}
         <Topbar
           title={activePage}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           onNavigateToNotifications={() => setActivePage("Notifications")}
         />
 
         {/* page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
           {activePage === "Dashboard" && <Dashboard />}
           {activePage === "Vehicles" && <Vehicles />}
           {activePage === "Bookings" && <Bookings />}
@@ -81,7 +107,6 @@ export default function OwnerLayout() {
           {activePage === "Settings" && <Settings />}
           {activePage === "Profile" && <Profile />}
         </main>
-
       </div>
     </div>
   );

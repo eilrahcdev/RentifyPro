@@ -21,6 +21,8 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -145,7 +147,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 
 .rp-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(11, 117, 231, 0.28);
+  box-shadow: 0 12px 24px #0b75e747;
 }
 
 .rp-btn-primary:active {

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Bot, Car, MessageCircle, Settings } from "lucide-react";
+import { Bell, Bot, Car, Menu, MessageCircle, Settings, X } from "lucide-react";
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
 import { LIVE_COUNTERS_REFRESH_EVENT } from "../utils/liveCounters";
 import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
+import { getSessionUser } from "../utils/sessionStore";
 
 const linkClassName = (activePage, itemKey) =>
   `rp-link-pill whitespace-nowrap ${
@@ -11,12 +12,9 @@ const linkClassName = (activePage, itemKey) =>
   }`;
 
 const formatBadgeCount = (value) => (value > 99 ? "99+" : String(value));
+const BRAND_LOGO_SRC = "/rentifypro%20logo.png";
 const getStoredUserId = () => {
-  try {
-    return JSON.parse(localStorage.getItem("user") || "{}")._id || "";
-  } catch {
-    return "";
-  }
+  return String(getSessionUser()?._id || "");
 };
 
 export default function Navbar({
@@ -38,9 +36,11 @@ export default function Navbar({
   onLogout,
 }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const currentUserId = String(user?._id || getStoredUserId() || "");
+  const mobileUnreadTotal = unreadMessages + unreadNotifications;
 
   const syncUnreadCounts = useCallback(async () => {
     if (!isLoggedIn) {
@@ -142,6 +142,61 @@ export default function Navbar({
     onNavigateToHome?.();
   };
 
+  const handleMobileNavigate = (navigateFn) => {
+    setShowMobileMenu(false);
+    navigateFn?.();
+  };
+
+  const isMobileItemActive = (key) => {
+    const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+    if (key === "home") return activePage === "home" || pathname === "/";
+    if (key === "vehicles") return activePage === "vehicles" || pathname === "/vehicles";
+    if (key === "bookings") return activePage === "bookings" || pathname === "/bookings";
+    if (key === "about") return activePage === "about" || pathname === "/about";
+    if (key === "contacts") return activePage === "contacts";
+    if (key === "messages") return activePage === "chat" || pathname === "/chat";
+    if (key === "notifications") return activePage === "notifications" || pathname === "/notifications";
+    return false;
+  };
+
+  const mobileNavItems = [
+    { key: "home", label: "Home", onClick: () => handleMobileNavigate(handleHomeClick) },
+    { key: "vehicles", label: "Vehicles", onClick: () => handleMobileNavigate(onNavigateToVehicles) },
+    { key: "bookings", label: "Bookings", onClick: () => handleMobileNavigate(onNavigateToBookingHistory) },
+    { key: "about", label: "About", onClick: () => handleMobileNavigate(onNavigateToAbout) },
+    { key: "contacts", label: "Contacts", onClick: () => handleMobileNavigate(onNavigateToContacts) },
+    { key: "messages", label: "Messages", onClick: () => handleMobileNavigate(onNavigateToChat) },
+    {
+      key: "notifications",
+      label: "Notifications",
+      onClick: () => handleMobileNavigate(onNavigateToNotifications),
+    },
+  ];
+
+  useEffect(() => {
+    if (!showMobileMenu) return undefined;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [showMobileMenu]);
+
+  useEffect(() => {
+    setShowMobileMenu(false);
+  }, [activePage]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setShowMobileMenu(false);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   return (
     <>
       <nav className="fixed inset-x-0 top-0 z-50 px-3 sm:px-5 pt-3">
@@ -149,9 +204,16 @@ export default function Navbar({
           <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-4">
             <button
               onClick={handleHomeClick}
-              className="text-xl sm:text-2xl font-extrabold hover:opacity-85 transition-opacity text-slate-900"
+              className="flex items-center gap-2.5 text-xl sm:text-2xl font-extrabold hover:opacity-85 transition-opacity text-slate-900"
             >
-              Rentify<span className="text-[#0B75E7]">Pro</span>
+              <img
+                src={BRAND_LOGO_SRC}
+                alt="RentifyPro logo"
+                className="w-9 h-9 rounded-xl object-cover"
+              />
+              <span>
+                Rentify<span className="text-[#0B75E7]">Pro</span>
+              </span>
             </button>
 
             <div className="flex-1 hidden lg:flex justify-center px-2">
@@ -196,7 +258,7 @@ export default function Navbar({
 
             <div className="flex items-center gap-2 sm:gap-3">
               {isLoggedIn && (
-                <>
+                <div className="hidden lg:flex items-center gap-2 sm:gap-3">
                   <button
                     onClick={onNavigateToChat}
                     aria-label="Chatroom"
@@ -221,7 +283,7 @@ export default function Navbar({
                       </span>
                     )}
                   </button>
-                </>
+                </div>
               )}
 
               {!isLoggedIn ? (
@@ -259,50 +321,76 @@ export default function Navbar({
                   }}
                 />
               )}
+
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu((prev) => !prev)}
+                className="lg:hidden relative w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-[#DCEEFF] transition-all text-[#0B75E7]"
+                aria-label={showMobileMenu ? "Close menu" : "Open menu"}
+              >
+                {showMobileMenu ? <X size={18} /> : <Menu size={18} />}
+                {mobileUnreadTotal > 0 && !showMobileMenu && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full font-semibold">
+                    {formatBadgeCount(mobileUnreadTotal)}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
+      </nav>
 
-        <div className="lg:hidden max-w-7xl mx-auto mt-2 overflow-x-auto pb-1">
-          <div className="inline-flex gap-2 min-w-full px-1">
-            <button
-              onClick={handleHomeClick}
-              data-active={activePage === "home"}
-              className={linkClassName(activePage, "home")}
-            >
-              Home
-            </button>
-            <button
-              onClick={onNavigateToVehicles}
-              data-active={activePage === "vehicles"}
-              className={linkClassName(activePage, "vehicles")}
-            >
-              Vehicles
-            </button>
-            <button
-              onClick={onNavigateToBookingHistory}
-              data-active={activePage === "bookings"}
-              className={linkClassName(activePage, "bookings")}
-            >
-              Bookings
-            </button>
-            <button
-              onClick={onNavigateToAbout}
-              data-active={activePage === "about"}
-              className={linkClassName(activePage, "about")}
-            >
-              About
-            </button>
-            <button
-              onClick={onNavigateToContacts}
-              data-active={activePage === "contacts"}
-              className={linkClassName(activePage, "contacts")}
-            >
-              Contacts
-            </button>
+      {showMobileMenu && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu backdrop"
+            onClick={() => setShowMobileMenu(false)}
+            className="absolute inset-0 bg-slate-900/35 backdrop-blur-[1px]"
+          />
+
+          <div className="absolute right-3 top-20 w-[min(92vw,340px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.30)]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">Navigation</p>
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                aria-label="Close menu"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-2">
+              {mobileNavItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={item.onClick}
+                  className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                    isMobileItemActive(item.key)
+                      ? "bg-[#017FE6]/10 text-[#017FE6]"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  {item.key === "messages" && unreadMessages > 0 && (
+                    <span className="min-w-[22px] rounded-full bg-emerald-500 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+                      {formatBadgeCount(unreadMessages)}
+                    </span>
+                  )}
+                  {item.key === "notifications" && unreadNotifications > 0 && (
+                    <span className="min-w-[22px] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+                      {formatBadgeCount(unreadNotifications)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </nav>
+      )}
 
       {onShowAI && !isAIOpen && (
         <button

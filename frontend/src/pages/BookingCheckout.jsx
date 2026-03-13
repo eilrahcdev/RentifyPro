@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Bot, Bell, MessageCircle, Settings, Car, Camera, ShieldCheck } from "lucide-react";
 import API from "../utils/api";
+import { getStoredUser, persistUserProfile } from "../utils/userProfile";
 import {
   getMinPickupDate,
   getMinPickupTime,
@@ -8,9 +9,6 @@ import {
   getMinReturnTime,
   getTomorrowDate,
 } from "../utils/dateUtils";
- 
- const PROFILE_PHOTO_KEY = "profilePhoto";
- const PROFILE_PHOTO_USER_KEY = "profilePhotoUserId";
  
    const BookingCheckout = ({
     vehicle,
@@ -123,17 +121,12 @@ const dailyRate = vehicle.price;
 useEffect(() => {
   if (!isLoggedIn) return;
   if (driveType !== "with-driver") return;
-  if (!user?.email) return;
-
-  const users = JSON.parse(localStorage.getItem("users")) || [];
-  const currentUser = users.find((u) => u.email === user.email);
-
-  if (!currentUser?.profile) return;
+  if (!user) return;
 
   setEmergencyContact({
-    name: currentUser.profile.emergencyName || "",
-    phone: currentUser.profile.emergencyPhone || "",
-    relationship: currentUser.profile.emergencyRelation || "",
+    name: user.emergencyContactName || "",
+    phone: user.emergencyContactPhone || "",
+    relationship: user.emergencyContactRelationship || "",
   });
 }, [driveType, isLoggedIn, user]);
 
@@ -202,59 +195,33 @@ const handleBack = () => {
          sender: "ai",
          text: "Hi! 👋 This is RentifyPro AI. How can I assist you today?"
        }
-     ]);
-   }, [showAI]);
- 
-    const [profilePhoto, setProfilePhoto] = useState(() => {
-      const storedUserRaw = localStorage.getItem("user");
-      const photo = String(localStorage.getItem(PROFILE_PHOTO_KEY) || "").trim();
-      if (!photo || !storedUserRaw) return photo || null;
+      ]);
+    }, [showAI]);
 
-      try {
-        const storedUser = JSON.parse(storedUserRaw);
-        const owner = String(localStorage.getItem(PROFILE_PHOTO_USER_KEY) || "").trim();
-        if (!owner) return photo;
+    const [profilePhoto, setProfilePhoto] = useState(
+      String(user?.avatar || getStoredUser()?.avatar || "").trim() || null
+    );
 
-        const userId = String(storedUser?._id || "").trim();
-        const email = String(storedUser?.email || "").trim().toLowerCase();
-        if (owner === userId) return photo;
-        if (email && owner.toLowerCase() === email) return photo;
-      } catch {
-        return null;
-      }
-      return null;
-    });
+    useEffect(() => {
+      const nextAvatar = String(user?.avatar || "").trim() || null;
+      setProfilePhoto(nextAvatar);
+    }, [user?.avatar, user?._id]);
 
     const syncAvatarToProfile = async (avatarValue = "") => {
-      const token = localStorage.getItem("token");
-      const storedUserRaw = localStorage.getItem("user");
-      if (!token || !storedUserRaw) return;
-
-      let storedUser = null;
-      try {
-        storedUser = JSON.parse(storedUserRaw);
-      } catch {
-        return;
-      }
-      if (!storedUser || typeof storedUser !== "object") return;
+      const currentUser = getStoredUser();
+      if (!currentUser || typeof currentUser !== "object") return;
 
       const normalizedAvatar = String(avatarValue || "").trim();
-      const localMergedUser = { ...storedUser, avatar: normalizedAvatar };
-      localStorage.setItem("user", JSON.stringify(localMergedUser));
-      if (normalizedAvatar) {
-        const ownerKey =
-          String(localMergedUser._id || "").trim() ||
-          String(localMergedUser.email || "").trim().toLowerCase();
-        if (ownerKey) localStorage.setItem(PROFILE_PHOTO_USER_KEY, ownerKey);
-      } else {
-        localStorage.removeItem(PROFILE_PHOTO_USER_KEY);
-      }
+      persistUserProfile({
+        ...currentUser,
+        avatar: normalizedAvatar,
+      });
       window.dispatchEvent(new Event("user-profile-updated"));
 
       try {
         const response = await API.updateProfile({ avatar: normalizedAvatar });
         if (response?.user && typeof response.user === "object") {
-          localStorage.setItem("user", JSON.stringify({ ...localMergedUser, ...response.user }));
+          persistUserProfile(response.user);
           window.dispatchEvent(new Event("user-profile-updated"));
         }
       } catch {
@@ -270,11 +237,6 @@ const handleBack = () => {
       reader.onloadend = async () => {
         const nextAvatar = String(reader.result || "");
         setProfilePhoto(nextAvatar || null);
-        localStorage.setItem(PROFILE_PHOTO_KEY, nextAvatar);
-        const ownerKey =
-          String(user?._id || "").trim() ||
-          String(user?.email || "").trim().toLowerCase();
-        if (ownerKey) localStorage.setItem(PROFILE_PHOTO_USER_KEY, ownerKey);
         await syncAvatarToProfile(nextAvatar);
       };
       reader.readAsDataURL(file);
@@ -282,8 +244,6 @@ const handleBack = () => {
     
     const handleRemovePhoto = async () => {
       setProfilePhoto(null);
-      localStorage.removeItem(PROFILE_PHOTO_KEY);
-      localStorage.removeItem(PROFILE_PHOTO_USER_KEY);
       await syncAvatarToProfile("");
     };
  

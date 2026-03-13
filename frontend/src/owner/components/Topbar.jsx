@@ -3,12 +3,13 @@ import {
   Search,
   Bell,
   Plus,
+  Menu,
 } from "lucide-react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { LIVE_COUNTERS_REFRESH_EVENT } from "../../utils/liveCounters";
 
-export default function Topbar({ title, onNavigateToNotifications }) {
+export default function Topbar({ title, onNavigateToNotifications, onToggleSidebar }) {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const syncUnreadNotifications = useCallback(async () => {
@@ -60,30 +61,40 @@ export default function Topbar({ title, onNavigateToNotifications }) {
 
   return (
     <header
-  className="sticky top-0 z-40 bg-[#017FE6] border-b border-white/20"
+      className="sticky top-0 z-30 bg-[#017FE6] border-b border-white/20"
       style={{
         background: "#017FE6",
         borderBottom: "1px solid rgba(255,255,255,0.20)",
       }}
     >
       {/* top bar */}
-      <div className="h-20 px-6 flex items-center justify-between gap-6">
+      <div className="h-20 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3 sm:gap-6">
 
         {/* left side */}
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white leading-tight">
-            {title}
-          </h1>
-          <p className="text-sm text-white/80">
-            Welcome back! Here's what's happening today.
-          </p>
+        <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-white transition hover:bg-white/25 lg:hidden"
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-white leading-tight truncate">
+              {title}
+            </h1>
+            <p className="hidden sm:block text-sm text-white/80">
+              Welcome back! Here's what's happening today.
+            </p>
+          </div>
         </div>
 
         {/* right side */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
 
           {/* search */}
-          <div className="relative hidden md:block">
+          <div className="relative hidden xl:block">
             <Search
               size={18}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70"
@@ -137,7 +148,7 @@ export default function Topbar({ title, onNavigateToNotifications }) {
               }, 0);
             }}
             className="
-              h-10 px-4 rounded-xl
+              h-10 px-3 sm:px-4 rounded-xl
               bg-white text-[#017FE6]
               font-semibold
               hover:bg-white/90 transition
@@ -148,7 +159,7 @@ export default function Topbar({ title, onNavigateToNotifications }) {
             }}
           >
             <Plus size={18} />
-            Add Vehicle
+            <span className="hidden sm:inline">Add Vehicle</span>
           </button>
         </div>
       </div>

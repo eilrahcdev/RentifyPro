@@ -160,6 +160,10 @@ const buildDuplicateKeyMessage = (error) => {
     return "This email is already registered.";
   }
 
+  if (duplicateField === "phone") {
+    return "This phone number is already registered.";
+  }
+
   if (duplicateField === "walletAddress") {
     return "This wallet address is already linked to another account.";
   }
@@ -257,18 +261,20 @@ const saveAvatarBase64 = async ({ base64, mimeType = "image/jpeg", req }) => {
 };
 
 const generateLoginChallenge = () => {
-  const a = crypto.randomInt(10, 100);
-  const b = crypto.randomInt(10, 100);
+  const oneDigit = crypto.randomInt(1, 10);
+  const twoDigit = crypto.randomInt(10, 100);
   const useAddition = crypto.randomInt(0, 2) === 0;
-  let left = a;
-  let right = b;
-  let operator = "+";
-  if (!useAddition) {
-    operator = "-";
-    if (right > left) {
-      [left, right] = [right, left];
-    }
+  const oneDigitFirst = crypto.randomInt(0, 2) === 0;
+
+  let left = oneDigitFirst ? oneDigit : twoDigit;
+  let right = oneDigitFirst ? twoDigit : oneDigit;
+  const operator = useAddition ? "+" : "-";
+
+  // Keep subtraction answers non-negative for numeric-only input UX.
+  if (!useAddition && left < right) {
+    [left, right] = [right, left];
   }
+
   const answer = operator === "+" ? left + right : left - right;
   const question = `What is ${left} ${operator} ${right}?`;
   return { question, answer: String(answer) };
@@ -351,6 +357,7 @@ export const registerUser = async (req, res) => {
     }
 
     const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = toText(phone);
     const requestedRole = role === "owner" ? "owner" : "user";
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
@@ -359,6 +366,17 @@ export const registerUser = async (req, res) => {
         success: false,
         message: "This email is already registered.",
       });
+    }
+
+    if (normalizedPhone) {
+      const existingPhone = await User.findOne({ phone: normalizedPhone }).select("_id");
+      if (existingPhone) {
+        auditLog.warn("AUTH", `Register with existing phone: ${normalizedPhone}`, { ip: req.ip });
+        return res.status(409).json({
+          success: false,
+          message: "This phone number is already registered.",
+        });
+      }
     }
 
     const requiredDocs = requestedRole === "owner" ? ["id", "supporting"] : ["id"];
@@ -408,7 +426,7 @@ export const registerUser = async (req, res) => {
       password: hashedPassword,
       role: requestedRole,
       walletAddress: normalizedWalletAddress,
-      phone: toText(phone) || undefined,
+      phone: normalizedPhone || undefined,
       dateOfBirth: toText(dateOfBirth) || undefined,
       gender: toText(gender) || undefined,
       ownerType: toText(ownerType) || undefined,
@@ -576,7 +594,6 @@ export const loginUser = async (req, res) => {
     res.json({
       success: true,
       message: "Login successful.",
-      token,
       user: buildSafeUserResponse(user),
     });
   } catch (error) {
@@ -590,11 +607,9 @@ export const loginUser = async (req, res) => {
 
 export const logoutUser = async (req, res) => {
   try {
-    const headerToken = req.headers.authorization?.split(" ")[1];
     const cookieToken = String(req.cookies?.token || "").trim();
-    const token = headerToken || cookieToken;
-    if (token) {
-      tokenBlacklist.add(String(token));
+    if (cookieToken) {
+      tokenBlacklist.add(cookieToken);
       auditLog.info("AUTH", "Logged out", { userId: req.user?._id?.toString() });
     }
     clearAuthCookie(res);
@@ -699,7 +714,6 @@ export const verifyOTP = async (req, res) => {
     res.json({
       success: true,
       message: "Verified successfully.",
-      token,
       user: buildSafeUserResponse(user),
     });
   } catch (error) {
@@ -1108,6 +1122,20 @@ export const updateProfile = async (req, res) => {
           success: false,
           message: "Phone number must be exactly 11 digits.",
         });
+      }
+
+      if (phone) {
+        const existingPhone = await User.findOne({
+          phone,
+          _id: { $ne: user._id },
+        }).select("_id");
+
+        if (existingPhone) {
+          return res.status(409).json({
+            success: false,
+            message: "This phone number is already registered.",
+          });
+        }
       }
     }
 

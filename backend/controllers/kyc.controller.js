@@ -13,12 +13,42 @@ import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { ensureFaceServiceReady, isFaceServiceConnectionError } from "../utils/faceServiceManager.js";
 import { verifyPhilippinesDocument } from "../services/geminiDocument.service.js";
 
-const FACE_SERVICE = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+const getFaceServiceUrl = () => process.env.FACE_SERVICE_URL || "http://localhost:8010";
 const INTERNAL_KEY = process.env.INTERNAL_API_KEY || "";
 const PRE_KYC_DOC_TTL_HOURS = Number(process.env.PREKYC_DOC_TTL_HOURS || 3);
 const PRE_KYC_FACE_TTL_HOURS = Number(process.env.PREKYC_FACE_TTL_HOURS || PRE_KYC_DOC_TTL_HOURS || 3);
 const MIN_CHALLENGE_FRAMES = Number(process.env.KYC_MIN_FRAMES || 3);
 const KYC_UPLOAD_DIR = process.env.KYC_UPLOAD_DIR || path.resolve("uploads", "kyc");
+const DEFAULT_KYC_ERROR_MESSAGE = "We couldn't complete verification right now. Please try again.";
+
+const toErrorDetail = (err) => String(err?.stack || err?.message || err || "Unknown error");
+
+const toClientMessage = (err, fallbackMessage = DEFAULT_KYC_ERROR_MESSAGE) => {
+  const status = Number(err?.status) || 500;
+
+  if (status < 500) {
+    if (err?.expose === false) return "Request failed.";
+    return String(err?.message || fallbackMessage);
+  }
+
+  return String(err?.publicMessage || fallbackMessage);
+};
+
+const sendKycError = (
+  res,
+  err,
+  {
+    logMessage = "KYC request failed",
+    fallbackMessage = DEFAULT_KYC_ERROR_MESSAGE,
+    includeSuccess = true,
+  } = {}
+) => {
+  auditLog.error("KYC", logMessage, { detail: toErrorDetail(err) });
+  const status = Number(err?.status) || 500;
+  const message = toClientMessage(err, fallbackMessage);
+  if (includeSuccess) return res.status(status).json({ success: false, message });
+  return res.status(status).json({ message });
+};
 
 const safeKeyMatch = (provided, expected) => {
   const providedBuffer = Buffer.from(String(provided || ""), "utf8");
@@ -120,7 +150,8 @@ const recordPreKycFace = async ({ email, role, result }) => {
 
 // Send a request to the face service
 const proxyToFaceService = async (endpoint, body) => {
-  const url = `${FACE_SERVICE}${endpoint}`;
+  const faceServiceUrl = getFaceServiceUrl();
+  const url = `${faceServiceUrl}${endpoint}`;
   auditLog.info("KYC", `Proxying to Python: ${url}`);
   const doRequest = () =>
     axios.post(url, body, {
@@ -151,7 +182,7 @@ const proxyToFaceService = async (endpoint, body) => {
     auditLog.error("KYC", `Python service error: status=${status}`, { detail, url });
 
     if (isFaceServiceConnectionError(err)) {
-      throw new Error(`Python face service is not running at ${FACE_SERVICE}. Start it with: python face-service/main.py`);
+      throw new Error(`Python face service is not running at ${faceServiceUrl}. Start it with: python face-service/main.py`);
     }
     if (err.code === "ETIMEDOUT" || err.code === "ECONNABORTED") {
       throw new Error("Face service timed out. The image may be too large or the service is overloaded.");
@@ -170,8 +201,10 @@ export const faceDetect = async (req, res) => {
     const result = await proxyToFaceService("/api/kyc/face/detect", { image_base64 });
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Face detect failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Face detect failed",
+      fallbackMessage: "We couldn't check your face right now. Please try again.",
+    });
   }
 };
 
@@ -182,28 +215,28 @@ export const registerIdFace = async (req, res) => {
     const { id_image_base64, id_image_mime } = req.body;
     if (!id_image_base64) return res.status(400).json({ message: "id_image_base64 is required" });
 
-    const docResult = await verifyPhilippinesDocument({
-      base64: id_image_base64,
-      mimeType: id_image_mime || "image/jpeg",
-      docType: "id",
-    });
-    await recordPreKycDocument({
-      email: req.user?.email,
-      role: req.user?.role,
-      docType: "id",
-      result: docResult,
-    });
-
-    if (!docResult.passed) {
-      return res.json({
-        success: false,
-        message:
-          docResult.reason ||
-          "Only valid Philippine government IDs are accepted. Please upload a supported Philippine ID.",
-        docType: docResult.doc_type,
-        country: docResult.country,
-        confidence: docResult.confidence,
+    let docResult = {
+      passed: true,
+      confidence: 0,
+      country: "Unknown",
+      doc_type: "Unknown",
+      reason: "ID accepted for face verification.",
+    };
+    try {
+      const checked = await verifyPhilippinesDocument({
+        base64: id_image_base64,
+        mimeType: id_image_mime || "image/jpeg",
+        docType: "id",
       });
+      docResult = { ...docResult, ...checked };
+    } catch (docErr) {
+      auditLog.warn("KYC", "ID document AI check failed; continuing with face-only verification", {
+        detail: docErr.message,
+      });
+      docResult = {
+        ...docResult,
+        reason: "ID accepted for face verification (AI document check unavailable).",
+      };
     }
 
     const payload = {
@@ -214,6 +247,18 @@ export const registerIdFace = async (req, res) => {
     };
 
     const result = await proxyToFaceService("/api/kyc/id/register", payload);
+    await recordPreKycDocument({
+      email: req.user?.email,
+      role: req.user?.role,
+      docType: "id",
+      result: result?.success
+        ? {
+            ...docResult,
+            passed: true,
+            reason: docResult.reason || "ID accepted for face verification.",
+          }
+        : docResult,
+    });
 
     if (result.success) {
       await KycVerification.findOneAndUpdate(
@@ -230,8 +275,10 @@ export const registerIdFace = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "ID registration failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "ID registration failed",
+      fallbackMessage: "We couldn't verify your ID right now. Please try again.",
+    });
   }
 };
 
@@ -264,8 +311,10 @@ export const selfieChallenge = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Selfie challenge failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Selfie challenge failed",
+      fallbackMessage: "We couldn't process the selfie challenge right now. Please try again.",
+    });
   }
 };
 
@@ -286,8 +335,10 @@ export const selfieVerify = async (req, res) => {
     const result = await proxyToFaceService("/api/kyc/selfie/verify", payload);
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Selfie verify failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Selfie verify failed",
+      fallbackMessage: "We couldn't verify your selfie right now. Please try again.",
+    });
   }
 };
 
@@ -351,8 +402,11 @@ export const internalUpdateStatus = async (req, res) => {
 
     res.json({ message: `KYC status updated to ${status} for user ${normalizedId}` });
   } catch (err) {
-    auditLog.error("KYC", "Internal update failed", { detail: err.message });
-    res.status(500).json({ message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Internal update failed",
+      fallbackMessage: "Internal KYC update failed.",
+      includeSuccess: false,
+    });
   }
 };
 
@@ -363,7 +417,11 @@ export const getMyKyc = async (req, res) => {
     const kyc = await KycVerification.findOne({ user: req.user._id });
     res.json(kyc || { status: "not_started" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Get KYC status failed",
+      fallbackMessage: "Could not fetch verification status. Please try again.",
+      includeSuccess: false,
+    });
   }
 };
 
@@ -379,40 +437,39 @@ export const preRegisterIdFace = async (req, res) => {
       return res.status(400).json({ success: false, message: "email and id_image_base64 are required" });
     }
 
-    const docResult = await verifyPhilippinesDocument({
-      base64: id_image_base64,
-      mimeType: id_image_mime || "image/jpeg",
-      docType: "id",
-    });
-    let fileMeta = {};
-    if (docResult.passed) {
-      try {
-        fileMeta = await saveKycBase64File({
-          base64: id_image_base64,
-          mimeType: id_image_mime || "image/jpeg",
-          prefix: "pre-id",
-        });
-      } catch (saveErr) {
-        auditLog.warn("KYC", "Failed to store pre-reg ID image", { detail: saveErr.message });
-      }
-    }
-    await recordPreKycDocument({
-      email,
-      role,
-      docType: "id",
-      result: { ...docResult, ...fileMeta },
-    });
-
-    if (!docResult.passed) {
-      return res.json({
-        success: false,
-        message:
-          docResult.reason ||
-          "Only valid Philippine government IDs are accepted. Please upload a supported Philippine ID.",
-        docType: docResult.doc_type,
-        country: docResult.country,
-        confidence: docResult.confidence,
+    let docResult = {
+      passed: true,
+      confidence: 0,
+      country: "Unknown",
+      doc_type: "Unknown",
+      reason: "ID accepted for face verification.",
+    };
+    try {
+      const checked = await verifyPhilippinesDocument({
+        base64: id_image_base64,
+        mimeType: id_image_mime || "image/jpeg",
+        docType: "id",
       });
+      docResult = { ...docResult, ...checked };
+    } catch (docErr) {
+      auditLog.warn("KYC", "Pre-reg ID AI check failed; continuing with face-only verification", {
+        detail: docErr.message,
+      });
+      docResult = {
+        ...docResult,
+        reason: "ID accepted for face verification (AI document check unavailable).",
+      };
+    }
+
+    let fileMeta = {};
+    try {
+      fileMeta = await saveKycBase64File({
+        base64: id_image_base64,
+        mimeType: id_image_mime || "image/jpeg",
+        prefix: "pre-id",
+      });
+    } catch (saveErr) {
+      auditLog.warn("KYC", "Failed to store pre-reg ID image", { detail: saveErr.message });
     }
 
     const payload = {
@@ -424,10 +481,25 @@ export const preRegisterIdFace = async (req, res) => {
 
     auditLog.info("KYC", `Pre-registration ID register for: ${email}`);
     const result = await proxyToFaceService("/api/kyc/id/register", payload);
+    await recordPreKycDocument({
+      email,
+      role,
+      docType: "id",
+      result: result?.success
+        ? {
+            ...docResult,
+            ...fileMeta,
+            passed: true,
+            reason: docResult.reason || "ID accepted for face verification.",
+          }
+        : { ...docResult, ...fileMeta },
+    });
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Pre-reg ID registration failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Pre-reg ID registration failed",
+      fallbackMessage: "We couldn't verify your ID right now. Please try again.",
+    });
   }
 };
 
@@ -455,8 +527,10 @@ export const preSelfieChallenge = async (req, res) => {
     const result = await proxyToFaceService("/api/kyc/selfie/challenge", payload);
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Pre-reg selfie challenge failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Pre-reg selfie challenge failed",
+      fallbackMessage: "We couldn't process the selfie challenge right now. Please try again.",
+    });
   }
 };
 
@@ -480,8 +554,10 @@ export const preSelfieVerify = async (req, res) => {
     await recordPreKycFace({ email, role, result });
     res.json(result);
   } catch (err) {
-    auditLog.error("KYC", "Pre-reg selfie verify failed", { detail: err.message });
-    res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Pre-reg selfie verify failed",
+      fallbackMessage: "We couldn't verify your selfie right now. Please try again.",
+    });
   }
 };
 
@@ -542,7 +618,9 @@ export const preVerifySupportingDocument = async (req, res) => {
       confidence: docResult.confidence,
     });
   } catch (err) {
-    auditLog.error("KYC", "Pre-reg supporting doc verify failed", { detail: err.message });
-    return res.status(500).json({ success: false, message: err.message });
+    return sendKycError(res, err, {
+      logMessage: "Pre-reg supporting doc verify failed",
+      fallbackMessage: "We couldn't verify your document right now. Please try again.",
+    });
   }
 };

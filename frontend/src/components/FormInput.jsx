@@ -1,5 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
 
+const normalizeNameInput = (value = "") => {
+  let nextValue = String(value);
+  nextValue = nextValue.replace(/[^A-Za-z ]/g, "");
+  nextValue = nextValue.replace(/\s+/g, " ");
+  if (nextValue.startsWith(" ")) nextValue = nextValue.slice(1);
+  const firstSpace = nextValue.indexOf(" ");
+  if (firstSpace !== -1) {
+    const before = nextValue.slice(0, firstSpace);
+    const after = nextValue.slice(firstSpace + 1).replace(/ /g, "");
+    nextValue = `${before} ${after}`;
+  }
+  return nextValue;
+};
+
 export default function FormInput({
   label,
   type = "text",
@@ -17,6 +31,7 @@ export default function FormInput({
   pattern,
   maxLength,
   inputRef,
+  iconPosition = "right",
 }) {
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
   const [savedEmails, setSavedEmails] = useState([]);
@@ -53,7 +68,7 @@ export default function FormInput({
     let newValue = e.target.value;
 
     if (onlyLetters) {
-      newValue = newValue.replace(/[^A-Za-z]/g, "");
+      newValue = normalizeNameInput(newValue);
     }
 
     if (onlyNumbers) {
@@ -86,6 +101,9 @@ export default function FormInput({
     inputNode.click();
   };
 
+  const hasLeftIcon = Boolean(Icon) && !isDateInput && iconPosition === "left";
+  const hasRightIcon = Boolean(Icon) && (isDateInput || iconPosition !== "left");
+
   return (
     <div className="space-y-2">
       <label className="block text-sm font-semibold text-slate-700">
@@ -108,8 +126,14 @@ export default function FormInput({
             </button>
           ) : (
             <div
-              className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${
-                error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-[#017FE6]"
+              className={`pointer-events-none absolute ${
+                hasLeftIcon ? "left-3" : "right-3"
+              } top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${
+                error
+                  ? "border-red-200 bg-red-50 text-red-500"
+                  : hasLeftIcon
+                  ? "border-slate-200 bg-slate-50 text-slate-500"
+                  : "border-slate-200 bg-slate-50 text-[#017FE6]"
               }`}
             >
               <Icon size={16} />
@@ -132,7 +156,9 @@ export default function FormInput({
           maxLength={maxLength}
           autoComplete={type === "email" ? "email" : "off"}
           className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
-            Icon ? "pr-12" : ""
+            hasRightIcon ? "pr-12" : ""
+          } ${
+            hasLeftIcon ? "pl-12" : ""
           } ${
             isDateInput
               ? "appearance-none [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none"

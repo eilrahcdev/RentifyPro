@@ -1,4 +1,4 @@
-export const NAME_REGEX = /^[A-Za-z]+$/;
+export const NAME_REGEX = /^[A-Za-z]+(?: [A-Za-z]+)?$/;
 export const EMAIL_REGEX = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
 export const PHONE_REGEX = /^[0-9]{11}$/;
 export const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
@@ -55,19 +55,23 @@ const getAgeFromDate = (birthDate, today) => {
 
 export const VALIDATION_RULES = {
   firstName: (value) => {
-    if (!value) return "First name is required.";
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "First name is required.";
     if (EMOJI_REGEX.test(value)) return "First name must not contain emoji.";
-    if (value.includes(" ")) return "First name cannot contain spaces.";
-    if (!/^[A-Za-z]+$/.test(value)) return "First name can only contain letters (A-Z, a-z).";
-    if (value.length > 50) return "First name is too long (max 50 characters).";
+    if (!NAME_REGEX.test(trimmed)) {
+      return "First name can only contain letters with one optional space for a second name.";
+    }
+    if (trimmed.length > 50) return "First name is too long (max 50 characters).";
     return "";
   },
   lastName: (value) => {
-    if (!value) return "Last name is required.";
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "Last name is required.";
     if (EMOJI_REGEX.test(value)) return "Last name must not contain emoji.";
-    if (value.includes(" ")) return "Last name cannot contain spaces.";
-    if (!/^[A-Za-z]+$/.test(value)) return "Last name can only contain letters (A-Z, a-z).";
-    if (value.length > 50) return "Last name is too long (max 50 characters).";
+    if (!NAME_REGEX.test(trimmed)) {
+      return "Last name can only contain letters with one optional space for a second name.";
+    }
+    if (trimmed.length > 50) return "Last name is too long (max 50 characters).";
     return "";
   },
   email: (value) => {

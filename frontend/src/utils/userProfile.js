@@ -1,16 +1,6 @@
-const USER_KEY = "user";
-const PHOTO_KEY = "profilePhoto";
-const PHOTO_USER_KEY = "profilePhotoUserId";
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+import { getSessionUser, setSessionUser } from "./sessionStore";
 
-const readJson = (key) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const toEmail = (value) => toText(value).toLowerCase();
@@ -26,19 +16,6 @@ const areSameIdentity = (source = {}, fallback = {}) => {
 
   // When identity data is missing on either side, avoid over-restricting fallback usage.
   return true;
-};
-const getStoredPhoto = (userId = "", email = "") => {
-  const photo = toText(localStorage.getItem(PHOTO_KEY));
-  if (!photo) return "";
-
-  const owner = toText(localStorage.getItem(PHOTO_USER_KEY));
-  if (!owner) return photo;
-
-  const normalizedUserId = toText(userId);
-  const normalizedEmail = toText(email).toLowerCase();
-  if (owner === normalizedUserId) return photo;
-  if (normalizedEmail && owner.toLowerCase() === normalizedEmail) return photo;
-  return "";
 };
 
 export const getInitialsFromName = (name = "") => {
@@ -87,11 +64,9 @@ export const normalizeUserProfile = (source = {}, fallback = {}) => {
   const firstName = pickText("firstName") || nameParts.firstName;
   const lastName = pickText("lastName") || nameParts.lastName;
   const fullName = toText(`${firstName} ${lastName}`) || srcName || fbName;
-  const userId = pickText("_id");
   const email = pickText("email");
-
   return {
-    _id: userId,
+    _id: pickText("_id"),
     firstName,
     lastName,
     name: fullName,
@@ -111,19 +86,16 @@ export const normalizeUserProfile = (source = {}, fallback = {}) => {
     role: pickText("role") || "user",
     isVerified: pickBool("isVerified", false),
     kycStatus: pickText("kycStatus"),
-    walletAddress:
-      hasOwn(src, "walletAddress")
-        ? src.walletAddress || null
-        : canUseFallback
-          ? fb.walletAddress || null
-          : null,
-    avatar:
-      pickText("avatar") ||
-      getStoredPhoto(userId, email),
+    walletAddress: hasOwn(src, "walletAddress")
+      ? src.walletAddress || null
+      : canUseFallback
+        ? fb.walletAddress || null
+        : null,
+    avatar: pickText("avatar"),
   };
 };
 
-export const getStoredUser = () => readJson(USER_KEY) || {};
+export const getStoredUser = () => getSessionUser() || {};
 
 export const getUserProfileFromStorage = () => {
   const storedUser = getStoredUser();
@@ -134,32 +106,20 @@ export const persistUserProfile = (profile) => {
   const currentUser = getStoredUser();
   const normalized = normalizeUserProfile(profile, currentUser);
 
-  localStorage.setItem(
-    USER_KEY,
-    JSON.stringify({
-      ...currentUser,
-      ...normalized,
-      name: normalized.name || currentUser.name || "",
-      initials: normalized.initials || currentUser.initials || "U",
-      email: normalized.email || currentUser.email || "",
-      role: normalized.role || currentUser.role || "user",
-      isVerified:
-        typeof normalized.isVerified === "boolean"
-          ? normalized.isVerified
-          : currentUser.isVerified || false,
-      walletAddress: normalized.walletAddress || currentUser.walletAddress || null,
-      avatar: normalized.avatar || currentUser.avatar || "",
-    })
-  );
-
-  if (normalized.avatar) {
-    localStorage.setItem(PHOTO_KEY, normalized.avatar);
-    const ownerKey = toText(normalized._id) || toText(normalized.email).toLowerCase();
-    if (ownerKey) localStorage.setItem(PHOTO_USER_KEY, ownerKey);
-  } else {
-    localStorage.removeItem(PHOTO_KEY);
-    localStorage.removeItem(PHOTO_USER_KEY);
-  }
+  setSessionUser({
+    ...currentUser,
+    ...normalized,
+    name: normalized.name || currentUser.name || "",
+    initials: normalized.initials || currentUser.initials || "U",
+    email: normalized.email || currentUser.email || "",
+    role: normalized.role || currentUser.role || "user",
+    isVerified:
+      typeof normalized.isVerified === "boolean"
+        ? normalized.isVerified
+        : currentUser.isVerified || false,
+    walletAddress: normalized.walletAddress || currentUser.walletAddress || null,
+    avatar: normalized.avatar || currentUser.avatar || "",
+  });
 
   return normalized;
 };

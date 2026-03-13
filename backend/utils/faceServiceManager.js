@@ -5,7 +5,7 @@ import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
-const FACE_SERVICE_URL = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+const getFaceServiceUrl = () => process.env.FACE_SERVICE_URL || "http://localhost:8010";
 const FACE_SERVICE_AUTOSTART = (process.env.FACE_SERVICE_AUTOSTART || "true").toLowerCase() !== "false";
 const STARTUP_TIMEOUT_MS = Number(process.env.FACE_SERVICE_STARTUP_TIMEOUT_MS || 90000);
 const HEALTH_TIMEOUT_MS = Number(process.env.FACE_SERVICE_HEALTH_TIMEOUT_MS || 2500);
@@ -50,11 +50,12 @@ const parseLines = (chunk, sink) => {
 };
 
 const faceServiceRootUrl = () => {
+  const faceServiceUrl = getFaceServiceUrl();
   try {
-    const parsed = new URL(FACE_SERVICE_URL);
+    const parsed = new URL(faceServiceUrl);
     return `${parsed.protocol}//${parsed.host}`;
   } catch {
-    return FACE_SERVICE_URL;
+    return faceServiceUrl;
   }
 };
 
@@ -163,9 +164,10 @@ const startFaceService = async () => {
 };
 
 export const ensureFaceServiceReady = async () => {
+  const faceServiceUrl = getFaceServiceUrl();
   if (await healthCheck()) return true;
   if (!FACE_SERVICE_AUTOSTART) return false;
-  if (!isLocalUrl(FACE_SERVICE_URL)) return false;
+  if (!isLocalUrl(faceServiceUrl)) return false;
 
   if (!bootPromise) {
     bootPromise = startFaceService()

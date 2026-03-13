@@ -20,12 +20,8 @@ import ChatWidget from "../components/ChatWidget";
 import API from "../utils/api";
 import {
   formatDateInput,
-  getDateTime,
-  getMinPickupDate,
   getMinPickupDateTime,
-  getMinPickupTime,
-  getMinReturnDateTime,
-  getTomorrowDate,
+  formatTimeInput,
 } from "../utils/dateUtils";
 import InfoModal from "../components/InfoModal";
 
@@ -152,20 +148,27 @@ const locations = [
 
 const formatCoding = (day) => (day ? `Coding every ${day}` : "");
 
-const mapSearchPayload = (
+const getDefaultSearchDates = () => {
+  const minPickupDateTime = getMinPickupDateTime();
+  const pickupDate = formatDateInput(minPickupDateTime);
+  const pickupTime = formatTimeInput(minPickupDateTime);
+
+  const nextDay = new Date(`${pickupDate}T00:00:00`);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const returnDate = formatDateInput(nextDay);
+
+  return {
+    pickupDate,
+    pickupTime,
+    returnDate,
+    returnTime: pickupTime,
+  };
+};
+
+const mapSearchPayload = (location, vehicleType) => ({
   location,
   vehicleType,
-  pickupDate,
-  pickupTime,
-  returnDate,
-  returnTime
-) => ({
-  location,
-  vehicleType,
-  pickupDate,
-  pickupTime,
-  returnDate,
-  returnTime,
+  ...getDefaultSearchDates(),
 });
 
 export default function RentifyPro({
@@ -193,26 +196,6 @@ export default function RentifyPro({
   const [vehicleType, setVehicleType] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [validationModalMessage, setValidationModalMessage] = useState("");
-  const [pickupDate, setPickupDate] = useState(() => getMinPickupDate());
-  const [pickupTime, setPickupTime] = useState(() => getMinPickupTime());
-  const [returnDate, setReturnDate] = useState(() => getTomorrowDate());
-  const [returnTime, setReturnTime] = useState(() => getMinPickupTime());
-
-  useEffect(() => {
-    if (returnDate <= pickupDate) {
-      const nextDay = new Date(`${pickupDate}T00:00:00`);
-      nextDay.setDate(nextDay.getDate() + 1);
-      setReturnDate(formatDateInput(nextDay));
-    }
-  }, [pickupDate, returnDate]);
-
-  useEffect(() => {
-    const minPickupDate = getMinPickupDate();
-    const minPickupTime = getMinPickupTime();
-    if (pickupDate === minPickupDate && pickupTime < minPickupTime) {
-      setPickupTime(minPickupTime);
-    }
-  }, [pickupDate, pickupTime]);
 
   const filteredLocations = useMemo(
     () =>
@@ -222,30 +205,14 @@ export default function RentifyPro({
     [location]
   );
 
-  const isValidDateTime = () => {
-    const minPickup = getMinPickupDateTime();
-
-    const pickup = getDateTime(pickupDate, pickupTime);
-    const dropoff = getDateTime(returnDate, returnTime);
-    const minReturn = getMinReturnDateTime(pickupDate, pickupTime);
-
-    if (!pickup || !dropoff) return false;
-    if (pickup < minPickup) return false;
-    if (!minReturn || dropoff < minReturn) return false;
-    return true;
-  };
-
   const handleSearch = (typeOverride = vehicleType) => {
-    if (!isValidDateTime()) {
-      setValidationModalMessage(
-        "Pickup must be at least 10 minutes from now and return must be at least 1 hour after pickup."
-      );
+    const normalizedLocation = location.trim();
+    const normalizedType = String(typeOverride || "").trim();
+    if (!normalizedLocation && !normalizedType) {
+      setValidationModalMessage("Please enter a location or choose a vehicle type to search.");
       return;
     }
-
-    onSearch(
-      mapSearchPayload(location, typeOverride, pickupDate, pickupTime, returnDate, returnTime)
-    );
+    onSearch(mapSearchPayload(location, typeOverride));
   };
 
   useEffect(() => {
@@ -331,7 +298,7 @@ export default function RentifyPro({
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 sm:-mt-20 relative z-20">
         <div className="rp-surface p-5 sm:p-7">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2 relative">
               <label className="text-xs font-semibold text-slate-500">Location</label>
               <div className="relative mt-1.5">
@@ -387,43 +354,6 @@ export default function RentifyPro({
                 <option value="van">Van</option>
                 <option value="truck">Truck</option>
               </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Pick-up Date</label>
-              <input
-                type="date"
-                min={getMinPickupDate()}
-                value={pickupDate}
-                onChange={(event) => setPickupDate(event.target.value)}
-                className="rp-input mt-1.5"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Pick-up Time</label>
-              <input
-                type="time"
-                value={pickupTime}
-                min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
-                onChange={(event) => setPickupTime(event.target.value)}
-                className="rp-input mt-1.5"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Return Date</label>
-              <input
-                  type="date"
-                  value={returnDate}
-                  min={(() => {
-                    const date = new Date(`${pickupDate}T00:00:00`);
-                    date.setDate(date.getDate() + 1);
-                    return formatDateInput(date);
-                  })()}
-                  onChange={(event) => setReturnDate(event.target.value)}
-                  className="rp-input mt-1.5"
-                />
             </div>
           </div>
 
@@ -502,65 +432,71 @@ export default function RentifyPro({
           {!featuredLoading && !featuredError && featuredVehicles.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {featuredVehicles.map((vehicle) => (
-                <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden">
-                <div className="relative h-52 bg-slate-100">
-                  <img src={vehicle.image} alt={vehicle.name} className="w-full h-full object-contain p-4" />
-                  {vehicle.available && (
-                    <span className="absolute top-3 left-3 rp-chip bg-emerald-100 text-emerald-700">
-                      Available
-                    </span>
-                  )}
-                  <span className="absolute top-3 right-3 rp-chip bg-slate-900 text-white">
-                    {vehicle.rating}
-                  </span>
-                </div>
-
-                <div className="p-5">
-                  <h3 className="text-xl font-bold">{vehicle.name}</h3>
-                  <p className="text-sm text-slate-500">{vehicle.category}</p>
-
-                  <div className="flex items-center gap-1 mt-2 text-sm text-slate-600">
-                    <MapPin size={14} className="text-[#0B75E7]" />
-                    {vehicle.location}
-                  </div>
-
-                  {formatCoding(vehicle.codingDay) && (
-                    <div className="mt-2">
-                      <span className="rp-chip bg-slate-100 text-slate-600">
-                        {formatCoding(vehicle.codingDay)}
+                <article key={vehicle.id} className="rp-surface rp-hover-lift overflow-hidden flex flex-col">
+                  <div className="px-4 pt-4">
+                    <div className="relative h-48 bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center overflow-hidden rp-image-frame">
+                      <img
+                        src={vehicle.image}
+                        alt={vehicle.name}
+                        className="relative z-0 h-full w-full object-cover object-center drop-shadow-sm"
+                      />
+                      {vehicle.available && (
+                        <span className="absolute top-3 left-3 z-10 rp-chip bg-emerald-100 text-emerald-700">
+                          Available
+                        </span>
+                      )}
+                      <span className="absolute top-3 right-3 z-10 rp-chip bg-slate-900 text-white">
+                        {vehicle.rating}
                       </span>
                     </div>
-                  )}
-
-                  <div className="flex items-center gap-4 mt-4 text-sm text-slate-600">
-                    <span className="flex items-center gap-1">
-                      <Users size={14} className="text-[#0B75E7]" />
-                      {vehicle.seats} seats
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Settings size={14} className="text-[#0B75E7]" />
-                      {vehicle.transmission}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Fuel size={14} className="text-[#0B75E7]" />
-                      {vehicle.fuel}
-                    </span>
                   </div>
 
-                  <p className="text-[#0B75E7] text-2xl font-bold mt-4">
-                    P{vehicle.price.toLocaleString()}
-                    <span className="text-sm text-slate-500 font-medium"> / day</span>
-                  </p>
+                  <div className="p-5 flex flex-col gap-2 flex-1">
+                    <h3 className="text-xl font-bold">{vehicle.name}</h3>
+                    <p className="text-sm text-slate-500">{vehicle.category}</p>
 
-                  <div className="mt-4">
-                    <button
-                      onClick={() => (isLoggedIn ? onViewDetails(vehicle) : onNavigateToSignIn())}
-                      className="rp-btn-primary py-2 text-sm w-full"
-                    >
-                      Book Now
-                    </button>
+                    <div className="flex items-center gap-1 mt-1 text-sm text-slate-600">
+                      <MapPin size={14} className="text-[#0B75E7]" />
+                      {vehicle.location}
+                    </div>
+
+                    {formatCoding(vehicle.codingDay) && (
+                      <div className="mt-1">
+                        <span className="rp-chip bg-slate-100 text-slate-600">
+                          {formatCoding(vehicle.codingDay)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
+                      <span className="flex items-center gap-1">
+                        <Users size={14} className="text-[#0B75E7]" />
+                        {vehicle.seats} seats
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Settings size={14} className="text-[#0B75E7]" />
+                        {vehicle.transmission}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Fuel size={14} className="text-[#0B75E7]" />
+                        {vehicle.fuel}
+                      </span>
+                    </div>
+
+                    <p className="text-[#0B75E7] text-2xl font-bold mt-2">
+                      P{vehicle.price.toLocaleString()}
+                      <span className="text-sm text-slate-500 font-medium"> / day</span>
+                    </p>
+
+                    <div className="pt-3 mt-auto">
+                      <button
+                        onClick={() => (isLoggedIn ? onViewDetails(vehicle) : onNavigateToSignIn())}
+                        className="rp-btn-primary py-2 text-sm w-full"
+                      >
+                        Book Now
+                      </button>
+                    </div>
                   </div>
-                </div>
                 </article>
               ))}
             </div>

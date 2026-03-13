@@ -1,8 +1,5 @@
+import { clearSessionOwnerProfile, clearSessionUser } from "./sessionStore";
 export const API_BASE_URL = "http://localhost:5000/api";
-
-function getToken() {
-  return localStorage.getItem("token");
-}
 
 function buildQueryString(params = {}) {
   const searchParams = new URLSearchParams();
@@ -30,11 +27,6 @@ async function request(endpoint, options = {}) {
     config.headers["Content-Type"] = "application/json";
   }
 
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
   const response = await fetch(url, config);
   const data = await response.json().catch(() => ({}));
 
@@ -46,7 +38,9 @@ async function request(endpoint, options = {}) {
       (response.status === 403 && /verify your email|verification is required/i.test(msg))
     ) {
       localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      sessionStorage.removeItem("token");
+      clearSessionOwnerProfile();
+      clearSessionUser();
     }
 
     throw new Error(msg);
@@ -77,7 +71,9 @@ const API = {
       // Clear local data even if logout fails.
     }
     localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    clearSessionOwnerProfile();
+    clearSessionUser();
   },
 
   sendOTP: (email) => request("/auth/send-otp", { method: "POST", body: JSON.stringify({ email }) }),
@@ -114,6 +110,16 @@ const API = {
   getOwnerBookings: (status = "all") => request(`/owner/bookings?status=${encodeURIComponent(status)}`),
   payBooking: (id, body = {}) =>
     request(`/bookings/${id}/pay`, { method: "POST", body: JSON.stringify(body || {}) }),
+  setBookingBalancePaymentMethod: (id, body = {}) =>
+    request(`/bookings/${id}/pay/balance-method`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+  requestWalkInPayment: (id, body = {}) =>
+    request(`/bookings/${id}/pay/walk-in-request`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
   verifyBookingPayment: (id, checkoutId = "") =>
     request(`/bookings/${id}/pay/verify`, {
       method: "POST",
@@ -135,6 +141,16 @@ const API = {
     request(`/owner/bookings/${id}/payment-status`, {
       method: "PATCH",
       body: JSON.stringify({ paymentStatus }),
+    }),
+  reviewOwnerWalkInPaymentRequest: (id, action, body = {}) =>
+    request(`/owner/bookings/${id}/walk-in-request`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, ...body }),
+    }),
+  confirmOwnerWalkInPayment: (id, body = {}) =>
+    request(`/owner/bookings/${id}/walk-in-confirm`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
     }),
 
   getOwnerReviews: () => request("/owner/reviews"),

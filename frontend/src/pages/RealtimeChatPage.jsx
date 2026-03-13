@@ -6,6 +6,7 @@ import { getSocket } from "../utils/socket";
 import { requestLiveCountersRefresh } from "../utils/liveCounters";
 import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
 import { resolveAssetUrl } from "../utils/media";
+import { getSessionUser } from "../utils/sessionStore";
 
 const getId = (value) => String(value?._id || value || "");
 const formatDateTime = (value) =>
@@ -45,7 +46,7 @@ export default function RealtimeChatPage({
   onNavigateToAccountSettings,
   onLogout,
 }) {
-  const currentUserId = user?._id || JSON.parse(localStorage.getItem("user") || "{}")._id || "";
+  const currentUserId = user?._id || getSessionUser()?._id || "";
 
   const [conversations, setConversations] = useState([]);
   const [activePartnerId, setActivePartnerId] = useState("");
@@ -259,20 +260,13 @@ export default function RealtimeChatPage({
 
           <section className="flex flex-col">
             <div className="px-5 py-4 border-b">
-              <div className="flex items-center gap-3">
-                <AvatarCircle
-                  name={activeConversation?.partner?.name || "User"}
-                  avatar={activeConversation?.partner?.avatar}
-                  sizeClass="w-9 h-9"
-                />
-                <div>
-                  <h2 className="font-semibold">
-                    {activeConversation?.partner?.name || "Select a conversation"}
-                  </h2>
-                  {activeConversation?.partner?.email && (
-                    <p className="text-xs text-gray-500">{activeConversation.partner.email}</p>
-                  )}
-                </div>
+              <div>
+                <h2 className="font-semibold">
+                  {activeConversation?.partner?.name || "Select a conversation"}
+                </h2>
+                {activeConversation?.partner?.email && (
+                  <p className="text-xs text-gray-500">{activeConversation.partner.email}</p>
+                )}
               </div>
             </div>
 

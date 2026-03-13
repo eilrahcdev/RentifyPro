@@ -8,7 +8,14 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
       <div className="bg-white rounded-2xl shadow-lg max-w-5xl w-full overflow-hidden">
         
         {/* header */}
-        <div className="relative h-16 flex items-center border-b px-6">
+        <div className="relative h-16 flex items-center border-b px-4 sm:px-6">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition"
+          >
+            <ArrowLeft size={16} />
+            <span className="hidden sm:inline">Back</span>
+          </button>
 
           {/* logo */}
           <button
@@ -21,14 +28,14 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
         </div>
 
         {/* content */}
-        <div className="p-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+        <div className="p-5 sm:p-8 lg:p-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-center">
             {/* illustration */}
             <div className="flex justify-center">
               <img
                 src="/vehicle-owner-verify.png"
                 alt="Vehicle Owner Verification"
-                className="max-w-xs"
+                className="w-full max-w-xs"
               />
             </div>
 
@@ -58,7 +65,7 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
                   <CheckCircle className="text-green-500 mt-0.5" size={20} />
                   <div>
                     <p className="font-medium text-sm">
-                      Upload a Driver’s License
+                      Upload a Driver's License
                     </p>
                     <p className="text-xs text-gray-500">
                       Required to confirm legal authorization to operate and rent
@@ -74,7 +81,7 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
                       Complete Selfie Verification
                     </p>
                     <p className="text-xs text-gray-500">
-                      Used to verify your identity against the submitted driver’s
+                      Used to verify your identity against the submitted driver's
                       license and prevent fraud
                     </p>
                   </div>

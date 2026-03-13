@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getCurrentTime, getTodayDate, getTomorrowDate } from "./utils/dateUtils";
 
 // Main pages
@@ -30,6 +30,13 @@ import OwnerLayout from "./owner/OwnerLayout";
 import LogoutModal from "./components/LogoutModal";
 import { disconnectSocket } from "./utils/socket";
 import API from "./utils/api";
+import {
+  SESSION_USER_UPDATED_EVENT,
+  clearSessionOwnerProfile,
+  clearSessionUser,
+  getSessionUser,
+  setSessionUser,
+} from "./utils/sessionStore";
 
 const ROUTE_TO_PAGE = {
   "/": "home",
@@ -38,9 +45,15 @@ const ROUTE_TO_PAGE = {
   "/bookings": "booking-history",
   "/signin": "signin",
   "/register": "register",
+  "/register-owner": "register-owner",
+  "/registerotp": "registerotp",
+  "/forgot-email": "forgot-email",
+  "/forgot-otp": "forgot-otp",
+  "/reset-password": "reset-password",
   "/chat": "realtime-chat",
   "/notifications": "notifications",
   "/account-settings": "account-settings",
+  "/owner-dashboard": "owner-dashboard",
 };
 
 const PAGE_TO_ROUTE = Object.entries(ROUTE_TO_PAGE).reduce((map, [route, page]) => {
@@ -62,21 +75,17 @@ const getInitialsFromName = (name) => {
   return `${first}${last}`.toUpperCase() || "U";
 };
 
-const PROFILE_PHOTO_KEY = "profilePhoto";
-const PROFILE_PHOTO_USER_KEY = "profilePhotoUserId";
-const getScopedProfilePhoto = (storedUser = {}) => {
-  const photo = String(localStorage.getItem(PROFILE_PHOTO_KEY) || "").trim();
-  if (!photo) return "";
-
-  const owner = String(localStorage.getItem(PROFILE_PHOTO_USER_KEY) || "").trim();
-  if (!owner) return photo;
-
-  const userId = String(storedUser?._id || "").trim();
-  const email = String(storedUser?.email || "").trim().toLowerCase();
-  if (owner === userId) return photo;
-  if (email && owner.toLowerCase() === email) return photo;
-  return "";
-};
+const LEGACY_AUTH_KEYS = ["token"];
+const LEGACY_PROFILE_KEYS = ["user", "ownerProfile", "ownerProfilePhoto", "profilePhoto", "profilePhotoUserId"];
+const AUTH_PAGES = new Set([
+  "signin",
+  "register",
+  "register-owner",
+  "registerotp",
+  "forgot-email",
+  "forgot-otp",
+  "reset-password",
+]);
 
 const hydrateStoredUser = (storedUser = {}) => {
   if (!storedUser || typeof storedUser !== "object") return null;
@@ -85,8 +94,7 @@ const hydrateStoredUser = (storedUser = {}) => {
     String(storedUser.name || "").trim() ||
     String(storedUser.email || "").split("@")[0] ||
     "User";
-  const profilePhoto = getScopedProfilePhoto(storedUser);
-  const avatar = String(storedUser.avatar || profilePhoto || "").trim();
+  const avatar = String(storedUser.avatar || "").trim();
 
   return {
     ...storedUser,
@@ -127,116 +135,105 @@ const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isOwnerLoggedIn, setIsOwnerLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
-  const attemptedAvatarBackfillByUserRef = useRef(new Set());
+  const [isSessionBootstrapping, setIsSessionBootstrapping] = useState(true);
 
   // Logout modal state
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      setIsOwnerLoggedIn(false);
-      localStorage.removeItem("isNewOwner");
-    }
+    const purgeLegacyStorage = () => {
+      LEGACY_AUTH_KEYS.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+      LEGACY_PROFILE_KEYS.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+    };
+
+    purgeLegacyStorage();
+
+    let mounted = true;
+
+    const bootstrapSession = async () => {
+      try {
+        const response = await API.getProfile();
+        const profileUser =
+          response?.user && typeof response.user === "object" ? response.user : null;
+        if (!mounted || !profileUser || profileUser.isVerified !== true) {
+          throw new Error("No active session");
+        }
+
+        const hydratedUser = hydrateStoredUser(profileUser);
+        setSessionUser(profileUser);
+        setUser(hydratedUser);
+
+        const isOwner = profileUser.role === "owner";
+        const ownerPreference = String(localStorage.getItem("isNewOwner") || "").trim().toLowerCase();
+        const ownerMode = isOwner && ownerPreference !== "false";
+        if (ownerMode) {
+          localStorage.setItem("isNewOwner", "true");
+          setIsOwnerLoggedIn(true);
+          setIsLoggedIn(false);
+          setCurrentPage("owner-dashboard");
+        } else {
+          if (isOwner) localStorage.setItem("isNewOwner", "false");
+          setIsOwnerLoggedIn(false);
+          setIsLoggedIn(true);
+          const pathPage = resolvePageFromPath(window.location.pathname);
+          if (AUTH_PAGES.has(pathPage) || pathPage === "owner-dashboard") {
+            setCurrentPage("home");
+          }
+        }
+      } catch {
+        if (!mounted) return;
+        setIsLoggedIn(false);
+        setIsOwnerLoggedIn(false);
+        setUser(null);
+        clearSessionUser();
+        clearSessionOwnerProfile();
+        purgeLegacyStorage();
+        localStorage.removeItem("isNewOwner");
+      } finally {
+        if (mounted) setIsSessionBootstrapping(false);
+      }
+    };
+
+    bootstrapSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUserRaw = localStorage.getItem("user");
-    if (!storedToken || !storedUserRaw) return;
+    const syncUserProfile = (event) => {
+      const payloadUser =
+        event?.detail && typeof event.detail === "object"
+          ? event.detail
+          : getSessionUser();
 
-    try {
-      const storedUser = JSON.parse(storedUserRaw);
-      if (!storedUser || typeof storedUser !== "object") return;
-      if (storedUser.isVerified !== true) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+      if (!payloadUser) {
+        setUser(null);
+        setIsLoggedIn(false);
+        setIsOwnerLoggedIn(false);
         return;
       }
 
-      const hydratedUser = hydrateStoredUser(storedUser);
-
-      setUser(hydratedUser);
-
-      const isOwner = storedUser.role === "owner";
-      const ownerMode = localStorage.getItem("isNewOwner") === "true";
-      if (isOwner && ownerMode) {
-        setIsOwnerLoggedIn(true);
-        setIsLoggedIn(false);
-        setCurrentPage("owner-dashboard");
-      } else {
-        setIsOwnerLoggedIn(false);
-        setIsLoggedIn(true);
-      }
-    } catch {
-      localStorage.removeItem("user");
-    }
-  }, []);
-
-  useEffect(() => {
-    const syncUserProfile = () => {
-      const storedUserRaw = localStorage.getItem("user");
-      if (!storedUserRaw) return;
-
-      try {
-        const storedUser = JSON.parse(storedUserRaw);
-        const hydrated = hydrateStoredUser(storedUser);
-        if (!hydrated) return;
-        setUser((prev) => (prev ? { ...prev, ...hydrated } : hydrated));
-      } catch {
-        // Ignore malformed storage.
-      }
+      const hydrated = hydrateStoredUser(payloadUser);
+      if (!hydrated) return;
+      setUser((prev) => (prev ? { ...prev, ...hydrated } : hydrated));
     };
 
     window.addEventListener("user-profile-updated", syncUserProfile);
-    window.addEventListener("storage", syncUserProfile);
+    window.addEventListener(SESSION_USER_UPDATED_EVENT, syncUserProfile);
 
     return () => {
       window.removeEventListener("user-profile-updated", syncUserProfile);
-      window.removeEventListener("storage", syncUserProfile);
+      window.removeEventListener(SESSION_USER_UPDATED_EVENT, syncUserProfile);
     };
   }, []);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const storedUserRaw = localStorage.getItem("user");
-    if (!token || !storedUserRaw) return;
-
-    let storedUser = null;
-    try {
-      storedUser = JSON.parse(storedUserRaw);
-    } catch {
-      return;
-    }
-    if (!storedUser || typeof storedUser !== "object") return;
-    if (String(storedUser.role || "").toLowerCase() !== "user") return;
-    const profilePhoto = getScopedProfilePhoto(storedUser);
-    if (!profilePhoto) return;
-
-    const userKey = String(storedUser._id || storedUser.email || "");
-    if (!userKey) return;
-    if (attemptedAvatarBackfillByUserRef.current.has(userKey)) return;
-    attemptedAvatarBackfillByUserRef.current.add(userKey);
-
-    const existingAvatar = String(storedUser.avatar || "").trim();
-    if (existingAvatar && existingAvatar !== profilePhoto) return;
-
-    const syncAvatarToBackend = async () => {
-      try {
-        const response = await API.updateProfile({ avatar: profilePhoto });
-        const mergedUser =
-          response?.user && typeof response.user === "object"
-            ? { ...storedUser, ...response.user }
-            : { ...storedUser, avatar: profilePhoto };
-        localStorage.setItem("user", JSON.stringify(mergedUser));
-        setUser(hydrateStoredUser(mergedUser));
-        window.dispatchEvent(new Event("user-profile-updated"));
-      } catch {
-        // Keep local-only photo if profile sync fails.
-      }
-    };
-
-    syncAvatarToBackend();
-  }, [isLoggedIn, isOwnerLoggedIn, user?._id]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -257,7 +254,9 @@ const App = () => {
 
   useEffect(() => {
     const switchToUser = () => {
+      localStorage.setItem("isNewOwner", "false");
       setIsOwnerLoggedIn(false);
+      setIsLoggedIn(true);
       setCurrentPage("home");
     };
     window.addEventListener("switch-to-user", switchToUser);
@@ -282,11 +281,17 @@ const App = () => {
     setUser(null);
     setPendingScrollTarget("");
     disconnectSocket();
+    clearSessionOwnerProfile();
+    clearSessionUser();
     localStorage.removeItem("isNewOwner");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem(PROFILE_PHOTO_KEY);
-    localStorage.removeItem(PROFILE_PHOTO_USER_KEY);
+    LEGACY_AUTH_KEYS.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+    LEGACY_PROFILE_KEYS.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
     setCurrentPage("home");
   };
 
@@ -374,6 +379,14 @@ const App = () => {
     setCurrentPage("home");
   }, [currentPage]);
 
+  if (isSessionBootstrapping) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center text-slate-600 text-sm">
+        Restoring your session...
+      </div>
+    );
+  }
+
   return (
     <>
       {/* logout modal */}
@@ -421,6 +434,7 @@ const App = () => {
           onNavigateToForgotPassword={() => setCurrentPage("forgot-email")}
           onLoginSuccess={(userData) => {
             setUser(userData);
+            setSessionUser(userData);
 
             if (userData?.role === "owner") {
               setIsOwnerLoggedIn(true);
@@ -580,11 +594,13 @@ const App = () => {
               setIsLoggedIn(false);
               localStorage.setItem("isNewOwner", "true");
               setUser(userData);
+              setSessionUser(userData);
               setCurrentPage("owner-dashboard");
             } else {
               setIsLoggedIn(true);
               setIsOwnerLoggedIn(false);
               setUser(userData);
+              setSessionUser(userData);
               setCurrentPage("home");
             }
           }}

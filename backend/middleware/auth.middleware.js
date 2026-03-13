@@ -5,10 +5,7 @@ import { isTokenBlacklisted } from "../controllers/auth.controller.js";
 import { auditLog } from "./auditLogger.middleware.js";
 
 export const protect = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const bearerToken = authHeader?.startsWith("Bearer") ? authHeader.split(" ")[1] : null;
-  const cookieToken = String(req.cookies?.token || "").trim();
-  const token = bearerToken || cookieToken || null;
+  const token = String(req.cookies?.token || "").trim() || null;
 
   if (!token) {
     return res.status(401).json({ success: false, message: "Please log in." });

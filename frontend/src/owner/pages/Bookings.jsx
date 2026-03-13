@@ -36,6 +36,10 @@ const toTitleCase = (value = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 const normalizeBookingStatus = (booking) =>
   booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
+const getWalkInStatus = (booking) =>
+  String(booking?.walkInPayment?.status || booking?.walk_in_payment?.status || "none")
+    .trim()
+    .toLowerCase();
 const getRentalTotal = (booking) => {
   const total = Number(booking?.totalAmount);
   if (Number.isFinite(total) && total >= 0) return total;
@@ -62,6 +66,7 @@ export default function Bookings() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [walkInActionBookingId, setWalkInActionBookingId] = useState("");
 
   const loadBookings = async (status = "all") => {
     setLoading(true);
@@ -136,6 +141,32 @@ export default function Bookings() {
     }
   };
 
+  const reviewWalkInRequest = async (bookingId, action) => {
+    try {
+      setWalkInActionBookingId(bookingId);
+      const response = await API.reviewOwnerWalkInPaymentRequest(bookingId, action);
+      const normalized = normalizeBookingStatus(response.booking);
+      setBookings((prev) => prev.map((booking) => (booking._id === bookingId ? normalized : booking)));
+    } catch (err) {
+      setError(err.message || "Failed to review walk-in request.");
+    } finally {
+      setWalkInActionBookingId("");
+    }
+  };
+
+  const confirmWalkInPayment = async (bookingId) => {
+    try {
+      setWalkInActionBookingId(bookingId);
+      const response = await API.confirmOwnerWalkInPayment(bookingId);
+      const normalized = normalizeBookingStatus(response.booking);
+      setBookings((prev) => prev.map((booking) => (booking._id === bookingId ? normalized : booking)));
+    } catch (err) {
+      setError(err.message || "Failed to confirm walk-in payment.");
+    } finally {
+      setWalkInActionBookingId("");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -195,6 +226,21 @@ export default function Bookings() {
                 >
                   {toTitleCase(booking.paymentStatus)}
                 </span>
+                {getWalkInStatus(booking) !== "none" && (
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      getWalkInStatus(booking) === "approved"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : getWalkInStatus(booking) === "rejected"
+                          ? "bg-rose-100 text-rose-700"
+                          : getWalkInStatus(booking) === "completed"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    Walk-in {toTitleCase(getWalkInStatus(booking))}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -250,6 +296,45 @@ export default function Bookings() {
                     Cancel
                   </button>
                 )}
+                {getWalkInStatus(booking) === "requested" && (
+                  <>
+                    <button
+                      onClick={() => reviewWalkInRequest(booking._id, "approve")}
+                      disabled={walkInActionBookingId === booking._id}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Approve Walk-in
+                    </button>
+                    <button
+                      onClick={() => reviewWalkInRequest(booking._id, "reject")}
+                      disabled={walkInActionBookingId === booking._id}
+                      className="px-3 py-2 rounded-lg bg-rose-600 text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Reject Walk-in
+                    </button>
+                  </>
+                )}
+                {getWalkInStatus(booking) === "approved" &&
+                  String(booking.paymentStatus || "").toLowerCase() === "partial" && (
+                    <button
+                      onClick={() => confirmWalkInPayment(booking._id)}
+                      disabled={walkInActionBookingId === booking._id}
+                      className="px-3 py-2 rounded-lg bg-[#017FE6] text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Confirm Walk-in Received
+                    </button>
+                  )}
+                {getWalkInStatus(booking) === "rejected" && (
+                  <p className="w-full text-xs text-rose-700">Walk-in request was rejected.</p>
+                )}
+                {getWalkInStatus(booking) === "approved" && (
+                  <p className="w-full text-xs text-emerald-700">
+                    Walk-in request approved. Confirm once remaining balance is received.
+                  </p>
+                )}
+                {getWalkInStatus(booking) === "completed" && (
+                  <p className="w-full text-xs text-green-700">Walk-in payment has been confirmed.</p>
+                )}
               </div>
 
               <div className="flex justify-start md:justify-end items-center gap-2">
@@ -257,11 +342,11 @@ export default function Bookings() {
                 <select
                   className="border rounded-lg px-2 py-2 text-sm"
                   value={booking.paymentStatus}
+                  disabled={walkInActionBookingId === booking._id}
                   onChange={(e) => updatePaymentStatus(booking._id, e.target.value)}
                 >
                   <option value="unpaid">Unpaid</option>
                   <option value="partial">Partial</option>
-                  <option value="paid">Paid</option>
                   <option value="refunded">Refunded</option>
                 </select>
               </div>

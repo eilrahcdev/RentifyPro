@@ -68,3 +68,6 @@ Thumbs.db
 uploads/
 temp/
 tmp/
+
+# QA artifacts
+qa/

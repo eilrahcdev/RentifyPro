@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 const WALLET_INDEX_NAME = "walletAddress_1";
+const PHONE_INDEX_NAME = "phone_1";
 
 const ensureWalletAddressIndex = async () => {
   try {
@@ -37,6 +38,41 @@ const ensureWalletAddressIndex = async () => {
   }
 };
 
+const ensurePhoneIndex = async () => {
+  try {
+    const usersCollection = mongoose.connection.collection("users");
+
+    await usersCollection.updateMany(
+      {
+        $or: [{ phone: null }, { phone: "" }],
+      },
+      {
+        $unset: { phone: "" },
+      }
+    );
+
+    const indexes = await usersCollection.indexes();
+    const phoneIndex = indexes.find((index) => index.name === PHONE_INDEX_NAME);
+
+    if (phoneIndex) {
+      await usersCollection.dropIndex(PHONE_INDEX_NAME);
+    }
+
+    await usersCollection.createIndex(
+      { phone: 1 },
+      {
+        name: PHONE_INDEX_NAME,
+        unique: true,
+        sparse: true,
+      }
+    );
+
+    console.log("Ensured users.phone uses a unique sparse index.");
+  } catch (error) {
+    console.error("Failed to rebuild users.phone index:", error.message);
+  }
+};
+
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI);
@@ -46,6 +82,7 @@ const connectDB = async () => {
     console.log(`Host: ${conn.connection.host}:${conn.connection.port}`);
 
     await ensureWalletAddressIndex();
+    await ensurePhoneIndex();
   } catch (error) {
     console.error("MongoDB connection error:", error.message);
     process.exit(1);

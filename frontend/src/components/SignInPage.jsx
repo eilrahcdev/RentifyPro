@@ -5,6 +5,7 @@ import PasswordInput from "./PasswordInput";
 import AuthShell from "./AuthShell";
 import { SIGN_IN_VALIDATION_RULES } from "../data/signInValidation";
 import API from "../utils/api";
+import { setSessionUser } from "../utils/sessionStore";
 import { normalizeOwnerProfile, persistOwnerProfile } from "../owner/utils/ownerProfile";
 
 // Delay between submit attempts
@@ -33,17 +34,23 @@ export default function SignInPage({
     setCaptchaLoading(true);
     try {
       const data = await API.getLoginChallenge();
+      const challengeId = String(data?.challengeId || "").trim();
+      const question = String(data?.question || "").trim();
+      if (!challengeId || !question) {
+        throw new Error("Security check is unavailable right now. Please try again.");
+      }
       setCaptcha({
-        id: data.challengeId || "",
-        question: data.question || "",
+        id: challengeId,
+        question,
       });
       setForm((prev) => ({ ...prev, captchaAnswer: "" }));
       setErrors((prev) => ({ ...prev, captchaAnswer: "" }));
-    } catch {
+    } catch (error) {
+      const message = String(error?.message || "").trim();
       setCaptcha({ id: "", question: "" });
       setErrors((prev) => ({
         ...prev,
-        captchaAnswer: "Unable to load security check. Please refresh.",
+        captchaAnswer: message || "Unable to load security check. Please refresh.",
       }));
     } finally {
       setCaptchaLoading(false);
@@ -96,8 +103,9 @@ export default function SignInPage({
         captchaAnswer: form.captchaAnswer,
       });
 
-      if (response.token) localStorage.setItem("token", response.token);
-      if (response.user) localStorage.setItem("user", JSON.stringify(response.user));
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+      if (response.user) setSessionUser(response.user);
 
       const isOwner = response.user?.role === "owner";
 
@@ -195,44 +203,46 @@ export default function SignInPage({
 
         <form onSubmit={handleSignIn} className="space-y-4" noValidate>
           <FormInput
-            label="Email Address"
+            label="Enter Email"
             type="email"
             value={form.email}
             onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())}
             error={errors.email}
             disabled={isLoading}
-            placeholder="john@gmail.com"
+            placeholder="Enter Email"
             required
             icon={Mail}
+            iconPosition="left"
             showEmailHint
             maxLength={254}
           />
 
           <PasswordInput
-            label="Password"
+            label="Enter Password"
             value={form.password}
             onChange={(e) => handleChange("password", e.target.value)}
             error={errors.password}
             disabled={isLoading}
+            placeholder="Enter Password"
             required
             maxLength={128}
           />
 
           <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
             {(() => {
-              const match = captcha.question?.match(/what is\s+(\d+)\s*([+-])\s*(\d+)/i);
-              const left = match?.[1] || "—";
+              const match = captcha.question?.match(/(\d+)\s*([+-])\s*(\d+)/);
+              const left = match?.[1] || "-";
               const op = match?.[2] || "+";
-              const right = match?.[3] || "—";
+              const right = match?.[3] || "-";
               return (
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="min-w-[56px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-lg font-semibold text-slate-700 shadow-sm">
-                      {captchaLoading ? "…" : left}
+                      {captchaLoading ? "..." : left}
                     </div>
                     <span className="text-lg font-semibold text-slate-500">{op}</span>
                     <div className="min-w-[56px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-lg font-semibold text-slate-700 shadow-sm">
-                      {captchaLoading ? "…" : right}
+                      {captchaLoading ? "..." : right}
                     </div>
                     <span className="text-lg font-semibold text-slate-500">=</span>
                     <input

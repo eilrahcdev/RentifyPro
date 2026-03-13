@@ -24,6 +24,14 @@ const MAX_PERMIT_NUMBER = 50;
 const MAX_LICENSE_NUMBER = 50;
 
 const normalizeEmail = (email = "") => email.toLowerCase().trim();
+const normalizePhone = (phone = "") => String(phone || "").trim();
+
+const buildDuplicateKeyMessage = (error) => {
+  const duplicateField = Object.keys(error?.keyPattern || error?.keyValue || {})[0];
+  if (duplicateField === "email") return "Email is already registered.";
+  if (duplicateField === "phone") return "This phone number is already registered.";
+  return "A unique field already exists.";
+};
 
 const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000)); // 6-digit OTP
 
@@ -58,10 +66,12 @@ export const requestOwnerOtp = async (req, res) => {
     if (email.length > MAX_EMAIL_LENGTH) {
       return res.status(400).json({ message: `Email is too long (max ${MAX_EMAIL_LENGTH} characters).` });
     }
-    if (String(phone).length > MAX_PHONE_LENGTH) {
+    const normalizedPhone = normalizePhone(phone);
+
+    if (normalizedPhone.length > MAX_PHONE_LENGTH) {
       return res.status(400).json({ message: `Phone number is too long (max ${MAX_PHONE_LENGTH} digits).` });
     }
-    if (!/^[0-9]{11}$/.test(String(phone))) {
+    if (!/^[0-9]{11}$/.test(normalizedPhone)) {
       return res.status(400).json({ message: "Phone number must be exactly 11 digits." });
     }
     if (address && address.length > MAX_ADDRESS_LENGTH) {
@@ -95,6 +105,10 @@ export const requestOwnerOtp = async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(409).json({ message: "Email is already registered." });
+    }
+    const existingPhone = await User.findOne({ phone: normalizedPhone }).select("_id");
+    if (existingPhone) {
+      return res.status(409).json({ message: "This phone number is already registered." });
     }
 
     // Basic validation
@@ -151,7 +165,7 @@ export const requestOwnerOtp = async (req, res) => {
     const pendingPayload = {
       firstName,
       lastName,
-      phone,
+      phone: normalizedPhone,
       address,
       region,
       province,
@@ -280,13 +294,22 @@ export const verifyOwnerOtp = async (req, res) => {
       return res.status(409).json({ message: "Email is already registered." });
     }
 
+    const normalizedPhone = normalizePhone(payload.phone);
+    if (normalizedPhone) {
+      const existingPhone = await User.findOne({ phone: normalizedPhone }).select("_id");
+      if (existingPhone) {
+        await Otp.deleteOne({ _id: otpDoc._id });
+        return res.status(409).json({ message: "This phone number is already registered." });
+      }
+    }
+
     const owner = await User.create({
       email,
       password: payload.passwordHash, // Already hashed
       role: "owner",
       firstName: payload.firstName,
       lastName: payload.lastName,
-      phone: payload.phone,
+      phone: normalizedPhone || undefined,
 
       // Optional owner fields
       ownerType: payload.ownerType,
@@ -316,6 +339,9 @@ export const verifyOwnerOtp = async (req, res) => {
       },
     });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: buildDuplicateKeyMessage(err) });
+    }
     console.error("verifyOwnerOtp error:", err);
     return res.status(500).json({ message: "Failed to verify OTP." });
   }

@@ -16,8 +16,22 @@ import {
 } from "lucide-react";
 import LogoutModal from "../../components/LogoutModal";
 import { getOwnerProfileFromStorage } from "../utils/ownerProfile";
+import API from "../../utils/api";
+import { disconnectSocket } from "../../utils/socket";
+import {
+  SESSION_OWNER_PROFILE_UPDATED_EVENT,
+  clearSessionOwnerProfile,
+  clearSessionUser,
+} from "../../utils/sessionStore";
 
-function Sidebar({ activePage, setActivePage }) {
+const BRAND_LOGO_SRC = "/rentifypro%20logo.png";
+
+function Sidebar({
+  activePage,
+  setActivePage,
+  isMobileOpen = false,
+  onCloseMobile,
+}) {
   const [owner, setOwner] = useState(() => getOwnerProfileFromStorage());
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
@@ -27,11 +41,11 @@ function Sidebar({ activePage, setActivePage }) {
     };
 
     window.addEventListener("owner-profile-updated", syncOwner);
-    window.addEventListener("storage", syncOwner);
+    window.addEventListener(SESSION_OWNER_PROFILE_UPDATED_EVENT, syncOwner);
 
     return () => {
       window.removeEventListener("owner-profile-updated", syncOwner);
-      window.removeEventListener("storage", syncOwner);
+      window.removeEventListener(SESSION_OWNER_PROFILE_UPDATED_EVENT, syncOwner);
     };
   }, []);
 
@@ -58,21 +72,26 @@ function Sidebar({ activePage, setActivePage }) {
 
   const openLogoutModal = () => {
     setIsLogoutModalOpen(true);
+    onCloseMobile?.();
   };
 
   const closeLogoutModal = () => {
     setIsLogoutModalOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLogoutModalOpen(false);
+    try {
+      await API.logout();
+    } catch {
+      // Continue local cleanup even if the request fails.
+    }
+    disconnectSocket();
+    clearSessionOwnerProfile();
+    clearSessionUser();
     localStorage.removeItem("isNewOwner");
-    localStorage.removeItem("ownerProfile");
-    localStorage.removeItem("ownerProfilePhoto");
     localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("profilePhoto");
-    localStorage.removeItem("profilePhotoUserId");
+    sessionStorage.removeItem("token");
     window.location.href = "/signin";
   };
 
@@ -84,22 +103,30 @@ function Sidebar({ activePage, setActivePage }) {
         onConfirm={handleLogout}
       />
 
-      <aside className="w-72 h-full bg-white flex flex-col border-r border-gray-200">
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[17.5rem] max-w-[86vw] bg-white flex flex-col border-r border-gray-200 transform transition-transform duration-300 ease-out lg:static lg:z-auto lg:w-72 lg:max-w-none lg:translate-x-0 ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         {/* header */}
-        <div className="h-20 px-10 text-white flex items-center border-b border-blue/20">
+        <div className="h-20 px-5 sm:px-6 lg:px-10 text-white flex items-center border-b border-blue/20">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#017FE6] text-white flex items-center justify-center font-bold">
-              R
+            <div className="w-10 h-10 rounded-xl bg-[#017FE6] overflow-hidden">
+              <img
+                src={BRAND_LOGO_SRC}
+                alt="RentifyPro logo"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h1 className="text-lg font-bold text-[#017FE6]">RentifyPro</h1>
-              <p className="text-xs opacity-90 text-[#017FE6]" >Owner / Lessor Dashboard</p>
+              <p className="text-xs opacity-90 text-[#017FE6]">Owner / Lessor Dashboard</p>
             </div>
           </div>
         </div>
 
         {/* profile */}
-        <div className="px-6 py-6 border-b border-gray-200">
+        <div className="px-5 sm:px-6 py-6 border-b border-gray-200">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-[#017FE6] overflow-hidden flex items-center justify-center text-white text-lg font-bold">
               {owner.avatar ? (
@@ -118,7 +145,10 @@ function Sidebar({ activePage, setActivePage }) {
           </div>
 
           <button
-            onClick={() => setActivePage("Profile")}
+            onClick={() => {
+              setActivePage("Profile");
+              onCloseMobile?.();
+            }}
             className="mt-4 w-full text-sm font-medium text-[#017FE6] border border-[#017FE6] rounded-lg py-2 hover:bg-[#017FE6] hover:text-white transition"
           >
             Edit Profile
@@ -130,7 +160,10 @@ function Sidebar({ activePage, setActivePage }) {
           {menuItems.map((item) => (
             <div
               key={item.id}
-              onClick={() => setActivePage(item.id)}
+              onClick={() => {
+                setActivePage(item.id);
+                onCloseMobile?.();
+              }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer ${
                 activePage === item.id
                   ? "bg-[#017FE6] text-white"

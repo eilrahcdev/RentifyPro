@@ -132,7 +132,7 @@ export default function RegisterPage({
   };
 
   const fullName = useMemo(
-    () => `${form.firstName} ${form.lastName}`.trim(),
+    () => `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
     [form.firstName, form.lastName]
   );
 
@@ -658,13 +658,25 @@ export default function RegisterPage({
       setTimeout(() => { onNavigateToRegisterOTP(form.email, form.phone, fullName); }, 1500);
     } catch (error) {
       const raw = error?.message || "";
+      const lower = raw.toLowerCase();
+      const phoneConflict = lower.includes("phone") && lower.includes("already");
       const msg = raw.includes("already")
-        ? "This email address is already registered."
+        ? phoneConflict
+          ? "This phone number is already registered."
+          : "This email address is already registered."
         : raw.includes("Too many")
         ? raw
         : /^[A-Z]/.test(raw) && !/request failed/i.test(raw)
         ? raw
         : "Registration failed. Please try again.";
+
+      if (phoneConflict) {
+        setErrors({ phone: msg });
+        setStep(1);
+        setTimeout(() => phoneRef.current?.focus(), 0);
+        return;
+      }
+
       setErrors({ email: msg });
       setStep(1);
       setTimeout(() => emailRef.current?.focus(), 0);
@@ -766,7 +778,7 @@ export default function RegisterPage({
       panelDescription="Finish setup in guided steps with secure identity checks and instant booking access."
       highlights={[
         "Clear 3-step onboarding with progress tracking",
-        "Secure KYC and face verification flow",
+        "Secure face verification flow",
         "Ready for bookings after successful verification",
       ]}
       contentMaxWidth="max-w-4xl"
@@ -844,8 +856,8 @@ export default function RegisterPage({
                       <FormInput label="Last Name" value={form.lastName} onChange={(e) => handleChange("lastName", e.target.value)} error={errors.lastName} disabled={isLoading} placeholder="Doe" required icon={User} onlyLetters inputRef={lastNameRef} maxLength={50} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="Email Address" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} error={errors.email} disabled={isLoading} placeholder="john@gmail.com" required icon={Mail} inputRef={emailRef} showEmailHint maxLength={254} />
-                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} error={errors.phone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={phoneRef} maxLength={11} />
+                      <FormInput label="Enter Email" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} error={errors.email} disabled={isLoading} placeholder="Enter Email" required icon={Mail} inputRef={emailRef} showEmailHint maxLength={254} />
+                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} error={errors.phone} disabled={isLoading} placeholder="Enter Phone Number" required icon={Phone} onlyNumbers inputRef={phoneRef} maxLength={11} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <FormInput label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(e) => handleChange("dateOfBirth", e.target.value)} error={errors.dateOfBirth} disabled={isLoading} required icon={Calendar} inputRef={dobRef} />
@@ -925,13 +937,13 @@ export default function RegisterPage({
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <FormInput label="Contact Name" value={form.emergencyContactName} onChange={(e) => handleChange("emergencyContactName", e.target.value)} error={errors.emergencyContactName} disabled={isLoading} placeholder="Maria Dela Cruz" required icon={User} inputRef={emergencyNameRef} maxLength={100} />
-                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", e.target.value)} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="09123456789" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} maxLength={11} />
+                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", e.target.value)} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="Enter Phone Number" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} maxLength={11} />
                       </div>
                       <SelectField label="Relationship" value={form.emergencyContactRelationship} onChange={(value) => handleChange("emergencyContactRelationship", value)} options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option, label: option }))} error={errors.emergencyContactRelationship} disabled={isLoading} required inputRef={emergencyRelationshipRef} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <PasswordInput label="Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} required showStrength inputRef={passwordRef} maxLength={128} />
-                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} required showStrength={false} inputRef={confirmPasswordRef} maxLength={128} />
+                      <PasswordInput label="Create Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} placeholder="Create Password" required showStrength inputRef={passwordRef} maxLength={128} />
+                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} placeholder="Confirm Password" required showStrength={false} inputRef={confirmPasswordRef} maxLength={128} />
                     </div>
                     <div className="space-y-2">
                       <label className="flex items-center gap-3 cursor-pointer group">

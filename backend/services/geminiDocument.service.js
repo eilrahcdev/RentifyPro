@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { auditLog } from "../middleware/auditLogger.middleware.js";
 
 const ID_DOC_TYPES = [
   "PhilSys National ID",
@@ -52,6 +53,46 @@ const safeJsonParse = (text) => {
   } catch {
     return null;
   }
+};
+
+const safeStringify = (value) => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+};
+
+const GEMINI_LIMIT_MESSAGE =
+  "Document verification is temporarily busy due to high demand. Please try again in a few minutes.";
+const GEMINI_UNAVAILABLE_MESSAGE =
+  "Document verification is temporarily unavailable right now. Please try again later.";
+
+const summarizeGeminiError = (error) => {
+  const message = String(error?.message || "");
+  const parts = [message];
+  if (error?.status) parts.push(`status=${error.status}`);
+  if (error?.code) parts.push(`code=${error.code}`);
+  if (error?.response?.status) parts.push(`responseStatus=${error.response.status}`);
+  if (error?.response?.data) parts.push(`responseData=${safeStringify(error.response.data)}`);
+  if (error?.stack) parts.push(`stack=${String(error.stack)}`);
+  return parts.filter(Boolean).join(" | ");
+};
+
+const toSafeGeminiError = (error) => {
+  const raw = summarizeGeminiError(error);
+  const isLimitError =
+    /\b429\b/i.test(raw) ||
+    /quota/i.test(raw) ||
+    /rate[\s-]*limit/i.test(raw) ||
+    /resource[\s-]*exhausted/i.test(raw) ||
+    /too many requests/i.test(raw);
+
+  auditLog.error("KYC", "Gemini document verification failed", { detail: raw });
+
+  const safe = new Error(isLimitError ? GEMINI_LIMIT_MESSAGE : GEMINI_UNAVAILABLE_MESSAGE);
+  safe.status = isLimitError ? 429 : 503;
+  return safe;
 };
 
 export async function verifyPhilippinesDocument({ base64, mimeType = "image/jpeg", docType = "id" }) {
@@ -109,22 +150,27 @@ Return ONLY JSON:
     systemInstruction: instruction,
   });
 
-  const result = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: "Document image:" },
-          { inlineData: { data: cleanBase64, mimeType } },
-          { text: "Analyze and return JSON only." },
-        ],
+  let result;
+  try {
+    result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: "Document image:" },
+            { inlineData: { data: cleanBase64, mimeType } },
+            { text: "Analyze and return JSON only." },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2,
       },
-    ],
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-    },
-  });
+    });
+  } catch (error) {
+    throw toSafeGeminiError(error);
+  }
 
   const text = result?.response?.text?.() ?? "";
   const parsed = safeJsonParse(text.trim());

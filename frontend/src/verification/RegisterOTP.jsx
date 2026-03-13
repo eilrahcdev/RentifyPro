@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader, ArrowLeft, CheckCircle2, ShieldCheck, RefreshCw, Clock3 } from "lucide-react";
 import API from "../utils/api";
+import { setSessionUser } from "../utils/sessionStore";
 import { normalizeOwnerProfile, persistOwnerProfile } from "../owner/utils/ownerProfile";
 
 // Mask the email address
@@ -92,8 +93,9 @@ export default function RegisterOTP({
     setError("");
     try {
       const response = await API.verifyOTP(email, otp.join(""));
-      if (response.token) localStorage.setItem("token", response.token);
-      if (response.user) localStorage.setItem("user", JSON.stringify(response.user));
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+      if (response.user) setSessionUser(response.user);
 
       if (isOwner) {
         try {

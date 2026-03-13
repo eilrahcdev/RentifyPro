@@ -3,8 +3,6 @@ import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { formatDisplayName } from "../../utils/dateUtils";
 import { resolveAssetUrl } from "../../utils/media";
-import { getTransactionFee } from "../../utils/fees";
-
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
     minimumFractionDigits: 0,
@@ -31,26 +29,52 @@ const formatDateTime = (value) => {
   return date ? date.toLocaleString() : "-";
 };
 
-const getRentalTotal = (booking) => {
+const getBookingAmountPayable = (booking) => {
+  const payable = Number(booking?.amountPayable);
+  if (Number.isFinite(payable) && payable >= 0) return payable;
+
   const total = Number(booking?.totalAmount);
-  if (Number.isFinite(total) && total >= 0) return total;
+  const gasFee = Number(booking?.blockchainGasFee);
+  if (Number.isFinite(total) && total >= 0) {
+    return total + (Number.isFinite(gasFee) ? gasFee : 0);
+  }
 
   const baseAmount = Number(booking?.baseAmount);
-  if (Number.isFinite(baseAmount) && baseAmount >= 0) return baseAmount;
+  const driverAmount = Number(booking?.driverAmount);
+  if (Number.isFinite(baseAmount) && Number.isFinite(driverAmount) && baseAmount + driverAmount >= 0) {
+    return baseAmount + driverAmount + (Number.isFinite(gasFee) ? gasFee : 0);
+  }
 
   const dailyRate = Number(booking?.vehicleDailyRate);
   const bookingDays = Number(booking?.bookingDays || 1);
   if (Number.isFinite(dailyRate) && dailyRate >= 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
-    return dailyRate * bookingDays;
+    return dailyRate * bookingDays + (Number.isFinite(gasFee) ? gasFee : 0);
   }
-
-  const payable = Number(booking?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) return payable;
 
   return 0;
 };
 
-const getPayableAmount = (booking) => getRentalTotal(booking) + getTransactionFee();
+const getBookingAmountEarned = (booking) => {
+  const directEarned = Number(booking?.amountEarned);
+  if (Number.isFinite(directEarned) && directEarned >= 0) return directEarned;
+
+  const totalPayable = getBookingAmountPayable(booking);
+  const paid = Number(booking?.paymentAmountPaid);
+  const status = String(booking?.paymentStatus || "").trim().toLowerCase();
+  if (status === "refunded") return 0;
+  if (Number.isFinite(paid) && paid > 0) return Math.min(paid, totalPayable);
+  if (status === "paid") return totalPayable;
+  return 0;
+};
+
+const getBookingEarnedAt = (booking) =>
+  toDate(
+    booking?.earnedAt ||
+      booking?.paymentUpdatedAt ||
+      booking?.paidAt ||
+      booking?.updatedAt ||
+      booking?.createdAt
+  );
 
 const getRangeStart = (range) => {
   const start = new Date();
@@ -190,9 +214,9 @@ export default function Dashboard() {
   const selectedRangeEarnings = useMemo(() => {
     const rangeStart = getRangeStart(earningsRange);
     return earningsBookings.reduce((sum, booking) => {
-      const completedAt = toDate(booking.completedAt || booking.updatedAt || booking.createdAt);
-      if (!completedAt || completedAt < rangeStart) return sum;
-      return sum + getPayableAmount(booking);
+      const earnedAt = getBookingEarnedAt(booking);
+      if (!earnedAt || earnedAt < rangeStart) return sum;
+      return sum + getBookingAmountEarned(booking);
     }, 0);
   }, [earningsBookings, earningsRange]);
 

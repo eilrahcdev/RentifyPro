@@ -61,7 +61,14 @@ const userSchema = new mongoose.Schema(
     },
 
     // Shared profile fields
-    phone: { type: String },
+    phone: {
+      type: String,
+      trim: true,
+      set: (value) => {
+        const normalized = String(value || "").trim();
+        return normalized || undefined;
+      },
+    },
     dateOfBirth: { type: String },
     gender: { type: String, enum: ["Male", "Female", "Prefer not to say", ""] },
     ownerType: { type: String, enum: ["individual", "business"] },

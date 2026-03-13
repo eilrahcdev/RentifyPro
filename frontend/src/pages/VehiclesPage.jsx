@@ -1,17 +1,9 @@
   import React, { useEffect, useMemo, useState } from "react";
-  import { Fuel, MapPin, Search, Settings, Users } from "lucide-react";
+  import { CarFront, Fuel, Search, Settings, Users } from "lucide-react";
   import API from "../utils/api";
   import Navbar from "../components/Navbar";
   import ChatWidget from "../components/ChatWidget";
-  import InfoModal from "../components/InfoModal";
   import {
-    getDateTime,
-    getMinPickupDate,
-    getMinPickupDateTime,
-    getMinPickupTime,
-    getMinReturnDate,
-    getMinReturnDateTime,
-    getMinReturnTime,
     sanitizeBookingRange,
   } from "../utils/dateUtils";
 
@@ -67,13 +59,9 @@
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAI, setShowAI] = useState(false);
-  const [validationModalMessage, setValidationModalMessage] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
-    const [locationFilter, setLocationFilter] = useState(bookingData.location || "");
-    const [priceRange, setPriceRange] = useState({ min: "", max: "" });
+    const [vehicleTypeFilter, setVehicleTypeFilter] = useState(bookingData.vehicleType || "");
     const [pagination, setPagination] = useState({ page: 1, limit: 24, total: 0, totalPages: 1 });
-
-    const { pickupDate, pickupTime, returnDate, returnTime } = bookingData;
 
     useEffect(() => {
       setBookingData((prev) => {
@@ -90,10 +78,7 @@
       });
     }, [setBookingData]);
 
-    const combinedSearch = useMemo(
-      () => [searchQuery, locationFilter].map((value) => value.trim()).filter(Boolean).join(" "),
-      [searchQuery, locationFilter]
-    );
+    const combinedSearch = useMemo(() => searchQuery.trim(), [searchQuery]);
 
     useEffect(() => {
       let isActive = true;
@@ -125,33 +110,12 @@
       };
     }, [combinedSearch]);
 
-    const isValidDateTime = () => {
-      const minPickup = getMinPickupDateTime();
-
-      const pickup = getDateTime(pickupDate, pickupTime);
-      const dropoff = getDateTime(returnDate, returnTime);
-      const minReturn = getMinReturnDateTime(pickupDate, pickupTime);
-
-      return Boolean(pickup && dropoff && minReturn && pickup >= minPickup && dropoff >= minReturn);
-    };
-
-    const updateBookingRange = (patch) => {
-      setBookingData((prev) => {
-        const merged = { ...prev, ...patch };
-        return { ...merged, ...sanitizeBookingRange(merged) };
-      });
-    };
-
     const filteredVehicles = useMemo(() => {
-      const minPrice = priceRange.min ? Number(priceRange.min) : 0;
-      const maxPrice = priceRange.max ? Number(priceRange.max) : Number.POSITIVE_INFINITY;
-
       return vehicles.filter((vehicle) => {
-        const matchesPrice = vehicle.price >= minPrice && vehicle.price <= maxPrice;
-
-        return matchesPrice;
+        if (!vehicleTypeFilter) return true;
+        return String(vehicle.type || "").toLowerCase() === vehicleTypeFilter.toLowerCase();
       });
-    }, [vehicles, priceRange]);
+    }, [vehicles, vehicleTypeFilter]);
 
   const availableCount = useMemo(
     () => filteredVehicles.filter((vehicle) => vehicle.available).length,
@@ -213,84 +177,18 @@
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block text-slate-600">Location</label>
-                <input
+                <label className="text-sm font-medium mb-1 block text-slate-600">Vehicle Type</label>
+                <select
                   className="rp-input text-sm"
-                  placeholder="Enter location"
-                  maxLength={100}
-                  value={locationFilter}
-                  onChange={(event) => setLocationFilter(event.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-1 block text-slate-600">Pickup</label>
-                <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      min={getMinPickupDate()}
-                      value={pickupDate || ""}
-                      onChange={(event) => updateBookingRange({ pickupDate: event.target.value })}
-                      className="rp-input text-sm"
-                    />
-                  <input
-                    type="time"
-                    min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
-                    value={pickupTime || ""}
-                    onChange={(event) => updateBookingRange({ pickupTime: event.target.value })}
-                    className="rp-input text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-1 block text-slate-600">Return</label>
-                <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      min={getMinReturnDate(pickupDate, pickupTime) || getMinPickupDate()}
-                      value={returnDate || ""}
-                      onChange={(event) => updateBookingRange({ returnDate: event.target.value })}
-                      className="rp-input text-sm"
-                    />
-                    <input
-                      type="time"
-                      min={
-                        returnDate === getMinReturnDate(pickupDate, pickupTime)
-                          ? getMinReturnTime(pickupDate, pickupTime)
-                          : undefined
-                      }
-                      value={returnTime || ""}
-                      onChange={(event) => updateBookingRange({ returnTime: event.target.value })}
-                      className="rp-input text-sm"
-                    />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-1 block text-slate-600">Price per day</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Min"
-                    value={priceRange.min}
-                    onChange={(event) =>
-                      setPriceRange((prev) => ({ ...prev, min: event.target.value }))
-                    }
-                    className="rp-input text-sm"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Max"
-                    value={priceRange.max}
-                    onChange={(event) =>
-                      setPriceRange((prev) => ({ ...prev, max: event.target.value }))
-                    }
-                    className="rp-input text-sm"
-                  />
-                </div>
+                  value={vehicleTypeFilter}
+                  onChange={(event) => setVehicleTypeFilter(event.target.value)}
+                >
+                  <option value="">All types</option>
+                  <option value="car">Car</option>
+                  <option value="motorcycle">Motorcycle</option>
+                  <option value="van">Van</option>
+                  <option value="truck">Truck</option>
+                </select>
               </div>
             </aside>
 
@@ -339,8 +237,8 @@
                       <p className="text-sm text-slate-600 line-clamp-2">{vehicle.description}</p>
 
                       <div className="flex items-center gap-1 text-sm text-slate-500">
-                        <MapPin size={14} className="text-[#0B75E7]" />
-                        <span>{vehicle.location}</span>
+                        <CarFront size={14} className="text-[#0B75E7]" />
+                        <span className="capitalize">{vehicle.type}</span>
                       </div>
 
                       <div className="flex gap-4 text-sm text-slate-600">
@@ -373,12 +271,6 @@
                         <button
                           onClick={() => {
                             if (!vehicle.available) return;
-                            if (!isValidDateTime()) {
-                              setValidationModalMessage(
-                                "Pickup must be at least 10 minutes from now and return must be at least 1 hour after pickup."
-                              );
-                              return;
-                            }
                             if (!isLoggedIn) {
                               onNavigateToSignIn();
                               return;
@@ -403,12 +295,6 @@
           </div>
         </div>
         <ChatWidget isOpen={showAI} onClose={() => setShowAI(false)} />
-        <InfoModal
-          isOpen={Boolean(validationModalMessage)}
-          title="RentifyPro says"
-          message={validationModalMessage}
-          onClose={() => setValidationModalMessage("")}
-        />
       </div>
     );
   }

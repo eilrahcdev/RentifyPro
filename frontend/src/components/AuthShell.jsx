@@ -25,7 +25,7 @@ export default function AuthShell({
         <div className="absolute bottom-[-7rem] left-[45%] h-96 w-96 -translate-x-1/2 rounded-full bg-blue-200/25 blur-3xl" />
       </div>
 
-      <div className="relative z-10 mx-auto flex h-[100dvh] w-full max-w-[1500px] items-stretch gap-4 p-4 sm:gap-6 sm:p-6 lg:gap-8 lg:p-8">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1500px] items-stretch gap-4 p-4 sm:gap-6 sm:p-6 lg:h-[100dvh] lg:gap-8 lg:p-8">
         <section className="hidden lg:flex lg:w-[44%] xl:w-[40%]">
           <div className="rp-surface relative h-full w-full overflow-hidden rounded-[30px] border border-white/60">
             <img

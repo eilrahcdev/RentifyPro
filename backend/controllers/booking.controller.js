@@ -71,6 +71,7 @@ const PAYMENT_CHANNEL_METHOD_TYPES = {
   ewallet: ["gcash", "paymaya"],
   card: ["card"],
 };
+const WALK_IN_PAYMENT_STATUSES = new Set(["none", "requested", "approved", "rejected", "completed"]);
 
 const roundCurrency = (value) => {
   const numeric = Number(value || 0);
@@ -88,6 +89,36 @@ const resolvePaymentChannel = (value, fallback = "ewallet") => {
   const normalized = String(value || "").trim().toLowerCase();
   if (PAYMENT_CHANNELS.has(normalized)) return normalized;
   return fallback;
+};
+
+const buildRenterName = (user = {}, renterProfile = {}) => {
+  const directName = String(user?.name || renterProfile?.name || "").trim();
+  if (directName) return directName;
+  const firstName = String(user?.firstName || renterProfile?.firstName || "").trim();
+  const lastName = String(user?.lastName || renterProfile?.lastName || "").trim();
+  const combined = `${firstName} ${lastName}`.trim();
+  return combined || "Renter";
+};
+
+const normalizePayMongoPhone = (phoneValue) => {
+  const raw = String(phoneValue || "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("63")) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+63${digits.slice(1)}`;
+  if (digits.startsWith("9") && digits.length === 10) return `+63${digits}`;
+  if (raw.startsWith("+")) return raw;
+  return `+${digits}`;
+};
+
+const logPayMongoError = (context, error) => {
+  console.error(`[PayMongo] ${context}`, {
+    message: error?.message,
+    code: error?.code,
+    statusCode: error?.statusCode,
+    stack: error?.stack,
+  });
 };
 
 const shouldApplyConfiguredFeeFallback = (booking) => {
@@ -163,6 +194,54 @@ const getBookingRemainingAmount = (booking) => {
   const paidAmount = getBookingPaidAmount(booking);
   return roundCurrency(Math.max(totalPayable - paidAmount, 0));
 };
+
+const normalizeWalkInStatus = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (WALK_IN_PAYMENT_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+const toOptionalText = (value, maxLength = 500) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return trimmed.slice(0, maxLength);
+};
+
+const toIdString = (value) => {
+  const raw = value?._id || value;
+  const normalized = String(raw || "").trim();
+  return normalized || null;
+};
+
+const resetWalkInPaymentState = (booking, { clearBalancePaymentMethod = true } = {}) => {
+  if (!booking) return;
+  if (clearBalancePaymentMethod) {
+    booking.balancePaymentMethod = null;
+  }
+  booking.walkInPaymentStatus = "none";
+  booking.walkInRequestedAt = null;
+  booking.walkInRequestedBy = null;
+  booking.walkInRequestNote = "";
+  booking.walkInReviewedAt = null;
+  booking.walkInReviewedBy = null;
+  booking.walkInReviewNote = "";
+  booking.walkInConfirmedAt = null;
+  booking.walkInConfirmedBy = null;
+  booking.walkInConfirmationNote = "";
+};
+
+const serializeWalkInPayment = (booking) => ({
+  status: normalizeWalkInStatus(booking?.walkInPaymentStatus, "none"),
+  requestedAt: booking?.walkInRequestedAt || null,
+  requestedBy: toIdString(booking?.walkInRequestedBy),
+  requestNote: toOptionalText(booking?.walkInRequestNote),
+  reviewedAt: booking?.walkInReviewedAt || null,
+  reviewedBy: toIdString(booking?.walkInReviewedBy),
+  reviewNote: toOptionalText(booking?.walkInReviewNote),
+  confirmedAt: booking?.walkInConfirmedAt || null,
+  confirmedBy: toIdString(booking?.walkInConfirmedBy),
+  confirmationNote: toOptionalText(booking?.walkInConfirmationNote),
+});
 
 const getBookingParties = (booking) => {
   const ownerId = String(booking?.owner?._id || booking?.owner || "");
@@ -261,6 +340,10 @@ const serializeBooking = (req, booking) => {
     payment_status: booking.paymentStatus,
     paymentMethod: booking.paymentMethod || null,
     payment_method: booking.paymentMethod || null,
+    balancePaymentMethod: booking.balancePaymentMethod || null,
+    balance_payment_method: booking.balancePaymentMethod || null,
+    walkInPayment: serializeWalkInPayment(booking),
+    walk_in_payment: serializeWalkInPayment(booking),
     paymongoReference: booking.paymongoReference || null,
     paymongo_reference: booking.paymongoReference || null,
     paymongoCheckoutId: booking.paymongoCheckoutId || null,
@@ -653,15 +736,19 @@ export const createBookingPayment = async (req, res) => {
     const amountInCentavos = Math.round(amountToCharge * 100);
     const { successUrl, cancelUrl } = buildPaymentRedirectUrls(booking._id);
     const renterProfile = booking?.renter || {};
-    const renterName = String(req.user?.name || renterProfile.name || "Renter").trim() || "Renter";
+    const renterName = buildRenterName(req.user, renterProfile);
     const vehicleName = booking.vehicle?.name || "vehicle rental";
     const description = `Booking ${effectiveScope} payment for ${vehicleName} (Renter: ${renterName})`;
     const lineItemBaseName = booking.vehicle?.name || "Vehicle Booking";
     const itemName = renterName ? `${lineItemBaseName} - ${renterName}` : lineItemBaseName;
+    const renterEmail = String(req.user?.email || renterProfile.email || "").trim();
+    const renterPhone = normalizePayMongoPhone(
+      req.user?.phone || renterProfile.phone || renterProfile.mobile || renterProfile.phoneNumber
+    );
     const billing = {
       name: renterName,
-      email: req.user?.email || renterProfile.email || "",
-      phone: req.user?.phone || renterProfile.phone || "",
+      email: renterEmail,
+      phone: renterPhone,
     };
 
     const checkoutSession = await createPayMongoCheckoutSession({
@@ -698,6 +785,7 @@ export const createBookingPayment = async (req, res) => {
     }
 
     booking.paymentMethod = "PayMongo";
+    resetWalkInPaymentState(booking);
     booking.paymongoReference = getPayMongoCheckoutReferenceNumber(checkoutSession) || referenceNumber;
     booking.paymongoCheckoutId = checkoutId;
     booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
@@ -735,13 +823,129 @@ export const createBookingPayment = async (req, res) => {
     });
   } catch (error) {
     if (error?.isPayMongoError) {
+      logPayMongoError("Checkout session creation failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;
       return res.status(statusCode).json({
         success: false,
-        message: error.message || "Failed to create PayMongo checkout session.",
+        message: "We could not start the payment. Please try again later.",
       });
     }
+    console.error("[Booking Payment] Checkout session creation failed", error);
     return res.status(500).json({ success: false, message: "Failed to create booking payment." });
+  }
+};
+
+export const setBookingBalancePaymentMethod = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(
+      bookingPopulate
+    );
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found." });
+    }
+    if (["cancelled", "rejected"].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled bookings cannot be updated for payment.",
+      });
+    }
+    if (booking.status !== "confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: "Booking must be confirmed before setting payment options.",
+      });
+    }
+
+    const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
+    if (normalizedPaymentStatus !== "partial") {
+      return res.status(400).json({
+        success: false,
+        message: "Walk-in payment is only available after the downpayment is recorded.",
+      });
+    }
+
+    const remainingAmount = getBookingRemainingAmount(booking);
+    if (!Number.isFinite(remainingAmount) || remainingAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This booking has no remaining balance.",
+      });
+    }
+
+    const requestedMethod = String(req.body?.method || "").trim().toLowerCase();
+    if (!["walkin", "walk-in", "on_return", "on-return", "manual"].includes(requestedMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid balance payment method.",
+      });
+    }
+
+    const currentWalkInStatus = normalizeWalkInStatus(booking.walkInPaymentStatus, "none");
+    if (currentWalkInStatus === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "Walk-in payment approval is already pending.",
+      });
+    }
+    if (currentWalkInStatus === "approved") {
+      return res.status(409).json({
+        success: false,
+        message: "Walk-in payment has already been approved by the owner.",
+      });
+    }
+    if (currentWalkInStatus === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Walk-in payment has already been confirmed.",
+      });
+    }
+
+    const requestNote = toOptionalText(req.body?.note, 500);
+    booking.balancePaymentMethod = "Walk-in";
+    booking.walkInPaymentStatus = "requested";
+    booking.walkInRequestedAt = new Date();
+    booking.walkInRequestedBy = req.user._id;
+    booking.walkInRequestNote = requestNote;
+    booking.walkInReviewedAt = null;
+    booking.walkInReviewedBy = null;
+    booking.walkInReviewNote = "";
+    booking.walkInConfirmedAt = null;
+    booking.walkInConfirmedBy = null;
+    booking.walkInConfirmationNote = "";
+    booking.paymentUpdatedAt = new Date();
+    await booking.save();
+
+    const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
+    const payload = serializeBooking(req, refreshed);
+    const { ownerId, renterId } = getBookingParties(refreshed);
+
+    await createNotification({
+      user: ownerId,
+      type: "booking_payment",
+      title: "Walk-in payment requested",
+      message: `${req.user.name || "Your renter"} requested walk-in payment approval for ${
+        refreshed.vehicle?.name || "a booking"
+      }.`,
+      data: { bookingId: refreshed._id, walkInPaymentStatus: "requested" },
+    });
+    await createNotification({
+      user: renterId,
+      type: "booking_payment",
+      title: "Walk-in payment request sent",
+      message: "Your request is now waiting for owner approval.",
+      data: { bookingId: refreshed._id, walkInPaymentStatus: "requested" },
+    });
+
+    emitToUser(ownerId, "booking:updated", payload);
+    emitToUser(renterId, "booking:updated", payload);
+
+    return res.json({
+      success: true,
+      message: "Walk-in payment request submitted. Waiting for owner approval.",
+      booking: payload,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to update payment method." });
   }
 };
 
@@ -870,6 +1074,7 @@ export const verifyBookingPayment = async (req, res) => {
           booking.paymentStatus = "partial";
           booking.paidAt = null;
         }
+        resetWalkInPaymentState(booking);
       }
 
       await booking.save();
@@ -949,12 +1154,14 @@ export const verifyBookingPayment = async (req, res) => {
     });
   } catch (error) {
     if (error?.isPayMongoError) {
+      logPayMongoError("Payment verification failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;
       return res.status(statusCode).json({
         success: false,
-        message: error.message || "Failed to verify PayMongo payment.",
+        message: "We could not verify the payment right now. Please try again later.",
       });
     }
+    console.error("[Booking Payment] Payment verification failed", error);
     return res.status(500).json({ success: false, message: "Failed to verify booking payment." });
   }
 };

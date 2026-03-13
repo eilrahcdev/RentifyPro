@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
-import { Send } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { formatDisplayName, getInitialsFromName } from "../../utils/dateUtils";
 import { resolveAssetUrl } from "../../utils/media";
+import { getSessionUser } from "../../utils/sessionStore";
 
-const formatTime = (value) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const formatDateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "-";
 const appendUniqueMessage = (list, message) =>
   list.some((item) => item._id === message._id) ? list : [...list, message];
 const normalizePartner = (partner = {}) => {
@@ -20,9 +30,15 @@ const normalizePartner = (partner = {}) => {
 };
 
 export default function Messages() {
-  const currentUserId = JSON.parse(localStorage.getItem("user") || "{}")._id || "";
+  const currentUserId = getSessionUser()?._id || "";
   const [conversations, setConversations] = useState([]);
   const [activeUser, setActiveUser] = useState(null);
+  const [isMobileView, setIsMobileView] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false
+  );
+  const [showConversationList, setShowConversationList] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false
+  );
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,6 +82,20 @@ export default function Messages() {
 
   useEffect(() => {
     loadConversations();
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobileView(mobile);
+      if (!mobile) {
+        setShowConversationList(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -138,15 +168,29 @@ export default function Messages() {
     }
   };
 
+  const handleSelectConversation = (partner) => {
+    setActiveUser(partner);
+    if (isMobileView) {
+      setShowConversationList(false);
+    }
+  };
+
+  const isShowingList = !isMobileView || showConversationList;
+  const isShowingThread = !isMobileView || !showConversationList;
+
   return (
-    <div className="flex h-full bg-white border rounded-xl overflow-hidden">
-      <aside className="w-80 border-r bg-gray-50">
+    <div className="flex h-full min-h-[70vh] bg-white border rounded-xl overflow-hidden">
+      <aside
+        className={`border-r bg-gray-50 w-full lg:w-80 lg:flex-shrink-0 ${
+          isShowingList ? "block" : "hidden"
+        }`}
+      >
         <div className="px-4 py-3 border-b font-semibold">Renter Conversations</div>
-        <div className="overflow-y-auto h-[calc(100%-48px)]">
+        <div className="overflow-y-auto h-[calc(70vh-48px)] lg:h-[calc(100%-48px)]">
           {conversations.map((conversation) => (
             <button
               key={conversation.partner._id}
-              onClick={() => setActiveUser(conversation.partner)}
+              onClick={() => handleSelectConversation(conversation.partner)}
               className={`w-full text-left px-4 py-3 border-b hover:bg-gray-100 ${
                 activeUser?._id === conversation.partner._id ? "bg-gray-100" : ""
               }`}
@@ -174,9 +218,19 @@ export default function Messages() {
         </div>
       </aside>
 
-      <section className="flex-1 flex flex-col">
+      <section className={`flex-1 flex-col ${isShowingThread ? "flex" : "hidden"}`}>
         <div className="px-5 py-4 border-b">
           <div className="flex items-center gap-3">
+            {isMobileView && (
+              <button
+                type="button"
+                onClick={() => setShowConversationList(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 lg:hidden"
+                aria-label="Back to conversations"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
             <AvatarCircle name={activeUser?.name || "User"} avatar={activeUser?.avatar} sizeClass="w-9 h-9" />
             <div>
               <h2 className="font-semibold">{activeUser?.name || "Select conversation"}</h2>
@@ -198,13 +252,13 @@ export default function Messages() {
             return (
               <div key={message._id} className={`flex ${isOwner ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[70%] rounded-xl px-3 py-2 text-sm ${
+                  className={`max-w-[85%] sm:max-w-[70%] rounded-xl px-3 py-2 text-sm ${
                     isOwner ? "bg-[#017FE6] text-white" : "bg-white border"
                   }`}
                 >
                   <p>{message.text}</p>
                   <p className={`text-[10px] mt-1 ${isOwner ? "text-white/80" : "text-gray-500"}`}>
-                    {formatTime(message.createdAt)}
+                    {formatDateTime(message.createdAt)}
                   </p>
                 </div>
               </div>

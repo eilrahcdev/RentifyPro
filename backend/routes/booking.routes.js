@@ -8,6 +8,7 @@ import {
   getMyBookings,
   getOwnerBookings,
   recordBookingTransactionOnChain,
+  setBookingBalancePaymentMethod,
   verifyBookingPayment,
 } from "../controllers/booking.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
@@ -27,6 +28,20 @@ router.get("/:id", protect, authorize("user", "owner", "admin"), validateObjectI
 router.patch("/:id/cancel", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), cancelMyBooking);
 router.patch("/:id/review", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), addBookingReview);
 router.post("/:id/pay", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), createBookingPayment);
+router.post(
+  "/:id/pay/balance-method",
+  protect,
+  authorize("user", "owner", "admin"),
+  validateObjectIdParam("id"),
+  setBookingBalancePaymentMethod
+);
+router.post(
+  "/:id/pay/walk-in-request",
+  protect,
+  authorize("user", "owner", "admin"),
+  validateObjectIdParam("id"),
+  setBookingBalancePaymentMethod
+);
 router.post(
   "/:id/pay/verify",
   protect,

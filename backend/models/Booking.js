@@ -109,6 +109,62 @@ const bookingSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    balancePaymentMethod: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    walkInPaymentStatus: {
+      type: String,
+      enum: ["none", "requested", "approved", "rejected", "completed"],
+      default: "none",
+      index: true,
+    },
+    walkInRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    walkInRequestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    walkInRequestNote: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    walkInReviewedAt: {
+      type: Date,
+      default: null,
+    },
+    walkInReviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    walkInReviewNote: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    walkInConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    walkInConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    walkInConfirmationNote: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
     paymongoReference: {
       type: String,
       trim: true,

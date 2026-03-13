@@ -4,6 +4,26 @@ import User from "../models/User.js";
 
 let ioInstance = null;
 
+const getTokenFromCookieHeader = (cookieHeader = "") => {
+  if (!cookieHeader) return "";
+
+  const tokenPair = String(cookieHeader)
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.toLowerCase().startsWith("token="));
+
+  if (!tokenPair) return "";
+
+  const rawValue = tokenPair.slice("token=".length).trim();
+  if (!rawValue) return "";
+
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
+};
+
 export const initSocket = (httpServer) => {
   ioInstance = new Server(httpServer, {
     cors: {
@@ -21,11 +41,7 @@ export const initSocket = (httpServer) => {
 
   ioInstance.use(async (socket, next) => {
     try {
-      const rawToken =
-        socket.handshake.auth?.token ||
-        socket.handshake.headers?.authorization ||
-        "";
-      const token = rawToken.startsWith("Bearer ") ? rawToken.slice(7) : rawToken;
+      const token = getTokenFromCookieHeader(socket.handshake.headers?.cookie || "");
 
       if (!token) {
         return next(new Error("Authentication required."));

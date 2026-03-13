@@ -21,6 +21,7 @@ import {
 import { protect } from "../middleware/auth.middleware.js";
 import { validateRegister, validateLogin } from "../middleware/validate.middleware.js";
 import {
+  loginChallengeLimiter,
   loginLimiter,
   registerLimiter,
   otpLimiter,
@@ -30,7 +31,7 @@ const router = express.Router();
 
 // Public routes
   router.post("/register", registerLimiter, validateRegister, registerUser);
-  router.get("/login-challenge", loginLimiter, getLoginChallenge);
+  router.get("/login-challenge", loginChallengeLimiter, getLoginChallenge);
   router.post("/login", loginLimiter, validateLogin, loginUser);
 router.post("/send-otp", otpLimiter, sendOTP);
 router.post("/verify-otp", otpLimiter, verifyOTP);
