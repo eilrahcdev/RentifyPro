@@ -1,6 +1,13 @@
- import React, { useState, useEffect } from "react";
- import { Bot, Bell, MessageCircle, Settings, Car, Camera, ShieldCheck} from "lucide-react";
- import API from "../utils/api";
+import React, { useState, useEffect } from "react";
+import { Bot, Bell, MessageCircle, Settings, Car, Camera, ShieldCheck } from "lucide-react";
+import API from "../utils/api";
+import {
+  getMinPickupDate,
+  getMinPickupTime,
+  getMinReturnDate,
+  getMinReturnTime,
+  getTomorrowDate,
+} from "../utils/dateUtils";
  
  const PROFILE_PHOTO_KEY = "profilePhoto";
  const PROFILE_PHOTO_USER_KEY = "profilePhotoUserId";
@@ -30,21 +37,6 @@
    const [agreedToTerms, setAgreedToTerms] = useState(false);
    const [showFormError, setShowFormError] = useState(false);
 
-   const getTodayDate = () => {
-  return new Date().toLocaleDateString("en-CA");
-};
-
-const getCurrentTime = () => {
-  return new Date().toTimeString().slice(0, 5);
-};
-
-const getTomorrowDate = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toLocaleDateString("en-CA");
-};
-
-
    const {
   pickupDate,
   pickupTime,
@@ -57,19 +49,19 @@ const getTomorrowDate = () => {
 useEffect(() => {
   if (!pickupDate || !pickupTime) return;
 
-  // Only check the time if pickup is today
-  if (pickupDate !== getTodayDate()) return;
+  const minPickupDate = getMinPickupDate();
+  const minPickupTime = getMinPickupTime();
 
-  const now = new Date();
-  now.setSeconds(0, 0);
+  // Only check the time if pickup is at the minimum allowed date
+  if (pickupDate !== minPickupDate) return;
 
   const selectedPickup = new Date(`${pickupDate}T${pickupTime}`);
 
-  // Reset past pickup times
-  if (selectedPickup < now) {
+  // Reset pickup times earlier than the minimum allowed time
+  if (selectedPickup < new Date(`${minPickupDate}T${minPickupTime}`)) {
     setBookingData((prev) => ({
       ...prev,
-      pickupTime: getCurrentTime(), // Reset to the current time
+      pickupTime: minPickupTime,
     }));
   }
 }, [pickupDate, pickupTime, setBookingData]);
@@ -82,12 +74,19 @@ useEffect(() => {
     returnTime
   ) return;
 
+  const initialPickupDate = getMinPickupDate();
+  const initialPickupTime = getMinPickupTime();
+  const initialReturnDate =
+    getMinReturnDate(initialPickupDate, initialPickupTime) || getTomorrowDate();
+  const initialReturnTime =
+    getMinReturnTime(initialPickupDate, initialPickupTime) || initialPickupTime;
+
   setBookingData((prev) => ({
     ...prev,
-    pickupDate: getTodayDate(),
-    pickupTime: getCurrentTime(),
-    returnDate: getTomorrowDate(),
-    returnTime: getCurrentTime(),
+    pickupDate: initialPickupDate,
+    pickupTime: initialPickupTime,
+    returnDate: initialReturnDate,
+    returnTime: initialReturnTime,
   }));
 }, []);
 
@@ -475,7 +474,7 @@ const handleBack = () => {
                 <input
                       type="date"
                       value={pickupDate}
-                      min={getTodayDate()}
+                      min={getMinPickupDate()}
                       onChange={(e) =>
                           setBookingData({ ...bookingData, pickupDate: e.target.value })
                       }
@@ -485,7 +484,7 @@ const handleBack = () => {
                       <input
                       type="time"
                       value={pickupTime}
-                      min={pickupDate === getTodayDate() ? getCurrentTime() : undefined}
+                      min={pickupDate === getMinPickupDate() ? getMinPickupTime() : undefined}
                       onChange={(e) =>
                           setBookingData({ ...bookingData, pickupTime: e.target.value })
                       }
@@ -498,7 +497,7 @@ const handleBack = () => {
                 <input
                   type="date"
                   value={returnDate}
-                  min={pickupDate || getTodayDate()}
+                  min={getMinReturnDate(pickupDate, pickupTime) || getMinPickupDate()}
                   onChange={(e) =>
                     setBookingData({ ...bookingData, returnDate: e.target.value })
                   }
@@ -508,6 +507,11 @@ const handleBack = () => {
                 <input
                   type="time"
                   value={returnTime}
+                  min={
+                    returnDate === getMinReturnDate(pickupDate, pickupTime)
+                      ? getMinReturnTime(pickupDate, pickupTime)
+                      : undefined
+                  }
                   onChange={(e) =>
                     setBookingData({ ...bookingData, returnTime: e.target.value })
                   }

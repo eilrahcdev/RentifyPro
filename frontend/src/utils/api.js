@@ -1,25 +1,9 @@
-<<<<<<< HEAD
-export const API_BASE_URL = "http://localhost:5000/api";
-=======
-<<<<<<< HEAD
-  const API_BASE_URL = "http://localhost:5000/api";
->>>>>>> 8422a2f (fixed bugs and updates)
-
-function getToken() {
-  return localStorage.getItem("token");
-}
-
-<<<<<<< HEAD
-=======
-export default API;
-=======
 export const API_BASE_URL = "http://localhost:5000/api";
 
 function getToken() {
   return localStorage.getItem("token");
 }
 
->>>>>>> 8422a2f (fixed bugs and updates)
 function buildQueryString(params = {}) {
   const searchParams = new URLSearchParams();
 
@@ -73,9 +57,18 @@ async function request(endpoint, options = {}) {
 
 const API = {
   register: (body) => request("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  getLoginChallenge: () => request("/auth/login-challenge", { method: "GET" }),
   login: (body) => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
   getProfile: () => request("/auth/me"),
   updateProfile: (body) => request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }),
+  changePassword: (body) =>
+    request("/auth/change-password", { method: "PATCH", body: JSON.stringify(body) }),
+  getNotificationSettings: () => request("/auth/notification-settings"),
+  updateNotificationSettings: (body) =>
+    request("/auth/notification-settings", { method: "PUT", body: JSON.stringify(body) }),
+  getLoginActivity: (params = {}) => request(`/auth/login-activity${buildQueryString(params)}`),
+  upgradeToOwner: (body = {}) =>
+    request("/auth/upgrade-to-owner", { method: "POST", body: JSON.stringify(body) }),
 
   logout: async () => {
     try {
@@ -167,7 +160,3 @@ const API = {
 };
 
 export default API;
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

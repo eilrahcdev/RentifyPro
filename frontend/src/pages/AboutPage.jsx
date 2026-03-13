@@ -1,24 +1,4 @@
 import React, { useState, useEffect } from "react";
-<<<<<<< HEAD
-import { Users, Wrench, ShieldCheck } from "lucide-react";
-import Navbar from "../components/Navbar";
-=======
-<<<<<<< HEAD
-import { Bot, Bell, MessageCircle, Settings, Car, Users, Wrench, ShieldCheck} from "lucide-react";
->>>>>>> 8422a2f (fixed bugs and updates)
-
-  const AboutPage = ({
-  onNavigateToHome,
-  onNavigateToSignIn,
-    onNavigateToVehicles,
-    onNavigateToRegister,
-    onNavigateToAbout,
-<<<<<<< HEAD
-    onNavigateToContacts,
-    onNavigateToChat,
-    onNavigateToNotifications,
-=======
-=======
 import { Users, Wrench, ShieldCheck } from "lucide-react";
 import Navbar from "../components/Navbar";
 
@@ -31,8 +11,6 @@ import Navbar from "../components/Navbar";
     onNavigateToContacts,
     onNavigateToChat,
     onNavigateToNotifications,
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     onNavigateToBookingHistory,
     onNavigateToAccountSettings,
     isLoggedIn,
@@ -44,19 +22,6 @@ import Navbar from "../components/Navbar";
   const [userMessage, setUserMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  
-
-  const getInitials = (firstName, lastName) => {
-    if (!firstName || !lastName) return "";
-    return `${firstName[0]}${lastName[0]}`.toUpperCase();
-  };
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
 
   useEffect(() => {
     if (!showAI) return;
@@ -69,60 +34,6 @@ import Navbar from "../components/Navbar";
     ]);
   }, [showAI]);
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-  const [profilePhoto, setProfilePhoto] = useState(
-    localStorage.getItem("profilePhoto") || null
-  );
-  
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-  
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setProfilePhoto(reader.result);
-      localStorage.setItem("profilePhoto", reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  const handleRemovePhoto = () => {
-    setProfilePhoto(null);
-    localStorage.removeItem("profilePhoto");
-  };
-
->>>>>>> 8422a2f (fixed bugs and updates)
-  return (
-    <div className="min-h-screen bg-white">
-      <Navbar
-        activePage="about"
-        isLoggedIn={isLoggedIn}
-        user={user}
-        isAIOpen={showAI}
-        onNavigateToHome={onNavigateToHome}
-        onNavigateToVehicles={onNavigateToVehicles}
-        onNavigateToBookingHistory={onNavigateToBookingHistory}
-        onNavigateToAbout={onNavigateToAbout}
-        onNavigateToContacts={onNavigateToContacts}
-        onNavigateToChat={onNavigateToChat}
-        onNavigateToNotifications={onNavigateToNotifications}
-        onNavigateToSignIn={onNavigateToSignIn}
-        onNavigateToRegister={onNavigateToRegister}
-        onNavigateToAccountSettings={onNavigateToAccountSettings}
-        onShowAI={() => setShowAI(true)}
-        onLogout={onLogout}
-      />
-
-
-                  {/* content */}
-            <div className="pt-28 pb-20 px-6 bg-white">
-<<<<<<< HEAD
-              {/* header */}
-=======
-              {/* HEADER */}
-=======
   return (
     <div className="min-h-screen bg-white">
       <Navbar
@@ -148,8 +59,6 @@ import Navbar from "../components/Navbar";
                   {/* content */}
             <div className="pt-28 pb-20 px-6 bg-white">
               {/* header */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
               <div className="text-center mb-12">
                 <h1 className="text-3xl font-bold text-gray-900">
                   About <span className="text-[#017FE6]">RentifyPro</span>
@@ -159,15 +68,7 @@ import Navbar from "../components/Navbar";
                 </p>
               </div>
 
-<<<<<<< HEAD
               {/* story */}
-=======
-<<<<<<< HEAD
-              {/* OUR STORY */}
-=======
-              {/* story */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
               <div className="max-w-4xl mx-auto bg-white border rounded-xl shadow-sm p-8 mb-14">
                 <h2 className="text-xl font-semibold mb-4">
                   Our <span className="text-[#017FE6]">Story</span>
@@ -192,15 +93,7 @@ import Navbar from "../components/Navbar";
                 </p>
               </div>
 
-<<<<<<< HEAD
               {/* stats */}
-=======
-<<<<<<< HEAD
-              {/* STATS */}
-=======
-              {/* stats */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
               <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
                 <div className="border rounded-xl text-center py-6 shadow-sm">
                   <h3 className="text-2xl font-bold text-[#017FE6]">1k</h3>
@@ -218,15 +111,7 @@ import Navbar from "../components/Navbar";
                 </div>
               </div>
 
-<<<<<<< HEAD
               {/* values */}
-=======
-<<<<<<< HEAD
-              {/* VALUES */}
-=======
-              {/* values */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
             <div className="max-w-5xl mx-auto">
               <h2 className="text-2xl font-semibold text-center mb-10">
                 Our <span className="text-[#017FE6]">Values</span>
@@ -234,15 +119,7 @@ import Navbar from "../components/Navbar";
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 
-<<<<<<< HEAD
                 {/* vehicles */}
-=======
-<<<<<<< HEAD
-                {/* QUALITY VEHICLES */}
-=======
-                {/* vehicles */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                 <div className="border rounded-xl p-6 text-center shadow-sm hover:shadow-md transition">
                   <div className="flex justify-center mb-4">
                     <div className="bg-blue-100 p-4 rounded-full">
@@ -255,15 +132,7 @@ import Navbar from "../components/Navbar";
                   </p>
                 </div>
 
-<<<<<<< HEAD
                 {/* customer experience */}
-=======
-<<<<<<< HEAD
-                {/* CUSTOMER EXPERIENCE */}
-=======
-                {/* customer experience */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                 <div className="border rounded-xl p-6 text-center shadow-sm hover:shadow-md transition">
                   <div className="flex justify-center mb-4">
                     <div className="bg-blue-100 p-4 rounded-full">
@@ -276,15 +145,7 @@ import Navbar from "../components/Navbar";
                   </p>
                 </div>
 
-<<<<<<< HEAD
                 {/* trust */}
-=======
-<<<<<<< HEAD
-                {/* TRUST & TRANSPARENCY */}
-=======
-                {/* trust */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                 <div className="border rounded-xl p-6 text-center shadow-sm hover:shadow-md transition">
                   <div className="flex justify-center mb-4">
                     <div className="bg-blue-100 p-4 rounded-full">
@@ -303,15 +164,7 @@ import Navbar from "../components/Navbar";
             </div>
 
 
-<<<<<<< HEAD
                   {/* footer */}
-=======
-<<<<<<< HEAD
-                  {/* FOOTERR */}
-=======
-                  {/* footer */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                   <footer className="bg-[#017FE6] text-white py-12">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -348,15 +201,7 @@ import Navbar from "../components/Navbar";
 
                 <li>
                   <button onClick={onNavigateToBookingHistory} className="text-blue-100 hover:text-white transition">
-<<<<<<< HEAD
                     Bookings
-=======
-<<<<<<< HEAD
-                    Booking History
-=======
-                    Bookings
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
                   </button>
                 </li>
 
@@ -410,15 +255,7 @@ import Navbar from "../components/Navbar";
       flex flex-col
     ">
 
-<<<<<<< HEAD
     {/* header */}
-=======
-<<<<<<< HEAD
-    {/* HEADER */}
-=======
-    {/* header */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     <div className="bg-[#017FE6] text-white px-4 py-3 flex justify-between items-center">
       <div>
         <h3 className="font-semibold text-sm">RentifyPro AI</h3>
@@ -427,15 +264,7 @@ import Navbar from "../components/Navbar";
       <button onClick={() => setShowAI(false)}>✕</button>
     </div>
 
-<<<<<<< HEAD
     {/* chat body */}
-=======
-<<<<<<< HEAD
-    {/* BODY NG AI */}
-=======
-    {/* chat body */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     <div className="p-4 flex-1 overflow-y-auto bg-gray-50 space-y-4">
 
 
@@ -480,15 +309,7 @@ import Navbar from "../components/Navbar";
       )}
     </div>
 
-<<<<<<< HEAD
     {/* chat input */}
-=======
-<<<<<<< HEAD
-    {/* INPUT MESSAGE AI */}
-=======
-    {/* chat input */}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     <div className="border-t bg-white px-3 py-2 flex items-center gap-2">
       <input
         value={userMessage}
@@ -524,14 +345,5 @@ import Navbar from "../components/Navbar";
   );
 };
 
-<<<<<<< HEAD
 export default AboutPage;
 
-=======
-<<<<<<< HEAD
-export default AboutPage;
-=======
-export default AboutPage;
-
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

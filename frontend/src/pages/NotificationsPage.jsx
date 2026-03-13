@@ -216,20 +216,20 @@ export default function NotificationsPage({
 
       {selectedNotification && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-[2px] flex items-center justify-center p-4"
           onClick={() => setSelectedNotification(null)}
         >
           <div
-            className="w-full max-w-2xl bg-white border rounded-2xl shadow-2xl"
+            className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-[0_25px_80px_rgba(15,23,42,0.25)] overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b flex items-center justify-between gap-3">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
               <div>
-                <h2 className="text-lg font-bold">Notification Details</h2>
+                <h2 className="text-lg font-bold text-slate-900">Notification Details</h2>
               </div>
               <button
                 onClick={() => setSelectedNotification(null)}
-                className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200"
+                className="rp-btn-secondary px-3 py-1.5 text-sm"
               >
                 Close
               </button>
@@ -237,13 +237,13 @@ export default function NotificationsPage({
 
             <div className="px-5 py-4 space-y-4">
               <div>
-                <p className="text-xs text-gray-500">Notification</p>
-                <p className="text-sm font-semibold">{selectedNotification.title}</p>
+                <p className="text-xs text-slate-500">Notification</p>
+                <p className="text-sm font-semibold text-slate-900">{selectedNotification.title}</p>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500">Content</p>
-                <p className="text-sm text-gray-700">{selectedNotification.message}</p>
+                <p className="text-xs text-slate-500">Content</p>
+                <p className="text-sm text-slate-700">{selectedNotification.message}</p>
               </div>
             </div>
           </div>

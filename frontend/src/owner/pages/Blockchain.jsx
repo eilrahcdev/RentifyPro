@@ -1,8 +1,8 @@
-<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { getSepoliaEtherscanTxUrl } from "../../blockchain/config";
+import { getTransactionFee } from "../../utils/fees";
 
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
@@ -16,159 +16,26 @@ const toTitleCase = (value = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 const normalizeBookingStatus = (booking) =>
   booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
-const getPayableAmount = (record) => {
-  const payable = Number(record?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
+const getRentalTotal = (record) => {
+  const total = Number(record?.totalAmount);
+  if (Number.isFinite(total) && total >= 0) return total;
+
+  const baseAmount = Number(record?.baseAmount);
+  if (Number.isFinite(baseAmount) && baseAmount >= 0) return baseAmount;
+
+  const dailyRate = Number(record?.vehicleDailyRate);
+  const bookingDays = Number(record?.bookingDays || 1);
+  if (Number.isFinite(dailyRate) && dailyRate >= 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
+    return dailyRate * bookingDays;
   }
-  const total = Number(record?.totalAmount || 0);
-  const gasFee = Number(record?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
-};
 
-const shortenHash = (value = "") => {
-  const hash = String(value || "").trim();
-  if (hash.length <= 14) return hash;
-  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-};
-
-const paymentStyles = {
-  unpaid: "bg-rose-100 text-rose-700 border border-rose-200",
-  partial: "bg-orange-100 text-orange-700 border border-orange-200",
-  paid: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  refunded: "bg-cyan-100 text-cyan-700 border border-cyan-200",
-};
-
-const bookingStyles = {
-  pending: "bg-amber-100 text-amber-700 border border-amber-200",
-  confirmed: "bg-blue-100 text-blue-700 border border-blue-200",
-  completed: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  cancelled: "bg-rose-100 text-rose-700 border border-rose-200",
-  rejected: "bg-rose-100 text-rose-700 border border-rose-200",
-};
-
-const recordFilters = [
-  { id: "all", label: "All Records" },
-  { id: "onchain", label: "On-Chain Only" },
-  { id: "pending", label: "Pending On-Chain" },
-];
-
-const blockerLabel = {
-  chain_not_configured: "Blockchain is not configured on server",
-};
-
-const reasonLabel = {
-  payment_not_completed: "Waiting for payment confirmation",
-  booking_cancelled: "Booking is cancelled/rejected",
-  awaiting_record: "Awaiting on-chain recording",
-};
-
-=======
-<<<<<<< HEAD
->>>>>>> 8422a2f (fixed bugs and updates)
-export default function Blockchain() {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [recordFilter, setRecordFilter] = useState("all");
-
-  const loadRecords = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await API.getOwnerBookings("all");
-      const normalized = (response.bookings || []).map(normalizeBookingStatus);
-      setRecords(normalized);
-    } catch (err) {
-      setError(err.message || "Failed to load transaction records.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadRecords();
-  }, []);
-
-  useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
-    const handleBookingUpdate = (booking) => {
-      const normalized = normalizeBookingStatus(booking);
-      setRecords((prev) => {
-        const exists = prev.some((item) => item._id === normalized._id);
-        if (exists) {
-          return prev.map((item) => (item._id === normalized._id ? normalized : item));
-        }
-        return [normalized, ...prev];
-      });
-    };
-
-    socket.on("booking:updated", handleBookingUpdate);
-    return () => socket.off("booking:updated", handleBookingUpdate);
-  }, []);
-
-  const filteredRecords = useMemo(() => {
-    if (recordFilter === "onchain") {
-      return records.filter((record) => Boolean(record.blockchainTxHash));
-    }
-    if (recordFilter === "pending") {
-      return records.filter(
-        (record) =>
-          record.paymentStatus === "paid" &&
-          !["cancelled", "rejected"].includes(record.status) &&
-          !record.blockchainTxHash
-      );
-    }
-    return records;
-  }, [records, recordFilter]);
-
-  const onChainCount = useMemo(
-    () => records.filter((record) => Boolean(record.blockchainTxHash)).length,
-    [records]
-  );
-
-  const hasConfigBlocker = useMemo(
-    () =>
-      filteredRecords.some((record) =>
-        (record.blockchainStatus?.blockers || []).includes("chain_not_configured")
-      ),
-    [filteredRecords]
-  );
-
-  return (
-<<<<<<< HEAD
-=======
-    <div className="bg-white p-6 rounded-xl shadow">
-      <h1 className="text-xl font-bold">Blockchain Records</h1>
-=======
-import { useEffect, useMemo, useState } from "react";
-import API from "../../utils/api";
-import { getSocket } from "../../utils/socket";
-import { getSepoliaEtherscanTxUrl } from "../../blockchain/config";
-
-const money = (value) =>
-  `\u20b1${Number(value || 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : "-");
-const toTitleCase = (value = "") =>
-  String(value)
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-const normalizeBookingStatus = (booking) =>
-  booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
-const getPayableAmount = (record) => {
   const payable = Number(record?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
-  }
-  const total = Number(record?.totalAmount || 0);
-  const gasFee = Number(record?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
+  if (Number.isFinite(payable) && payable >= 0) return payable;
+
+  return 0;
 };
+
+const getPayableAmount = (record) => getRentalTotal(record) + getTransactionFee();
 
 const shortenHash = (value = "") => {
   const hash = String(value || "").trim();
@@ -279,7 +146,6 @@ export default function Blockchain() {
   );
 
   return (
->>>>>>> 8422a2f (fixed bugs and updates)
     <div className="space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
@@ -408,10 +274,6 @@ export default function Blockchain() {
           </tbody>
         </table>
       </div>
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     </div>
   );
 }

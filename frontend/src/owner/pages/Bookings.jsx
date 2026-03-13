@@ -1,11 +1,7 @@
-<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
-=======
-<<<<<<< HEAD
-import React, { useMemo, useState } from "react";
->>>>>>> 8422a2f (fixed bugs and updates)
+import { getTransactionFee } from "../../utils/fees";
 
 const statusFilters = [
   { id: "all", label: "All" },
@@ -40,15 +36,26 @@ const toTitleCase = (value = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 const normalizeBookingStatus = (booking) =>
   booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
-const getPayableAmount = (booking) => {
-  const payable = Number(booking?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
+const getRentalTotal = (booking) => {
+  const total = Number(booking?.totalAmount);
+  if (Number.isFinite(total) && total >= 0) return total;
+
+  const baseAmount = Number(booking?.baseAmount);
+  if (Number.isFinite(baseAmount) && baseAmount >= 0) return baseAmount;
+
+  const dailyRate = Number(booking?.vehicleDailyRate);
+  const bookingDays = Number(booking?.bookingDays || 1);
+  if (Number.isFinite(dailyRate) && dailyRate >= 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
+    return dailyRate * bookingDays;
   }
-  const total = Number(booking?.totalAmount || 0);
-  const gasFee = Number(booking?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
+
+  const payable = Number(booking?.amountPayable);
+  if (Number.isFinite(payable) && payable >= 0) return payable;
+
+  return 0;
 };
+
+const getPayableAmount = (booking) => getRentalTotal(booking) + getTransactionFee();
 
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
@@ -70,81 +77,6 @@ export default function Bookings() {
     }
   };
 
-<<<<<<< HEAD
-=======
-  const updateStatus = (id, status) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status } : b))
-    );
-=======
-import { useEffect, useMemo, useState } from "react";
-import API from "../../utils/api";
-import { getSocket } from "../../utils/socket";
-
-const statusFilters = [
-  { id: "all", label: "All" },
-  { id: "pending", label: "Pending" },
-  { id: "confirmed", label: "Confirmed" },
-  { id: "completed", label: "Completed" },
-  { id: "cancelled", label: "Cancelled" },
-];
-const statusStyles = {
-  pending: "bg-yellow-100 text-yellow-700",
-  confirmed: "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
-  rejected: "bg-red-100 text-red-700",
-};
-const paymentStyles = {
-  unpaid: "bg-gray-200 text-gray-700",
-  partial: "bg-orange-100 text-orange-700",
-  paid: "bg-green-100 text-green-700",
-  refunded: "bg-blue-100 text-blue-700",
-};
-
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : "-");
-const money = (value) =>
-  `\u20b1${Number(value || 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
-const toTitleCase = (value = "") =>
-  String(value)
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-const normalizeBookingStatus = (booking) =>
-  booking?.status === "rejected" ? { ...booking, status: "cancelled" } : booking;
-const getPayableAmount = (booking) => {
-  const payable = Number(booking?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
-  }
-  const total = Number(booking?.totalAmount || 0);
-  const gasFee = Number(booking?.blockchainGasFee || 0);
-  return total + (Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0);
-};
-
-export default function Bookings() {
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  const loadBookings = async (status = "all") => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await API.getOwnerBookings(status);
-      const mapped = (response.bookings || []).map(normalizeBookingStatus);
-      setBookings(mapped);
-    } catch (err) {
-      setError(err.message || "Failed to load bookings.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
->>>>>>> 8422a2f (fixed bugs and updates)
   useEffect(() => {
     loadBookings(statusFilter);
   }, [statusFilter]);
@@ -202,42 +134,10 @@ export default function Bookings() {
     } catch (err) {
       setError(err.message || "Failed to update payment status.");
     }
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
   };
 
   return (
     <div className="space-y-6">
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-      {/* HEADER */}
->>>>>>> 8422a2f (fixed bugs and updates)
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Booking Management</h1>
-        <p className="text-sm text-gray-600">
-          View and manage renter bookings with status and payment updates.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {statusFilters.map((status) => (
-          <button
-            key={status.id}
-            onClick={() => setStatusFilter(status.id)}
-            className={`px-3 py-2 rounded-lg border text-sm ${
-              statusFilter === status.id
-                ? "bg-[#017FE6] text-white border-[#017FE6]"
-                : "bg-white text-gray-700"
-            }`}
-          >
-<<<<<<< HEAD
-            {status.label}
-=======
-            {f}
-=======
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Booking Management</h1>
         <p className="text-sm text-gray-600">
@@ -257,46 +157,10 @@ export default function Bookings() {
             }`}
           >
             {status.label}
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
           </button>
         ))}
       </div>
 
-<<<<<<< HEAD
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {loading && <p className="text-sm text-gray-600">Loading bookings...</p>}
-=======
-<<<<<<< HEAD
-      {/* TABLE */}
-      <div className="bg-white rounded-2xl border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 text-gray-600">
-            <tr>
-              <th className="px-4 py-3 text-left">Booking ID</th>
-              <th className="px-4 py-3 text-left">Renter</th>
-              <th className="px-4 py-3 text-left">Vehicle</th>
-              <th className="px-4 py-3 text-center">Payment</th>
-              <th className="px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
->>>>>>> 8422a2f (fixed bugs and updates)
-
-      {!loading && !filteredBookings.length && (
-        <div className="bg-white rounded-xl border p-6 text-sm text-gray-600">
-          No bookings available.
-        </div>
-      )}
-
-<<<<<<< HEAD
-=======
-function Detail({ label, value }) {
-  return (
-    <div className="flex justify-between text-sm border-b py-1">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium">{value}</span>
-=======
       {error && <p className="text-sm text-red-600">{error}</p>}
       {loading && <p className="text-sm text-gray-600">Loading bookings...</p>}
 
@@ -306,7 +170,6 @@ function Detail({ label, value }) {
         </div>
       )}
 
->>>>>>> 8422a2f (fixed bugs and updates)
       <div className="space-y-4">
         {filteredBookings.map((booking) => (
           <article key={booking._id} className="bg-white rounded-xl border p-5">
@@ -415,10 +278,6 @@ function Info({ title, value }) {
     <div className="bg-gray-50 rounded-lg p-3">
       <p className="text-gray-500">{title}</p>
       <p className="font-medium">{value}</p>
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
     </div>
   );
 }

@@ -1,22 +1,9 @@
-<<<<<<< HEAD
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
 
-=======
-<<<<<<< HEAD
-=======
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
-
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
->>>>>>> 8422a2f (fixed bugs and updates)
 :root {
   --rp-primary: #0b75e7;
   --rp-primary-strong: #045fc3;
@@ -56,10 +43,6 @@ h6 {
   letter-spacing: -0.02em;
 }
 
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
@@ -68,11 +51,6 @@ input[type="password"]::-ms-clear {
 input[type="password"]::-webkit-credentials-auto-fill-button {
   display: none !important;
 }
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
->>>>>>> 8422a2f (fixed bugs and updates)
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -234,7 +212,3 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 .rp-badge-live {
   animation: rpPulse 1.4s ease infinite;
 }
-<<<<<<< HEAD
-=======
->>>>>>> 8745d21 (fixed bugs and updates)
->>>>>>> 8422a2f (fixed bugs and updates)

@@ -135,6 +135,7 @@ export const createPayMongoCheckoutSession = async ({
   successUrl,
   cancelUrl,
   metadata = {},
+  billing,
   paymentMethodTypes = [],
 }) => {
   try {
@@ -166,10 +167,24 @@ export const createPayMongoCheckoutSession = async ({
           cancel_url: normalizeText(cancelUrl),
           show_description: true,
           show_line_items: true,
+          billing: billing && typeof billing === "object" ? billing : undefined,
           metadata,
         },
       },
     };
+
+    if (payload.data.attributes.billing) {
+      const sanitized = Object.entries(payload.data.attributes.billing).reduce((acc, [key, value]) => {
+        const normalized = normalizeText(value);
+        if (normalized) acc[key] = normalized;
+        return acc;
+      }, {});
+      if (Object.keys(sanitized).length) {
+        payload.data.attributes.billing = sanitized;
+      } else {
+        delete payload.data.attributes.billing;
+      }
+    }
 
     const response = await axios.post(`${PAYMONGO_API_BASE}/checkout_sessions`, payload, {
       headers: getAuthHeaders(),

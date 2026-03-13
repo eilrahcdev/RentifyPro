@@ -4,9 +4,22 @@ import mongoose from "mongoose";
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const PHONE_REGEX = /^[0-9]{11}$/;
+const ALLOWED_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+]);
 const ALLOWED_GENDERS = new Set(["Male", "Female", "Prefer not to say"]);
 const ALLOWED_RELATIONSHIPS = new Set(["Parent", "Sibling", "Spouse", "Partner", "Relative", "Friend", "Guardian", "Other"]);
+const ALLOWED_OWNER_TYPES = new Set(["individual", "business"]);
 const MIN_RENTER_AGE = 18;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PHONE_LENGTH = 11;
+const MAX_BUSINESS_NAME = 120;
+const MAX_LICENSE_NUMBER = 50;
+const MAX_PERMIT_NUMBER = 50;
+const MAX_ADDRESS_LENGTH = 255;
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const parseDateOfBirth = (value) => {
@@ -60,6 +73,10 @@ export const validateRegister = (req, res, next) => {
   const emergencyContactName = toText(req.body.emergencyContactName);
   const emergencyContactPhone = toText(req.body.emergencyContactPhone);
   const emergencyContactRelationship = toText(req.body.emergencyContactRelationship);
+  const ownerType = toText(req.body.ownerType);
+  const businessName = toText(req.body.businessName);
+  const permitNumber = toText(req.body.permitNumber);
+  const licenseNumber = toText(req.body.licenseNumber);
 
   // Name rules
   if (!name || !name.trim()) errors.name = "Name is required.";
@@ -70,7 +87,16 @@ export const validateRegister = (req, res, next) => {
   if (!email || typeof email !== "string") errors.email = "Email is required.";
   else if (/\s/.test(email.trim())) errors.email = "Email must not contain spaces.";
   else if (EMOJI_REGEX.test(email)) errors.email = "Email must not contain emoji.";
+  else if (email.trim().length > MAX_EMAIL_LENGTH)
+    errors.email = `Email is too long (max ${MAX_EMAIL_LENGTH} characters).`;
   else if (!EMAIL_REGEX.test(email.trim())) errors.email = "Enter a valid email address.";
+
+  if (!errors.email) {
+    const emailDomain = String(email || "").trim().split("@")[1]?.toLowerCase() || "";
+    if (!ALLOWED_EMAIL_DOMAINS.has(emailDomain)) {
+      errors.email = "Please use a valid email address from a supported provider.";
+    }
+  }
 
   // Password rules
   if (!password) errors.password = "Password is required.";
@@ -85,7 +111,9 @@ export const validateRegister = (req, res, next) => {
     errors.password = "Password needs a special character.";
 
   if (phone) {
-    if (!PHONE_REGEX.test(phone)) errors.phone = "Phone number must be exactly 11 digits.";
+    if (phone.length > MAX_PHONE_LENGTH)
+      errors.phone = `Phone number is too long (max ${MAX_PHONE_LENGTH} digits).`;
+    else if (!PHONE_REGEX.test(phone)) errors.phone = "Phone number must be exactly 11 digits.";
   }
 
   if (requestedRole === "user" && !dateOfBirth) {
@@ -114,7 +142,8 @@ export const validateRegister = (req, res, next) => {
     errors.gender = "Gender selection is invalid.";
   }
 
-  if (address && address.length > 255) errors.address = "Address is too long (max 255 characters).";
+  if (address && address.length > MAX_ADDRESS_LENGTH)
+    errors.address = `Address is too long (max ${MAX_ADDRESS_LENGTH} characters).`;
   if (region && region.length > 50) errors.region = "Region code is invalid.";
   if (province && province.length > 50) errors.province = "Province code is invalid.";
   if (city && city.length > 50) errors.city = "City code is invalid.";
@@ -139,6 +168,29 @@ export const validateRegister = (req, res, next) => {
     errors.emergencyContactRelationship = "Emergency contact relationship is invalid.";
   }
 
+  if (requestedRole === "owner" && !ownerType) {
+    errors.ownerType = "Owner type is required.";
+  } else if (ownerType && !ALLOWED_OWNER_TYPES.has(ownerType)) {
+    errors.ownerType = "Owner type is invalid.";
+  }
+
+  if (businessName && businessName.length > MAX_BUSINESS_NAME) {
+    errors.businessName = `Business name is too long (max ${MAX_BUSINESS_NAME} characters).`;
+  }
+
+  if (licenseNumber && licenseNumber.length > MAX_LICENSE_NUMBER) {
+    errors.licenseNumber = `License number is too long (max ${MAX_LICENSE_NUMBER} characters).`;
+  }
+
+  if (permitNumber && permitNumber.length > MAX_PERMIT_NUMBER) {
+    errors.permitNumber = `Permit number is too long (max ${MAX_PERMIT_NUMBER} characters).`;
+  }
+
+  if (requestedRole === "owner" && ownerType === "business") {
+    if (!businessName) errors.businessName = "Business name is required.";
+    if (!permitNumber) errors.permitNumber = "Permit number is required.";
+  }
+
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ success: false, message: "Validation failed.", errors });
   }
@@ -158,6 +210,10 @@ export const validateRegister = (req, res, next) => {
   if (emergencyContactRelationship) {
     req.body.emergencyContactRelationship = emergencyContactRelationship;
   }
+  if (ownerType) req.body.ownerType = ownerType;
+  if (businessName) req.body.businessName = businessName;
+  if (licenseNumber) req.body.licenseNumber = licenseNumber;
+  if (permitNumber) req.body.permitNumber = permitNumber;
   next();
 };
 

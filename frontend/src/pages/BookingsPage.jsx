@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import BookingAccessModal from "../components/BookingAccessModal";
 import ChatWidget from "../components/ChatWidget";
 import { requestLiveCountersRefresh } from "../utils/liveCounters";
+import { getTransactionFee } from "../utils/fees";
 
 const statusStyles = {
   pending: "bg-amber-100 text-amber-800 border border-amber-200",
@@ -39,44 +40,39 @@ const toTitleCase = (value = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 const appendUniqueMessage = (list, message) =>
   list.some((item) => item._id === message._id) ? list : [...list, message];
-const getBlockchainGasFee = (booking) => {
-  const fee = Number(booking?.blockchainGasFee || 0);
-  return Number.isFinite(fee) && fee >= 0 ? fee : 0;
-};
+const getRentalTotal = (booking) => {
+  const total = Number(booking?.totalAmount);
+  if (Number.isFinite(total) && total >= 0) return total;
 
-const getVehicleRateForPayment = (booking) => {
-  const directTotal = Number(booking?.totalAmount);
-  if (Number.isFinite(directTotal) && directTotal > 0) {
-    return directTotal;
+  const baseAmount = Number(booking?.baseAmount);
+  const driverAmount = Number(booking?.driverAmount);
+  if (Number.isFinite(baseAmount) && Number.isFinite(driverAmount) && baseAmount + driverAmount > 0) {
+    return baseAmount + driverAmount;
   }
 
-  const directRate = Number(booking?.vehicleDailyRate);
+  const vehicleDailyRate = Number(booking?.vehicleDailyRate);
   const bookingDays = Number(booking?.bookingDays || 1);
-  if (Number.isFinite(directRate) && directRate > 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
-    return directRate * bookingDays;
+  if (Number.isFinite(vehicleDailyRate) && vehicleDailyRate > 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
+    const driverDailyRate = Number(booking?.driverDailyRate || 0);
+    const driverSelected = Boolean(booking?.driverSelected);
+    const driverAmountFromRate =
+      driverSelected && Number.isFinite(driverDailyRate) && driverDailyRate > 0
+        ? driverDailyRate * bookingDays
+        : 0;
+    return vehicleDailyRate * bookingDays + driverAmountFromRate;
   }
 
-  const populatedRate = Number(booking?.vehicle?.dailyRentalRate);
-  if (Number.isFinite(populatedRate) && populatedRate > 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
-    return populatedRate * bookingDays;
+  const payable = Number(booking?.amountPayable);
+  if (Number.isFinite(payable) && payable >= 0) {
+    return Math.max(payable - getTransactionFee(), 0);
   }
 
   return 0;
 };
 
-const getAmountPayable = (booking) => {
-  const payable = Number(booking?.amountPayable);
-  if (Number.isFinite(payable) && payable >= 0) {
-    return payable;
-  }
+const getVehicleRateForPayment = (booking) => getRentalTotal(booking);
 
-  const totalAmount = Number(booking?.totalAmount);
-  if (Number.isFinite(totalAmount) && totalAmount >= 0) {
-    return totalAmount + getBlockchainGasFee(booking);
-  }
-
-  return getVehicleRateForPayment(booking) + getBlockchainGasFee(booking);
-};
+const getAmountPayable = (booking) => getRentalTotal(booking) + getTransactionFee();
 
 const roundCurrency = (value) => {
   const numeric = Number(value || 0);
@@ -98,10 +94,6 @@ const getPaymentPaidAmount = (booking) => {
 
 const getPaymentRemainingAmount = (booking) => {
   const totalPayable = getAmountPayable(booking);
-  const due = Number(booking?.paymentAmountDue);
-  if (Number.isFinite(due) && due >= 0) {
-    return roundCurrency(Math.min(due, totalPayable));
-  }
   return roundCurrency(Math.max(totalPayable - getPaymentPaidAmount(booking), 0));
 };
 
@@ -597,7 +589,7 @@ export default function BookingsPage({
                 <Info title="Vehicle Rate" value={money(booking.vehicleDailyRate)} />
                 <Info title="Driver" value={booking.driverSelected ? money(booking.driverDailyRate) : "No"} />
                 <Info title="Rental Total" value={money(booking.totalAmount)} />
-                <Info title="Blockchain Gas Fee" value={moneyWithCents(getBlockchainGasFee(booking))} />
+                <Info title="Transaction Fee" value={moneyWithCents(getTransactionFee())} />
                 <Info title="Amount Payable" value={moneyWithCents(getAmountPayable(booking))} />
               </div>
 
@@ -709,21 +701,30 @@ export default function BookingsPage({
 
       {chatBooking && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setChatBooking(null)} />
+          <div
+            className="fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-[2px]"
+            onClick={() => setChatBooking(null)}
+          />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-xl rounded-xl border shadow-2xl flex flex-col max-h-[80vh]">
-              <div className="px-4 py-3 border-b flex items-center justify-between">
+            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)] flex flex-col max-h-[80vh]">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
                 <div>
-                  <p className="font-semibold">Chat with {chatBooking.owner?.name || "Owner"}</p>
-                  <p className="text-xs text-gray-500">{chatBooking.vehicle?.name}</p>
+                  <p className="font-semibold text-slate-900">Chat with {chatBooking.owner?.name || "Owner"}</p>
+                  <p className="text-xs text-slate-500">{chatBooking.vehicle?.name}</p>
                 </div>
-                <button onClick={() => setChatBooking(null)} className="text-xl">x</button>
+                <button
+                  onClick={() => setChatBooking(null)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                  aria-label="Close chat"
+                >
+                  ×
+                </button>
               </div>
 
-              <div className="p-4 overflow-y-auto flex-1 space-y-2 bg-gray-50">
+              <div className="p-4 overflow-y-auto flex-1 space-y-2 bg-slate-50">
                 {chatError && <p className="text-sm text-red-600">{chatError}</p>}
                 {!chatMessages.length && (
-                  <p className="text-sm text-gray-500">No messages yet.</p>
+                  <p className="text-sm text-slate-500">No messages yet.</p>
                 )}
                 {chatMessages.map((message) => {
                   const isMe = String(message.sender?._id || message.sender) === String(currentUserId);
@@ -744,16 +745,16 @@ export default function BookingsPage({
                 })}
               </div>
 
-              <div className="border-t p-3 flex gap-2">
+              <div className="border-t border-slate-200 p-3 flex gap-2">
                 <input
-                  className="flex-1 border rounded-lg px-3 py-2 text-sm"
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#0B75E7] focus:outline-none focus:ring-4 focus:ring-blue-100"
                   placeholder="Type your message"
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
                 />
                 <button
                   onClick={sendChatMessage}
-                  className="px-4 py-2 rounded-lg bg-[#017FE6] text-white text-sm"
+                  className="rp-btn-primary px-4 py-2 text-sm"
                 >
                   Send
                 </button>
@@ -766,25 +767,29 @@ export default function BookingsPage({
       {approvalModalBooking && (
         <>
           <div
-            className="fixed inset-0 bg-black/45 z-[70]"
+            className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] z-[70]"
             onClick={() => setApprovalModalBooking(null)}
           />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white border shadow-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-900">Payment Not Available Yet</h3>
-              <p className="text-sm text-gray-600 mt-2">
-                You can only pay after the owner approves your booking.
-              </p>
-              <p className="text-xs text-gray-500 mt-2">
-                Current status: {toTitleCase(approvalModalBooking.status || "pending")}
-              </p>
-              <div className="mt-5 flex justify-end">
-                <button
-                  onClick={() => setApprovalModalBooking(null)}
-                  className="px-4 py-2 rounded-lg bg-[#017FE6] text-white text-sm"
-                >
-                  I Understand
-                </button>
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+              <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
+                <h3 className="text-lg font-semibold text-slate-900">Payment Not Available Yet</h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  You can only pay after the owner approves your booking.
+                </p>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-xs text-slate-500">
+                  Current status: {toTitleCase(approvalModalBooking.status || "pending")}
+                </p>
+                <div className="mt-5 flex justify-end">
+                  <button
+                    onClick={() => setApprovalModalBooking(null)}
+                    className="rp-btn-primary px-4 py-2 text-sm"
+                  >
+                    I Understand
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -794,21 +799,24 @@ export default function BookingsPage({
       {paymentConfirmBooking && (
         <>
           <div
-            className="fixed inset-0 bg-black/45 z-[70]"
+            className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] z-[70]"
             onClick={() => {
               if (!payingBookingId) setPaymentConfirmBooking(null);
             }}
           />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white border shadow-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-900">Confirm Payment</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Review your payment before continuing.
-              </p>
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+              <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
+                <h3 className="text-lg font-semibold text-slate-900">Confirm Payment</h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  Review your payment before continuing.
+                </p>
+              </div>
 
-              <div className="mt-4 rounded-xl border p-4 space-y-2 text-sm">
+              <div className="px-6 py-5">
+              <div className="rounded-xl border p-4 space-y-2 text-sm">
                 <Line label="Vehicle Rate" value={money(getVehicleRateForPayment(paymentConfirmBooking))} />
-                <Line label="Gas Fee" value={moneyWithCents(getBlockchainGasFee(paymentConfirmBooking))} />
+                <Line label="Transaction Fee" value={moneyWithCents(getTransactionFee())} />
                 <Line label="Already Paid" value={moneyWithCents(confirmPaidAmount)} />
                 <Line
                   label="Total Amount Payable"
@@ -886,17 +894,18 @@ export default function BookingsPage({
                 <button
                   onClick={() => setPaymentConfirmBooking(null)}
                   disabled={Boolean(payingBookingId)}
-                  className="px-4 py-2 rounded-lg border text-gray-700 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="rp-btn-secondary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmAndStartPayment}
                   disabled={Boolean(payingBookingId)}
-                  className="px-4 py-2 rounded-lg bg-[#017FE6] text-white text-sm"
+                  className="rp-btn-primary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {payingBookingId ? "Processing..." : "Proceed to PayMongo"}
+                  {payingBookingId ? "Processing..." : "Proceed to Pay"}
                 </button>
+              </div>
               </div>
             </div>
           </div>
