@@ -6,7 +6,10 @@ import { fileURLToPath } from "url";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
 const CHATBOT_URL = process.env.CHATBOT_URL || "http://localhost:8001";
-const CHATBOT_SERVICE_AUTOSTART = (process.env.CHATBOT_SERVICE_AUTOSTART || "true").toLowerCase() !== "false";
+const isProduction = process.env.NODE_ENV === "production";
+const CHATBOT_SERVICE_AUTOSTART = (
+  process.env.CHATBOT_SERVICE_AUTOSTART || (isProduction ? "false" : "true")
+).toLowerCase() !== "false";
 const CHATBOT_SERVICE_RELOAD =
   (process.env.CHATBOT_SERVICE_RELOAD || "false").toLowerCase() !== "false";
 const STARTUP_TIMEOUT_MS = Number(process.env.CHATBOT_SERVICE_STARTUP_TIMEOUT_MS || 180000);

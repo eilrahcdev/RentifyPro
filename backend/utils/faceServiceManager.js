@@ -6,7 +6,10 @@ import { fileURLToPath } from "url";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
 const getFaceServiceUrl = () => process.env.FACE_SERVICE_URL || "http://localhost:8010";
-const FACE_SERVICE_AUTOSTART = (process.env.FACE_SERVICE_AUTOSTART || "true").toLowerCase() !== "false";
+const isProduction = process.env.NODE_ENV === "production";
+const FACE_SERVICE_AUTOSTART = (
+  process.env.FACE_SERVICE_AUTOSTART || (isProduction ? "false" : "true")
+).toLowerCase() !== "false";
 const STARTUP_TIMEOUT_MS = Number(process.env.FACE_SERVICE_STARTUP_TIMEOUT_MS || 90000);
 const HEALTH_TIMEOUT_MS = Number(process.env.FACE_SERVICE_HEALTH_TIMEOUT_MS || 2500);
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.FACE_SERVICE_HEALTH_POLL_MS || 1500);
