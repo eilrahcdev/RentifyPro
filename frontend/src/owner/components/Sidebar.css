@@ -46,18 +46,8 @@
 .rp-owner-sidebar__brand-caption { margin-top: 2px; color: #64748b; font-size: 11px; }
 
 .rp-owner-sidebar__close {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
   margin-left: auto;
-  border-radius: 12px;
-  color: #64748b;
 }
-
-.rp-owner-sidebar__close:hover { background: #f1f5f9; color: #15243b; }
 .rp-owner-sidebar__profile-wrap { flex-shrink: 0; padding: 20px 16px 12px; }
 
 .rp-owner-sidebar__profile {
@@ -67,7 +57,7 @@
   width: 100%;
   padding: 12px 10px;
   border: 1px solid #e7edf5;
-  border-radius: 14px;
+  border-radius: var(--rp-radius-control);
   background: #f8fafd;
   text-align: left;
   transition: background-color 160ms, border-color 160ms;
@@ -122,7 +112,7 @@
   width: 100%;
   min-height: 46px;
   padding: 7px 12px;
-  border-radius: 10px;
+  border-radius: var(--rp-radius-compact);
   color: #526278;
   text-align: left;
   transition: color 160ms, background-color 160ms;
@@ -153,7 +143,7 @@
   min-width: 22px;
   height: 22px;
   padding-inline: 6px;
-  border-radius: 7px;
+  border-radius: var(--rp-radius-compact);
   background: #017fe6;
   color: white;
   font-size: 10px;
@@ -161,13 +151,13 @@
 }
 
 .rp-owner-sidebar__footer { flex-shrink: 0; margin-inline: 16px; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid #edf1f6; }
-.rp-owner-sidebar__logout { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px; color: #b64048; font-size: 13px; font-weight: 500; transition: background-color 160ms; }
+.rp-owner-sidebar__logout { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 10px 12px; border-radius: var(--rp-radius-compact); color: #b64048; font-size: 13px; font-weight: 500; transition: background-color 160ms; }
 .rp-owner-sidebar__logout:hover { background: #fff1f2; color: #9f2633; }
 .rp-owner-sidebar button:focus-visible { outline: 2px solid #017fe6; outline-offset: 3px; }
 
 @media (min-width: 1024px) {
   .rp-owner-sidebar { position: relative; z-index: auto; width: 16.5rem; max-width: none; height: 100%; visibility: visible; transform: none; box-shadow: none; }
-  .rp-owner-sidebar__close { display: none; }
+  .rp-icon-button.rp-owner-sidebar__close { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

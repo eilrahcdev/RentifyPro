@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import PreKycDocument from "../models/PreKycDocument.js";
 import { verifyPhilippinesDocument } from "../services/geminiDocument.service.js";
-import { evaluateDocumentExtraction } from "../services/documentValidation.service.js";
+import { DOCUMENT_REASON_CODES, evaluateDocumentExtraction } from "../services/documentValidation.service.js";
 import { reconcileUserKyc } from "../services/kycReview.service.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
@@ -134,7 +134,19 @@ const processClaimedDocument = async (document) => {
         requireBirthDate: document.docType === "id" && document.role === "user",
       })
     : preliminary;
-  const status = decision.status;
+  const uncertainIdentity = document.docType === "id"
+    && decision.reasonCode === DOCUMENT_REASON_CODES.EXTRACTION_UNCERTAIN
+    && decision.mismatchFields.length > 0;
+  const retryUncertainIdentity = uncertainIdentity
+    && Number(document.processingAttempts || 1) < maxAttempts();
+  const status = retryUncertainIdentity
+    ? "retry_wait"
+    : uncertainIdentity ? "reupload_required" : decision.status;
+  const reason = retryUncertainIdentity
+    ? "Some ID details could not be read confidently. We will check the image again automatically."
+    : uncertainIdentity
+      ? "We could not read your ID details confidently after retrying. Upload a sharper image of the complete ID."
+      : decision.reviewReason;
   const now = new Date();
   const updateResult = await PreKycDocument.updateOne(
     { _id: document._id, status: "processing", fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
@@ -150,7 +162,7 @@ const processClaimedDocument = async (document) => {
         confidence: decision.confidence,
         classificationConfidence: decision.classificationConfidence,
         documentSurface: decision.documentSurface,
-        reason: decision.reviewReason,
+        reason,
         reasonCode: decision.reasonCode,
         decisionSource: "backend_rules",
         validationChecks: decision.checks,
@@ -160,7 +172,7 @@ const processClaimedDocument = async (document) => {
         verifiedAt: status === "verified" ? now : null,
         lastProcessedAt: now,
         processingLockedAt: null,
-        nextAttemptAt: null,
+        nextAttemptAt: retryUncertainIdentity ? new Date(Date.now() + retryDelayMs(document.processingAttempts)) : null,
         processingError: "",
       },
     },

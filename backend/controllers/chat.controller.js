@@ -216,7 +216,7 @@ export const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const [messages, unreadCounts] = await Promise.all([
+    const [messages, unreadCounts, threads] = await Promise.all([
       ChatMessage.find({
         $or: [{ sender: userId }, { receiver: userId }],
         hiddenFor: { $ne: userId },
@@ -243,7 +243,38 @@ export const getConversations = async (req, res) => {
           },
         },
       ]),
+      ChatThread.find({ $or: [{ owner: userId }, { renter: userId }] })
+        .select("owner renter archivedFor")
+        .lean(),
     ]);
+
+    const seenPartners = new Set(messages.map((message) => {
+      const partner = String(message.sender?._id || message.sender) === String(userId)
+        ? message.receiver : message.sender;
+      return toIdString(partner);
+    }));
+    const missingArchivedThreads = threads.filter((thread) => {
+      if (!(thread.archivedFor || []).some((id) => String(id) === String(userId))) return false;
+      const partnerId = String(thread.owner) === String(userId) ? String(thread.renter) : String(thread.owner);
+      return !seenPartners.has(partnerId);
+    });
+    if (missingArchivedThreads.length) {
+      const archivedMessages = await Promise.all(missingArchivedThreads.map((thread) => {
+        const partnerId = String(thread.owner) === String(userId) ? thread.renter : thread.owner;
+        return ChatMessage.findOne({
+          ...buildParticipantQuery(userId, partnerId),
+          hiddenFor: { $ne: userId },
+        })
+          .sort({ createdAt: -1 })
+          .populate("sender", "name email avatar")
+          .populate("receiver", "name email avatar")
+          .populate("booking", "pickupAt returnAt status")
+          .populate("vehicle", "name")
+          .lean();
+      }));
+      messages.push(...archivedMessages.filter(Boolean));
+      messages.sort((a, b) => toTimeValue(b.createdAt) - toTimeValue(a.createdAt));
+    }
 
     const unreadBySender = new Map(
       unreadCounts.map((entry) => [String(entry._id), entry.count])
@@ -256,8 +287,8 @@ export const getConversations = async (req, res) => {
           ? message.receiver
           : message.sender;
 
-      const partnerId = String(partner?._id || partner);
-      if (!partnerId || byPartner.has(partnerId)) continue;
+      const partnerId = toIdString(partner);
+      if (!isObjectId(partnerId) || byPartner.has(partnerId)) continue;
 
       byPartner.set(partnerId, {
         partner: {
@@ -280,6 +311,41 @@ export const getConversations = async (req, res) => {
         }),
         unreadCount: unreadBySender.get(partnerId) || 0,
       });
+    }
+
+    const partnerIds = Array.from(byPartner.keys());
+    if (partnerIds.length) {
+      const bookings = await Booking.find({
+        $or: [
+          { owner: userId, renter: { $in: partnerIds } },
+          { renter: userId, owner: { $in: partnerIds } },
+        ],
+        status: { $in: OWNER_RENTER_BOOKING_STATUSES },
+      })
+        .sort({ createdAt: -1 })
+        .select("_id owner renter vehicle status pickupAt returnAt actualReturnAt updatedAt createdAt")
+        .populate("vehicle", "name")
+        .lean();
+      for (const thread of threads) {
+        const partnerId = String(thread.owner) === String(userId)
+          ? String(thread.renter)
+          : String(thread.owner);
+        const conversation = byPartner.get(partnerId);
+        if (conversation) {
+          conversation.isArchived = (thread.archivedFor || []).some(
+            (id) => String(id) === String(userId)
+          );
+        }
+      }
+      for (const booking of bookings) {
+        const partnerId = String(booking.owner) === String(userId)
+          ? String(booking.renter)
+          : String(booking.owner);
+        const conversation = byPartner.get(partnerId);
+        if (conversation && !conversation.recentBooking) {
+          conversation.recentBooking = serializeRenterBooking(booking);
+        }
+      }
     }
 
     res.json({ success: true, conversations: Array.from(byPartner.values()) });
@@ -397,6 +463,8 @@ export const getOwnerRenterThreads = async (req, res) => {
         unreadCount: unreadByRenter.get(renterId) || 0,
         isPinned: Boolean(thread?.pinned),
         pinnedAt: thread?.pinnedAt || null,
+        isArchived: (thread?.archivedFor || []).some((id) => String(id) === String(ownerId)),
+        recentBooking: serializeRenterBooking(entry.bookings[0]),
         lastMessage: latestMessage ? sanitizeChatMessage(latestMessage) : null,
       };
     });
@@ -597,6 +665,15 @@ export const sendMessageToUser = async (req, res) => {
     const populated = await populateChatMessage(message._id);
     const sanitizedMessage = sanitizeChatMessage(populated);
 
+    try {
+      await ChatThread.updateOne(
+        { owner: relation.ownerId, renter: relation.renterId },
+        { $pull: { archivedFor: { $in: [senderId, receiverId] } } }
+      );
+    } catch (archiveError) {
+      console.error("Failed to restore conversation after sending a message.", archiveError);
+    }
+
     eventBus.emit(NOTIFICATION_EVENTS.CHAT_MESSAGE_RECEIVED, {
       message,
       actor: req.user,
@@ -735,6 +812,11 @@ export const deleteConversation = async (req, res) => {
       { $addToSet: { hiddenFor: currentUserId } }
     );
 
+    await ChatThread.updateOne(
+      { owner: relation.ownerId, renter: relation.renterId },
+      { $pull: { archivedFor: currentUserId } }
+    );
+
     emitToUser(String(currentUserId), "chat:conversation:deleted", {
       partnerId: String(partnerId),
       bookingId: context.bookingId || null,
@@ -749,6 +831,44 @@ export const deleteConversation = async (req, res) => {
     });
   } catch {
     res.status(500).json({ success: false, message: "Failed to delete conversation." });
+  }
+};
+
+export const updateConversationArchive = async (req, res) => {
+  try {
+    const partnerId = req.params.userId;
+    const currentUserId = req.user._id;
+    const archived = req.body?.archived;
+    if (!isObjectId(partnerId) || String(partnerId) === String(currentUserId)) {
+      return res.status(400).json({ success: false, message: "Invalid conversation partner." });
+    }
+    if (typeof archived !== "boolean") {
+      return res.status(400).json({ success: false, message: "archived must be a boolean." });
+    }
+
+    const relation = await resolveOwnerRenterPair({ senderId: currentUserId, partnerId });
+    if (!relation) {
+      return res.status(403).json({ success: false, message: "Conversation is unavailable." });
+    }
+
+    const thread = await ChatThread.findOneAndUpdate(
+      { owner: relation.ownerId, renter: relation.renterId },
+      {
+        [archived ? "$addToSet" : "$pull"]: { archivedFor: currentUserId },
+        $setOnInsert: { owner: relation.ownerId, renter: relation.renterId },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+    const isArchived = (thread.archivedFor || []).some(
+      (id) => String(id) === String(currentUserId)
+    );
+    emitToUser(String(currentUserId), "chat:conversation:archive", {
+      partnerId: String(partnerId),
+      archived: isArchived,
+    });
+    res.json({ success: true, archived: isArchived });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to update conversation archive." });
   }
 };
 

@@ -25,15 +25,20 @@ const ForgotPasswordOTP = lazy(() => import("./verification/ForgotPasswordOTP"))
 const ResetPassword = lazy(() => import("./verification/ResetPassword"));
 const OwnerLayout = lazy(() => import("./owner/OwnerLayout"));
 const AdminLayout = lazy(() => import("./admin/AdminLayout"));
+const HelpPage = lazy(() => import("./pages/HelpPage"));
 
 // Shared parts
 import LogoutModal from "./components/LogoutModal";
 import IdleWarningModal from "./components/IdleWarningModal";
 import RenterNotificationsModal from "./components/RenterNotificationsModal";
 import SessionSkeleton from "./components/SessionSkeleton";
+import HelpPanel from "./components/HelpPanel";
 import { RouteSkeleton, SignOutProgress } from "./components/LoadingSkeletons";
-import { disconnectSocket } from "./utils/socket";
+import { disconnectSocket, getSocket } from "./utils/socket";
+import { dismissActionToasts, showActionToast } from "./utils/actionToast";
 import API from "./utils/api";
+import { getHelpGuide } from "./data/helpContent";
+import { HELP_ASK_AI_EVENT, HELP_OPEN_EVENT } from "./utils/helpNavigation";
 import {
   SESSION_USER_UPDATED_EVENT,
   clearSessionOwnerProfile,
@@ -47,6 +52,7 @@ const ROUTE_TO_PAGE = {
   "/vehicles": "vehicles",
   "/vehicle-details": "vehicle-details",
   "/about": "about",
+  "/help": "help",
   "/privacy": "privacy-policy",
   "/privacy-policy": "privacy-policy",
   "/terms": "terms-and-conditions",
@@ -77,8 +83,17 @@ const PAGE_TO_ROUTE = Object.entries(ROUTE_TO_PAGE).reduce((map, [route, page]) 
 const resolvePageFromPath = (pathname) => {
   const raw = String(pathname || "/").toLowerCase();
   const normalized = raw === "/" ? raw : raw.replace(/\/+$/, "");
+  if (/^\/help\/[a-z0-9-]+$/.test(normalized)) return "help";
   return ROUTE_TO_PAGE[normalized] || "not-found";
 };
+
+const getHelpAudienceFromPath = (pathname) =>
+  String(pathname || "").match(/^\/help\/(renter|owner)\/?$/i)?.[1]?.toLowerCase() || "";
+
+const getHelpSlugFromPath = (pathname) =>
+  getHelpAudienceFromPath(pathname)
+    ? ""
+    : String(pathname || "").match(/^\/help\/([a-z0-9-]+)\/?$/i)?.[1]?.toLowerCase() || "";
 
 const getVehicleIdFromSearch = (search) => {
   const params = new URLSearchParams(String(search || ""));
@@ -101,9 +116,9 @@ const buildRouteWithQuery = (path, query = {}) => {
 };
 
 const FLOW_STATE_STORAGE_KEY = "rentifypro:flow-state";
-// Product choice to keep the requested startup skeleton from flashing briefly.
-// This timer runs alongside session restoration, not after the network request.
+const BOOKING_RETURN_STORAGE_KEY = "rentifypro:booking-return";
 const SESSION_SKELETON_MIN_MS = 1000;
+const SESSION_CHECK_TIMEOUT_MS = 15000;
 
 const readFlowState = () => {
   try {
@@ -130,6 +145,24 @@ const writeFlowState = (nextState = {}) => {
     sessionStorage.setItem(FLOW_STATE_STORAGE_KEY, JSON.stringify(normalized));
   } catch {
     // Ignore storage errors.
+  }
+};
+
+const readBookingReturn = () => {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(BOOKING_RETURN_STORAGE_KEY) || "null");
+    if (!/^[a-f\d]{24}$/i.test(String(parsed?.vehicleId || ""))) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const clearBookingReturn = () => {
+  try {
+    sessionStorage.removeItem(BOOKING_RETURN_STORAGE_KEY);
+  } catch {
+    // Sign-in still works when session storage is unavailable.
   }
 };
 
@@ -172,6 +205,17 @@ const AUTH_PAGES = new Set([
   "forgot-otp",
   "reset-password",
 ]);
+const SESSION_REQUIRED_PAGES = new Set([
+  "booking-history",
+  "realtime-chat",
+  "notifications",
+  "reports",
+  "account-settings",
+  "vehicle-owner-proceed",
+  "vehicle-owner-verification",
+  "owner-dashboard",
+  "admin-dashboard",
+]);
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const IDLE_WARNING_SECONDS = 60;
 const IDLE_ACTIVITY_EVENTS = ["keydown", "pointerdown", "touchstart", "mousemove", "scroll"];
@@ -209,12 +253,60 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState(() =>
     resolvePageFromPath(window.location.pathname)
   );
+  const [helpGuideSlug, setHelpGuideSlug] = useState(() => getHelpSlugFromPath(window.location.pathname));
+  const [helpAudience, setHelpAudience] = useState(() => getHelpAudienceFromPath(window.location.pathname));
+  const [helpPanelGuideSlug, setHelpPanelGuideSlug] = useState(null);
   const initialFlowStateRef = useRef(readFlowState());
   const initialFlowState = initialFlowStateRef.current;
   const [bookingData, setBookingData] = useState(getDefaultBookingData());
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const bookingReturnRef = useRef(readBookingReturn());
   const [pendingScrollTarget, setPendingScrollTarget] = useState("");
   const [chatNavigationContext, setChatNavigationContext] = useState(null);
+
+  const beginBookingSignIn = (vehicle) => {
+    const vehicleId = String(vehicle?._id || vehicle?.id || "").trim();
+    bookingReturnRef.current = null;
+    clearBookingReturn();
+    if (/^[a-f\d]{24}$/i.test(vehicleId)) {
+      const bookingReturn = {
+        vehicleId,
+        pickupDate: bookingData.pickupDate,
+        pickupTime: bookingData.pickupTime,
+        returnDate: bookingData.returnDate,
+        returnTime: bookingData.returnTime,
+      };
+      bookingReturnRef.current = bookingReturn;
+      try {
+        sessionStorage.setItem(BOOKING_RETURN_STORAGE_KEY, JSON.stringify(bookingReturn));
+      } catch {
+        // The in-memory return still works for this tab.
+      }
+      setSelectedVehicle(vehicle);
+    }
+    setCurrentPage("signin");
+  };
+
+  const restoreBookingAfterSignIn = useCallback(() => {
+    const bookingReturn = bookingReturnRef.current || readBookingReturn();
+    bookingReturnRef.current = null;
+    clearBookingReturn();
+    if (!bookingReturn) return false;
+    setBookingData((current) => ({
+      ...current,
+      pickupDate: bookingReturn.pickupDate || current.pickupDate,
+      pickupTime: bookingReturn.pickupTime || current.pickupTime,
+      returnDate: bookingReturn.returnDate || current.returnDate,
+      returnTime: bookingReturn.returnTime || current.returnTime,
+    }));
+    setSelectedVehicle((current) =>
+      String(current?._id || current?.id || "") === bookingReturn.vehicleId
+        ? current
+        : { _id: bookingReturn.vehicleId }
+    );
+    setCurrentPage("vehicle-details");
+    return true;
+  }, []);
 
   const [registeredEmail, setRegisteredEmail] = useState(() =>
     String(initialFlowState.registeredEmail || "").trim()
@@ -240,7 +332,8 @@ const App = () => {
   const [isOwnerLoggedIn, setIsOwnerLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [isSessionBootstrapping, setIsSessionBootstrapping] = useState(true);
-  const [hasSessionMinimumElapsed, setHasSessionMinimumElapsed] = useState(false);
+  const [sessionLoadError, setSessionLoadError] = useState("");
+  const [sessionRetryCount, setSessionRetryCount] = useState(0);
   const [logoutState, setLogoutState] = useState({ status: "idle", redirectPage: "home" });
 
   // Logout modal state
@@ -253,6 +346,7 @@ const App = () => {
   const logoutInProgressRef = useRef(false);
   const logoutRedirectPageRef = useRef("home");
   const idleWarningOpenRef = useRef(false);
+  const seenReturnNotificationsRef = useRef(new Set());
 
   useEffect(() => {
     const purgeLegacyStorage = () => {
@@ -269,20 +363,24 @@ const App = () => {
     purgeLegacyStorage();
 
     let mounted = true;
-    const minimumTimer = window.setTimeout(() => {
-      setHasSessionMinimumElapsed(true);
-    }, SESSION_SKELETON_MIN_MS);
+    const startedAt = performance.now();
+    let finishTimer;
+    const controller = new AbortController();
+    const timeoutTimer = window.setTimeout(() => controller.abort(), SESSION_CHECK_TIMEOUT_MS);
 
     const bootstrapSession = async () => {
       try {
-        const response = await API.getProfile();
+        const response = await API.getProfile({ signal: controller.signal });
         const profileUser =
           response?.user && typeof response.user === "object" ? response.user : null;
         if (!mounted || !profileUser || profileUser.isVerified !== true) {
-          throw new Error("No active session");
+          const error = new Error("No active session");
+          error.status = 401;
+          throw error;
         }
 
         const hydratedUser = hydrateStoredUser(profileUser);
+        setSessionLoadError("");
         setSessionUser(profileUser);
         setUser(hydratedUser);
 
@@ -299,13 +397,17 @@ const App = () => {
           localStorage.setItem("isNewOwner", "true");
           setIsOwnerLoggedIn(true);
           setIsLoggedIn(false);
-          setCurrentPage("owner-dashboard");
+          if (resolvePageFromPath(window.location.pathname) !== "help") {
+            setCurrentPage("owner-dashboard");
+          }
         } else {
           if (isOwner) localStorage.setItem("isNewOwner", "false");
           setIsOwnerLoggedIn(false);
           setIsLoggedIn(true);
           const pathPage = resolvePageFromPath(window.location.pathname);
-          if (
+          if (pathPage === "signin" && restoreBookingAfterSignIn()) {
+            // Return to the selected vehicle after a sign-in page reload.
+          } else if (
             AUTH_PAGES.has(pathPage) ||
             pathPage === "owner-dashboard" ||
             pathPage === "admin-dashboard"
@@ -313,8 +415,17 @@ const App = () => {
             setCurrentPage("home");
           }
         }
-      } catch {
+      } catch (error) {
         if (!mounted) return;
+        if (error?.status !== 401 && error?.code !== "EMAIL_VERIFICATION_REQUIRED") {
+          setSessionLoadError(
+            error?.status === 0 || error?.name === "AbortError"
+              ? "We couldn't connect to RentifyPro. Check your connection and try again."
+              : "RentifyPro couldn't check your account right now. Please try again."
+          );
+          return;
+        }
+        setSessionLoadError("");
         setIsLoggedIn(false);
         setIsOwnerLoggedIn(false);
         setUser(null);
@@ -327,7 +438,17 @@ const App = () => {
           setCurrentPage("signin");
         }
       } finally {
-        if (mounted) setIsSessionBootstrapping(false);
+        window.clearTimeout(timeoutTimer);
+        if (mounted) {
+          const remaining = Math.max(0, SESSION_SKELETON_MIN_MS - (performance.now() - startedAt));
+          if (remaining > 0) {
+            finishTimer = window.setTimeout(() => {
+              if (mounted) setIsSessionBootstrapping(false);
+            }, remaining);
+          } else {
+            setIsSessionBootstrapping(false);
+          }
+        }
       }
     };
 
@@ -335,9 +456,31 @@ const App = () => {
 
     return () => {
       mounted = false;
-      window.clearTimeout(minimumTimer);
+      controller.abort();
+      window.clearTimeout(timeoutTimer);
+      window.clearTimeout(finishTimer);
     };
-  }, []);
+  }, [sessionRetryCount, restoreBookingAfterSignIn]);
+
+  useEffect(() => {
+    if (AUTH_PAGES.has(currentPage) || currentPage === "vehicle-details") return;
+    bookingReturnRef.current = null;
+    clearBookingReturn();
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (!sessionLoadError) return undefined;
+
+    const retryWhenAvailable = () => {
+      if (navigator.onLine) setSessionRetryCount((count) => count + 1);
+    };
+    window.addEventListener("online", retryWhenAvailable);
+    window.addEventListener("focus", retryWhenAvailable);
+    return () => {
+      window.removeEventListener("online", retryWhenAvailable);
+      window.removeEventListener("focus", retryWhenAvailable);
+    };
+  }, [sessionLoadError]);
 
   useEffect(() => {
     const syncUserProfile = (event) => {
@@ -440,11 +583,23 @@ const App = () => {
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPage(resolvePageFromPath(window.location.pathname));
+      setHelpGuideSlug(getHelpSlugFromPath(window.location.pathname));
+      setHelpAudience(getHelpAudienceFromPath(window.location.pathname));
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    const handleOpenHelp = (event) => {
+      setHelpPanelGuideSlug(String(event?.detail?.guideSlug || ""));
+    };
+    window.addEventListener(HELP_OPEN_EVENT, handleOpenHelp);
+    return () => window.removeEventListener(HELP_OPEN_EVENT, handleOpenHelp);
+  }, []);
+
+  const closeHelp = useCallback(() => setHelpPanelGuideSlug(null), []);
 
   useEffect(() => {
     const baseRoute = PAGE_TO_ROUTE[currentPage];
@@ -484,6 +639,10 @@ const App = () => {
         return buildRouteWithQuery(baseRoute, { tab });
       }
 
+      if (currentPage === "help") {
+        return helpGuideSlug ? `/help/${helpGuideSlug}` : helpAudience ? `/help/${helpAudience}` : "/help";
+      }
+
       if (currentPage === "booking-history") {
         // Keep the provider return reference until BookingsPage verifies it.
         return buildRouteWithQuery(baseRoute, {
@@ -508,6 +667,8 @@ const App = () => {
     registeredPhone,
     registerRole,
     forgotEmail,
+    helpGuideSlug,
+    helpAudience,
   ]);
 
   useEffect(() => {
@@ -515,7 +676,7 @@ const App = () => {
     const storedVehicleId = String(readFlowState().selectedVehicleId || "").trim();
     const vehicleIdFromQuery = getVehicleIdFromSearch(window.location.search) || storedVehicleId;
     const selectedVehicleId = String(selectedVehicle?._id || selectedVehicle?.id || "").trim();
-    if (selectedVehicleId && (!vehicleIdFromQuery || vehicleIdFromQuery === selectedVehicleId)) {
+    if (selectedVehicle?.name && selectedVehicleId && (!vehicleIdFromQuery || vehicleIdFromQuery === selectedVehicleId)) {
       return undefined;
     }
 
@@ -543,7 +704,7 @@ const App = () => {
     return () => {
       active = false;
     };
-  }, [currentPage, selectedVehicle?._id, selectedVehicle?.id]);
+  }, [currentPage, selectedVehicle?._id, selectedVehicle?.id, selectedVehicle?.name]);
 
   useEffect(() => {
     const switchToUser = () => {
@@ -603,6 +764,8 @@ const App = () => {
     lastActivityRef.current = Date.now();
     idleDeadlineRef.current = 0;
     setSelectedVehicle(null);
+    bookingReturnRef.current = null;
+    clearBookingReturn();
     setRegisteredEmail("");
     setRegisteredPhone("");
     setRegisteredName("");
@@ -721,6 +884,39 @@ const App = () => {
     setCurrentPage("booking-history");
   };
 
+  useEffect(() => {
+    dismissActionToasts();
+  }, [user?._id]);
+
+  useEffect(() => {
+    seenReturnNotificationsRef.current.clear();
+    if (!isLoggedIn || isOwnerLoggedIn || !user?._id || user.role === "admin") return undefined;
+
+    const socket = getSocket();
+    const handleReturnDecision = (notification) => {
+      const event = String(notification?.event || "");
+      if (event !== "vehicle_return.confirmed" && event !== "vehicle_return.declined") return;
+      const notificationId = String(notification?._id || "");
+      if (!notificationId || seenReturnNotificationsRef.current.has(notificationId)) return;
+      seenReturnNotificationsRef.current.add(notificationId);
+
+      const declined = event === "vehicle_return.declined";
+      const finalFee = Number(notification?.data?.lateReturnPenaltyFee || 0);
+      const message = declined
+        ? "Return request declined. Booking stays active."
+        : finalFee > 0
+          ? "Vehicle return confirmed. A final late-return balance is ready."
+          : "The owner confirmed receipt of the vehicle.";
+      showActionToast(message, {
+        id: `renter-return-${notificationId}`,
+        tone: declined ? "warning" : "success",
+      });
+    };
+
+    socket.on("notification:new", handleReturnDecision);
+    return () => socket.off("notification:new", handleReturnDecision);
+  }, [isLoggedIn, isOwnerLoggedIn, user?._id, user?.role]);
+
   const goToRealtimeChat = (context = null) => {
     if (!isLoggedIn) {
       setCurrentPage("signin");
@@ -790,6 +986,22 @@ const App = () => {
     setCurrentPage("home");
   };
 
+  const navigateToHelp = (slug = "", audience = "") => {
+    const safeSlug = /^[a-z0-9-]+$/.test(String(slug)) ? String(slug) : "";
+    const guideAudience = getHelpGuide(safeSlug)?.audience;
+    const safeAudience = ["renter", "owner"].includes(audience)
+      ? audience
+      : guideAudience || (isOwnerLoggedIn ? "owner" : isLoggedIn ? "renter" : "");
+    const route = safeSlug ? `/help/${safeSlug}` : safeAudience ? `/help/${safeAudience}` : "/help";
+    if (window.location.pathname !== route) {
+      window.history.pushState({ page: "help" }, "", route);
+    }
+    setHelpGuideSlug(safeSlug);
+    setHelpAudience(safeAudience);
+    setCurrentPage("help");
+    window.scrollTo(0, 0);
+  };
+
   const goToPrivacyPolicy = () => {
     if (currentPage === "privacy-policy") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -846,8 +1058,32 @@ const App = () => {
     return <SignOutProgress />;
   }
 
-  if (isSessionBootstrapping || !hasSessionMinimumElapsed) {
+  if (isSessionBootstrapping) {
     return <SessionSkeleton page={currentPage} />;
+  }
+
+  if (sessionLoadError && SESSION_REQUIRED_PAGES.has(currentPage) && !isLoggedIn && !isOwnerLoggedIn) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-neutral-50 p-8 text-center">
+          <div role="alert">
+            <h1 className="text-xl font-bold text-slate-900">Could not check your account</h1>
+            <p className="mt-3 text-sm text-slate-700">{sessionLoadError}</p>
+          </div>
+          <button
+            type="button"
+            className="rp-btn-primary mt-6 w-full py-3"
+            onClick={() => {
+              setSessionLoadError("");
+              setIsSessionBootstrapping(true);
+              setSessionRetryCount((count) => count + 1);
+            }}
+          >
+            Retry account check
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -874,7 +1110,33 @@ const App = () => {
         onViewAllNotifications={handleViewAllRenterNotifications}
       />
 
+      {helpPanelGuideSlug !== null && (
+        <HelpPanel
+          key={helpPanelGuideSlug}
+          guideSlug={helpPanelGuideSlug}
+          audience={isOwnerLoggedIn ? "owner" : isLoggedIn ? "renter" : ""}
+          onClose={closeHelp}
+          onAskAI={[
+            "home", "vehicles", "booking-history", "account-settings",
+          ].includes(currentPage) ? () => {
+            closeHelp();
+            window.dispatchEvent(new Event(HELP_ASK_AI_EVENT));
+          } : undefined}
+        />
+      )}
+
       <Suspense fallback={<RouteSkeleton page={currentPage} label="Loading page" />}>
+
+      {currentPage === "help" && (
+        <HelpPage
+          guideSlug={helpGuideSlug}
+          audience={helpAudience}
+          isOwner={isOwnerLoggedIn}
+          isRenter={isLoggedIn && !isOwnerLoggedIn}
+          onSelectGuide={navigateToHelp}
+          onReturn={() => setCurrentPage(isOwnerLoggedIn ? "owner-dashboard" : "home")}
+        />
+      )}
 
       {/* home */}
       {currentPage === "home" && (
@@ -883,6 +1145,7 @@ const App = () => {
           user={user}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+          onSignInToBook={beginBookingSignIn}
           onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
           onNavigateToReports={() => setCurrentPage("reports")}
           onNavigateToVehicles={() => {
@@ -917,6 +1180,7 @@ const App = () => {
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToForgotPassword={() => setCurrentPage("forgot-email")}
           onLoginSuccess={(userData) => {
+            setSessionLoadError("");
             setUser(userData);
             setSessionUser(userData);
             setRegisteredEmail("");
@@ -939,7 +1203,7 @@ const App = () => {
             } else {
               setIsLoggedIn(true);
               setIsOwnerLoggedIn(false);
-              setCurrentPage("home");
+              if (!restoreBookingAfterSignIn()) setCurrentPage("home");
             }
           }}
         />
@@ -990,6 +1254,7 @@ const App = () => {
           user={user}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+          onSignInToBook={beginBookingSignIn}
           onNavigateToVehicles={() => setCurrentPage("vehicles")}
           onNavigateToBookingHistory={goToBookingHistory}
           onNavigateToChat={goToRealtimeChat}
@@ -1009,7 +1274,10 @@ const App = () => {
       )}
 
       {/* vehicle details */}
-      {currentPage === "vehicle-details" && selectedVehicle && (
+      {currentPage === "vehicle-details" && !selectedVehicle?.name && (
+        <RouteSkeleton page="vehicle-details" label="Loading selected vehicle" />
+      )}
+      {currentPage === "vehicle-details" && selectedVehicle?.name && (
         <VehicleDetailsPage
           vehicle={selectedVehicle}
           bookingData={bookingData}
@@ -1019,6 +1287,7 @@ const App = () => {
           onBack={() => setCurrentPage("vehicles")}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
+          onSignInToBook={beginBookingSignIn}
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToVehicles={() => setCurrentPage("vehicles")}
           onNavigateToBookingHistory={goToBookingHistory}
@@ -1073,6 +1342,7 @@ const App = () => {
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToRegister={() => setCurrentPage("register")}
           onVerificationSuccess={(role, verifiedUser) => {
+            setSessionLoadError("");
             const fallbackUser = buildUserData(
               registeredName || registeredEmail,
               registeredEmail,

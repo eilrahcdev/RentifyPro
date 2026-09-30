@@ -11,6 +11,7 @@ import {
   buildDocumentExtractionInstruction,
   normalizeDocumentInspection,
 } from "../services/geminiDocument.service.js";
+import { isIdentityReadyForSelfie } from "../utils/preKycDocs.js";
 
 const passportStructure = {
   official_markings_present: true,
@@ -208,6 +209,49 @@ test("name matching uses complete tokens and rejects substring collisions", () =
   assert.equal(result.status, "reupload_required");
   assert.equal(result.reasonCode, DOCUMENT_REASON_CODES.IDENTITY_DATA_MISMATCH);
   assert.deepEqual(result.mismatchFields, ["Name"]);
+});
+
+test("name matching accepts spacing differences without accepting partial or reused names", () => {
+  const sameLetters = evaluatePassport({
+    profile: { ...profile, last_name: "De La Cruz" },
+    extraction: {
+      ...validIdExtraction,
+      extracted_data: { ...validIdExtraction.extracted_data, full_name: "DELACRUZ, JUAN SANTOS" },
+    },
+  });
+  assert.equal(sameLetters.status, "verified");
+  assert.equal(sameLetters.checks.nameMatches, true);
+
+  const reusedToken = evaluatePassport({
+    profile: { ...profile, first_name: "Juan", last_name: "Juan" },
+    extraction: {
+      ...validIdExtraction,
+      extracted_data: { ...validIdExtraction.extracted_data, full_name: "JUAN SANTOS" },
+    },
+  });
+  assert.equal(reusedToken.reasonCode, DOCUMENT_REASON_CODES.IDENTITY_DATA_MISMATCH);
+  assert.equal(reusedToken.checks.nameMatches, false);
+});
+
+test("uncertain ID text cannot become a definite name mismatch or unlock a selfie", () => {
+  const uncertainName = evaluatePassport({
+    extraction: {
+      ...validIdExtraction,
+      extraction_confidence: 60,
+      extracted_data: { ...validIdExtraction.extracted_data, full_name: "JOANNE LIM" },
+    },
+  });
+  assert.equal(uncertainName.status, "pending_review");
+  assert.equal(uncertainName.reasonCode, DOCUMENT_REASON_CODES.EXTRACTION_UNCERTAIN);
+  assert.deepEqual(uncertainName.mismatchFields, ["Name"]);
+  assert.equal(uncertainName.checks.registrationDataCompared, true);
+  assert.equal(uncertainName.checks.nameMatches, false);
+  assert.equal(isIdentityReadyForSelfie({
+    docType: "id",
+    status: uncertainName.status,
+    detailsMatched: uncertainName.checks.registrationDataCompared === true
+      && uncertainName.mismatchFields.length === 0,
+  }), false);
 });
 
 test("a renter ID cannot pass when the registration birth date is missing", () => {

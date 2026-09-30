@@ -60,6 +60,11 @@ const evaluate = async (expression) => { const result = await send("Runtime.eval
 const wait = async (expression) => { for (let i = 0; i < 200; i++) { if (await evaluate(`Boolean(${expression})`)) return; await pause(80); } throw new Error(`Timeout: ${expression}`); };
 const set = (id, value) => evaluate(`(() => { const input = document.getElementById(${JSON.stringify(id)}); Object.getOwnPropertyDescriptor(input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
 const click = (text) => evaluate(`[...(document.querySelector('dialog[open]') || document.querySelector('[role=dialog]') || document).querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}).click()`);
+const checkSuccessAlert = async (message) => {
+  await wait(`document.querySelector('.rp-floating-alert')?.textContent.includes(${JSON.stringify(message)})`);
+  assert.equal(await evaluate(`(() => { const el=document.querySelector('.rp-floating-alert'); const r=el.getBoundingClientRect(); return r.top >= 0 && r.top < 180 && el.querySelectorAll('svg').length === 0; })()`), true);
+  assert.equal(await evaluate("Boolean(document.querySelector('dialog[open], [role=dialog]'))"), false);
+};
 
 try {
   await send("Page.enable"); await send("Runtime.enable"); await send("Page.bringToFront"); await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/*" }] });
@@ -120,9 +125,13 @@ try {
   assert.equal(saved, 0);
   await set("owner-vehicle-description", "A clean comfortable sedan with air conditioning, safety features, and room for four passengers.");
   await wait("document.getElementById('owner-vehicle-description').getAttribute('aria-invalid') === 'false'");
-  await click("Add Vehicle"); await wait("document.body.innerText.includes('Vehicle Added')");
+  await click("Add Vehicle");
+  await checkSuccessAlert("Honda Civic was added successfully and is now in your vehicle list.");
+  await fs.writeFile("frontend/.vite/vehicle-listing-create-alert-mobile.png", Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
   assert.equal(saved, 1); assert.equal(uploaded, 1);
-  await click("Done"); await wait("document.querySelector('[aria-label=\"Edit Honda Civic\"]')");
+  await wait("document.querySelector('[aria-label=\"Edit Honda Civic\"]')");
+  await pause(3200);
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
   await evaluate("document.querySelector('[aria-label=\"Edit Honda Civic\"]').click()");
   await wait("document.body.innerText.includes('Edit vehicle listing')");
   await evaluate(`(() => { const select=[...document.querySelectorAll('select')].find(item => [...item.options].some(option => option.value === 'motorcycle')); const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set; setter.call(select,'motorcycle'); select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
@@ -136,10 +145,10 @@ try {
   await wait("document.querySelector('dialog[open]')?.innerText.includes('Save vehicle changes?')");
   assert.equal(updated, 0);
   await click("Save Changes");
-  await wait("document.body.innerText.includes('Vehicle Updated')");
+  await checkSuccessAlert("Honda Civic was updated successfully.");
+  await fs.writeFile("frontend/.vite/vehicle-listing-edit-alert-mobile.png", Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
   assert.equal(updated, 1);
-  await click("Done");
-  console.log("Owner: inline errors, create/edit success modals, edit confirmation, category-dependent validation, and valid submissions passed.");
+  console.log("Owner: inline errors, create/edit success alerts, edit confirmation, category-dependent validation, and valid submissions passed.");
   role = "admin"; photo.status = "needs_review";
   await send("Page.navigate", { url: `${base}/admin-dashboard` });
   await wait("[...document.querySelectorAll('button')].find(b => b.textContent.trim()==='Vehicles')");

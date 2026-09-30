@@ -1,4 +1,6 @@
-const configuredApiUrl = String(import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
+const configuredApiUrl = import.meta.env.MODE === "quick-tunnel"
+  ? ""
+  : String(import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
 const apiBaseUrl = configuredApiUrl || "/api";
 
 const resolveMediaUrl = (value) => {

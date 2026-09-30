@@ -1,8 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import {
   REALTIME_CHAT_INPUT_MAX_LENGTH,
-  REALTIME_CHAT_WORD_LIMIT,
-  countRealtimeChatWords,
   sanitizeRealtimeChatInput,
 } from "../utils/realtimeChatInput";
 
@@ -18,14 +16,25 @@ export default function ChatMessageInput({
   textareaClassName = "",
 }) {
   const textareaRef = useRef(null);
-  const wordCount = countRealtimeChatWords(value);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+    const resize = () => {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+      textarea.style.overflowY = textarea.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
+    };
+    resize();
+    let width = textarea.clientWidth;
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === width) return;
+      width = textarea.clientWidth;
+      resize();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
   }, [value]);
 
   return (
@@ -46,9 +55,6 @@ export default function ChatMessageInput({
         disabled={disabled}
         className={`rp-chat-textarea ${textareaClassName}`}
       />
-      <span className="rp-chat-word-counter" aria-live="polite">
-        {wordCount}/{REALTIME_CHAT_WORD_LIMIT} words
-      </span>
     </div>
   );
 }

@@ -7,10 +7,11 @@ import VehicleCard from "../../components/VehicleCard";
 import { VehicleGridSkeleton } from "../../components/LoadingSkeletons";
 import "./Vehicles.css";
 import ModalPortal from "../../components/ModalPortal";
-import InfoModal from "../../components/InfoModal";
+import { showActionToast } from "../../utils/actionToast";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { validateVehicleImageFiles } from "../../utils/fileValidation";
 import OwnerPageHeader from "../components/OwnerPageHeader";
+import HelpLink from "../../components/HelpLink";
 import VehiclePhotoReviews from "../../components/VehiclePhotoReviews";
 import {
   LISTING_LIMITS,
@@ -321,7 +322,7 @@ function VehicleModal({
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rp-icon-button"
                 aria-label="Close modal"
               >
                 <X size={18} />
@@ -1066,7 +1067,6 @@ function Vehicles() {
   const [modalFieldErrors, setModalFieldErrors] = useState({});
   const [modalLoading, setModalLoading] = useState(false);
   const [editConfirmationOpen, setEditConfirmationOpen] = useState(false);
-  const [vehicleSuccess, setVehicleSuccess] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(createInitialForm());
 
@@ -1242,15 +1242,12 @@ function Vehicles() {
       setModalOpen(false);
       setForm(createInitialForm());
       await loadVehicles();
-      setVehicleSuccess(modalMode === "create"
-        ? {
-            title: "Vehicle Added",
-            message: `${form.name.trim()} was added successfully and is now in your vehicle list.`,
-          }
-        : {
-            title: "Vehicle Updated",
-            message: `${form.name.trim()} was updated successfully.`,
-          });
+      showActionToast(
+        modalMode === "create"
+          ? `${form.name.trim()} was added successfully and is now in your vehicle list.`
+          : `${form.name.trim()} was updated successfully.`,
+        { id: "owner-vehicle-save" }
+      );
     } catch (err) {
       const serverErrors = err?.details?.errors;
       if (serverErrors && typeof serverErrors === "object" && Object.keys(serverErrors).length) {
@@ -1289,6 +1286,7 @@ function Vehicles() {
         availabilityStatus,
         availabilityHoldReason
       );
+      if (response?.success === false) throw new Error(response.message || "Failed to update vehicle status.");
       setVehicles((prev) =>
         prev.map((item) =>
           item._id === vehicle._id
@@ -1300,6 +1298,12 @@ function Vehicles() {
             : item
         )
       );
+      const statusMessage = operationalStatus === "available"
+        ? "Vehicle marked available."
+        : operationalStatus === "inspection"
+          ? "Vehicle moved to inspection."
+          : "Vehicle marked unavailable.";
+      showActionToast(statusMessage, { id: `owner-vehicle-${vehicle._id}` });
     } catch (err) {
       setError(err.message || "Failed to update vehicle status.");
     } finally {
@@ -1314,9 +1318,11 @@ function Vehicles() {
     setDeleting(true);
     setDeleteError("");
     try {
-      await API.deleteOwnerVehicle(vehicleId);
+      const response = await API.deleteOwnerVehicle(vehicleId);
+      if (response?.success === false) throw new Error(response.message || "Failed to delete vehicle.");
       setVehicles((prev) => prev.filter((vehicle) => vehicle._id !== vehicleId));
       setVehicleToDelete(null);
+      showActionToast("Vehicle deleted from your listings.", { id: `owner-vehicle-${vehicleId}` });
     } catch (err) {
       setDeleteError(err.message || "Failed to delete vehicle. Please try again.");
     } finally {
@@ -1330,6 +1336,10 @@ function Vehicles() {
       <OwnerPageHeader
         title="Vehicle Management"
         description="Manage vehicle details, images, availability, and driver options."
+        actions={<HelpLink guide="list-vehicle" className="whitespace-nowrap">
+          <span className="xl:hidden">Need help?</span>
+          <span className="hidden xl:inline">Need help listing a vehicle?</span>
+        </HelpLink>}
       />
 
       <div className="bg-white border rounded-xl p-4 flex flex-col md:flex-row gap-3">
@@ -1451,13 +1461,6 @@ function Vehicles() {
           onConfirm={deleteVehicle}
         />
       )}
-      <InfoModal
-        isOpen={Boolean(vehicleSuccess)}
-        title={vehicleSuccess?.title}
-        message={vehicleSuccess?.message}
-        confirmLabel="Done"
-        onClose={() => setVehicleSuccess(null)}
-      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, Wrench, ShieldCheck } from "lucide-react";
+import { Users, Wrench, ShieldCheck, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 
   const AboutPage = ({
@@ -262,10 +262,10 @@ import Navbar from "../components/Navbar";
       <button
         type="button"
         onClick={() => setShowAI(false)}
-        className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/10"
+        className="rp-icon-button"
         aria-label="Close Rentify AI"
       >
-        X
+        <X aria-hidden="true" />
       </button>
     </div>
 

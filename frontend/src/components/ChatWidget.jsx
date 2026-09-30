@@ -3,6 +3,7 @@ import { LoaderCircle, MessageCirclePlus, Send, X } from "lucide-react";
 import API from "../utils/api";
 import { getSessionUser, SESSION_USER_UPDATED_EVENT } from "../utils/sessionStore";
 import { formatVehicleType } from "../utils/vehicleText";
+import { HELP_ASK_AI_EVENT } from "../utils/helpNavigation";
 
 const CHAT_WIDGET_STORAGE_KEY_PREFIX = "rentifypro.chatWidget.v2";
 const LEGACY_CHAT_WIDGET_STORAGE_KEY = "rentifypro.chatWidget.v1";
@@ -291,7 +292,7 @@ const removeLegacyChatStorage = () => {
   }
 };
 
-export default function ChatWidget({ isOpen, onClose, onViewAvailableVehicles }) {
+export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVehicles }) {
   const initialStorageScope = resolveStorageScope();
   const initialState = readStoredChatState(initialStorageScope);
   const [storageScope, setStorageScope] = useState(initialStorageScope);
@@ -304,6 +305,13 @@ export default function ChatWidget({ isOpen, onClose, onViewAvailableVehicles })
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const conversationIdRef = useRef(initialState.conversation.id);
+
+  useEffect(() => {
+    if (!onOpen) return undefined;
+    const handleHelpAskAI = () => onOpen();
+    window.addEventListener(HELP_ASK_AI_EVENT, handleHelpAskAI);
+    return () => window.removeEventListener(HELP_ASK_AI_EVENT, handleHelpAskAI);
+  }, [onOpen]);
 
   const messages = ensureConversation(messagesByLanguage[language], language);
   const draft = String(draftByLanguage[language] || "");
@@ -545,7 +553,7 @@ export default function ChatWidget({ isOpen, onClose, onViewAvailableVehicles })
     <div
       role="dialog"
       aria-label="Rentify AI chatbot"
-      className="rp-ai-chat-dialog fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[90] flex h-[min(76dvh,620px)] max-h-[620px] w-[calc(100vw-2rem)] max-w-[440px] flex-col overflow-hidden rounded-[1.5rem] border border-blue-100/80 bg-white shadow-[0_20px_48px_rgba(2,32,71,0.2)] sm:bottom-4 sm:right-4 sm:rounded-[1.75rem] sm:shadow-[0_30px_100px_rgba(2,32,71,0.3)]"
+      className="rp-ai-chat-dialog fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[90] flex h-[min(76dvh,620px)] max-h-[620px] w-[calc(100vw-2rem)] max-w-[440px] flex-col overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-[0_20px_48px_rgba(2,32,71,0.2)] sm:bottom-4 sm:right-4 sm:shadow-[0_30px_100px_rgba(2,32,71,0.3)]"
     >
       <div className="rp-ai-chat-header relative overflow-hidden bg-[linear-gradient(135deg,#0B75E7_0%,#056ED9_55%,#045FC3_100%)] px-4 py-4 text-white">
         <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full border border-white/10 bg-white/5" />
@@ -585,7 +593,7 @@ export default function ChatWidget({ isOpen, onClose, onViewAvailableVehicles })
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 transition hover:rotate-3 hover:bg-white/20"
+              className="rp-icon-button"
               aria-label="Close Rentify AI"
             >
               <X size={18} />

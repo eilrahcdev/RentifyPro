@@ -5,9 +5,9 @@ import { AdminPageHeader, AdminSidebar } from "./components/AdminShell";
 import {
   ConfirmationDialog,
   DocumentReviewDialog,
-  Toast,
   ViewerDialog,
 } from "./components/AdminUI";
+import { showActionToast } from "../utils/actionToast";
 import { adminDataApi } from "./adminDataApi";
 import BookingsView from "./pages/BookingsView";
 import CustomersView from "./pages/CustomersView";
@@ -65,8 +65,6 @@ export default function AdminLayout({ user, onLogout }) {
   const [reviewDocument, setReviewDocument] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-  const feedbackTimerRef = useRef(null);
   const actionLockRef = useRef(false);
 
   const displayName = user?.name || "Admin";
@@ -85,10 +83,8 @@ export default function AdminLayout({ user, onLogout }) {
     return [...months].filter(Boolean).sort().reverse().slice(0, 12);
   }, [bookings]);
 
-  const showFeedback = useCallback((message) => {
-    window.clearTimeout(feedbackTimerRef.current);
-    setFeedbackMessage(message);
-    feedbackTimerRef.current = window.setTimeout(() => setFeedbackMessage(""), 3200);
+  const showFeedback = useCallback((message, tone = "success") => {
+    showActionToast(message, { id: "admin-feedback", tone });
   }, []);
 
   const loadAdminData = useCallback(async ({ background = false } = {}) => {
@@ -106,7 +102,7 @@ export default function AdminLayout({ user, onLogout }) {
       setLoadState("ready");
       if (background) showFeedback("Dashboard data refreshed from RentifyPro.");
     } catch (error) {
-      if (background) showFeedback(error.message);
+      if (background) showFeedback(error.message, "error");
       else {
         setLoadError(error.message);
         setLoadState("error");
@@ -133,8 +129,6 @@ export default function AdminLayout({ user, onLogout }) {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [actionLoading, confirmation, reviewDocument, viewerItem]);
 
-  useEffect(() => () => window.clearTimeout(feedbackTimerRef.current), []);
-
   const selectView = (view, context = {}) => {
     setActiveView(view);
     setViewContext(context);
@@ -155,7 +149,7 @@ export default function AdminLayout({ user, onLogout }) {
       await pendingAction.onConfirm();
       setConfirmation(null);
     } catch (error) {
-      showFeedback(error.message || "The action could not be completed.");
+      showFeedback(error.message || "The action could not be completed.", "error");
     } finally {
       actionLockRef.current = false;
       setActionLoading(false);
@@ -223,7 +217,6 @@ export default function AdminLayout({ user, onLogout }) {
 
   return (
     <div className="min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-[#f5f7fb] lg:w-auto">
-      <Toast message={feedbackMessage} />
       <ConfirmationDialog confirmation={confirmation} loading={actionLoading} onCancel={() => setConfirmation(null)} onConfirm={confirmAction} />
       <ViewerDialog item={viewerItem} onClose={() => setViewerItem(null)} />
       <DocumentReviewDialog

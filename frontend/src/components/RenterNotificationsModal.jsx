@@ -153,7 +153,7 @@ export default function RenterNotificationsModal({
           </div>
           <button
             onClick={onClose}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="rp-icon-button"
             aria-label="Close notifications modal"
           >
             <X size={16} />

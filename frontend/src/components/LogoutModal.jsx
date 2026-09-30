@@ -14,7 +14,7 @@ export default function LogoutModal({ isOpen, onCancel, onConfirm }) {
         <div className="px-6 pt-5 pb-4 sm:px-7 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
           <button
             onClick={onCancel}
-            className="absolute right-2 top-2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+            className="rp-icon-button absolute right-2 top-2"
             aria-label="Close"
           >
             <X size={16} />

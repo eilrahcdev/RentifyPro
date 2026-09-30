@@ -7,7 +7,7 @@
   aspect-ratio: 16 / 10;
   min-height: 11.5rem;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: var(--rp-radius-card);
   border: 1px solid rgba(148, 163, 184, 0.28);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.96) 42%, rgba(226, 232, 240, 0.94) 100%);
@@ -83,7 +83,7 @@
 .rp-vehicle-cover--listing {
   min-height: 0;
   border: 0;
-  border-radius: 1rem;
+  border-radius: var(--rp-radius-card);
   background: linear-gradient(145deg, #edf6ff 0%, #dbeafe 100%);
   box-shadow: none;
 }

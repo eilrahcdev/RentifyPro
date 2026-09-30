@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import {
   REALTIME_CHAT_MAX_LENGTH,
-  REALTIME_CHAT_MAX_WORDS,
   validateRealtimeChatText,
 } from "../utils/chatMessageValidation.js";
 
@@ -29,11 +28,10 @@ test("rejects empty and oversized messages", () => {
   );
 });
 
-test("rejects messages above the real-time chat word limit", () => {
-  const result = validateRealtimeChatText(
-    Array.from({ length: REALTIME_CHAT_MAX_WORDS + 1 }, () => "word").join(" ")
-  );
-
-  assert.equal(result.isValid, false);
-  assert.equal(result.reason, "too_many_words");
+test("accepts more than 250 short words within the character limit", () => {
+  const text = Array.from({ length: 251 }, () => "a").join(" ");
+  const result = validateRealtimeChatText(text);
+  assert.equal(result.isValid, true);
+  assert.equal(result.text, text);
+  assert.equal(validateRealtimeChatText("a".repeat(REALTIME_CHAT_MAX_LENGTH)).isValid, true);
 });

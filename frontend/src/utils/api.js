@@ -114,7 +114,7 @@ const API = {
   register: (body) => request("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   getLoginChallenge: () => request("/auth/login-challenge", { method: "GET" }),
   login: (body) => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-  getProfile: () => request("/auth/me"),
+  getProfile: ({ signal } = {}) => request("/auth/me", { signal }),
   updateProfile: (body) => request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }),
   changePassword: (body) =>
     request("/auth/change-password", { method: "PATCH", body: JSON.stringify(body) }),
@@ -162,6 +162,8 @@ const API = {
     request(`/vehicles${buildQueryString(params)}`, { cache: "no-store" }),
   getVehicleLocations: (params = {}, signal) =>
     request(`/vehicles/locations${buildQueryString(params)}`, { cache: "no-store", signal }),
+  getVehicleSearchSuggestions: (params = {}, signal) =>
+    request(`/vehicles/suggestions${buildQueryString(params)}`, { cache: "no-store", signal }),
   getPublicVehicleById: (id) =>
     request(`/vehicles/${encodeURIComponent(id)}`, { cache: "no-store" }),
   getOwnerVehicles: () => request("/owner/vehicles"),
@@ -314,6 +316,11 @@ const API = {
   deleteConversation: (userId, context = "") =>
     request(`/chat/conversations/${userId}${buildQueryString(normalizeChatContext(context))}`, {
       method: "DELETE",
+    }),
+  setConversationArchived: (userId, archived) =>
+    request(`/chat/conversations/${userId}/archive`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived }),
     }),
   markMessagesAsRead: (userId, context = "") =>
     request(`/chat/messages/${userId}/read${buildQueryString(normalizeChatContext(context))}`, {

@@ -109,16 +109,6 @@ export function TableFooter({ visible, total, noun }) {
   );
 }
 
-export function Toast({ message }) {
-  if (!message) return null;
-  return (
-    <div role="status" aria-live="polite" className="fixed bottom-5 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-3 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-2xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-5 sm:translate-x-0">
-      <CircleCheck size={ICON_SIZE.control} strokeWidth={2} className="text-emerald-400" aria-hidden="true" />
-      {message}
-    </div>
-  );
-}
-
 export function ConfirmationDialog({ confirmation, loading, onCancel, onConfirm }) {
   if (!confirmation) return null;
   const danger = confirmation.tone === "danger";
@@ -153,7 +143,7 @@ export function ViewerDialog({ item, onClose }) {
             <h3 id="viewer-title" className="mt-2 text-xl font-bold text-slate-950">{item.title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{item.subtitle}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close preview" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><X size={ICON_SIZE.control} strokeWidth={2} /></button>
+          <button type="button" onClick={onClose} aria-label="Close preview" className="rp-icon-button"><X size={ICON_SIZE.control} strokeWidth={2} /></button>
         </div>
         <PreviewPane item={item} className="mt-6 min-h-64" />
       </div>
@@ -170,7 +160,7 @@ export function DocumentReviewDialog({ document, onClose, onApprove, onReject })
       <div role="dialog" aria-modal="true" aria-labelledby="review-title" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 p-5 sm:p-6">
           <div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600">Document review</p><h3 id="review-title" className="mt-1.5 text-xl font-bold text-slate-950">{document.fileName}</h3><p className="mt-1 text-sm text-slate-500">Review the verification details before making a decision.</p></div>
-          <button type="button" aria-label="Close review" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><X size={ICON_SIZE.control} strokeWidth={2} /></button>
+          <button type="button" aria-label="Close review" onClick={onClose} className="rp-icon-button"><X size={ICON_SIZE.control} strokeWidth={2} /></button>
         </div>
         <div className="grid gap-5 p-5 sm:grid-cols-[220px_1fr] sm:p-6">
           <PreviewPane item={document} className="min-h-56" />

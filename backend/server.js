@@ -37,6 +37,7 @@ import { registerNotificationHandlers } from "./handlers/notification.handlers.j
 import { warmupFaceService } from "./utils/faceServiceManager.js";
 import { warmupChatbotService } from "./utils/chatbotServiceManager.js";
 import { createOriginChecker } from "./utils/corsOrigins.js";
+import { mountFrontendDist } from "./utils/mountFrontendDist.js";
 import {
   startNotificationCleanupJob,
   stopNotificationCleanupJob,
@@ -63,6 +64,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const backendUploadsDir = path.resolve(__dirname, "uploads");
 const cwdUploadsDir = path.resolve(process.cwd(), "uploads");
+const serveFrontendDist = String(process.env.SERVE_FRONTEND_DIST || "").trim().toLowerCase() === "true";
 const chatbotUrl = process.env.CHATBOT_URL || "http://localhost:8001";
 const { isAllowedOrigin, allowedOrigins, allowVercelPreviewOrigins } = createOriginChecker();
 const corsOriginHandler = (origin, callback) => {
@@ -135,14 +137,16 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/reports", reportRoutes);
 
 // Info routes
-app.get("/", (_req, res) => {
-  res.json({
-    success: true,
-    message: "RentifyPro API is running",
-    version: "2.0.0",
-    security: ["helmet", "rate-limiting", "nosql-sanitize", "xss-clean", "hpp", "audit-logging"],
+if (!serveFrontendDist) {
+  app.get("/", (_req, res) => {
+    res.json({
+      success: true,
+      message: "RentifyPro API is running",
+      version: "2.0.0",
+      security: ["helmet", "rate-limiting", "nosql-sanitize", "xss-clean", "hpp", "audit-logging"],
+    });
   });
-});
+}
 
 app.get("/api/health", (_req, res) => {
   const states = { 0: "disconnected", 1: "connected", 2: "connecting", 3: "disconnecting" };
@@ -164,6 +168,10 @@ app.get("/api/face-service-health", async (_req, res) => {
     res.json({ success: false, message: "Face service unreachable" });
   }
 });
+
+if (serveFrontendDist) {
+  mountFrontendDist(app, path.resolve(__dirname, "../frontend/dist"));
+}
 
 // 404 handler
 app.use((req, res) => {

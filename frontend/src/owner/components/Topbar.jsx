@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Bell,
+  CircleHelp,
   Plus,
   Menu,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import { getOwnerProfileFromStorage } from "../utils/ownerProfile";
 import {
   SESSION_OWNER_PROFILE_UPDATED_EVENT,
 } from "../../utils/sessionStore";
+import { openHelp } from "../../utils/helpNavigation";
 
 const isNotificationRead = (notification) =>
   Boolean(notification?.readAt);
@@ -114,6 +116,16 @@ export default function Topbar({ onNavigateToNotifications, onToggleSidebar, isS
 
         {/* right side */}
         <div className="flex items-center gap-2 sm:gap-3">
+
+          <button
+            type="button"
+            onClick={() => openHelp()}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-white transition hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            title="Help"
+            aria-label="Help"
+          >
+            <CircleHelp size={18} aria-hidden="true" />
+          </button>
 
           {/* notifications */}
           <button

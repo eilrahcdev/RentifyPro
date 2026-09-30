@@ -28,6 +28,7 @@ import AuthShell from "./AuthShell";
 import LegalPolicyModal from "./LegalPolicyModal";
 import RegistrationDraftNotice from "./RegistrationDraftNotice";
 import RegistrationProgress from "./RegistrationProgress";
+import HelpLink from "./HelpLink";
 import SelfieCapture from "./SelfieCapture";
 import useRegistrationDraft from "../hooks/useRegistrationDraft";
 import useRegistrationEmailCheck from "../hooks/useRegistrationEmailCheck";
@@ -1032,7 +1033,7 @@ function RegisterForm({
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-[28px] border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         {/* header */}
         <div className="mb-6 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
@@ -1043,6 +1044,7 @@ function RegisterForm({
         </div>
 
         <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
+        {step === 4 && <HelpLink guide="verify-identity" className="mt-3">Need help with your ID or selfie?</HelpLink>}
 
         <RegistrationDraftNotice draft={draft} busy={isLoading} />
 
@@ -1318,7 +1320,7 @@ function RegisterForm({
                     )}
 
                     {identityStage === "id_blocked" && (
-                      <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable because this ID needs a correction. Review the reason below, then upload a matching ID.</p>
+                      <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
                     )}
 
                     {(["camera", "selfie", "complete"].includes(identityStage)) && (
@@ -1385,6 +1387,7 @@ function RegisterForm({
                     email={form.email}
                     enabled={kyc.idRegistered}
                     onIdStatus={handleIdStatus}
+                    onCorrectDetails={() => setStep(2)}
                     onResubmit={() => {
                       resetKyc();
                       setStep(4);

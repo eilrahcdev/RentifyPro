@@ -57,14 +57,16 @@ export default function RegistrationDraftNotice({ draft, busy }) {
         <button type="button" disabled={busy} onClick={() => setConfirmReset(true)} className="shrink-0 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">Start over</button>
       </div>
       {draft.warning && createPortal(
-        <div className="fixed inset-x-3 bottom-4 z-[100] mx-auto max-w-lg rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-xl" role="region" aria-label="Registration draft expiry">
-          <p role="alert" className="font-semibold text-amber-950">Your registration draft is about to expire.</p>
-          <p className="mt-1 text-amber-900">
-            {draft.remainingSeconds > 0
-              ? <>Your entered details will be cleared in <span role="timer" aria-live="off">{Math.ceil(draft.remainingSeconds / 60)} {draft.remainingSeconds > 60 ? "minutes" : "minute"}</span>.</>
-              : "Waiting for your current request to finish before clearing your details."}
-          </p>
-          <button ref={keepRef} type="button" onClick={draft.keepProgress} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Keep my progress</button>
+        <div className="rp-floating-alert-position">
+          <div className="rp-floating-alert" role="region" aria-label="Registration draft expiry">
+            <p role="alert">Your registration draft is about to expire.</p>
+            <p className="mt-1 font-normal text-slate-600">
+              {draft.remainingSeconds > 0
+                ? <>Your entered details will be cleared in <span role="timer" aria-live="off">{Math.ceil(draft.remainingSeconds / 60)} {draft.remainingSeconds > 60 ? "minutes" : "minute"}</span>.</>
+                : "Waiting for your current request to finish before clearing your details."}
+            </p>
+            <button ref={keepRef} type="button" onClick={draft.keepProgress} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Keep my progress</button>
+          </div>
         </div>, document.body
       )}
       {confirmReset && (

@@ -228,14 +228,14 @@ export default function VerificationStepper({ onVerificationComplete }) {
             {result.verified ? <CircleCheck size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" /> : <CircleX size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" />}
           </div>
           <h2 className={`text-2xl font-bold mb-2 ${result.verified ? "text-green-700" : "text-red-700"}`}>
-            {result.verified ? result.kycStatus === "approved" ? "Identity verified" : "Selfie matched" : "Selfie didn't match"}
+            {result.verified ? result.kycStatus === "approved" ? "Identity verified" : "Selfie matched" : "Selfie needs another try"}
           </h2>
           <p className="mb-4 text-sm leading-6 text-gray-600">
             {result.verified
               ? result.kycStatus === "approved"
                 ? "Your selfie matched your ID photo and your identity verification is complete."
                 : "Your selfie matched your ID photo. Your document is still being reviewed."
-              : "We couldn't match this selfie to your ID photo. Try again in even lighting, face the camera directly, and remove anything covering your face."}
+              : result.message || "We couldn't verify this selfie. Keep your face visible and try again."}
           </p>
           {result.verified && result.kycStatus !== "approved" && <p role="status" className="mb-4 text-sm leading-6 text-amber-800">Use Refresh status in your account settings to check document approval before booking.</p>}
 

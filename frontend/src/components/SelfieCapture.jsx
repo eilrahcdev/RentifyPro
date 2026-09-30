@@ -95,7 +95,7 @@ export default function SelfieCapture({
     setCameraError("");
     setCameraState("capturing");
     try {
-      const dataUrl = await captureBase64FromStream(streamRef.current);
+      const dataUrl = await captureBase64FromStream(streamRef.current, { videoElement: videoRef.current });
       if (!dataUrl) throw new Error("EMPTY_CAPTURE");
 
       closeCamera();

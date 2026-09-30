@@ -93,7 +93,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                className="rp-icon-button"
                 aria-label="Close notification details"
               >
                 <X size={18} />

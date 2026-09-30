@@ -80,7 +80,7 @@ export default function ReportModalFrame({
                   <p id={`${titleId}-subtitle`} className="mt-0.5 break-words text-xs leading-4 text-slate-500">{subtitle}</p>
                 </div>
               </div>
-              <button type="button" aria-label={reviewing ? "Back to edit report" : "Close report form"} disabled={submitting} onClick={dismiss} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50">
+              <button type="button" aria-label={reviewing ? "Back to edit report" : "Close report form"} disabled={submitting} onClick={dismiss} className="rp-icon-button">
                 <X size={18} strokeWidth={2} />
               </button>
             </div>

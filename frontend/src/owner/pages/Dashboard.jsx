@@ -21,7 +21,6 @@ import {
   History,
   ImageOff,
   Inbox,
-  Lightbulb,
   ListTodo,
   Wallet,
   X,
@@ -37,6 +36,8 @@ import {
 import { resolveAssetUrl } from "../../utils/media";
 import { formatVehicleTypeLabel } from "../../utils/vehicleText";
 import ModalPortal from "../../components/ModalPortal";
+import { showActionToast } from "../../utils/actionToast";
+import ReturnReviewModal from "../components/ReturnReviewModal";
 
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
@@ -722,7 +723,10 @@ export default function Dashboard() {
   const [extensionReviewBooking, setExtensionReviewBooking] = useState(null);
   const [reviewingExtensionId, setReviewingExtensionId] = useState("");
   const [renterRequestReview, setRenterRequestReview] = useState(null);
+  const [returnDeclineRequest, setReturnDeclineRequest] = useState(null);
+  const [returnReviewNote, setReturnReviewNote] = useState("");
   const [reviewingRenterRequestKey, setReviewingRenterRequestKey] = useState("");
+  const [reviewError, setReviewError] = useState("");
   const [viewAllModal, setViewAllModal] = useState("");
 
   const loadDashboard = useCallback(async ({ silent = false } = {}) => {
@@ -826,8 +830,10 @@ export default function Dashboard() {
 
   const updateBookingStatus = async (bookingId, nextStatus) => {
     setUpdatingBookingId(bookingId);
+    setError("");
     try {
       const response = await API.updateOwnerBookingStatus(bookingId, nextStatus);
+      if (response?.success === false) throw new Error(response.message || "Failed to update booking.");
       const updated = normalizeBookingStatus(response.booking);
 
       setBookings((prev) => {
@@ -838,6 +844,7 @@ export default function Dashboard() {
 
       setLastUpdated(new Date().toISOString());
       loadDashboard({ silent: true });
+      showActionToast(nextStatus === "confirmed" ? "Booking approved." : nextStatus === "rejected" ? "Booking declined." : "Booking updated.", { id: `owner-booking-${bookingId}` });
     } catch (err) {
       setError(err.message || "Failed to update booking.");
     } finally {
@@ -848,16 +855,19 @@ export default function Dashboard() {
   const reviewExtensionRequest = async (booking, action) => {
     if (!booking?._id) return;
     setReviewingExtensionId(booking._id);
+    setReviewError("");
     try {
       const response = await API.reviewOwnerBookingExtensionRequest(booking._id, action);
+      if (response?.success === false) throw new Error(response.message || "Failed to review extension request.");
       const updated = normalizeBookingStatus(response.booking);
 
       setBookings((prev) => prev.map((item) => (item._id === booking._id ? updated : item)));
-      setExtensionReviewBooking((prev) => (prev?._id === booking._id ? updated : prev));
+      setExtensionReviewBooking(null);
       setLastUpdated(new Date().toISOString());
       loadDashboard({ silent: true });
+      showActionToast(action === "approve" ? "Extension approved." : "Extension declined.", { id: `owner-booking-${booking._id}` });
     } catch (err) {
-      setError(err.message || "Failed to review extension request.");
+      setReviewError(err.message || "Failed to review extension request.");
     } finally {
       setReviewingExtensionId("");
     }
@@ -865,6 +875,7 @@ export default function Dashboard() {
 
   const openRenterRequestReview = (request) => {
     setViewAllModal("");
+    setReviewError("");
 
     if (request?.type === "extension") {
       setDayModalOpen(false);
@@ -875,10 +886,11 @@ export default function Dashboard() {
     setRenterRequestReview(request);
   };
 
-  const reviewRenterRequest = async (request, action) => {
+  const reviewRenterRequest = async (request, action, note = "") => {
     if (!request?.booking?._id) return;
 
     setReviewingRenterRequestKey(request.key);
+    setReviewError("");
     try {
       let response;
       if (request.type === "booking") {
@@ -893,11 +905,13 @@ export default function Dashboard() {
       } else if (request.type === "return") {
         response = await API.reviewOwnerVehicleReturnRequest(
           request.booking._id,
-          action === "approve" ? "confirm" : "decline"
+          action === "approve" ? "confirm" : "decline",
+          action === "reject" ? { note } : {}
         );
       } else {
         return;
       }
+      if (response?.success === false) throw new Error(response.message || "Failed to review request.");
 
       const updated = normalizeBookingStatus(response.booking);
       setBookings((prev) => {
@@ -906,10 +920,20 @@ export default function Dashboard() {
         return prev.map((booking) => (booking._id === request.booking._id ? updated : booking));
       });
       setRenterRequestReview(null);
+      setReturnDeclineRequest(null);
+      setReturnReviewNote("");
       setLastUpdated(new Date().toISOString());
       loadDashboard({ silent: true });
+      const decisionMessage = request.type === "booking"
+        ? action === "approve" ? "Booking approved." : "Booking declined."
+        : request.type === "cancellation"
+          ? action === "approve" ? "Cancellation approved. Booking cancelled." : "Cancellation declined. Booking remains active."
+          : request.type === "return"
+            ? action === "approve" ? "Vehicle return confirmed." : "Return request declined. Booking remains active."
+            : action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.";
+      showActionToast(decisionMessage, { id: `owner-booking-${request.booking._id}` });
     } catch (err) {
-      setError(err.message || `Failed to review ${request.label.toLowerCase()}.`);
+      setReviewError(err.message || `Failed to review ${request.label.toLowerCase()}.`);
     } finally {
       setReviewingRenterRequestKey("");
     }
@@ -933,10 +957,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <p className="sr-only" aria-live="polite">
-        {syncing ? "Syncing live updates..." : loading ? "Loading dashboard..." : `Last updated: ${formatDateTime(lastUpdated)}`}
-      </p>
-
       {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
 
       {/* ── Summary Cards ─────────────────────────────── */}
@@ -978,12 +998,21 @@ export default function Dashboard() {
       </section>
 
       {/* ── Calendar + Tasks & Requests ───────────────── */}
+      <p className="sr-only" aria-live="polite">
+        {syncing ? "Syncing live updates..." : loading ? "Loading dashboard..." : `Last updated: ${formatDateTime(lastUpdated)}`}
+      </p>
+
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.92fr)]">
         {/* Calendar */}
         <Panel className="overflow-hidden">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 border-b border-slate-200/80 pb-4">
-            <CalendarDays size={20} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />
-            Rental Calendar
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-slate-200/80 pb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <CalendarDays size={20} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />
+              Rental Calendar
+            </div>
+            <p className="ml-auto max-w-md text-right text-xs leading-5 text-slate-500">
+              Tip: Click any date on the calendar to see schedules and manage bookings easily.
+            </p>
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
@@ -1264,12 +1293,6 @@ export default function Dashboard() {
         </Panel>
       </section>
 
-      {/* ── Tip Bar ──────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-1 text-sm text-slate-500">
-        <Lightbulb size={16} className="shrink-0 text-[#017FE6]" />
-        <span>Tip: Click any date on the calendar to see schedules and manage bookings easily.</span>
-      </div>
-
       {/* ── Day Modal ────────────────────────────────── */}
       {viewAllModal && (
         <ViewAllDashboardModal
@@ -1413,7 +1436,7 @@ export default function Dashboard() {
 
       {/* ── Extension Review Modal ───────────────────── */}
       {extensionReviewBooking && (
-        <Modal onClose={() => setExtensionReviewBooking(null)} title="Review Extension Request">
+        <Modal onClose={() => { setExtensionReviewBooking(null); setReviewError(""); }} title="Review Extension Request">
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <VehicleThumbnail
@@ -1442,6 +1465,8 @@ export default function Dashboard() {
               </div>
             )}
 
+            {reviewError && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{reviewError}</p>}
+
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1467,7 +1492,7 @@ export default function Dashboard() {
       )}
 
       {renterRequestReview && (
-        <Modal onClose={() => setRenterRequestReview(null)} title={`Review ${renterRequestReview.label}`}>
+        <Modal onClose={() => { setRenterRequestReview(null); setReviewError(""); }} title={`Review ${renterRequestReview.label}`}>
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <VehicleThumbnail
@@ -1503,6 +1528,8 @@ export default function Dashboard() {
               </div>
             )}
 
+            {reviewError && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{reviewError}</p>}
+
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1522,7 +1549,16 @@ export default function Dashboard() {
               <button
                 type="button"
                 disabled={reviewingRenterRequestKey === renterRequestReview.key}
-                onClick={() => reviewRenterRequest(renterRequestReview, "reject")}
+                onClick={() => {
+                  if (renterRequestReview.type === "return") {
+                    setReturnReviewNote("");
+                    setReviewError("");
+                    setReturnDeclineRequest(renterRequestReview);
+                    setRenterRequestReview(null);
+                  } else {
+                    reviewRenterRequest(renterRequestReview, "reject");
+                  }
+                }}
                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
               >
                 <CircleX size={18} strokeWidth={2} aria-hidden="true" />
@@ -1538,6 +1574,20 @@ export default function Dashboard() {
           </div>
         </Modal>
       )}
+      <ReturnReviewModal
+        review={returnDeclineRequest && { booking: returnDeclineRequest.booking, action: "decline" }}
+        note={returnReviewNote}
+        error={returnDeclineRequest ? reviewError : ""}
+        loading={Boolean(returnDeclineRequest) && reviewingRenterRequestKey === returnDeclineRequest.key}
+        onNoteChange={setReturnReviewNote}
+        onClose={() => {
+          if (reviewingRenterRequestKey === returnDeclineRequest?.key) return;
+          setReturnDeclineRequest(null);
+          setReturnReviewNote("");
+          setReviewError("");
+        }}
+        onSubmit={() => reviewRenterRequest(returnDeclineRequest, "reject", returnReviewNote)}
+      />
     </div>
   );
 }
@@ -1568,19 +1618,19 @@ function SummaryCard({
   const hasVisibilityToggle = typeof onToggleValueVisibility === "function";
 
   return (
-    <Panel className="h-full !p-3 sm:!p-5">
-      <div className="relative flex h-full flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl ${iconClassName}`}>
+    <Panel className="h-full !p-3 sm:!p-4">
+      <div className="relative flex h-full flex-col gap-3 sm:flex-row sm:items-start xl:gap-2">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl ${iconClassName}`}>
           <SummaryIcon className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden="true" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium leading-4 text-slate-600 sm:text-sm">{title}</p>
+            <p className={`text-xs font-medium leading-4 text-slate-600 sm:text-sm ${hasVisibilityToggle ? "sm:pr-11 xl:text-xs min-[1400px]:text-sm" : ""}`}>{title}</p>
             {hasVisibilityToggle && (
               <button
                 type="button"
                 onClick={onToggleValueVisibility}
-                className="absolute right-0 top-0 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#017FE6]/40 sm:static"
+                className="absolute right-0 top-0 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#017FE6]/40"
                 aria-label={isValueVisible ? `Hide ${title}` : `Show ${title}`}
                 title={isValueVisible ? `Hide ${title}` : `Show ${title}`}
               >
@@ -1588,7 +1638,7 @@ function SummaryCard({
               </button>
             )}
           </div>
-          <p className="mt-1 break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{value}</p>
+          <p className={`mt-1 break-words font-bold tracking-tight text-slate-900 ${hasVisibilityToggle ? "text-lg sm:pr-12 sm:text-2xl xl:text-lg min-[1400px]:text-2xl" : "text-xl sm:text-2xl"}`}>{value}</p>
           {subtitle && (
             <button
               type="button"
@@ -1763,7 +1813,7 @@ function Modal({ title, description = "Simple, readable booking details.", child
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+            className="rp-icon-button"
             aria-label="Close modal"
           >
             <X size={18} />

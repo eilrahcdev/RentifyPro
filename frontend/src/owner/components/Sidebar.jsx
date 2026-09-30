@@ -184,7 +184,7 @@ function Sidebar({
             <p className="rp-owner-sidebar__brand-name">Rentify<span>Pro</span></p>
             <p className="rp-owner-sidebar__brand-caption">Owner workspace</p>
           </div>
-          <button type="button" className="rp-owner-sidebar__close" onClick={onCloseMobile} aria-label="Close menu">
+          <button type="button" className="rp-icon-button rp-owner-sidebar__close" onClick={onCloseMobile} aria-label="Close menu">
             <X size={20} aria-hidden="true" />
           </button>
         </div>

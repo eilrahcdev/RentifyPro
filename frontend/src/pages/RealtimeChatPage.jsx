@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Flag, MessageCircle, Search, Send, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ArrowLeft, Flag, Info, MessageCircle, RotateCcw, Send, Trash2 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
@@ -13,6 +13,9 @@ import {
 } from "../utils/realtimeChatInput";
 import MessageReportModal from "../components/MessageReportModal";
 import ChatMessageInput from "../components/ChatMessageInput";
+import { ChatFolderNav, ChatParticipantDetails, ChatSearchField, ConversationActionMenu } from "../components/MessagingWorkspaceControls";
+import { readRecentChatPeople, rememberRecentChatPerson } from "../utils/recentChatPeople";
+import { getChatPreview } from "../utils/chatPreview";
 import { ConversationListSkeleton, MessageThreadSkeleton } from "../components/LoadingSkeletons";
 
 const getId = (value) => String(value?._id || value || "");
@@ -25,6 +28,15 @@ const formatDateTime = (value) =>
         minute: "2-digit",
       })
     : "-";
+const formatConversationTime = (value) => {
+  const time = value ? new Date(value).getTime() : 0;
+  if (!time || Number.isNaN(time)) return "";
+  const elapsed = Math.max(0, Date.now() - time);
+  if (elapsed < 60 * 1000) return "Now";
+  if (elapsed < 60 * 60 * 1000) return `${Math.floor(elapsed / (60 * 1000))}m`;
+  if (elapsed < 24 * 60 * 60 * 1000) return `${Math.floor(elapsed / (60 * 60 * 1000))}h`;
+  return new Date(value).toLocaleDateString([], { month: "short", day: "numeric" });
+};
 const appendUniqueMessage = (list, message) =>
   list.some((item) => item._id === message._id) ? list : [...list, message];
 const replaceMessageById = (list, message) =>
@@ -120,10 +132,24 @@ export default function RealtimeChatPage({
   const [showDeleteConversationConfirm, setShowDeleteConversationConfirm] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [conversationQuery, setConversationQuery] = useState("");
+  const [folder, setFolder] = useState("inbox");
+  const [searching, setSearching] = useState(false);
+  const [recentPersonIds, setRecentPersonIds] = useState(() => readRecentChatPeople(currentUserId));
+  const [openActionMenu, setOpenActionMenu] = useState("");
+  const [archivePendingId, setArchivePendingId] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailsModal, setDetailsModal] = useState(() => window.innerWidth < 1280);
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth < 768);
   const [showConversationList, setShowConversationList] = useState(true);
   const [reportMessage, setReportMessage] = useState(null);
   const [reportNotice, setReportNotice] = useState("");
+  const directChatPartnerRef = useRef(normalizeInitialPartner(initialChatContext));
+  const lastSelectedConversationRef = useRef(null);
+  const listHeadingRef = useRef(null);
+  const threadBackButtonRef = useRef(null);
+  const messageRequestIdRef = useRef(0);
+  const detailsTriggerRef = useRef(null);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => getId(conversation.partner) === activePartnerId),
@@ -132,19 +158,24 @@ export default function RealtimeChatPage({
 
   const filteredConversations = useMemo(() => {
     const query = conversationQuery.trim().toLowerCase();
-    if (!query) return conversations;
+    if (searching && !query) {
+      return recentPersonIds.map((id) => conversations.find((conversation) => getId(conversation.partner) === id)).filter(Boolean);
+    }
+    if (!query) return conversations.filter((conversation) => Boolean(conversation.isArchived) === (folder === "archived"));
 
     return conversations.filter((conversation) =>
       [
         conversation.partner?.name,
         conversation.partner?.email,
-        conversation.lastMessage?.text,
+        conversation.lastMessage?.vehicle?.name,
       ].some((value) => String(value || "").toLowerCase().includes(query))
     );
-  }, [conversationQuery, conversations]);
+  }, [conversationQuery, conversations, folder, recentPersonIds, searching]);
+
+  const folderCount = conversations.filter((conversation) => Boolean(conversation.isArchived) === (folder === "archived")).length;
 
   const mergeInitialPartnerConversation = useCallback((list = []) => {
-    const initialPartner = normalizeInitialPartner(initialChatContext);
+    const initialPartner = directChatPartnerRef.current;
     if (!initialPartner?._id) return list;
     if (list.some((conversation) => getId(conversation.partner) === initialPartner._id)) return list;
     return [
@@ -155,7 +186,7 @@ export default function RealtimeChatPage({
       },
       ...list,
     ];
-  }, [initialChatContext]);
+  }, []);
 
   const loadConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -172,7 +203,7 @@ export default function RealtimeChatPage({
       setActivePartnerId((prevId) =>
         nextConversations.some((conversation) => getId(conversation.partner) === prevId)
           ? prevId
-          : getId(nextConversations[0]?.partner)
+          : ""
       );
       requestLiveCountersRefresh();
     } catch (err) {
@@ -183,15 +214,23 @@ export default function RealtimeChatPage({
   }, [mergeInitialPartnerConversation]);
 
   const loadMessages = useCallback(async (partnerId, context = {}) => {
-    if (!partnerId) return;
+    const requestId = ++messageRequestIdRef.current;
+    if (!partnerId) {
+      setMessages([]);
+      setLoadingMessages(false);
+      return;
+    }
 
     setLoadingMessages(true);
+    setMessages([]);
     setError("");
     try {
       const normalizedContext = normalizeChatContext(context);
       const response = await API.getMessagesWithUser(partnerId, normalizedContext);
+      if (requestId !== messageRequestIdRef.current) return;
       setMessages(response.messages || []);
       await API.markMessagesAsRead(partnerId, normalizedContext);
+      if (requestId !== messageRequestIdRef.current) return;
       setConversations((prev) =>
         prev.map((conversation) =>
           getId(conversation.partner) === partnerId ? { ...conversation, unreadCount: 0 } : conversation
@@ -199,9 +238,11 @@ export default function RealtimeChatPage({
       );
       requestLiveCountersRefresh();
     } catch (err) {
-      setError(err.message || "Failed to load messages.");
+      if (requestId === messageRequestIdRef.current) {
+        setError(err.message || "Failed to load messages.");
+      }
     } finally {
-      setLoadingMessages(false);
+      if (requestId === messageRequestIdRef.current) setLoadingMessages(false);
     }
   }, []);
 
@@ -210,21 +251,61 @@ export default function RealtimeChatPage({
   }, [loadConversations]);
 
   useEffect(() => {
-    const handleResize = () => setIsMobileView(window.innerWidth < 768);
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobileView(mobile);
+      setDetailsModal(window.innerWidth < 1280);
+      if (!mobile) setShowConversationList(true);
+      else if (activePartnerId) setShowConversationList(false);
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [activePartnerId]);
 
   useEffect(() => {
     const initialPartner = normalizeInitialPartner(initialChatContext);
     if (!initialPartner?._id) return;
 
+    directChatPartnerRef.current = initialPartner;
     setConversations((prev) => mergeInitialPartnerConversation(prev));
     setActivePartnerId(initialPartner._id);
     setActiveChatContext(normalizeChatContext(initialChatContext));
     setShowConversationList(false);
     onChatContextHandled?.();
   }, [initialChatContext, mergeInitialPartnerConversation, onChatContextHandled]);
+
+  useEffect(() => {
+    if (isMobileView && !showConversationList && activePartnerId) {
+      threadBackButtonRef.current?.focus();
+    }
+  }, [isMobileView, showConversationList, activePartnerId]);
+
+  const openConversation = (partnerId, button, conversation) => {
+    lastSelectedConversationRef.current = button;
+    setActivePartnerId(partnerId);
+    setActiveChatContext({ bookingId: "", vehicleId: "" });
+    setShowConversationList(false);
+    setShowDetails(false);
+    setOpenActionMenu("");
+    if (searching) {
+      setRecentPersonIds(rememberRecentChatPerson(currentUserId, partnerId));
+      setSearching(false);
+      setConversationQuery("");
+      setFolder(conversation?.isArchived ? "archived" : "inbox");
+    }
+  };
+
+  const returnToConversations = () => {
+    setActivePartnerId("");
+    setActiveChatContext({ bookingId: "", vehicleId: "" });
+    setShowConversationList(true);
+    setShowDetails(false);
+    requestAnimationFrame(() => {
+      const target = lastSelectedConversationRef.current;
+      if (target?.isConnected) target.focus();
+      else listHeadingRef.current?.focus();
+    });
+  };
 
   useEffect(() => {
     loadMessages(activePartnerId, activeChatContext);
@@ -255,6 +336,7 @@ export default function RealtimeChatPage({
         );
 
         const nextConversation = {
+          ...(existingConversation || {}),
           partner: normalizePartner({
             _id: getId(partner),
             name: partner?.name,
@@ -262,6 +344,7 @@ export default function RealtimeChatPage({
             avatar: partner?.avatar,
           }),
           lastMessage: toMessagePreview(message),
+          isArchived: false,
           unreadCount:
             !isOutgoing && activePartnerId !== partnerId
               ? (existingConversation?.unreadCount || 0) + 1
@@ -330,13 +413,23 @@ export default function RealtimeChatPage({
       loadMessages(partnerId, activeChatContext);
     };
 
+    const handleArchiveChanged = (payload = {}) => {
+      const partnerId = String(payload.partnerId || "");
+      if (!partnerId) return;
+      setConversations((prev) => prev.map((conversation) =>
+        getId(conversation.partner) === partnerId ? { ...conversation, isArchived: Boolean(payload.archived) } : conversation
+      ));
+    };
+
     socket.on("chat:message", handleIncomingMessage);
     socket.on("chat:message:update", handleMessageUpdate);
     socket.on("chat:conversation:deleted", handleConversationDeleted);
+    socket.on("chat:conversation:archive", handleArchiveChanged);
     return () => {
       socket.off("chat:message", handleIncomingMessage);
       socket.off("chat:message:update", handleMessageUpdate);
       socket.off("chat:conversation:deleted", handleConversationDeleted);
+      socket.off("chat:conversation:archive", handleArchiveChanged);
     };
   }, [activePartnerId, activeChatContext, currentUserId, loadConversations, loadMessages]);
 
@@ -357,6 +450,7 @@ export default function RealtimeChatPage({
       if (messageMatchesContext(response.message, contextPayload)) {
         setMessages((prev) => appendUniqueMessage(prev, response.message));
       }
+      setFolder("inbox");
       loadConversations();
     } catch (err) {
       setMessageText((currentDraft) => currentDraft || text);
@@ -442,23 +536,63 @@ export default function RealtimeChatPage({
   };
 
   const confirmDeleteConversation = async () => {
-    if (!activePartnerId || deletingConversation) return;
+    const partnerId = deleteTargetId || activePartnerId;
+    if (!partnerId || deletingConversation) return;
 
     try {
       setDeletingConversation(true);
       setError("");
-      await API.deleteConversation(activePartnerId, activeChatContext);
-      setMessages([]);
-      cancelEditMessage();
+      await API.deleteConversation(partnerId, partnerId === activePartnerId ? activeChatContext : {});
+      if (partnerId === activePartnerId) {
+        directChatPartnerRef.current = null;
+        setMessages([]);
+        cancelEditMessage();
+      }
       setShowDeleteConversationConfirm(false);
+      setDeleteTargetId("");
       await loadConversations();
-      if (isMobileView) setShowConversationList(true);
+      if (partnerId === activePartnerId && isMobileView) returnToConversations();
       requestLiveCountersRefresh();
     } catch (err) {
       setError(err.message || "Failed to delete conversation.");
     } finally {
       setDeletingConversation(false);
     }
+  };
+
+  const changeArchive = async (conversation) => {
+    const partnerId = getId(conversation?.partner);
+    if (!partnerId || archivePendingId) return;
+    setArchivePendingId(partnerId);
+    setError("");
+    try {
+      const response = await API.setConversationArchived(partnerId, !conversation.isArchived);
+      setConversations((prev) => prev.map((item) => getId(item.partner) === partnerId
+        ? { ...item, isArchived: Boolean(response.archived) } : item));
+      setReportNotice(response.archived ? "Conversation moved to Archived." : "Conversation restored to Chats.");
+      setSearching(false);
+      setConversationQuery("");
+      if (partnerId === activePartnerId) {
+        setActivePartnerId("");
+        setShowDetails(false);
+        setShowConversationList(true);
+      }
+      requestAnimationFrame(() => listHeadingRef.current?.focus());
+    } catch (err) {
+      setError(err.message || "Failed to update archive.");
+    } finally {
+      setArchivePendingId("");
+    }
+  };
+
+  const conversationActions = (conversation) => [
+    { label: conversation.isArchived ? "Restore chat" : "Archive chat", icon: conversation.isArchived ? RotateCcw : Archive, disabled: archivePendingId === getId(conversation.partner), onClick: () => changeArchive(conversation) },
+    { label: "Delete chat", icon: Trash2, danger: true, onClick: () => { setDeleteTargetId(getId(conversation.partner)); setShowDeleteConversationConfirm(true); } },
+  ];
+
+  const closeDetails = () => {
+    setShowDetails(false);
+    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   };
 
   const isShowingList = !isMobileView || showConversationList;
@@ -509,89 +643,86 @@ export default function RealtimeChatPage({
         )}
         {reportNotice && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">{reportNotice}</div>}
 
-        <div className="rp-chat-shell">
+        <div className={`rp-chat-shell ${isMobileView && !showConversationList ? "is-thread-open" : ""}`}>
+          <ChatFolderNav folder={folder} onChange={(next) => { setFolder(next); setSearching(false); setConversationQuery(""); setOpenActionMenu(""); }} />
           <aside className={`rp-chat-sidebar ${isShowingList ? "rp-chat-panel-visible" : "rp-chat-panel-hidden"}`}>
             <div className="rp-chat-sidebar-header">
               <div>
-                <h2>Conversations</h2>
-                <p>{conversations.length} total</p>
+                <h2 ref={listHeadingRef} tabIndex={-1}>{folder === "archived" ? "Archived chats" : "Conversations"}</h2>
+                <p>{folderCount} {folder === "archived" ? "archived" : "chats"}</p>
               </div>
-              <span className="rp-chat-count" aria-label={`${conversations.length} conversations`}>
-                {conversations.length > 99 ? "99+" : conversations.length}
+              <span className="rp-chat-count" aria-label={`${folderCount} conversations`}>
+                {folderCount > 99 ? "99+" : folderCount}
               </span>
             </div>
 
-            <div className="rp-chat-search">
-              <Search size={16} aria-hidden="true" />
-              <input
-                value={conversationQuery}
-                onChange={(event) => setConversationQuery(event.target.value)}
-                placeholder="Search conversations"
-                aria-label="Search conversations"
-              />
-            </div>
+            <ChatSearchField label="Search conversations" value={conversationQuery} onChange={setConversationQuery} searching={searching} onSearchStart={() => setSearching(true)} onSearchEnd={() => { setSearching(false); setConversationQuery(""); listHeadingRef.current?.focus(); }} />
 
             <div className="rp-chat-conversation-list">
               {loadingConversations && <ConversationListSkeleton />}
-              {!loadingConversations && !conversations.length && (
+              {searching && !conversationQuery.trim() && <p className="rp-chat-list-message">Recent searches</p>}
+              {!loadingConversations && !searching && !folderCount && folder === "inbox" && (
                 <div className="rp-chat-list-empty">
                   <MessageCircle size={20} strokeWidth={2} aria-hidden="true" />
                   <p>No conversations yet</p>
                   <span>Open a vehicle listing to message its owner.</span>
                 </div>
               )}
-              {!loadingConversations && conversations.length > 0 && !filteredConversations.length && (
+              {!loadingConversations && !searching && !folderCount && folder === "archived" && <p className="rp-chat-list-message">No archived conversations.</p>}
+              {!loadingConversations && searching && !conversationQuery.trim() && !filteredConversations.length && <p className="rp-chat-list-message">People you open from search will appear here.</p>}
+              {!loadingConversations && conversationQuery.trim() && !filteredConversations.length && (
                 <p className="rp-chat-list-message">No conversations match your search.</p>
               )}
 
               {!loadingConversations && filteredConversations.map((conversation) => {
                 const partnerId = getId(conversation.partner);
                 const isActive = activePartnerId === partnerId;
+                const partnerName = conversation.partner?.name || "User";
+                const preview = getChatPreview(conversation.lastMessage, currentUserId);
                 return (
-                  <button
+                  <div
                     key={partnerId}
-                    type="button"
-                    onClick={() => {
-                      setActivePartnerId(partnerId);
-                      setActiveChatContext({ bookingId: "", vehicleId: "" });
-                      setShowConversationList(false);
-                    }}
                     className={`rp-chat-conversation ${isActive ? "rp-chat-conversation-active" : ""}`}
-                    aria-current={isActive ? "true" : undefined}
                   >
+                    <button type="button" className="rp-chat-conversation-select" onClick={(event) => openConversation(partnerId, event.currentTarget, conversation)} aria-current={isActive ? "true" : undefined} aria-label={`${partnerName}, ${preview}${conversation.unreadCount > 0 ? `, ${conversation.unreadCount} unread messages` : ""}`}>
                     <AvatarCircle
-                      name={conversation.partner?.name || "User"}
+                      name={partnerName}
                       avatar={conversation.partner?.avatar}
                       sizeClass="h-11 w-11"
                     />
                     <div className="rp-chat-conversation-copy">
                       <div className="rp-chat-conversation-title">
-                        <p>{conversation.partner?.name || "User"}</p>
-                        <time>{formatDateTime(conversation.lastMessage?.createdAt)}</time>
+                        <p>{partnerName}</p>
+                        {conversation.lastMessage?.createdAt && <time dateTime={conversation.lastMessage.createdAt}>{formatConversationTime(conversation.lastMessage.createdAt)}</time>}
                       </div>
                       <div className="rp-chat-conversation-preview">
-                        <p>{conversation.lastMessage?.text || "No messages yet"}</p>
+                        <p>{preview}</p>
                         {conversation.unreadCount > 0 && (
-                          <span aria-label={`${conversation.unreadCount} unread messages`}>
+                          <span aria-hidden="true">
                           {conversation.unreadCount}
                           </span>
                         )}
                       </div>
                     </div>
-                  </button>
+                    </button>
+                    <ConversationActionMenu label={`Actions for ${partnerName}`} open={openActionMenu === `row:${partnerId}`} onToggle={() => setOpenActionMenu((prev) => prev === `row:${partnerId}` ? "" : `row:${partnerId}`)} onClose={() => setOpenActionMenu("")} actions={conversationActions(conversation)} />
+                  </div>
                 );
               })}
             </div>
           </aside>
 
-          <section className={`rp-chat-thread ${isShowingThread ? "rp-chat-panel-visible" : "rp-chat-panel-hidden"}`}>
+          <section id="renter-message-thread" className={`rp-chat-thread ${isShowingThread ? "rp-chat-panel-visible" : "rp-chat-panel-hidden"}`}>
+            {activePartnerId ? (
+              <>
             <div className="rp-chat-thread-header">
               <div className="rp-chat-thread-person">
                 {isMobileView && (
                   <button
                     type="button"
+                    ref={threadBackButtonRef}
                     className="rp-chat-back-button"
-                    onClick={() => setShowConversationList(true)}
+                    onClick={returnToConversations}
                     aria-label="Back to conversations"
                   >
                     <ArrowLeft size={18} />
@@ -605,23 +736,16 @@ export default function RealtimeChatPage({
                   />
                 )}
                 <div className="min-w-0">
-                  <h2>{activeConversation?.partner?.name || "Select a conversation"}</h2>
+                  <h2>{activeConversation?.partner?.name || "Conversation"}</h2>
                   <p>
                     {activeConversation?.partner?.email || "Choose an owner from your conversations"}
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowDeleteConversationConfirm(true)}
-                disabled={!activePartnerId}
-                className="rp-chat-delete-button"
-                aria-label="Delete conversation"
-              >
-                <Trash2 size={18} strokeWidth={2} aria-hidden="true" />
-                <span>Delete</span>
-              </button>
+              <div className="rp-chat-thread-tools">
+                <button ref={detailsTriggerRef} type="button" className="rp-chat-more-button" aria-label="Show chat details" aria-expanded={showDetails} onClick={() => setShowDetails(true)}><Info size={20} aria-hidden="true" /></button>
+              </div>
             </div>
 
             <div
@@ -743,19 +867,27 @@ export default function RealtimeChatPage({
                 value={messageText}
                 onChange={setMessageText}
                 onSend={sendMessage}
-                placeholder={activePartnerId ? "Write a message..." : "Select a conversation first"}
-                disabled={!activePartnerId}
+                placeholder="Write a message..."
                 containerClassName="rp-chat-composer-input-wrap"
               />
               <button
                 type="submit"
-                disabled={!activePartnerId || !messageText.trim()}
+                disabled={!messageText.trim()}
                 aria-label="Send message"
               >
                 <Send size={18} />
               </button>
             </form>
+              </>
+            ) : (
+              <div className="rp-chat-inbox-empty">
+                <MessageCircle size={28} strokeWidth={1.8} aria-hidden="true" />
+                <h2>Choose a conversation</h2>
+                <p>Select an owner from the list to read and send messages.</p>
+              </div>
+            )}
           </section>
+          {showDetails && activeConversation && <ChatParticipantDetails partner={activeConversation.partner} booking={activeConversation.recentBooking} onClose={closeDetails} modal={detailsModal} />}
         </div>
       </main>
 

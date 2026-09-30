@@ -263,7 +263,6 @@ export default function NotificationsPage({
       <div className="rp-page-shell mx-auto max-w-5xl px-4 pb-16 pt-24 sm:px-6">
         <div className="rp-page-header mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <span className="rp-page-eyebrow">Activity center</span>
             <h1 className="text-3xl font-bold">Notifications</h1>
             <p className="text-sm text-gray-600">
               {unreadCount} unread notification{unreadCount === 1 ? "" : "s"}.

@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CarFront,
-  Search,
   X,
 } from "lucide-react";
 import API from "../utils/api";
@@ -11,7 +10,8 @@ import BookingAccessModal from "../components/BookingAccessModal";
 import VehiclePreviewModal from "../components/VehiclePreviewModal";
 import { sanitizeBookingRange } from "../utils/dateUtils";
 import VehicleCard from "../components/VehicleCard";
-import { VehicleGridSkeleton } from "../components/LoadingSkeletons";
+import VehicleSearchInput from "../components/VehicleSearchInput";
+import { DelayedSkeleton, VehicleGridSkeleton } from "../components/LoadingSkeletons";
 import { DEFAULT_VEHICLE_IMAGE } from "../utils/media";
 import { matchesLocationSearch, validateLocationSearch } from "../utils/locationSearch";
 
@@ -101,6 +101,7 @@ export default function VehiclesPage({
   onLogout,
   onNavigateToHome,
   onNavigateToSignIn,
+  onSignInToBook,
   onNavigateToRegister,
   onNavigateToVehicles,
   onViewDetails,
@@ -116,9 +117,13 @@ export default function VehiclesPage({
   const [vehicles, setVehicles] = useState([]);
   const [reloadSignal, setReloadSignal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [loadedQueryKey, setLoadedQueryKey] = useState(null);
+  const loadedQueryRef = useRef({ key: null, count: 0 });
   const [showAI, setShowAI] = useState(false);
   const [showBookingAccessModal, setShowBookingAccessModal] = useState(false);
+  const [bookingVehicle, setBookingVehicle] = useState(null);
   const [previewVehicle, setPreviewVehicle] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState(() => String(bookingData.location || "").trim());
@@ -146,22 +151,32 @@ export default function VehiclesPage({
     [searchQuery]
   );
   const combinedSearch = useMemo(() => searchQuery.trim(), [searchQuery]);
+  const queryKey = useMemo(
+    () => JSON.stringify([combinedSearch, locationFilter, vehicleTypeFilter]),
+    [combinedSearch, locationFilter, vehicleTypeFilter]
+  );
+  const showingCurrentResults = loadedQueryKey === queryKey;
 
   useEffect(() => {
-    setVehicles([]);
+    const refreshExisting = reloadSignal > 0 &&
+      loadedQueryRef.current.key === queryKey && loadedQueryRef.current.count > 0;
+    if (!refreshExisting) {
+      loadedQueryRef.current = { key: null, count: 0 };
+      setLoadedQueryKey(null);
+      setVehicles([]);
+    }
     const locationError = validateLocationSearch(locationFilter);
     if (searchValidationError || locationError) {
       setError(locationError || searchValidationError);
       setLoading(false);
+      setRefreshing(false);
       return undefined;
     }
-    setLoading(true);
+    setLoading(!refreshExisting);
+    setRefreshing(refreshExisting);
     setError("");
     let isActive = true;
     const timeoutId = window.setTimeout(async () => {
-      setLoading(true);
-      setError("");
-
       try {
         const response = await API.getPublicVehicles({
           search: combinedSearch,
@@ -175,12 +190,17 @@ export default function VehiclesPage({
         const availableVehicles = (response.vehicles || [])
           .map(normalizeVehicle)
           .filter((vehicle) => vehicle.available && matchesLocationSearch(vehicle.location, locationFilter));
+        loadedQueryRef.current = { key: queryKey, count: availableVehicles.length };
+        setLoadedQueryKey(queryKey);
         setVehicles(availableVehicles);
       } catch (err) {
         if (!isActive) return;
         setError(err.message || "Failed to load available vehicles.");
       } finally {
-        if (isActive) setLoading(false);
+        if (isActive) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }, 300);
 
@@ -188,7 +208,7 @@ export default function VehiclesPage({
       isActive = false;
       window.clearTimeout(timeoutId);
     };
-  }, [combinedSearch, locationFilter, searchValidationError, vehicleTypeFilter, reloadSignal]);
+  }, [combinedSearch, locationFilter, queryKey, searchValidationError, vehicleTypeFilter, reloadSignal]);
 
   const clearLocationFilter = () => {
     setLocationFilter("");
@@ -204,7 +224,8 @@ export default function VehiclesPage({
   const closeBookingAccessModal = () => setShowBookingAccessModal(false);
   const handleBookingModalSignIn = () => {
     setShowBookingAccessModal(false);
-    onNavigateToSignIn();
+    if (bookingVehicle) onSignInToBook?.(bookingVehicle);
+    else onNavigateToSignIn();
   };
   const handleBookingModalRegister = () => {
     setShowBookingAccessModal(false);
@@ -219,6 +240,21 @@ export default function VehiclesPage({
     setPreviewVehicle(vehicle);
   };
 
+  const openSuggestedVehicle = async (entry) => {
+    try {
+      const response = await API.getPublicVehicleById(entry.id);
+      const vehicle = normalizeVehicle(response.vehicle);
+      if (!vehicle.available) {
+        setReloadSignal((value) => value + 1);
+        return "This vehicle is no longer available. Try another suggestion.";
+      }
+      openVehiclePreview(vehicle);
+      return "";
+    } catch {
+      return "Could not open this vehicle. Try again or use the results below.";
+    }
+  };
+
   const closeVehiclePreview = () => {
     setPreviewVehicle(null);
   };
@@ -226,6 +262,7 @@ export default function VehiclesPage({
   const handleBookNow = (vehicle) => {
     if (!vehicle?.available) return;
     if (!isLoggedIn) {
+      setBookingVehicle(vehicle);
       setShowBookingAccessModal(true);
       return;
     }
@@ -297,34 +334,22 @@ export default function VehiclesPage({
                   <span className="rp-page-eyebrow">Explore the fleet</span>
                   <h2 id="vehicle-results-heading">Available vehicles</h2>
                   <p>
-                    {loading
+                    {loading || (!showingCurrentResults && !error)
                       ? "Checking the latest listings..."
+                      : refreshing
+                        ? "Updating the latest listings..."
                       : `${vehicles.length} ${vehicles.length === 1 ? "vehicle" : "vehicles"} match your search`}
                   </p>
                 </div>
-                <div className="rp-vehicle-search">
-                  <label htmlFor="vehicle-market-search">Search vehicles</label>
-                  <div className="rp-vehicle-search__control">
-                    <Search size={20} strokeWidth={2} aria-hidden="true" />
-                    <input
-                      id="vehicle-market-search"
-                      type="search"
-                      placeholder="Search available vehicles"
-                      maxLength={MAX_VEHICLE_SEARCH_LENGTH}
-                      value={searchQuery}
-                      aria-invalid={Boolean(searchValidationError)}
-                      aria-describedby="vehicle-search-help"
-                      onChange={(event) => setSearchQuery(filterVehicleSearch(event.target.value))}
-                    />
-                  </div>
-                  <span
-                    id="vehicle-search-help"
-                    className={searchValidationError ? "is-error" : ""}
-                    role={searchValidationError ? "alert" : undefined}
-                  >
-                    {searchValidationError || "Letters, numbers, single spaces, and hyphens only."}
-                  </span>
-                </div>
+                <VehicleSearchInput
+                  value={searchQuery}
+                  onChange={(value) => setSearchQuery(filterVehicleSearch(value))}
+                  onSelectVehicle={openSuggestedVehicle}
+                  location={locationFilter}
+                  vehicleType={vehicleTypeFilter}
+                  error={searchValidationError}
+                  maxLength={MAX_VEHICLE_SEARCH_LENGTH}
+                />
               </div>
 
               {locationFilter && (
@@ -351,14 +376,20 @@ export default function VehiclesPage({
               </div>
 
               {loading && (
-                <VehicleGridSkeleton label="Loading available vehicles" />
+                <div className="min-h-[27rem]">
+                  <DelayedSkeleton delay={500}>
+                    <VehicleGridSkeleton label="Loading available vehicles" count={4} />
+                  </DelayedSkeleton>
+                </div>
               )}
+
+              {refreshing && showingCurrentResults && <p role="status" className="mb-3 text-sm text-slate-600">Updating listings...</p>}
 
               {!loading && error && (
                 <div role="alert" className="rp-results-status rp-results-status--error"><span>{error}</span><button type="button" onClick={() => setReloadSignal((value) => value + 1)} className="rounded-lg border border-current px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2">Retry</button></div>
               )}
 
-              {!loading && !error && vehicles.length === 0 && (
+              {!loading && !error && showingCurrentResults && vehicles.length === 0 && (
                 <div className="rp-results-status">
                   <CarFront size={24} />
                   <strong>{locationFilter ? `No available vehicles found in ${locationFilter}` : "No vehicles match your search"}</strong>
@@ -369,7 +400,7 @@ export default function VehiclesPage({
                 </div>
               )}
 
-              {!loading && !error && vehicles.length > 0 && (
+              {!loading && !error && showingCurrentResults && vehicles.length > 0 && (
                 <div className="rp-market-grid">
                   {vehicles.map((vehicle) => (
                     <VehicleCard
@@ -409,6 +440,7 @@ export default function VehiclesPage({
         />
         <ChatWidget
           isOpen={showAI}
+          onOpen={() => setShowAI(true)}
           onClose={() => setShowAI(false)}
           onViewAvailableVehicles={onNavigateToVehicles}
         />

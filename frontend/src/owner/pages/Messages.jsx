@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Archive,
   Flag,
+  Info,
   MessageCircle,
   Pin,
-  Search,
+  RotateCcw,
   Send,
   Trash2,
 } from "lucide-react";
@@ -20,6 +22,10 @@ import {
 import ModalPortal from "../../components/ModalPortal";
 import MessageReportModal from "../../components/MessageReportModal";
 import ChatMessageInput from "../../components/ChatMessageInput";
+import { ChatFolderNav, ChatParticipantDetails, ChatSearchField, ConversationActionMenu } from "../../components/MessagingWorkspaceControls";
+import { readRecentChatPeople, rememberRecentChatPerson } from "../../utils/recentChatPeople";
+import { showActionToast } from "../../utils/actionToast";
+import { getChatPreview } from "../../utils/chatPreview";
 import OwnerPageHeader from "../components/OwnerPageHeader";
 import { ConversationListSkeleton, MessageThreadSkeleton } from "../../components/LoadingSkeletons";
 
@@ -147,7 +153,6 @@ export default function Messages() {
   const [activeRenterId, setActiveRenterId] = useState("");
   const [actionThreadId, setActionThreadId] = useState("");
   const [pinningRenterId, setPinningRenterId] = useState("");
-  const [pinNotice, setPinNotice] = useState(null);
   const [isMobileView, setIsMobileView] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 1024 : false
   );
@@ -168,8 +173,21 @@ export default function Messages() {
   const [showDeleteConversationConfirm, setShowDeleteConversationConfirm] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
+  const [folder, setFolder] = useState("inbox");
+  const [searching, setSearching] = useState(false);
+  const [recentPersonIds, setRecentPersonIds] = useState(() => readRecentChatPeople(currentUserId));
+  const [openActionMenu, setOpenActionMenu] = useState("");
+  const [archivePendingId, setArchivePendingId] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailsModal, setDetailsModal] = useState(() => window.innerWidth < 1600);
   const [reportMessage, setReportMessage] = useState(null);
   const [reportNotice, setReportNotice] = useState("");
+  const lastSelectedRenterRef = useRef(null);
+  const renterListHeadingRef = useRef(null);
+  const threadBackButtonRef = useRef(null);
+  const messageRequestIdRef = useRef(0);
+  const detailsTriggerRef = useRef(null);
 
   const activeThread = useMemo(
     () => renterThreads.find((thread) => thread.partner._id === activeRenterId) || null,
@@ -181,17 +199,19 @@ export default function Messages() {
   );
   const filteredRenterThreads = useMemo(() => {
     const query = threadQuery.trim().toLowerCase();
-    if (!query) return renterThreads;
+    if (searching && !query) return recentPersonIds.map((id) => renterThreads.find((thread) => thread.partner._id === id)).filter(Boolean);
+    if (!query) return renterThreads.filter((thread) => Boolean(thread.isArchived) === (folder === "archived"));
 
     return renterThreads.filter((thread) =>
       [
         thread.partner?.name,
         thread.partner?.email,
         thread.vehicle?.name,
-        thread.lastMessage?.text,
       ].some((value) => String(value || "").toLowerCase().includes(query))
     );
-  }, [renterThreads, threadQuery]);
+  }, [renterThreads, threadQuery, folder, recentPersonIds, searching]);
+
+  const folderCount = renterThreads.filter((thread) => Boolean(thread.isArchived) === (folder === "archived")).length;
 
   const loadRenterThreads = async () => {
     setLoadingThreads(true);
@@ -211,26 +231,33 @@ export default function Messages() {
   };
 
   const loadMessages = async (partnerId) => {
+    const requestId = ++messageRequestIdRef.current;
     if (!partnerId) {
       setMessages([]);
+      setLoadingMessages(false);
       return;
     }
 
     setLoadingMessages(true);
+    setMessages([]);
     setError("");
     try {
       const response = await API.getMessagesWithUser(partnerId);
+      if (requestId !== messageRequestIdRef.current) return;
       setMessages(response.messages || []);
       await API.markMessagesAsRead(partnerId);
+      if (requestId !== messageRequestIdRef.current) return;
       setRenterThreads((prev) =>
         prev.map((thread) =>
           thread.partner._id === partnerId ? { ...thread, unreadCount: 0 } : thread
         )
       );
     } catch (err) {
-      setError(err.message || "Failed to load messages.");
+      if (requestId === messageRequestIdRef.current) {
+        setError(err.message || "Failed to load messages.");
+      }
     } finally {
-      setLoadingMessages(false);
+      if (requestId === messageRequestIdRef.current) setLoadingMessages(false);
     }
   };
 
@@ -239,28 +266,31 @@ export default function Messages() {
   }, []);
 
   useEffect(() => {
-    if (!pinNotice) return undefined;
-    const timeoutId = window.setTimeout(() => setPinNotice(null), 2600);
-    return () => window.clearTimeout(timeoutId);
-  }, [pinNotice]);
-
-  useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobileView(mobile);
+      setDetailsModal(window.innerWidth < 1600);
       if (!mobile) {
         setShowConversationList(true);
+      } else if (activeRenterId) {
+        setShowConversationList(false);
       }
     };
 
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [activeRenterId]);
 
   useEffect(() => {
     loadMessages(activeRenterId);
   }, [activeRenterId]);
+
+  useEffect(() => {
+    if (isMobileView && !showConversationList && activeRenterId) {
+      threadBackButtonRef.current?.focus();
+    }
+  }, [isMobileView, showConversationList, activeRenterId]);
 
   useEffect(() => {
     setEditingMessageId("");
@@ -296,6 +326,7 @@ export default function Messages() {
           statusLabel: existing?.statusLabel || "Active Rental",
           lastMessage: toMessagePreview(message),
           latestActivityAt: message.createdAt,
+          isArchived: false,
           unreadCount:
             !isOutgoing && activeRenterId !== partnerId
               ? Number(existing?.unreadCount || 0) + 1
@@ -356,33 +387,59 @@ export default function Messages() {
       loadMessages(partnerId);
     };
 
+    const handleArchiveChanged = (payload = {}) => {
+      const partnerId = String(payload.partnerId || "");
+      if (!partnerId) return;
+      setRenterThreads((prev) => prev.map((thread) => thread.partner._id === partnerId
+        ? { ...thread, isArchived: Boolean(payload.archived) } : thread));
+    };
+
     socket.on("chat:message", handleIncomingMessage);
     socket.on("chat:message:update", handleMessageUpdate);
     socket.on("chat:conversation:deleted", handleConversationDeleted);
+    socket.on("chat:conversation:archive", handleArchiveChanged);
     return () => {
       socket.off("chat:message", handleIncomingMessage);
       socket.off("chat:message:update", handleMessageUpdate);
       socket.off("chat:conversation:deleted", handleConversationDeleted);
+      socket.off("chat:conversation:archive", handleArchiveChanged);
     };
   }, [activeRenterId, currentUserId]);
 
-  const handleSelectConversation = async (thread) => {
+  const handleSelectConversation = async (thread, button) => {
     const renterId = thread?.partner?._id;
     if (!renterId) return;
 
     try {
       setError("");
       await API.openOwnerRenterThread(renterId);
+      lastSelectedRenterRef.current = button || null;
       setActiveRenterId(renterId);
-      setRenterThreads((prev) =>
-        prev.map((item) => (item.partner._id === renterId ? { ...item, unreadCount: 0 } : item))
-      );
+      setOpenActionMenu("");
+      setShowDetails(false);
+      if (searching) {
+        setRecentPersonIds(rememberRecentChatPerson(currentUserId, renterId));
+        setSearching(false);
+        setThreadQuery("");
+        setFolder(thread.isArchived ? "archived" : "inbox");
+      }
       if (isMobileView) {
         setShowConversationList(false);
       }
     } catch (err) {
       setError(err.message || "Failed to open conversation.");
     }
+  };
+
+  const returnToRenters = () => {
+    setActiveRenterId("");
+    setShowConversationList(true);
+    setShowDetails(false);
+    requestAnimationFrame(() => {
+      const target = lastSelectedRenterRef.current;
+      if (target?.isConnected) target.focus();
+      else renterListHeadingRef.current?.focus();
+    });
   };
 
   const togglePinThread = async (thread) => {
@@ -408,10 +465,7 @@ export default function Messages() {
           )
         )
       );
-      setPinNotice({
-        id: `${renterId}-${Date.now()}`,
-        message: `${thread.partner.name} was ${savedPinned ? "pinned" : "unpinned"}.`,
-      });
+      showActionToast(`${thread.partner.name} was ${savedPinned ? "pinned" : "unpinned"}.`, { id: `owner-chat-pin-${renterId}` });
       setActionThreadId("");
     } catch (err) {
       setError(err.message || "Failed to update pinned chat.");
@@ -433,6 +487,7 @@ export default function Messages() {
         text: nextText,
       });
       setMessages((prev) => appendUniqueMessage(prev, response.message));
+      setFolder("inbox");
       loadRenterThreads();
     } catch (err) {
       setText((currentDraft) => currentDraft || nextText);
@@ -517,22 +572,63 @@ export default function Messages() {
   };
 
   const confirmDeleteConversation = async () => {
-    if (!activeThread?.partner?._id || deletingConversation) return;
+    const partnerId = deleteTargetId || activeThread?.partner?._id;
+    if (!partnerId || deletingConversation) return;
 
     try {
       setDeletingConversation(true);
       setError("");
-      await API.deleteConversation(activeThread.partner._id);
-      setMessages([]);
-      setActiveRenterId("");
-      cancelEditMessage();
+      await API.deleteConversation(partnerId);
+      if (partnerId === activeRenterId) {
+        setMessages([]);
+        if (isMobileView) returnToRenters();
+        else setActiveRenterId("");
+        cancelEditMessage();
+      }
       setShowDeleteConversationConfirm(false);
+      setDeleteTargetId("");
       await loadRenterThreads();
     } catch (err) {
       setError(err.message || "Failed to delete conversation.");
     } finally {
       setDeletingConversation(false);
     }
+  };
+
+  const changeArchive = async (thread) => {
+    const partnerId = thread?.partner?._id;
+    if (!partnerId || archivePendingId) return;
+    setArchivePendingId(partnerId);
+    setError("");
+    try {
+      const response = await API.setConversationArchived(partnerId, !thread.isArchived);
+      setRenterThreads((prev) => prev.map((item) => item.partner._id === partnerId
+        ? { ...item, isArchived: Boolean(response.archived) } : item));
+      showActionToast(response.archived ? "Conversation moved to Archived." : "Conversation restored to Chats.", { id: `owner-chat-archive-${partnerId}` });
+      setSearching(false);
+      setThreadQuery("");
+      if (partnerId === activeRenterId) {
+        setActiveRenterId("");
+        setShowDetails(false);
+        setShowConversationList(true);
+      }
+      requestAnimationFrame(() => renterListHeadingRef.current?.focus());
+    } catch (err) {
+      setError(err.message || "Failed to update archive.");
+    } finally {
+      setArchivePendingId("");
+    }
+  };
+
+  const conversationActions = (thread) => [
+    { label: thread.isPinned ? "Unpin chat" : "Pin chat", icon: Pin, disabled: pinningRenterId === thread.partner._id, onClick: () => togglePinThread(thread) },
+    { label: thread.isArchived ? "Restore chat" : "Archive chat", icon: thread.isArchived ? RotateCcw : Archive, disabled: archivePendingId === thread.partner._id, onClick: () => changeArchive(thread) },
+    { label: "Delete chat", icon: Trash2, danger: true, onClick: () => { setDeleteTargetId(thread.partner._id); setShowDeleteConversationConfirm(true); } },
+  ];
+
+  const closeDetails = () => {
+    setShowDetails(false);
+    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   };
 
   const isShowingList = !isMobileView || showConversationList;
@@ -542,36 +638,28 @@ export default function Messages() {
     <div className="owner-messages-page">
       <OwnerPageHeader
         className="owner-messages-page-header"
-        eyebrow="Owner inbox"
         title="Messages"
         description="Keep renter conversations, booking questions, and vehicle updates in one place."
         actions={<span className="rp-owner-page-header__status">Real-time messaging</span>}
       />
       {reportNotice && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">{reportNotice}</div>}
 
-      <div className="owner-messages-shell">
+      <div className={`owner-messages-shell ${isMobileView && !showConversationList ? "is-thread-open" : ""}`}>
+      <ChatFolderNav folder={folder} onChange={(next) => { setFolder(next); setSearching(false); setThreadQuery(""); setOpenActionMenu(""); }} />
       <aside
         className={`owner-messages-renters ${isShowingList ? "owner-messages-panel-visible" : "owner-messages-panel-hidden"
           }`}
       >
         <div className="owner-messages-renters-header">
           <div>
-            <h2>Conversations</h2>
-            <p>{renterThreads.length} renters</p>
+            <h2 ref={renterListHeadingRef} tabIndex={-1}>{folder === "archived" ? "Archived chats" : "Conversations"}</h2>
+            <p>{folderCount} {folder === "archived" ? "archived" : "renters"}</p>
           </div>
-          <span>{renterThreads.length > 99 ? "99+" : renterThreads.length}</span>
+          <span>{folderCount > 99 ? "99+" : folderCount}</span>
         </div>
 
         <div className="owner-messages-renters-body">
-          <div className="rp-chat-search owner-messages-search">
-            <Search size={16} aria-hidden="true" />
-            <input
-              value={threadQuery}
-              onChange={(event) => setThreadQuery(event.target.value)}
-              placeholder="Search conversations"
-              aria-label="Search renter conversations"
-            />
-          </div>
+          <ChatSearchField label="Search renter conversations" value={threadQuery} onChange={setThreadQuery} searching={searching} onSearchStart={() => setSearching(true)} onSearchEnd={() => { setSearching(false); setThreadQuery(""); renterListHeadingRef.current?.focus(); }} />
 
           {error && (
             <div className="mb-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
@@ -579,11 +667,14 @@ export default function Messages() {
             </div>
           )}
 
-          {!loadingThreads && !renterThreads.length && (
+          {searching && !threadQuery.trim() && <p className="rp-chat-list-message">Recent searches</p>}
+          {!loadingThreads && !searching && !folderCount && folder === "inbox" && (
             <p className="px-1 py-2 text-sm text-slate-500">No renter conversations yet.</p>
           )}
 
-          {!loadingThreads && renterThreads.length > 0 && !filteredRenterThreads.length && (
+          {!loadingThreads && !searching && !folderCount && folder === "archived" && <p className="px-1 py-2 text-sm text-slate-500">No archived conversations.</p>}
+          {!loadingThreads && searching && !threadQuery.trim() && !filteredRenterThreads.length && <p className="px-1 py-2 text-sm text-slate-500">People you open from search will appear here.</p>}
+          {!loadingThreads && threadQuery.trim() && !filteredRenterThreads.length && (
             <p className="px-1 py-2 text-sm text-slate-500">No conversations match your search.</p>
           )}
 
@@ -593,10 +684,13 @@ export default function Messages() {
               <RenterCard
                 key={thread.partner._id}
                 thread={thread}
+                currentUserId={currentUserId}
                 selected={activeRenterId === thread.partner._id}
-                pinning={pinningRenterId === thread.partner._id}
-                onSelect={() => handleSelectConversation(thread)}
-                onTogglePin={() => togglePinThread(thread)}
+                onSelect={(button) => handleSelectConversation(thread, button)}
+                menuOpen={openActionMenu === `row:${thread.partner._id}`}
+                onToggleMenu={() => setOpenActionMenu((prev) => prev === `row:${thread.partner._id}` ? "" : `row:${thread.partner._id}`)}
+                onCloseMenu={() => setOpenActionMenu("")}
+                menuActions={conversationActions(thread)}
               />
             ))}
           </div>
@@ -614,8 +708,9 @@ export default function Messages() {
                 {isMobileView && (
                   <button
                     type="button"
-                    onClick={() => setShowConversationList(true)}
-                    className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 lg:hidden"
+                    ref={threadBackButtonRef}
+                    onClick={returnToRenters}
+                    className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0B75E7] lg:hidden"
                     aria-label="Back to renters"
                   >
                     <ArrowLeft size={18} strokeWidth={2} />
@@ -634,14 +729,9 @@ export default function Messages() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowDeleteConversationConfirm(true)}
-                className="inline-flex h-11 flex-shrink-0 items-center gap-1.5 rounded-lg border border-rose-100 bg-white px-3 text-xs font-medium text-rose-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-              >
-                <Trash2 size={18} strokeWidth={2} aria-hidden="true" />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
+              <div className="rp-chat-thread-tools">
+                <button ref={detailsTriggerRef} type="button" className="rp-chat-more-button" aria-label="Show chat details" aria-expanded={showDetails} onClick={() => setShowDetails(true)}><Info size={20} aria-hidden="true" /></button>
+              </div>
             </div>
 
             <div className="owner-messages-chat-body" onClick={() => setActiveMessageActionId("")}>
@@ -712,11 +802,12 @@ export default function Messages() {
         ) : (
           <EmptyConversationState
             showBackButton={isMobileView}
-            onBack={() => setShowConversationList(true)}
+            onBack={returnToRenters}
             error={error}
           />
         )}
       </section>
+      {showDetails && activeThread && <ChatParticipantDetails partner={activeThread.partner} onClose={closeDetails} modal={detailsModal} showBookingContext={false} />}
 
       {actionThread && (
         <ActionModal
@@ -753,7 +844,6 @@ export default function Messages() {
         />
       )}
 
-      {pinNotice && <PinStatusToast key={pinNotice.id} message={pinNotice.message} />}
       <MessageReportModal
         message={reportMessage}
         senderName={activeThread?.partner?.name || "this renter"}
@@ -765,28 +855,25 @@ export default function Messages() {
   );
 }
 
-function RenterCard({ thread, selected, pinning, onSelect, onTogglePin }) {
+function RenterCard({ thread, currentUserId, selected, onSelect, menuOpen, onToggleMenu, onCloseMenu, menuActions }) {
   const statusIsActive = thread.status === "active" || thread.isActive;
   const activityAt = thread.lastMessage?.createdAt || thread.latestActivityAt;
-
-  const handleKeyDown = (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onSelect();
-  };
+  const preview = getChatPreview(thread.lastMessage, currentUserId);
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={handleKeyDown}
-      className={`owner-renter-card ${selected ? "owner-renter-card-selected" : ""}`}
-    >
+    <div className={`owner-renter-card ${selected ? "owner-renter-card-selected" : ""}`}>
+      <button
+        type="button"
+        className="owner-renter-card-select"
+        onClick={(event) => onSelect(event.currentTarget)}
+        aria-current={selected ? "true" : undefined}
+        aria-label={`${thread.partner.name}, ${preview}, ${thread.statusLabel}${thread.unreadCount > 0 ? `, ${thread.unreadCount} unread messages` : ""}`}
+      >
       <div className="owner-renter-card-content">
         <AvatarCircle name={thread.partner.name} avatar={thread.partner.avatar} sizeClass="h-11 w-11" />
         <div className="owner-renter-card-copy">
-          <p className="owner-renter-name">{thread.partner.name}</p>
+          <p className="owner-renter-name">{thread.partner.name}{thread.isPinned && <Pin size={13} className="ml-1 inline -rotate-45 text-[#075bb6]" aria-label="Pinned" />}</p>
+          <p className="owner-renter-preview">{preview}</p>
           <span
             className={`owner-renter-status ${statusIsActive
                 ? "owner-renter-status-active"
@@ -798,26 +885,14 @@ function RenterCard({ thread, selected, pinning, onSelect, onTogglePin }) {
           <p className="owner-renter-time">{formatRelativeTime(activityAt)}</p>
         </div>
       </div>
+      </button>
 
       <div className="owner-renter-card-actions">
-        <button
-          type="button"
-          className={`owner-renter-pin ${thread.isPinned ? "owner-renter-pin-active" : ""}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onTogglePin();
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-          disabled={pinning}
-          aria-label={thread.isPinned ? "Unpin chat" : "Pin chat"}
-          title={thread.isPinned ? "Unpin chat" : "Pin chat"}
-        >
-          <Pin size={18} className="-rotate-45" fill={thread.isPinned ? "currentColor" : "none"} />
-        </button>
+        <ConversationActionMenu label={`Actions for ${thread.partner.name}`} open={menuOpen} onToggle={onToggleMenu} onClose={onCloseMenu} actions={menuActions} />
       </div>
 
       {thread.unreadCount > 0 && (
-        <span className="owner-renter-unread">
+        <span className="owner-renter-unread" aria-hidden="true">
           {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
         </span>
       )}
@@ -859,7 +934,7 @@ function MessageBubble({
       >
         <div
           title={formatDateTime(message.createdAt)}
-          className={`rounded-[17px] px-4 py-3 text-sm leading-6 shadow-sm ${isOwner
+          className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${isOwner
               ? "rounded-br-md bg-gradient-to-br from-[#0B75E7] to-[#045FC3] text-white shadow-[0_10px_24px_rgba(11,117,231,0.18)]"
               : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-[0_8px_20px_rgba(15,23,42,0.05)]"
             }`}
@@ -966,11 +1041,10 @@ function EmptyConversationState({ showBackButton, onBack, error }) {
           <MessageCircle size={24} strokeWidth={2} aria-hidden="true" />
         </div>
         <h2 className="text-lg font-semibold tracking-normal text-[#111827]">
-          Start a conversation
+          Choose a conversation
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#6b7280]">
-          Select a renter from the list to send messages regarding bookings, vehicle concerns,
-          reminders, or follow-ups.
+          Select a renter from the list to read and send messages about their booking or vehicle.
         </p>
         {error && (
           <p className="mt-4 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
@@ -1018,17 +1092,6 @@ function ActionModal({ thread, onChat, onCancel }) {
       </div>
       </div>
     </ModalPortal>
-  );
-}
-
-function PinStatusToast({ message }) {
-  return (
-    <div className="owner-pin-toast" role="status" aria-live="polite">
-      <span className="owner-pin-toast-icon" aria-hidden="true">
-        <Pin size={16} strokeWidth={2} className="-rotate-45" />
-      </span>
-      <span>{message}</span>
-    </div>
   );
 }
 

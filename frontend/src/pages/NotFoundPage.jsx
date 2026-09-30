@@ -4,7 +4,7 @@ import { ArrowLeft, CarFront } from "lucide-react";
 export default function NotFoundPage({ onNavigateToHome, onNavigateToVehicles }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 py-16 text-slate-900">
-      <section className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.1)] sm:p-12">
+      <section className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.1)] sm:p-12">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-[#0B75E7]">
           <CarFront size={32} aria-hidden="true" />
         </div>

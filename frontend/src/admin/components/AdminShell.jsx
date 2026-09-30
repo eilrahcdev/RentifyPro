@@ -23,7 +23,7 @@ export function AdminSidebar({ activeView, displayName, displayEmail, mobileOpen
           <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
             <img src="/rentifypro-logo-optimized.png" alt="RentifyPro logo" className="h-11 w-11 shrink-0 object-contain" />
             <div className="min-w-0 flex-1"><p className="text-lg font-bold text-white">RentifyPro</p><p className="text-xs text-slate-400">Admin Control Panel</p></div>
-            <button type="button" onClick={onClose} aria-label="Close menu" className="rounded-lg p-2 text-slate-300 hover:bg-white/10 lg:hidden"><X size={18} /></button>
+            <button type="button" onClick={onClose} aria-label="Close menu" className="rp-icon-button lg:!hidden"><X size={18} /></button>
           </div>
 
           <div className="mx-3 mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">

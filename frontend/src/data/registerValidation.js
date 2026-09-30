@@ -20,7 +20,6 @@ export const RELATIONSHIP_OPTIONS = [
   "Relative",
   "Friend",
   "Guardian",
-  "Other",
 ];
 
 const MIN_RENTER_AGE = 18;

@@ -10,6 +10,7 @@ import {
   Camera,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import HelpLink from "../components/HelpLink";
 import ChatWidget from "../components/ChatWidget";
 import InfoModal from "../components/InfoModal";
 import API from "../utils/api";
@@ -241,7 +242,7 @@ const SelectField = React.memo(function SelectField({
       >
         <option value="">{placeholder}</option>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} disabled={option.disabled} hidden={option.hidden}>
             {option.label}
           </option>
         ))}
@@ -1059,7 +1060,6 @@ const AccountSettings = ({
 
           <main className="flex-1 space-y-8 pb-12">
             <div className="rp-page-header mb-6">
-              <span className="rp-page-eyebrow">Personal workspace</span>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
               <p className="text-base text-gray-500 max-w-xl">
                 Manage your personal information and account preferences
@@ -1400,7 +1400,11 @@ const AccountSettings = ({
                       options={RELATIONSHIP_OPTIONS.map((option) => ({
                         label: option,
                         value: option,
-                      }))}
+                      })).concat(
+                        profile.emergencyContactRelationship === "Other"
+                          ? [{ label: "Other", value: "Other", disabled: true, hidden: true }]
+                          : []
+                      )}
                       onChange={(event) =>
                         updateDraftField("emergencyContactRelationship", event.target.value)
                       }
@@ -1712,6 +1716,7 @@ const AccountSettings = ({
                     >
                       {kycLoading ? "Checking..." : "Refresh Status"}
                     </button>
+                    <HelpLink guide="verify-identity">Need help verifying?</HelpLink>
                   </div>
 
                   {kycError && <p role="alert" className="text-sm text-rose-700">{kycError}</p>}
@@ -1994,6 +1999,7 @@ const AccountSettings = ({
 
       <ChatWidget
         isOpen={showAI}
+        onOpen={() => setShowAI(true)}
         onClose={() => setShowAI(false)}
         onViewAvailableVehicles={onNavigateToVehicles}
       />

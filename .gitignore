@@ -78,6 +78,7 @@ qa/
 # Local agent guidance, skills, and configuration
 RULES.md
 DESIGN.md
+README-QUICK-TUNNEL.md
 .agents/
 .codex/
 .impeccable/

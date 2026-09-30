@@ -1,5 +1,4 @@
 export const REALTIME_CHAT_MAX_LENGTH = 2000;
-export const REALTIME_CHAT_MAX_WORDS = 250;
 
 const ALLOWED_REALTIME_CHAT_MESSAGE_PATTERN = /^[A-Za-z?,. \r\n]+$/;
 const INVALID_CHARACTERS_MESSAGE =
@@ -23,16 +22,6 @@ export const validateRealtimeChatText = (input = "") => {
       isValid: false,
       reason: "too_long",
       message: `Please keep your message within ${REALTIME_CHAT_MAX_LENGTH} characters.`,
-      text,
-    };
-  }
-
-  const wordCount = text.match(/\S+/g)?.length || 0;
-  if (wordCount > REALTIME_CHAT_MAX_WORDS) {
-    return {
-      isValid: false,
-      reason: "too_many_words",
-      message: `Please keep your message within ${REALTIME_CHAT_MAX_WORDS} words.`,
       text,
     };
   }

@@ -11,6 +11,7 @@ import {
   editMessage,
   deleteMessage,
   deleteConversation,
+  updateConversationArchive,
 } from "../controllers/chat.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
@@ -196,6 +197,7 @@ router.get("/owner/renters", protect, authorize("owner", "admin"), getOwnerRente
 router.post("/owner/renters/:renterId/open", protect, authorize("owner", "admin"), openOwnerRenterThread);
 router.patch("/owner/renters/:renterId/pin", protect, authorize("owner", "admin"), updateOwnerRenterThreadPin);
 router.delete("/conversations/:userId", protect, authorize("user", "owner", "admin"), deleteConversation);
+router.patch("/conversations/:userId/archive", protect, authorize("user", "owner", "admin"), updateConversationArchive);
 router.get("/messages/:userId", protect, authorize("user", "owner", "admin"), getMessagesWithUser);
 router.post("/messages/:userId", protect, authorize("user", "owner", "admin"), requireModerationCapability("chat"), sendMessageToUser);
 router.patch("/messages/:userId/read", protect, authorize("user", "owner", "admin"), markMessagesAsRead);

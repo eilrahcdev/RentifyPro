@@ -35,6 +35,7 @@ import AuthShell from "../components/AuthShell";
 import LegalPolicyModal from "../components/LegalPolicyModal";
 import RegistrationDraftNotice from "../components/RegistrationDraftNotice";
 import RegistrationProgress from "../components/RegistrationProgress";
+import HelpLink from "../components/HelpLink";
 import PasswordStrengthIndicator from "../components/PasswordStrengthIndicator";
 import SelfieCapture from "../components/SelfieCapture";
 import useRegistrationDraft from "../hooks/useRegistrationDraft";
@@ -1094,7 +1095,7 @@ function RegisterOwnerForm({
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-[28px] border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         <div className="mt-5 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
           <h2 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
@@ -1103,7 +1104,19 @@ function RegisterOwnerForm({
 
         <div className="mt-6">
           <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
+          {(step === 3 || step === 4) && <HelpLink guide="owner-verification" className="mt-3">Need help with verification?</HelpLink>}
         </div>
+
+        {step === 1 && (
+          <section aria-labelledby="owner-preparation-title" className="mt-5 border-t border-slate-200 pt-4">
+            <h3 id="owner-preparation-title" className="text-sm font-bold text-slate-900">Have these ready before you start</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+              <li>A readable Philippines-issued business document, such as DTI registration, BIR Form 2303, or a business permit.</li>
+              <li>A government ID, such as a National ID, passport, or driver&apos;s license, and a camera for a live selfie.</li>
+              <li>Access to the email address you will use for the confirmation code.</li>
+            </ul>
+          </section>
+        )}
 
         <RegistrationDraftNotice draft={draft} busy={isLoading} />
 
@@ -1539,7 +1552,7 @@ function RegisterOwnerForm({
               )}
 
               {identityStage === "id_blocked" && (
-                <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable because this ID needs a correction. Review the reason below, then upload a matching ID.</p>
+                <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
               )}
 
               {(["camera", "selfie", "complete"].includes(identityStage)) && (
@@ -1569,7 +1582,11 @@ function RegisterOwnerForm({
               ignoreSupportingDocument={!supportingDocStatus.submitted}
               onDocumentsChange={handleDocumentsChange}
               onIdStatus={handleIdStatus}
-              onCorrectDetails={() => {
+              onCorrectDetails={(type) => {
+                if (type === "id") {
+                  setStep(1);
+                  return;
+                }
                 setSupportingDocStatus({ submitted: false, message: "" });
                 setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
                 setStep(3);

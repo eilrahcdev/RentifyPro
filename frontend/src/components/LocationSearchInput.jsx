@@ -2,54 +2,68 @@ import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import API from "../utils/api";
 import { normalizeLocationSearch, sanitizeLocationInput, validateLocationSearch } from "../utils/locationSearch";
+import RotatingSearchHint from "./RotatingSearchHint";
 
 export default function LocationSearchInput({ value, onChange, vehicleType, error, onError, inputRef }) {
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(-1);
   const [result, setResult] = useState(null);
   const search = normalizeLocationSearch(value);
-  const open = focused && Boolean(search) && !validateLocationSearch(search, { minLetters: 1 });
+  const validSearch = !validateLocationSearch(search, { minLetters: 1 });
+  const open = focused && Boolean(search) && validSearch;
+  const shouldFetch = validSearch && (focused || !search);
   const queryKey = `${search}\u0000${vehicleType}`;
   const suggestions = result?.key === queryKey ? result.locations : [];
-  const status = result?.key === queryKey ? result.status : "Finding locations with available vehicles…";
+  const resultKey = result?.key;
+  const status = resultKey === queryKey ? result.status : "Finding locations with available vehicles…";
+  const hintItems = !search && resultKey === queryKey
+    ? suggestions.map(({ location }) => location.split(",").map((part) => part.trim()))
+      .filter((parts) => parts.length === 2 && parts.every(Boolean))
+      .map((parts) => parts.join(", "))
+      .filter((hint, index, hints) => hints.indexOf(hint) === index)
+    : [];
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!shouldFetch || resultKey === queryKey) return undefined;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
         const response = await API.getVehicleLocations({ search, vehicleType }, controller.signal);
         if (controller.signal.aborted) return;
-        const locations = response.locations || [];
+        const locations = (response.locations || []).slice(0, 3);
         setActive(-1);
-        setResult({ key: queryKey, locations, status: locations.length ? "Locations with available vehicles" : "No available vehicles found for this location." });
+        setResult({ key: queryKey, locations, status: locations.length
+          ? "Matching areas with vehicles"
+          : "No available vehicles found for this location." });
       } catch (err) {
         if (!controller.signal.aborted) setResult({ key: queryKey, locations: [], status: err.message || "Location suggestions are unavailable. You can still search." });
       }
-    }, 250);
+    }, search ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, search, vehicleType, queryKey]);
+  }, [shouldFetch, resultKey, search, vehicleType, queryKey]);
 
   const select = (entry) => {
     onChange(sanitizeLocationInput(entry.location));
     onError("");
+    inputRef?.current?.blur();
     setFocused(false);
     setActive(-1);
   };
 
   return (
     <div className="relative min-w-0">
-      <label htmlFor="home-search-location" className="text-xs font-semibold text-slate-600">Location</label>
-      <div className="relative mt-1.5">
+      <label htmlFor="home-search-location" className="text-xs font-semibold text-slate-600">Search by location <span className="font-normal">(optional)</span></label>
+      <div className="rp-location-search__control relative mt-1.5" data-hint-active={!focused && !value && hintItems.length > 0}>
         <MapPin size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#0B75E7]" />
         <input
           id="home-search-location" ref={inputRef} name="location" role="combobox" autoComplete="off"
-          aria-autocomplete="list" aria-expanded={open && suggestions.length > 0}
+          aria-autocomplete="list" aria-expanded={open}
           aria-controls={open ? "home-location-options" : undefined} aria-activedescendant={open && suggestions[active] ? `home-location-option-${active}` : undefined}
           aria-invalid={Boolean(error)} aria-describedby={`home-location-help${error ? " home-location-error" : ""}`}
-          maxLength={180} value={value} placeholder="City or area"
-          className="rp-input !pl-10 placeholder:!text-slate-500"
-          onFocus={() => { setFocused(true); setResult(null); setActive(-1); }}
+          maxLength={180} value={value} placeholder="City, Province"
+          className="rp-input !pl-10"
+          onFocus={() => { setFocused(true); setActive(-1); }}
+          onClick={() => setFocused(true)}
           onChange={(event) => {
             const next = sanitizeLocationInput(event.target.value);
             onChange(next);
@@ -72,8 +86,9 @@ export default function LocationSearchInput({ value, onChange, vehicleType, erro
             }
           }}
         />
+        {!focused && !value && <RotatingSearchHint key={hintItems.join("\u0000")} items={hintItems} />}
       </div>
-      <p id="home-location-help" className="mt-2 text-xs leading-5 text-slate-600">Type a letter to find locations with available vehicles. Up to 180 characters.</p>
+      <p id="home-location-help" className="mt-2 text-xs leading-5 text-slate-600">Enter a city or province, or leave blank to see all vehicles.</p>
       {error && <p id="home-location-error" role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
       {open && (
         <div className="absolute left-0 right-0 z-40 mt-2 rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200">

@@ -20,6 +20,9 @@ export function bookingGuidance(booking, perspective = "renter") {
   if (returnStatus === "requested") return owner
     ? "Confirm receipt after the vehicle is returned, or decline the return request with an explanation."
     : "Waiting for the vehicle owner to confirm receipt of the returned vehicle.";
+  if (returnStatus === "declined") return owner
+    ? "The booking remains active. Review the handover with the renter before confirming a future return."
+    : "The booking remains active. You can request return again when the handover is ready.";
   if (status === "pending") return owner
     ? "Review the rental dates, then approve or reject this booking request."
     : "Waiting for the vehicle owner to review your request. Payment becomes available after confirmation.";

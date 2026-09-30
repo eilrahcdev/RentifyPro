@@ -108,7 +108,7 @@ export default function ForgotPasswordOTP({ email, onVerified, onNavigateToForgo
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#f6f9ff] to-[#eaf3ff]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
-        <div className="hidden lg:flex lg:w-[44%] relative flex-shrink-0 overflow-hidden rounded-r-[36px]">
+        <div className="hidden lg:flex lg:w-[44%] relative flex-shrink-0 overflow-hidden rounded-r-3xl">
           <img
             src="/porsche 911.png"
             alt="RentifyPro"

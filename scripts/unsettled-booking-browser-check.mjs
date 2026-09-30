@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 const base = "http://127.0.0.1:4176";
+const paymentRequests = [];
 const target = await (await fetch("http://127.0.0.1:9236/json/new?about:blank", { method: "PUT" })).json();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
@@ -42,6 +43,7 @@ const unsettledBooking = {
   paymentStatus: "partial",
   paymentAmountPaid: 900,
   paymentAmountDue: 10598,
+  walkInPayment: { status: "rejected" },
   pickupAt: "2026-09-18T09:00:00.000Z",
   returnAt: "2026-09-18T12:00:00.000Z",
   actualReturnAt: "2026-09-18T14:00:00.000Z",
@@ -86,6 +88,10 @@ async function route(event) {
           ? [activeBooking, unsettledBooking]
           : [activeBooking];
       return fulfill(event, { bookings, page: { hasMore: false, nextCursor: null, limit: 10 } });
+    }
+    if (endpoint === `/bookings/${unsettledBooking._id}/pay` && event.request.method === "POST") {
+      paymentRequests.push(JSON.parse(event.request.postData || "{}"));
+      return fulfill(event, { success: false, message: "Fixture checkout stopped before payment." }, 503);
     }
     return fulfill(event, { success: true, notifications: [], reports: [], unreadCount: 0, messages: [], users: [] });
   }
@@ -132,6 +138,8 @@ async function click(label) {
 
 const desktopScreenshot = path.join(os.tmpdir(), "rentifypro-unsettled-desktop.png");
 const mobileScreenshot = path.join(os.tmpdir(), "rentifypro-unsettled-mobile.png");
+const desktopPaymentScreenshot = path.join(os.tmpdir(), "rentifypro-unsettled-payment-desktop.png");
+const mobilePaymentScreenshot = path.join(os.tmpdir(), "rentifypro-unsettled-payment-mobile.png");
 try {
   await send("Emulation.setDeviceMetricsOverride", { width: 1365, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: `${base}/bookings` });
@@ -145,14 +153,31 @@ try {
   assert.ok(unsettledText.includes("Pay Remaining"));
   assert.equal(unsettledText.includes("Upcoming Sedan"), false);
   await fs.writeFile(desktopScreenshot, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
-
+  await click("Pay Remaining");
+  assert.deepEqual(await evaluate(`(() => ({
+    selected: [...document.querySelectorAll('input[name="booking-payment-method"]')].filter((input) => input.checked).length,
+    disabled: [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Proceed to Pay')?.disabled,
+    hasAmountSummary: document.body.innerText.includes('Amount to Pay Now'),
+  }))()`), { selected: 0, disabled: true, hasAmountSummary: false });
+  await fs.writeFile(desktopPaymentScreenshot, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+  assert.equal(await evaluate(`(() => { const bounds = document.querySelector('[role="dialog"] section')?.getBoundingClientRect(); return Boolean(bounds && bounds.left >= 0 && bounds.right <= window.innerWidth && bounds.top >= 0 && bounds.bottom <= window.innerHeight); })()`), true);
+  await fs.writeFile(mobilePaymentScreenshot, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+  assert.equal(await evaluate(`(() => { const label = [...document.querySelectorAll('label')].find((item) => item.textContent.includes('Request Walk-in Payment')); label?.click(); return Boolean(label); })()`), true);
+  await waitFor("Request Walk-in Approval");
+  assert.equal(await evaluate(`(() => { const label = [...document.querySelectorAll('label')].find((item) => item.textContent.includes('Credit / Debit Card')); label?.click(); return Boolean(label); })()`), true);
+  await waitFor("Amount to Pay Now");
+  assert.equal(await evaluate(`(() => [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Proceed to Pay')?.disabled)()`), false);
+  await click("Proceed to Pay");
+  for (let attempt = 0; attempt < 40 && paymentRequests.length === 0; attempt += 1) await sleep(100);
+  assert.deepEqual(paymentRequests, [{ paymentScope: "full", paymentChannel: "card" }]);
   assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
   assert.equal(await evaluate("[...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'Unsettled')"), true);
   await fs.writeFile(mobileScreenshot, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: 8, desktopScreenshot, mobileScreenshot }, null, 2));
+  console.log(JSON.stringify({ passed: 15, desktopScreenshot, mobileScreenshot, desktopPaymentScreenshot, mobilePaymentScreenshot }, null, 2));
 } finally {
   await send("Page.close");
   ws.close();

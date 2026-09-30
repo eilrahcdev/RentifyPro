@@ -10,6 +10,7 @@ const checks = [];
 const errors = [];
 let role = "user";
 let profileDelay = 0;
+let profileMode = "success";
 let logoutMode = "success";
 let logoutCalls = 0;
 let documentLoads = 0;
@@ -50,6 +51,7 @@ try {
       if (url.pathname === "/api/auth/me") {
         const user = role ? fixtureUser() : null;
         await pause(profileDelay);
+        if (profileMode === "network") return send("Fetch.failRequest", { requestId, errorReason: "InternetDisconnected" });
         return respond(requestId, user ? 200 : 401, user ? { user } : { message: "No session" });
       }
       if (url.pathname === "/api/auth/logout") {
@@ -111,18 +113,22 @@ try {
     }
     throw new Error(`Timed out: ${expression}`);
   };
+  const waitForDocumentLoad = async (previousCount) => {
+    const start = Date.now();
+    while (documentLoads <= previousCount && Date.now() - start < 15000) await pause(40);
+    assert.ok(documentLoads > previousCount, "Expected a page reload");
+  };
   const clickText = async (text, selector = "button") => {
     const expression = `[...document.querySelectorAll(${JSON.stringify(selector)})].find(el => el.textContent.trim() === ${JSON.stringify(text)})`;
     await wait(expression);
     await evaluate(`${expression}.click()`);
   };
   const ready = async () => {
-    await wait("window.sessionSkeletonTimes?.end !== undefined");
-    return evaluate("window.sessionSkeletonTimes.end - window.sessionSkeletonTimes.start");
+    await wait("document.querySelector('#root > *:not([aria-hidden=\"true\"]) button, #root > *:not([aria-hidden=\"true\"]) a, #root > *:not([aria-hidden=\"true\"]) input') && !document.querySelector('[aria-label=\"Loading your account\"]')");
+    return evaluate("window.sessionSkeletonTimes?.start === undefined ? null : window.sessionSkeletonTimes.end - window.sessionSkeletonTimes.start");
   };
   const navigate = async (path = "/") => {
     await send("Page.navigate", { url: base + path });
-    await wait("document.querySelector('[role=\"status\"][aria-label=\"Loading your account\"]')");
   };
   const openLogout = async (owner = false) => {
     if (!owner) {
@@ -144,15 +150,41 @@ try {
 
   await navigate();
   const fastMs = await ready();
-  assert.ok(fastMs >= 970 && fastMs < 1800, `Fast restoration took ${fastMs} ms`);
-  checks.push({ scenario: "Fast saved session has a one-second skeleton", milliseconds: Math.round(fastMs) });
+  assert.equal(fastMs, null, `Fast restoration showed a skeleton for ${fastMs} ms`);
+  checks.push({ scenario: "Fast saved session skips the skeleton" });
 
   profileDelay = 1700;
   await navigate();
+  await wait("document.querySelector('[role=\"status\"][aria-label=\"Loading your account\"]')");
+  const slowStart = await evaluate("window.sessionSkeletonTimes.start");
+  assert.ok(slowStart >= 450, `Skeleton appeared after ${slowStart} ms`);
   const slowMs = await ready();
-  assert.ok(slowMs >= 1650 && slowMs < 2450, `Slow restoration took ${slowMs} ms`);
-  checks.push({ scenario: "Slower restoration has no extra second added", milliseconds: Math.round(slowMs) });
+  assert.ok(slowMs >= 950 && slowMs < 1800, `Slow skeleton lasted ${slowMs} ms`);
+  checks.push({ scenario: "Slow restoration shows a delayed skeleton", milliseconds: Math.round(slowMs) });
   profileDelay = 0;
+
+  profileMode = "network";
+  await navigate();
+  await ready();
+  assert.equal(await evaluate("document.body.innerText.includes('Could not check your account')"), false);
+  assert.equal(await evaluate("document.body.innerText.includes('Session Fixture')"), false);
+  profileMode = "success";
+  await evaluate("window.dispatchEvent(new Event('online'))");
+  await wait("document.body.innerText.includes('Session Fixture')");
+  checks.push({ scenario: "Public page remains available during account-check failure and restores session online" });
+
+  profileMode = "network";
+  await navigate("/account-settings");
+  await wait("document.body.innerText.includes('Could not check your account')");
+  assert.equal(await evaluate("document.body.innerText.includes('Session Fixture')"), false);
+  profileMode = "success";
+  await clickText("Retry account check");
+  await wait("!document.body.innerText.includes('Could not check your account')");
+  await ready();
+  checks.push({ scenario: "Private page remains blocked during account-check failure and recovers on retry" });
+
+  await navigate();
+  await ready();
 
   await openLogout();
   await clickText("Cancel", ".rp-modal-layer button");
@@ -160,7 +192,7 @@ try {
   await openLogout();
   const loadsBeforeLogout = documentLoads;
   await confirm();
-  await wait("document.querySelector('[role=\"status\"][aria-label=\"Loading your account\"]')");
+  await waitForDocumentLoad(loadsBeforeLogout);
   await ready();
   assert.equal(logoutCalls, 1);
   assert.equal(documentLoads, loadsBeforeLogout + 1);
@@ -196,7 +228,8 @@ try {
 
   logoutMode = "success";
   await clickText("Retry sign out");
-  await wait("location.pathname === '/signin' && document.querySelector('[role=\"status\"]')");
+  await waitForDocumentLoad(loadsBeforeFailure);
+  await wait("location.pathname === '/signin'");
   await ready();
   assert.equal(documentLoads, loadsBeforeFailure + 1);
   checks.push({ scenario: "Owner retry succeeds and reloads the existing sign-in destination" });
@@ -206,8 +239,9 @@ try {
   await ready();
   await openLogout();
   logoutMode = "expired";
+  const loadsBeforeExpired = documentLoads;
   await confirm();
-  await wait("document.querySelector('[role=\"status\"][aria-label=\"Loading your account\"]')");
+  await waitForDocumentLoad(loadsBeforeExpired);
   await ready();
   assert.equal(await evaluate("Boolean(document.querySelector('[role=\"alert\"]'))"), false);
   checks.push({ scenario: "An already expired session completes logout" });
@@ -222,13 +256,15 @@ try {
     Date.now = () => realNow() + 16 * 60 * 1000;
   })()`);
   await wait("document.querySelector('[role=\"status\"][aria-label=\"Signing out\"]')");
-  await wait("location.pathname === '/signin' && document.querySelector('[role=\"status\"]')");
+  await waitForDocumentLoad(loadsBeforeIdle);
+  await wait("location.pathname === '/signin'");
   await ready();
   assert.equal(documentLoads, loadsBeforeIdle + 1);
   checks.push({ scenario: "Idle timeout uses the same sign-out flow and reloads sign-in" });
 
   profileDelay = 5000;
   await navigate();
+  await wait("document.querySelector('[role=\"status\"][aria-label=\"Loading your account\"]')");
   const widths = [1440, 1024, 768, 430, 390, 360];
   for (const width of widths) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: false });

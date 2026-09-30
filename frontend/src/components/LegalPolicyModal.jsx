@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { X } from "lucide-react";
 import ModalPortal from "./ModalPortal";
 
 const LAST_UPDATED = "March 16, 2026";
@@ -180,10 +181,10 @@ export default function LegalPolicyModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="rp-icon-button"
             aria-label="Close legal policy modal"
           >
-            X
+            <X aria-hidden="true" />
           </button>
         </div>
 

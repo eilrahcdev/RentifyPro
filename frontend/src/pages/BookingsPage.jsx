@@ -23,6 +23,7 @@ import {
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
 import Navbar from "../components/Navbar";
+import HelpLink from "../components/HelpLink";
 import BookingAccessModal from "../components/BookingAccessModal";
 import ChatWidget from "../components/ChatWidget";
 import { requestLiveCountersRefresh } from "../utils/liveCounters";
@@ -43,6 +44,8 @@ import ReportIssueModal from "../components/ReportIssueModal";
 import MessageReportModal from "../components/MessageReportModal";
 import ChatMessageInput from "../components/ChatMessageInput";
 import ModalPortal from "../components/ModalPortal";
+import PaymentSuccessToast from "../components/PaymentSuccessToast";
+import { showActionToast } from "../utils/actionToast";
 
 const statusStyles = {
   pending: "bg-amber-100 text-amber-800 border border-amber-200",
@@ -388,7 +391,8 @@ export default function BookingsPage({
   const [paymentRecovery, setPaymentRecovery] = useState(null);
   const [paymentRetrySignal, setPaymentRetrySignal] = useState(0);
   const [paymentErrors, setPaymentErrors] = useState({});
-  const [paymentNotice, setPaymentNotice] = useState("");
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
+  const toastedCheckoutIds = useRef(new Set());
   const [approvalModalBooking, setApprovalModalBooking] = useState(null);
   const [paymentConfirmBooking, setPaymentConfirmBooking] = useState(null);
   const [extensionModalBooking, setExtensionModalBooking] = useState(null);
@@ -403,7 +407,7 @@ export default function BookingsPage({
   const [returnRequestSubmittingId, setReturnRequestSubmittingId] = useState("");
   const [paymentPreferences, setPaymentPreferences] = useState({
     scope: "downpayment",
-    channel: "ewallet",
+    channel: "",
   });
   const [showAI, setShowAI] = useState(false);
   const currentUserId = user?._id || getSessionUser()?._id || "";
@@ -551,6 +555,25 @@ export default function BookingsPage({
       bookings.filter((booking) => bookingMatchesView(booking, statusFilter)),
     [bookings, statusFilter]
   );
+  const recoveryBookingPaid = Boolean(
+    paymentRecovery && bookings.some((booking) =>
+      booking._id === paymentRecovery.bookingId &&
+      String(booking.paymentStatus || "").toLowerCase() === "paid"
+    )
+  );
+  const activePaymentRecovery = recoveryBookingPaid ? null : paymentRecovery;
+
+  useEffect(() => {
+    if (!recoveryBookingPaid || !paymentRecovery) return;
+    setPaymentRecovery(null);
+    setPaymentSuccessToast((current) => current?.kind === "retry" ? null : current);
+    setPaymentErrors((previous) => ({ ...previous, [paymentRecovery.bookingId]: "" }));
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("bookingId") === paymentRecovery.bookingId && params.get("payment") === "success") {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.hash}`);
+    }
+  }, [recoveryBookingPaid, paymentRecovery]);
+
   const activeView = renterViewMeta[statusFilter] || renterViewMeta.all;
   const ActiveViewIcon = activeView.icon;
 
@@ -561,10 +584,12 @@ export default function BookingsPage({
     try {
       setCancellingBookingId(bookingId);
       const response = await API.cancelBooking(bookingId);
+      if (response?.success === false) throw new Error(response.message || "Failed to cancel booking.");
       setBookings((prev) =>
         prev.map((booking) => (booking._id === bookingId ? response.booking : booking))
       );
       setCancellationModalBooking(null);
+      showActionToast("Booking cancelled.", { id: `renter-booking-${bookingId}` });
     } catch (err) {
       setError(err.message || "Failed to cancel booking.");
     } finally {
@@ -581,9 +606,11 @@ export default function BookingsPage({
         rating: Number(draft.rating),
         comment: draft.comment || "",
       });
+      if (response?.success === false) throw new Error(response.message || "Failed to submit review.");
       setBookings((prev) =>
         prev.map((booking) => (booking._id === bookingId ? response.booking : booking))
       );
+      showActionToast("Review submitted.", { id: `renter-review-${bookingId}` });
     } catch (err) {
       setError(err.message || "Failed to submit review.");
     }
@@ -635,10 +662,11 @@ export default function BookingsPage({
         newReturnAt: newReturnAt.toISOString(),
         note: extensionForm.note || "",
       });
+      if (response?.success === false) throw new Error(response.message || "Failed to request booking extension.");
       if (response.booking) {
         upsertBooking(response.booking);
       }
-      setPaymentNotice(response.message || "Extension request submitted. Waiting for owner approval.");
+      showActionToast("Extension request sent. Waiting for owner approval.", { id: `renter-booking-${booking._id}`, tone: "info" });
       setExtensionModalBooking(null);
     } catch (err) {
       setError(err.message || "Failed to request booking extension.");
@@ -653,10 +681,11 @@ export default function BookingsPage({
       setReturnRequestSubmittingId(booking._id);
       setError("");
       const response = await API.requestBookingReturn(booking._id);
+      if (response?.success === false) throw new Error(response.message || "Failed to request vehicle return.");
       if (response.booking) {
         upsertBooking(response.booking);
       }
-      setPaymentNotice(response.message || "Vehicle return requested.");
+      showActionToast("Vehicle return request sent. Waiting for owner confirmation.", { id: `renter-booking-${booking._id}`, tone: "info" });
     } catch (err) {
       setError(err.message || "Failed to request vehicle return.");
     } finally {
@@ -795,7 +824,7 @@ export default function BookingsPage({
 
   const startPayment = async (bookingId, options = {}) => {
     if (!bookingId) return;
-    setPaymentNotice("");
+    setPaymentSuccessToast(null);
     setPaymentErrors((prev) => ({ ...prev, [bookingId]: "" }));
     setPayingBookingId(bookingId);
     try {
@@ -821,15 +850,15 @@ export default function BookingsPage({
 
   const setWalkInPayment = async (bookingId) => {
     if (!bookingId) return;
-    setPaymentNotice("");
     setPaymentErrors((prev) => ({ ...prev, [bookingId]: "" }));
     setPayingBookingId(bookingId);
     try {
       const response = await API.requestWalkInPayment(bookingId, { method: "walkin" });
+      if (response?.success === false) throw new Error(response.message || "Failed to request walk-in payment.");
       if (response.booking) {
         upsertBooking(response.booking);
       }
-      setPaymentNotice(response.message || "Walk-in payment request submitted. Waiting for owner approval.");
+      showActionToast("Walk-in payment request sent. Waiting for owner approval.", { id: `renter-booking-${bookingId}`, tone: "info" });
     } catch (err) {
       setPaymentErrors((prev) => ({
         ...prev,
@@ -852,12 +881,12 @@ export default function BookingsPage({
     const isPartial = String(booking.paymentStatus || "").toLowerCase() === "partial";
     const walkInStatus = getWalkInStatus(booking);
     if (isPartial && ["requested", "approved"].includes(walkInStatus)) {
-      setPaymentNotice(getWalkInStatusMessage(booking));
+      showActionToast(getWalkInStatusMessage(booking), { id: `renter-booking-${booking._id}`, tone: "info" });
       return;
     }
     setPaymentPreferences({
       scope: isPartial ? "full" : "downpayment",
-      channel: isPartial ? "walkin" : "ewallet",
+      channel: "",
     });
     setPaymentConfirmBooking(booking);
   };
@@ -867,27 +896,29 @@ export default function BookingsPage({
     if (!bookingId) return;
     const isPartial = String(paymentConfirmBooking?.paymentStatus || "").toLowerCase() === "partial";
     const walkInStatus = getWalkInStatus(paymentConfirmBooking);
-    if (isPartial && paymentPreferences.channel === "walkin") {
+    const channel = paymentPreferences.channel;
+    if (
+      !["ewallet", "card"].includes(channel) &&
+      !(isPartial && channel === "walkin")
+    ) return;
+    if (isPartial && channel === "walkin") {
       setPaymentConfirmBooking(null);
       if (walkInStatus === "requested") {
-        setPaymentNotice("Walk-in request is already pending owner approval.");
+        showActionToast("Walk-in request is already pending owner approval.", { id: `renter-booking-${bookingId}`, tone: "info" });
         return;
       }
       if (walkInStatus === "approved") {
-        setPaymentNotice(
-          "Your walk-in payment request has already been approved. Please pay the remaining balance directly to the owner."
-        );
+        showActionToast("Your walk-in payment request has already been approved. Please pay the remaining balance directly to the owner.", { id: `renter-booking-${bookingId}`, tone: "info" });
         return;
       }
       if (walkInStatus === "completed") {
-        setPaymentNotice("Walk-in payment is already confirmed for this booking.");
+        showActionToast("Walk-in payment is already confirmed for this booking.", { id: `renter-booking-${bookingId}`, tone: "info" });
         return;
       }
       await setWalkInPayment(bookingId);
       return;
     }
     const scope = isPartial ? "full" : paymentPreferences.scope;
-    const channel = paymentPreferences.channel;
     setPaymentConfirmBooking(null);
     startPayment(bookingId, {
       paymentScope: scope,
@@ -913,7 +944,8 @@ export default function BookingsPage({
     };
 
     if (paymentResult === "cancelled") {
-      setPaymentNotice("Payment was cancelled.");
+      setPaymentSuccessToast(null);
+      showActionToast("Payment was cancelled.", { id: `renter-checkout-${bookingId}`, tone: "info" });
       clearQuery();
       return undefined;
     }
@@ -930,11 +962,12 @@ export default function BookingsPage({
       });
 
     const verifyPayment = async () => {
-      setPaymentRecovery({ bookingId, checkoutId });
+      setPaymentRecovery({ bookingId, checkoutId, stage: "checking" });
+      setPaymentSuccessToast(null);
       setVerifyingBookingId(bookingId);
       setPaymentErrors((prev) => ({ ...prev, [bookingId]: "" }));
       try {
-        const maxAttempts = 4;
+        const maxAttempts = 8;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           const response = await API.verifyBookingPayment(bookingId, checkoutId);
           if (!isActive) return;
@@ -943,44 +976,50 @@ export default function BookingsPage({
             upsertBooking(response.booking);
           }
 
-          const paymentStatus = String(
-            response.paymentStatus || response.booking?.paymentStatus || ""
-          ).toLowerCase();
           const paymentCaptured = Boolean(response.paymentCaptured);
+          const paymentRecorded = paymentCaptured && ["paid", "partial"].includes(
+            String(response.booking?.paymentStatus || "").toLowerCase()
+          );
           if (!paymentCaptured && ["expired", "cancelled", "canceled"].includes(response.checkoutStatus)) {
             setPaymentRecovery(null);
             clearQuery();
-            setPaymentNotice("This checkout has ended without a completed payment. You can start a new checkout from your booking.");
+            showActionToast("This checkout has ended without a completed payment. You can start a new checkout from your booking.", { id: `renter-checkout-${bookingId}`, tone: "info" });
             return;
           }
 
-          if (paymentCaptured) {
+          if (paymentRecorded) {
             setPaymentRecovery(null);
             clearQuery();
             requestLiveCountersRefresh();
-            const paidBooking = response.booking || null;
-            if (paymentStatus === "partial") {
-              const remaining = paidBooking
-                ? moneyWithCents(getPaymentRemainingAmount(paidBooking))
-                : moneyWithCents(0);
-              setPaymentNotice(`Downpayment successful. Remaining balance: ${remaining}.`);
-            } else {
-              setPaymentNotice("Payment successful.");
+            const verifiedCheckoutId = String(checkoutId || response.checkoutId || "").trim();
+            if (!verifiedCheckoutId || !toastedCheckoutIds.current.has(verifiedCheckoutId)) {
+              if (verifiedCheckoutId) toastedCheckoutIds.current.add(verifiedCheckoutId);
+              setPaymentSuccessToast((current) => ({
+                id: (current?.id || 0) + 1,
+                message: "Payment successful.",
+              }));
             }
             return;
           }
 
           if (attempt < maxAttempts) {
-            await wait(1500);
+            await wait(2000);
           }
         }
 
-        setPaymentNotice("Payment is still processing. Use Check payment status to verify this checkout before starting another payment.");
-      } catch (err) {
+        setPaymentRecovery({ bookingId, checkoutId, stage: "retry" });
+        setPaymentSuccessToast((current) => ({
+          id: (current?.id || 0) + 1,
+          kind: "retry",
+          message: `This checkout for booking #${bookingId.slice(-6).toUpperCase()} is not confirmed yet. Retry verification before paying again.`,
+        }));
+      } catch {
         if (!isActive) return;
-        setPaymentErrors((prev) => ({
-          ...prev,
-          [bookingId]: err.message || "Failed to verify payment.",
+        setPaymentRecovery({ bookingId, checkoutId, stage: "retry" });
+        setPaymentSuccessToast((current) => ({
+          id: (current?.id || 0) + 1,
+          kind: "retry",
+          message: `Payment verification is unavailable for booking #${bookingId.slice(-6).toUpperCase()}. Retry verification before paying again.`,
         }));
       } finally {
         if (isActive) {
@@ -1001,6 +1040,9 @@ export default function BookingsPage({
   const confirmCanRequestWalkIn =
     confirmIsPartial && (confirmWalkInStatus === "none" || confirmWalkInStatus === "rejected");
   const confirmIsWalkIn = confirmIsPartial && paymentPreferences.channel === "walkin";
+  const confirmHasPaymentMethod =
+    ["ewallet", "card"].includes(paymentPreferences.channel) ||
+    (confirmIsWalkIn && confirmCanRequestWalkIn);
   const confirmTotalPayable = paymentConfirmBooking ? getAmountPayable(paymentConfirmBooking) : 0;
   const confirmBaseRentalAmount = paymentConfirmBooking ? getBaseRentalTotal(paymentConfirmBooking) : 0;
   const confirmLateReturnInfo = paymentConfirmBooking ? getLateReturnInfo(paymentConfirmBooking) : null;
@@ -1054,7 +1096,6 @@ export default function BookingsPage({
 
         <div className="rp-page-shell mx-auto max-w-4xl px-4 pb-16 pt-24 sm:px-6">
           <div className="rp-surface p-8 text-center">
-            <span className="rp-page-eyebrow">Your rental workspace</span>
             <h1 className="text-3xl font-bold">Bookings</h1>
             <p className="text-sm text-gray-600 mt-2">
               You are on the bookings page. Sign in or register to view your booking history.
@@ -1088,6 +1129,7 @@ export default function BookingsPage({
         />
         <ChatWidget
           isOpen={showAI}
+          onOpen={() => setShowAI(true)}
           onClose={() => setShowAI(false)}
           onViewAvailableVehicles={onNavigateToVehicles}
         />
@@ -1119,16 +1161,14 @@ export default function BookingsPage({
       />
 
       <div className="rp-page-shell mx-auto max-w-7xl space-y-6 px-4 pb-16 pt-24 sm:px-6">
-        <div className="rp-page-header">
-          <span className="rp-page-eyebrow">Your rental workspace</span>
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="min-w-0 text-3xl font-bold tracking-tight text-slate-900">My bookings</h1>
-            <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => load({ background: true })} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
-              <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">Manage your reservations, payments, and trip updates.</p>
+        <div className="rp-page-header rp-bookings-page-header">
+          <h1 className="rp-bookings-page-header__title text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">My bookings</h1>
+          <p className="rp-bookings-page-header__description text-sm text-slate-500">Manage your reservations, payments, and trip updates.</p>
+          <HelpLink guide="booking-payments" className="rp-bookings-page-header__help">Need help with payments?</HelpLink>
+          <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => load({ background: true })} className="rp-bookings-page-header__refresh inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50" aria-label={refreshing ? "Refreshing bookings" : "Refresh bookings"}>
+            <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
+            <span className="rp-bookings-page-header__refresh-label">{refreshing ? "Refreshing..." : "Refresh"}</span>
+          </button>
         </div>
 
         <div
@@ -1158,11 +1198,15 @@ export default function BookingsPage({
           ))}
         </div>
 
+        {activePaymentRecovery?.stage === "retry" && !filteredBookings.some((booking) => booking._id === activePaymentRecovery.bookingId) && (
+          <button type="button" onClick={() => setPaymentRetrySignal((value) => value + 1)} className="min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+            Retry verification for booking #{activePaymentRecovery.bookingId.slice(-6).toUpperCase()}
+          </button>
+        )}
+
         <RequestFeedback loading={refreshing} label="Refreshing bookings..." error={loadError} onRetry={() => load({ background: bookings.length > 0 })} />
         {loading && <BookingListSkeleton />}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {paymentNotice && <p role="status" className="text-sm text-emerald-700">{paymentNotice}</p>}
-        {paymentRecovery && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Checking payment for booking #{paymentRecovery.bookingId.slice(-6).toUpperCase()}. Keep this page open or return to it to verify the same checkout.</p><button type="button" disabled={Boolean(verifyingBookingId)} onClick={() => setPaymentRetrySignal((value) => value + 1)} className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold disabled:opacity-50">{verifyingBookingId ? "Checking payment..." : "Check payment status"}</button></div>}
         {reportNotice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{reportNotice}</p>}
 
         {!loading && !loadError && filteredBookings.length === 0 && (
@@ -1237,6 +1281,9 @@ export default function BookingsPage({
                   >
                     {displayState.label}
                   </span>
+                  {returnRequestInfo.status === "declined" && (
+                    <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">Return declined</span>
+                  )}
                   {unsettled && (
                     <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                       settlementPending
@@ -1315,21 +1362,8 @@ export default function BookingsPage({
                   Your extension request was rejected. Original return schedule still applies.
                 </div>
               )}
-              {returnRequestInfo.status === "requested" && (
-                <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                  Vehicle return requested. The vehicle remains unavailable while waiting for owner confirmation.
-                </div>
-              )}
-              {returnRequestInfo.status === "confirmed" && (
-                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  The owner confirmed receipt of the vehicle.
-                </div>
-              )}
-              {returnRequestInfo.status === "declined" && (
-                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                  The owner declined the vehicle return request. The booking remains active and you may request return again when the handover is ready.
-                  {returnRequestInfo.reviewNote ? ` Note: ${returnRequestInfo.reviewNote}` : ""}
-                </div>
+              {returnRequestInfo.status === "declined" && returnRequestInfo.reviewNote && (
+                <p className="mt-3 text-sm text-slate-600">Owner note: {returnRequestInfo.reviewNote}</p>
               )}
 
               <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
@@ -1351,7 +1385,7 @@ export default function BookingsPage({
                   !["cancelled", "rejected"].includes(booking.status) && (
                     <button
                       onClick={() => handlePayNow(booking)}
-                      disabled={payingBookingId === booking._id || verifyingBookingId === booking._id || paymentRecovery?.bookingId === booking._id}
+                      disabled={payingBookingId === booking._id || verifyingBookingId === booking._id || activePaymentRecovery?.bookingId === booking._id}
                       className={`px-3 py-2 rounded-lg text-sm ${
                         payingBookingId === booking._id || verifyingBookingId === booking._id
                           ? "bg-slate-200 text-slate-500 cursor-not-allowed"
@@ -1368,6 +1402,12 @@ export default function BookingsPage({
                     </button>
                   )}
 
+                {activePaymentRecovery?.stage === "retry" && activePaymentRecovery.bookingId === booking._id && (
+                  <button type="button" onClick={() => setPaymentRetrySignal((value) => value + 1)} className="min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                    Retry verification
+                  </button>
+                )}
+
                 {["unpaid", "partial"].includes(String(booking.paymentStatus || "").toLowerCase()) &&
                   !isPaymentEligibleStatus &&
                   !["cancelled", "rejected"].includes(booking.status) && (
@@ -1376,14 +1416,18 @@ export default function BookingsPage({
                     </p>
                   )}
 
-                {["pending", "confirmed", "extended"].includes(booking.status) &&
-                  returnRequestInfo.status !== "requested" && (
+                {["pending", "confirmed", "extended"].includes(booking.status) && (
                   <button
+                    type="button"
                     onClick={() => setCancellationModalBooking(booking)}
-                    className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                    disabled={returnRequestInfo.status === "requested"}
+                    className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel Booking
                   </button>
+                )}
+                {["pending", "confirmed", "extended"].includes(booking.status) && returnRequestInfo.status === "requested" && (
+                  <p className="w-full text-xs text-slate-600">Cancellation becomes available if the owner declines the return request.</p>
                 )}
 
                 {canResolveOverdue && returnRequestInfo.status === "none" && (
@@ -1531,7 +1575,7 @@ export default function BookingsPage({
                     </button>
                     <button
                       onClick={closeChatModal}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                      className="rp-icon-button"
                       aria-label="Close chat"
                       title="Close chat"
                     >
@@ -1856,7 +1900,7 @@ export default function BookingsPage({
                     type="button"
                     onClick={() => setPaymentConfirmBooking(null)}
                     disabled={Boolean(payingBookingId)}
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rp-icon-button"
                     aria-label="Close payment confirmation"
                   >
                     <X size={18} />
@@ -1870,6 +1914,70 @@ export default function BookingsPage({
                     ? "The owner confirmed receipt and finalized this fee. Pay online below, or choose Request Walk-in Payment to ask the owner to accept the remaining balance in person."
                     : "Payment reminder: complete payment within the booked rental duration, or request walk-in settlement upon return."}
                 </div>
+
+                <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p id="booking-payment-method-label" className="text-sm font-semibold text-slate-800">Payment Method</p>
+                  <p className="text-sm text-slate-600">Choose a method to continue.</p>
+                  <div className="space-y-2" role="radiogroup" aria-labelledby="booking-payment-method-label">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/50">
+                      <input
+                        type="radio"
+                        name="booking-payment-method"
+                        checked={paymentPreferences.channel === "ewallet"}
+                        onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "ewallet" }))}
+                      />
+                      <span className="text-sm text-slate-700">E-wallet (GCash / Maya)</span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/50">
+                      <input
+                        type="radio"
+                        name="booking-payment-method"
+                        checked={paymentPreferences.channel === "card"}
+                        onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "card" }))}
+                      />
+                      <span className="text-sm text-slate-700">Credit / Debit Card</span>
+                    </label>
+                    {confirmIsPartial && (
+                      <label
+                        className={`flex items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition ${
+                          confirmCanRequestWalkIn
+                            ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/50"
+                            : "cursor-not-allowed opacity-70"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="booking-payment-method"
+                          checked={paymentPreferences.channel === "walkin"}
+                          disabled={!confirmCanRequestWalkIn}
+                          onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "walkin" }))}
+                        />
+                        <span className="text-sm text-slate-700">
+                          Request Walk-in Payment (owner must approve before confirmation)
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                  {confirmWalkInStatus === "requested" && (
+                    <p className="text-xs text-amber-700">Walk-in request is already pending owner approval.</p>
+                  )}
+                  {confirmWalkInStatus === "approved" && (
+                    <p className="text-xs text-emerald-700">
+                      Your walk-in payment request has already been approved. Please pay the remaining balance
+                      directly to the owner.
+                    </p>
+                  )}
+                  {confirmWalkInStatus === "rejected" && (
+                    <p className="text-xs text-rose-700">
+                      Your previous walk-in request was rejected. You may submit a new request.
+                    </p>
+                  )}
+                  {confirmIsWalkIn && confirmCanRequestWalkIn && (
+                    <p className="text-xs text-amber-700">
+                      This will send a walk-in payment request to the owner. No online charge will happen now.
+                    </p>
+                  )}
+                </section>
 
                 {confirmHasLateReturnFee && (
                   <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
@@ -1927,73 +2035,15 @@ export default function BookingsPage({
                   )}
                 </section>
 
-                <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-sm font-semibold text-slate-800">Payment Method</p>
-                  <div className="space-y-2">
-                    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/50">
-                      <input
-                        type="radio"
-                        checked={paymentPreferences.channel === "ewallet"}
-                        onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "ewallet" }))}
-                      />
-                      <span className="text-sm text-slate-700">E-wallet (GCash / Maya)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/50">
-                      <input
-                        type="radio"
-                        checked={paymentPreferences.channel === "card"}
-                        onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "card" }))}
-                      />
-                      <span className="text-sm text-slate-700">Credit / Debit Card</span>
-                    </label>
-                    {confirmIsPartial && (
-                      <label
-                        className={`flex items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition ${
-                          confirmCanRequestWalkIn
-                            ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/50"
-                            : "cursor-not-allowed opacity-70"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          checked={paymentPreferences.channel === "walkin"}
-                          disabled={!confirmCanRequestWalkIn}
-                          onChange={() => setPaymentPreferences((prev) => ({ ...prev, channel: "walkin" }))}
-                        />
-                        <span className="text-sm text-slate-700">
-                          Request Walk-in Payment (owner must approve before confirmation)
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                  {confirmWalkInStatus === "requested" && (
-                    <p className="text-xs text-amber-700">Walk-in request is already pending owner approval.</p>
-                  )}
-                  {confirmWalkInStatus === "approved" && (
-                    <p className="text-xs text-emerald-700">
-                      Your walk-in payment request has already been approved. Please pay the remaining balance
-                      directly to the owner.
-                    </p>
-                  )}
-                  {confirmWalkInStatus === "rejected" && (
-                    <p className="text-xs text-rose-700">
-                      Your previous walk-in request was rejected. You may submit a new request.
-                    </p>
-                  )}
-                  {confirmIsWalkIn && confirmCanRequestWalkIn && (
-                    <p className="text-xs text-amber-700">
-                      This will send a walk-in payment request to the owner. No online charge will happen now.
-                    </p>
-                  )}
-                </section>
-
-                <section className="space-y-1 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm">
-                  <Line label="Amount to Pay Now" value={moneyWithCents(confirmChargeAmount)} strong />
-                  <Line
-                    label="Balance After This Payment"
-                    value={moneyWithCents(confirmRemainingAfterPayment)}
-                  />
-                </section>
+                {confirmHasPaymentMethod && (
+                  <section className="space-y-1 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm">
+                    <Line label="Amount to Pay Now" value={moneyWithCents(confirmChargeAmount)} strong />
+                    <Line
+                      label="Balance After This Payment"
+                      value={moneyWithCents(confirmRemainingAfterPayment)}
+                    />
+                  </section>
+                )}
               </div>
 
               <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
@@ -2008,7 +2058,7 @@ export default function BookingsPage({
                 <button
                   type="button"
                   onClick={confirmAndStartPayment}
-                  disabled={Boolean(payingBookingId)}
+                  disabled={Boolean(payingBookingId) || !confirmHasPaymentMethod}
                   className="rp-btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {payingBookingId
@@ -2113,7 +2163,7 @@ export default function BookingsPage({
                     aria-label="Close cancellation confirmation"
                     onClick={() => setCancellationModalBooking(null)}
                     disabled={Boolean(cancellingBookingId)}
-                    className="rounded-xl p-2 text-slate-400 transition hover:bg-white hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rp-icon-button"
                   >
                     <X size={20} />
                   </button>
@@ -2152,8 +2202,18 @@ export default function BookingsPage({
       )}
       <ChatWidget
         isOpen={showAI}
+        onOpen={() => setShowAI(true)}
         onClose={() => setShowAI(false)}
         onViewAvailableVehicles={onNavigateToVehicles}
+      />
+      <PaymentSuccessToast
+        notice={activePaymentRecovery?.stage === "checking"
+          ? {
+              id: `${activePaymentRecovery.bookingId}:${activePaymentRecovery.checkoutId}`,
+              kind: "processing",
+              message: "Processing payment, please wait...",
+            }
+          : paymentSuccessToast}
       />
       <ReportIssueModal booking={reportBooking} perspective="renter" onClose={() => setReportBooking(null)} onSubmitted={(report) => setReportNotice(`Report ${report.caseReference} was submitted for administrator review.`)} />
       <MessageReportModal

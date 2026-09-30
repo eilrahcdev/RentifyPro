@@ -55,7 +55,7 @@ export default function VehiclePreviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-2 top-2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+            className="rp-icon-button absolute right-2 top-2"
             aria-label="Close vehicle preview"
           >
             <X size={16} />

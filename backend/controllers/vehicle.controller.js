@@ -12,6 +12,7 @@ const REVIEW_PREVIEW_LIMIT = 20;
 const ALLOWED_SEARCH_PATTERN = /^[\p{L}\p{N} -]*$/u;
 const ALLOWED_VEHICLE_TYPES = new Set(["car", "motorcycle", "van", "truck"]);
 const DYNAMIC_VEHICLE_CACHE_CONTROL = "private, no-store, no-cache, must-revalidate, max-age=0";
+const MAX_SEARCH_SUGGESTIONS = 3;
 const SEARCH_FIELDS = [
   "name",
   "description",
@@ -227,13 +228,12 @@ export const getVehicleLocationSuggestions = async (req, res, next) => {
       return res.status(400).json({ success: false, message: error || "Vehicle type filter is invalid." });
     }
     res.setHeader("Cache-Control", DYNAMIC_VEHICLE_CACHE_CONTROL);
-    if (!search) return res.json({ success: true, locations: [] });
     const tokens = search.match(/[\p{L}\p{M}\p{N}]+/gu) || [];
     const locations = await Vehicle.aggregate([
       { $match: {
         availabilityStatus: "available",
         ...(vehicleType ? buildVehicleTypeQuery(vehicleType) : {}),
-        $and: tokens.map((token) => ({ location: { $regex: `(?:^|[^\\p{L}\\p{M}\\p{N}])${token}`, $options: "i" } })),
+        ...(tokens.length ? { $and: tokens.map((token) => ({ location: { $regex: `(?:^|[^\\p{L}\\p{M}\\p{N}])${token}`, $options: "i" } })) } : {}),
       } },
       { $lookup: {
         from: Booking.collection.name,
@@ -247,11 +247,60 @@ export const getVehicleLocationSuggestions = async (req, res, next) => {
       } },
       { $match: { "blockingBookings.0": { $exists: false } } },
       { $group: { _id: { $toLower: { $trim: { input: "$location" } } }, location: { $first: { $trim: { input: "$location" } } }, vehicleCount: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-      { $limit: 6 },
+      { $sample: { size: MAX_SEARCH_SUGGESTIONS } },
       { $project: { _id: 0, location: 1, vehicleCount: 1 } },
     ]);
-    return res.json({ success: true, locations });
+    return res.json({ success: true, locations: locations.slice(0, MAX_SEARCH_SUGGESTIONS) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getVehicleSearchSuggestions = async (req, res, next) => {
+  try {
+    const rawSearch = String(req.query.search || "");
+    const search = rawSearch.trim();
+    const location = normalizeLocationSearch(req.query.location || "");
+    const vehicleType = normalizeVehicleType(req.query.vehicleType || "");
+    const error = validateVehicleSearch(rawSearch) || validateLocationSearch(req.query.location || "")
+      || (vehicleType && !ALLOWED_VEHICLE_TYPES.has(vehicleType) ? "Vehicle type filter is invalid." : "");
+    if (error) return res.status(400).json({ success: false, message: error });
+
+    const tokens = search.split(/\s+/).filter(Boolean).slice(0, 5);
+    const filters = [
+      { availabilityStatus: "available" },
+      buildVehicleLocationQuery(location),
+      buildVehicleTypeQuery(vehicleType),
+      ...tokens.map((token) => ({ name: new RegExp(escapeRegex(token), "i") })),
+    ].filter(Boolean);
+    const candidates = await Vehicle.aggregate([
+      { $match: { $and: filters } },
+      { $lookup: {
+        from: Booking.collection.name,
+        let: { vehicleId: "$_id" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$vehicle", "$$vehicleId"] }, status: { $in: ["pending", "confirmed", "extended"] }, actualReturnAt: null } },
+          { $limit: 1 },
+          { $project: { _id: 1 } },
+        ],
+        as: "blockingBookings",
+      } },
+      { $match: { "blockingBookings.0": { $exists: false } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: { $toLower: { $trim: { input: "$name" } } }, vehicle: { $first: "$$ROOT" } } },
+      { $replaceRoot: { newRoot: "$vehicle" } },
+      { $sample: { size: MAX_SEARCH_SUGGESTIONS } },
+    ]);
+    res.setHeader("Cache-Control", DYNAMIC_VEHICLE_CACHE_CONTROL);
+    return res.json({ success: true, suggestions: candidates.slice(0, MAX_SEARCH_SUGGESTIONS).map((vehicle) => {
+      const publicVehicle = serializeVehicleForRenter(req, vehicle);
+      return {
+        id: String(publicVehicle._id),
+        name: publicVehicle.name,
+        location: publicVehicle.location,
+        hourlyRate: publicVehicle.hourlyRentalRate,
+      };
+    }) });
   } catch (error) {
     next(error);
   }

@@ -49,7 +49,7 @@
   z-index: 5;
   display: none;
   border: 1px solid rgba(203, 213, 225, 0.8);
-  border-radius: 0.65rem;
+  border-radius: var(--rp-radius-control);
   background: rgba(255, 255, 255, 0.96);
   padding: 0.55rem 0.8rem;
   box-shadow: 0 5px 16px rgba(15, 23, 42, 0.12);
@@ -129,7 +129,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #d9e4f3;
-  border-radius: 1.5rem;
+  border-radius: var(--rp-radius-feature);
   background: #fff;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.09);
   color: var(--rp-ink);
@@ -244,7 +244,6 @@
     margin-inline: -0.65rem;
   }
 
-  .rp-type-carousel__card-button { border-radius: 1.1rem; }
   .rp-type-carousel__details { padding: 1.1rem 1rem; }
   .rp-type-carousel__title-row { gap: 0.4rem; }
   .rp-type-carousel__title-row > svg { width: 19px; }

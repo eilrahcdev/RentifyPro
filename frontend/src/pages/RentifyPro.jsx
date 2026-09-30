@@ -20,7 +20,7 @@ import {
 } from "../utils/dateUtils";
 import LocationSearchInput from "../components/LocationSearchInput";
 import VehicleCard from "../components/VehicleCard";
-import { VehicleGridSkeleton } from "../components/LoadingSkeletons";
+import { DelayedSkeleton, VehicleGridSkeleton } from "../components/LoadingSkeletons";
 import VehicleTypeCarousel from "../components/VehicleTypeCarousel";
 import { DEFAULT_VEHICLE_IMAGE } from "../utils/media";
 import { formatVehicleTypeLabel } from "../utils/vehicleText";
@@ -195,6 +195,7 @@ const mapSearchPayload = (location, vehicleType) => ({
 export default function RentifyPro({
   onNavigateToHome,
   onNavigateToSignIn,
+  onSignInToBook,
   onNavigateToVehicles,
   onNavigateToRegister,
   onNavigateToAbout,
@@ -312,7 +313,7 @@ export default function RentifyPro({
   const handleFeaturedBookNow = (vehicle) => {
     if (!vehicle) return;
     if (!isLoggedIn) {
-      onNavigateToSignIn?.();
+      onSignInToBook?.(vehicle);
       return;
     }
     onViewDetails(vehicle);
@@ -370,7 +371,7 @@ export default function RentifyPro({
         onLogout={onLogout}
       />
 
-      <section className="relative mx-auto max-w-7xl overflow-hidden pt-28 sm:rounded-b-[2rem] sm:pt-36 pb-28">
+      <section className="relative mx-auto max-w-7xl overflow-hidden pt-28 sm:rounded-b-3xl sm:pt-36 pb-28">
         <img
           src="/hero-car1-optimized.jpg"
           alt="RentifyPro Hero"
@@ -504,7 +505,11 @@ export default function RentifyPro({
             <div className="rp-surface p-6 text-sm text-rose-600">{featuredError}</div>
           )}
           {featuredLoading && (
-            <VehicleGridSkeleton label="Loading featured vehicles" count={4} className="rp-featured-carousel" />
+            <div className="min-h-[27rem]">
+              <DelayedSkeleton>
+                <VehicleGridSkeleton label="Loading featured vehicles" count={4} className="rp-featured-carousel" />
+              </DelayedSkeleton>
+            </div>
           )}
           {!featuredLoading && !featuredError && featuredVehicles.length === 0 && (
             <div className="rp-surface p-6 text-sm text-slate-600">
@@ -700,7 +705,7 @@ export default function RentifyPro({
 
       <footer
         id="contacts"
-        className="mx-auto mt-8 max-w-7xl overflow-hidden bg-gradient-to-r from-[#045FC3] to-[#0B75E7] py-14 text-white sm:rounded-t-[2rem]"
+        className="mx-auto mt-8 max-w-7xl overflow-hidden bg-gradient-to-r from-[#045FC3] to-[#0B75E7] py-14 text-white sm:rounded-t-3xl"
       >
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -780,6 +785,7 @@ export default function RentifyPro({
 
       <ChatWidget
         isOpen={showAI}
+        onOpen={() => setShowAI(true)}
         onClose={() => setShowAI(false)}
         onViewAvailableVehicles={onNavigateToVehicles}
       />

@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import API from "../utils/api";
 import Navbar from "../components/Navbar";
+import HelpLink from "../components/HelpLink";
+import { showActionToast } from "../utils/actionToast";
 import {
   formatDisplayName,
   getCurrentTime,
@@ -105,6 +107,7 @@ export default function VehicleDetailsPage({
   onBack,
   onNavigateToHome,
   onNavigateToSignIn,
+  onSignInToBook,
   onNavigateToRegister,
   onNavigateToVehicles,
   onNavigateToBookingHistory,
@@ -125,7 +128,6 @@ export default function VehicleDetailsPage({
   const [bookingError, setBookingError] = useState("");
   const [eligibilityState, setEligibilityState] = useState(null);
   const [eligibilityRetry, setEligibilityRetry] = useState(0);
-  const [bookingSuccess, setBookingSuccess] = useState("");
   const [bookingRequiresKyc, setBookingRequiresKyc] = useState(false);
   const [chatOwnerError, setChatOwnerError] = useState("");
   const [driverSelected, setDriverSelected] = useState(false);
@@ -140,6 +142,13 @@ export default function VehicleDetailsPage({
   const eligibilityError = eligibilityState?.key === eligibilityKey ? eligibilityState.error : "";
   const balanceReasons = eligibility?.reasons?.filter((reason) => BALANCE_REASON_CODES.has(reason.code)) || [];
   const firstNonBalanceReason = eligibility?.reasons?.find((reason) => !BALANCE_REASON_CODES.has(reason.code));
+  const needsIdentityVerification = isLoggedIn && (
+    bookingRequiresKyc || (user?.role !== "admin" && String(user?.kycStatus || "not_started") !== "approved")
+  );
+  const knownEligibilityBlock = isLoggedIn && eligibility?.eligible === false;
+  const changeDatesToBook = knownEligibilityBlock && eligibility.reasons?.length > 0
+    && eligibility.reasons.every((reason) => reason.code === "RENTER_SCHEDULE_CONFLICT");
+  const resolveInBookings = knownEligibilityBlock && !changeDatesToBook;
 
   useEffect(() => {
     if (!isLoggedIn) return undefined;
@@ -306,10 +315,9 @@ export default function VehicleDetailsPage({
 
   const handleContinueBooking = async () => {
     setBookingError("");
-    setBookingSuccess("");
 
     if (!isLoggedIn) {
-      onNavigateToSignIn?.();
+      onSignInToBook?.(currentVehicle);
       return;
     }
 
@@ -338,13 +346,14 @@ export default function VehicleDetailsPage({
 
     setBookingLoading(true);
     try {
-      await API.createBooking({
+      const response = await API.createBooking({
         vehicleId,
         pickupAt: `${pickupDate}T${pickupTime}`,
         returnAt: `${returnDate}T${returnTime}`,
         driverSelected,
       });
-      setBookingSuccess("Booking submitted successfully. Redirecting to booking history...");
+      if (response?.success === false) throw new Error(response.message || "Booking could not be submitted.");
+      showActionToast("Booking request sent. Waiting for owner approval.", { id: `renter-booking-${response?.booking?._id || vehicleId}`, tone: "info" });
       setTimeout(() => onNavigateToBookingHistory?.(), 900);
     } catch (error) {
       if (error?.details?.eligibility) {
@@ -490,7 +499,7 @@ export default function VehicleDetailsPage({
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.65fr_1fr] xl:gap-6">
           <div className="space-y-5 sm:space-y-6">
             <section className="rp-surface p-5 sm:p-6">
-              <div className="relative overflow-hidden rounded-[1.35rem] border border-slate-200 bg-slate-100">
+              <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
                 <VehicleCover
                   vehicle={currentVehicle}
                   src={galleryImages[activeImageIndex]}
@@ -707,6 +716,9 @@ export default function VehicleDetailsPage({
                   <div className="my-2.5 h-px bg-slate-200/80" />
                   <SummaryRow label="Estimated total" value={moneyWithCents(estimatedTotal)} strong />
                 </div>
+                <p className="text-sm leading-6 text-slate-600">
+                  The 30% downpayment is part of the estimated total. Submitting a booking request does not charge you; payment options appear in Bookings after the owner approves it.
+                </p>
 
                 <div className="rp-detail-note border border-slate-200 bg-slate-50 text-slate-700">
                   <p className="font-semibold text-slate-900">Booking limits</p>
@@ -750,31 +762,27 @@ export default function VehicleDetailsPage({
                     {bookingError}
                   </p>
                 )}
-                {bookingSuccess && (
-                  <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-700">
-                    {bookingSuccess}
-                  </p>
-                )}
-
                 <button
                   type="button"
-                  onClick={handleContinueBooking}
-                  disabled={bookingLoading || !isAvailable}
+                  onClick={resolveInBookings ? onNavigateToBookingHistory : handleContinueBooking}
+                  disabled={bookingLoading || !isAvailable || changeDatesToBook}
                   className="rp-btn-primary min-h-[3.3rem] w-full px-4 text-[0.97rem] tracking-[0.01em] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {bookingLoading
                     ? "Submitting..."
                     : !isAvailable
                     ? "Currently Unavailable"
-                    : isLoggedIn &&
-                      (bookingRequiresKyc ||
-                        (user?.role !== "admin" &&
-                          String(user?.kycStatus || "not_started") !== "approved"))
+                    : resolveInBookings
+                    ? "View bookings to resolve"
+                    : changeDatesToBook
+                    ? "Change dates to book"
+                    : needsIdentityVerification
                     ? "Verify Identity to Book"
                     : isLoggedIn
                     ? "Book Now"
                     : "Sign In to Book"}
                 </button>
+                <HelpLink guide="request-booking" className="justify-center self-center">Need help booking?</HelpLink>
               </div>
             </section>
 

@@ -120,7 +120,6 @@ export default function Analytics() {
   return (
     <div className="space-y-5" aria-busy={loading}>
       <OwnerPageHeader
-        eyebrow={null}
         title="Vehicle performance"
         description="Compare booking demand across your fleet and spot vehicles that may need attention."
         actions={

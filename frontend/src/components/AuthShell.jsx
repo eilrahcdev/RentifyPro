@@ -41,7 +41,7 @@ export default function AuthShell({
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1500px] items-stretch gap-4 p-4 sm:gap-6 sm:p-6 lg:h-[100dvh] lg:gap-8 lg:p-8">
         {/* ── Left car panel (desktop/tablet only) ── */}
         <section className="hidden lg:flex lg:w-[44%] xl:w-[40%]">
-          <div className="rp-surface relative h-full w-full overflow-hidden rounded-[30px] border border-white/60">
+          <div className="rp-surface relative h-full w-full overflow-hidden rounded-3xl border border-white/60">
             <img
               src="/porsche 911.png"
               alt="RentifyPro showcase"

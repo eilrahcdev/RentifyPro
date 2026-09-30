@@ -366,7 +366,7 @@ export default function SignInPage({
       contentMaxWidth="max-w-xl"
       contentContainerClassName="items-center py-2 sm:py-4"
     >
-      <div className="rp-surface rp-glass rounded-[28px] border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div className="rp-surface rp-glass rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         <div className="mb-6 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Sign In</span>
           <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">Access your account</h2>

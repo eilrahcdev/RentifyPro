@@ -121,6 +121,7 @@ try {
   await openDetails();
   await wait(hasText("1/3 open · 0/2 pending"));
   assert.equal(await evaluate(hasText("Partial payments are allowed until due")), false);
+  assert.equal(await evaluate(hasText("The 30% downpayment is part of the estimated total.")), true);
   checks.push("Allowed state shows only the renter's compact booking counts");
 
   await click("Book Now");
@@ -142,6 +143,8 @@ try {
   mode = "limit";
   await openDetails();
   await wait(hasText("3/3 open · 0/2 pending"));
+  await wait(hasText("View bookings to resolve"));
+  assert.equal(await evaluate("[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Book Now')"), false);
   for (const width of [1440, 1024, 768, 430, 390, 360]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width <= 430 });
     await pause(80);
@@ -152,9 +155,12 @@ try {
   await fs.mkdir(new URL("../frontend/.vite/", import.meta.url), { recursive: true });
   await fs.writeFile(new URL("../frontend/.vite/booking-policy-mobile.png", import.meta.url), Buffer.from(screenshot.data, "base64"));
   checks.push("Limit warning fits 1440, 1024, 768, 430, 390, and 360px");
+  await click("View bookings to resolve");
+  await wait("location.pathname === '/bookings'");
+  checks.push("Known booking limit sends the renter to booking management");
 
   mode = "pending";
-  await refresh();
+  await openDetails();
   await wait(hasText("2 pending requests reached"));
   checks.push("Pending request cap has its own explanation");
 

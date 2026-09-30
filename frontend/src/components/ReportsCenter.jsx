@@ -125,7 +125,6 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
       <div className={ownerHeader ? "space-y-5" : "mx-auto max-w-6xl space-y-5"}>
         {ownerHeader ? (
           <OwnerPageHeader
-            eyebrow="Trust & safety"
             title="Reports and Appeals"
             description="Track reports you submitted and moderation decisions involving your account."
             actions={(
@@ -143,8 +142,7 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
               </button>
             ) : null}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Trust and safety</p>
-              <h1 className="mt-1 text-2xl font-bold text-slate-950">Reports and appeals</h1>
+              <h1 className="text-2xl font-bold text-slate-950">Reports and appeals</h1>
               <p className="mt-1 text-sm text-slate-500">Track reports you submitted and moderation decisions involving your account.</p>
             </div>
           </div>

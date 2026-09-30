@@ -103,14 +103,28 @@ export function stopCamera(streamOrVideo) {
 
 /**
  * Capture an image from a MediaStream.
- * Uses ImageCapture first, then falls back to canvas.
+ * Uses the displayed video frame when available so the captured framing matches the guide.
+ * Falls back to ImageCapture, then a separate video canvas.
  * Returns a data URL.
  */
-export async function captureBase64FromStream(stream, { mime = "image/jpeg", quality = 0.92 } = {}) {
+export async function captureBase64FromStream(stream, { mime = "image/jpeg", quality = 0.92, videoElement } = {}) {
   if (!stream) return "";
 
   const track = stream.getVideoTracks?.()[0];
   if (!track) return "";
+
+  if (videoElement?.videoWidth && videoElement?.videoHeight) {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      const context = canvas.getContext("2d");
+      context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL(mime, quality);
+    } catch {
+      // Fall back to a frame from the same camera track.
+    }
+  }
 
   // Try ImageCapture first
   if ("ImageCapture" in window) {

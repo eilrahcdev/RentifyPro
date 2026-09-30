@@ -132,9 +132,23 @@ const namesMatch = (profile = {}, extractedName = "") => {
   const lastNameTokens = nameTokens(lastName);
   if (!firstNameTokens.length || !lastNameTokens.length) return false;
   if ([...firstNameTokens, ...lastNameTokens].some((token) => token.length < 2)) return false;
-  const containsSequence = (expectedTokens) => documentTokens.some((_, start) =>
-    expectedTokens.every((token, offset) => documentTokens[start + offset] === token));
-  return containsSequence(firstNameTokens) && containsSequence(lastNameTokens);
+  const matchingSpans = (expectedTokens) => {
+    const expected = expectedTokens.join("");
+    const spans = [];
+    documentTokens.forEach((_, start) => {
+      let actual = "";
+      for (let end = start; end < documentTokens.length; end += 1) {
+        actual += documentTokens[end];
+        if (!expected.startsWith(actual)) break;
+        if (actual === expected) spans.push({ start, end });
+      }
+    });
+    return spans;
+  };
+  const firstSpans = matchingSpans(firstNameTokens);
+  const lastSpans = matchingSpans(lastNameTokens);
+  return firstSpans.some((first) => lastSpans.some((last) =>
+    first.end < last.start || last.end < first.start));
 };
 
 const textMatches = (expected, actual) => {
@@ -452,6 +466,14 @@ export const evaluateDocumentExtraction = ({
   checks.permitNumberMatches = permitNumberMatches;
   checks.duplicateDetected = Boolean(duplicateDetected);
 
+  if (docType === "id" && mismatchFields.length && confidence < minimumConfidence) {
+    return buildResult({
+      status: "pending_review",
+      reasonCode: DOCUMENT_REASON_CODES.EXTRACTION_UNCERTAIN,
+      mismatchFields,
+      compareData: true,
+    });
+  }
   if (mismatchFields.length) {
     return buildResult({
       status: docType === "id" ? "reupload_required" : "pending_review",

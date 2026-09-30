@@ -70,6 +70,7 @@ SELFIE_FACE_COUNT_MIN_RELATIVE_RATIO = float(os.getenv("KYC_SELFIE_COUNT_MIN_REL
 BLUR_THRESHOLD      = 15
 BRIGHTNESS_MIN      = 15
 BRIGHTNESS_MAX      = 245
+MIN_FACE_CONTRAST    = 8
 
 def sanitize_mongo_uri(uri: str) -> str:
     text = str(uri or "")
@@ -285,11 +286,22 @@ def brightness_score(image: np.ndarray) -> float:
     return float(np.mean(gray))
 
 
-def check_image_quality(image: np.ndarray) -> Optional[str]:
-    b = blur_score(image)
-    br = brightness_score(image)
+def check_image_quality(image: np.ndarray, bbox: Optional[Dict[str, int]] = None) -> Optional[str]:
+    sample = image
+    if bbox:
+        x, y = bbox["x"], bbox["y"]
+        sample = image[y:y + bbox["h"], x:x + bbox["w"]]
+        if sample.size == 0:
+            return "We couldn't find a clear face. Please try again."
+    b = blur_score(sample)
+    br = brightness_score(sample)
     if b < BLUR_THRESHOLD:
         return "Your image is a bit blurry. Please hold your device steady and try again."
+    if bbox:
+        gray = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
+        if float(np.std(gray)) < MIN_FACE_CONTRAST:
+            return "We couldn't see enough facial detail. Please use more even lighting and try again."
+        return None
     if br < BRIGHTNESS_MIN:
         return "The image is too dark. Please move to a brighter area."
     if br > BRIGHTNESS_MAX:
@@ -301,30 +313,25 @@ def check_image_quality(image: np.ndarray) -> Optional[str]:
 
 def extract_best_face(image: np.ndarray) -> Dict[str, Any]:
     """Detect faces using opencv (fast). Only fall back to ssd if opencv finds nothing."""
-    faces = None
-
-    # Try opencv first
-    try:
-        faces = DeepFace.extract_faces(
-            img_path=image,
-            detector_backend="opencv",
-            enforce_detection=False,
-            align=True,
-        )
-    except Exception as e:
-        logger.warning(f"opencv face detection failed: {e}")
-
-    # Fall back to ssd if opencv finds nothing
-    if not faces:
+    faces = []
+    image_area = max(1, image.shape[0] * image.shape[1])
+    for backend in ("opencv", "ssd"):
         try:
-            faces = DeepFace.extract_faces(
+            detected = DeepFace.extract_faces(
                 img_path=image,
-                detector_backend="ssd",
-                enforce_detection=False,
+                detector_backend=backend,
+                enforce_detection=True,
                 align=True,
             )
+            faces = [face for face in detected if not (
+                float(face.get("confidence", 0.0)) <= 0
+                and int(face.get("facial_area", {}).get("w", 0))
+                * int(face.get("facial_area", {}).get("h", 0)) >= image_area * 0.95
+            )]
+            if faces:
+                break
         except Exception as e:
-            logger.warning(f"ssd face detection also failed: {e}")
+            logger.info(f"{backend} found no usable face: {e}")
 
     if not faces:
         raise ValueError("We couldn't find a face in your image. Please make sure your face is clearly visible and well-lit.")
@@ -477,14 +484,71 @@ def validate_face_constraints(
         max_faces_allowed is not None and face_count > max_faces_allowed
     ):
         return multi_face_message
+    if min_confidence is not None and best.get("confidence", 0.0) < min_confidence:
+        return low_conf_message
     ratio = face_area_ratio(best["bbox"], image)
     if ratio < min_ratio:
         return small_face_message
     if ratio > max_ratio:
         return large_face_message
-    if min_confidence is not None and best.get("confidence", 0.0) < min_confidence:
-        return low_conf_message
     return None
+
+
+def select_selfie_frame(
+    image: np.ndarray,
+    *,
+    multi_face_message: str,
+    small_face_message: str,
+    large_face_message: str,
+    low_conf_message: str,
+    use_secondary_count: bool = True,
+    count_min_area_ratio: Optional[float] = None,
+    count_min_relative_to_largest: Optional[float] = None,
+) -> tuple:
+    first_issue = None
+    for attempt in range(2):
+        candidate = image if attempt == 0 else normalize_image(image)
+        try:
+            best = extract_best_face(candidate)
+        except ValueError:
+            continue
+
+        constraint_err = validate_face_constraints(
+            best,
+            candidate,
+            min_ratio=MIN_FACE_AREA_RATIO,
+            max_ratio=MAX_FACE_AREA_RATIO,
+            min_confidence=MIN_FACE_CONFIDENCE,
+            multi_face_message=multi_face_message,
+            small_face_message=small_face_message,
+            large_face_message=large_face_message,
+            low_conf_message=low_conf_message,
+            use_secondary_count=use_secondary_count,
+            count_min_area_ratio=count_min_area_ratio,
+            count_min_relative_to_largest=count_min_relative_to_largest,
+        )
+        if constraint_err:
+            if constraint_err in (multi_face_message, small_face_message, large_face_message):
+                return candidate, best, constraint_err
+            if first_issue is None:
+                first_issue = (candidate, best, constraint_err)
+            continue
+
+        quality_err = check_image_quality(candidate, best["bbox"])
+        if quality_err:
+            if first_issue is None:
+                first_issue = (candidate, best, quality_err)
+            continue
+        return candidate, best, None
+
+    if first_issue is not None:
+        return first_issue
+    brightness = brightness_score(image)
+    if brightness < BRIGHTNESS_MIN:
+        return image, None, "We couldn't find your face in this dark image. Please add some light and try again."
+    if brightness > BRIGHTNESS_MAX:
+        return image, None, "We couldn't find your face because of glare. Please avoid direct light and try again."
+    return image, None, "We couldn't find your face. Keep your full face visible and try again."
 
 
 def get_embedding_fast(image: np.ndarray) -> np.ndarray:
@@ -498,7 +562,7 @@ def get_embedding_fast(image: np.ndarray) -> np.ndarray:
                 img_path=image,
                 model_name=MODEL_NAME,
                 detector_backend=backend,
-                enforce_detection=False,
+                enforce_detection=True,
             )
             if reps:
                 return np.array(reps[0]["embedding"], dtype=np.float32)
@@ -582,48 +646,22 @@ async def post_face_detect(req: FaceDetectRequest):
         img = resize_if_needed(decode_base64_image(req.image_base64))
         b = blur_score(img)
         br = brightness_score(img)
-
-        quality_err = check_image_quality(img)
-        if quality_err:
-            return FaceDetectResponse(
-                ok=False, message=quality_err, face_count=0,
-                quality={"blur": round(b, 2), "brightness": round(br, 2)},
-            )
-
-        best = extract_best_face(img)
-        constraint_err = validate_face_constraints(
-            best,
+        selected_img, best, error = select_selfie_frame(
             img,
-            min_ratio=MIN_FACE_AREA_RATIO,
-            max_ratio=MAX_FACE_AREA_RATIO,
-            min_confidence=MIN_FACE_CONFIDENCE,
             multi_face_message="Multiple faces detected. Please make sure only your face is visible.",
             small_face_message="Your face is too small. Please move closer to the camera.",
             large_face_message="Your face is too close. Please move slightly farther away.",
             low_conf_message="We're having trouble detecting your face. Please improve the lighting.",
         )
-        if constraint_err:
-            return FaceDetectResponse(
-                ok=False,
-                message=constraint_err,
-                face_count=best["face_count"],
-                bounding_box=best["bbox"],
-                quality={
-                    "blur": round(b, 2),
-                    "brightness": round(br, 2),
-                    "face_area_ratio": round(face_area_ratio(best["bbox"], img), 4),
-                },
-            )
+        quality = {"blur": round(b, 2), "brightness": round(br, 2)}
+        if best:
+            quality["face_area_ratio"] = round(face_area_ratio(best["bbox"], selected_img), 4)
         return FaceDetectResponse(
-            ok=True,
-            message="Face detected. Looking good!",
-            face_count=best["face_count"],
-            bounding_box=best["bbox"],
-            quality={
-                "blur": round(b, 2),
-                "brightness": round(br, 2),
-                "face_area_ratio": round(face_area_ratio(best["bbox"], img), 4),
-            },
+            ok=error is None,
+            message=error or "Face detected. Looking good!",
+            face_count=best["face_count"] if best else 0,
+            bounding_box=best["bbox"] if best else None,
+            quality=quality,
         )
     except ValueError as e:
         return FaceDetectResponse(ok=False, message=str(e), face_count=0)
@@ -709,23 +747,8 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
             "confidence": 0.0,
         }
 
-        # Quality check (fail fast to avoid poor matches)
-        quality_err = check_image_quality(img)
-        if quality_err:
-            return KycSelfieVerifyResponse(verified=False, message=quality_err, **base_resp)
-
-        # Quick face check
-        try:
-            best = extract_best_face(img)
-        except ValueError:
-            return KycSelfieVerifyResponse(verified=False, message="We couldn't find your face. Please try again with better lighting.", **base_resp)
-
-        constraint_err = validate_face_constraints(
-            best,
+        selected_img, _, frame_error = select_selfie_frame(
             img,
-            min_ratio=MIN_FACE_AREA_RATIO,
-            max_ratio=MAX_FACE_AREA_RATIO,
-            min_confidence=MIN_FACE_CONFIDENCE,
             multi_face_message="Multiple people detected. Please make sure only you are in the frame.",
             small_face_message="Your face is too small. Please move closer to the camera.",
             large_face_message="Your face is too close. Please move slightly farther away.",
@@ -734,8 +757,8 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
             count_min_area_ratio=SELFIE_FACE_COUNT_MIN_AREA_RATIO,
             count_min_relative_to_largest=SELFIE_FACE_COUNT_MIN_RELATIVE_RATIO,
         )
-        if constraint_err:
-            return KycSelfieVerifyResponse(verified=False, message=constraint_err, **base_resp)
+        if frame_error:
+            return KycSelfieVerifyResponse(verified=False, message=frame_error, **base_resp)
 
         id_emb = np.array(record["id_embedding"], dtype=np.float32)
 
@@ -744,21 +767,21 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
         t1 = time.time()
 
         try:
-            emb = get_embedding_fast(img)
+            emb = get_embedding_fast(selected_img)
             d = cosine_distance(id_emb, emb)
-            logger.info(f"  Fast path (original+opencv): distance={d:.4f} ({time.time()-t1:.1f}s)")
+            logger.info(f"  First face match: distance={d:.4f} ({time.time()-t1:.1f}s)")
             best_dist = d
         except Exception as e:
             logger.warning(f"  Fast path failed: {e}")
 
         # If needed, try the normalized image next
-        if best_dist > MAX_ACCEPT_DISTANCE:
+        if best_dist > MAX_ACCEPT_DISTANCE and selected_img is img:
             t2 = time.time()
             try:
-                norm_img = normalize_image(img)
-                emb = get_embedding_fast(norm_img)
+                alternate_img = normalize_image(img)
+                emb = get_embedding_fast(alternate_img)
                 d = cosine_distance(id_emb, emb)
-                logger.info(f"  Normalized path: distance={d:.4f} ({time.time()-t2:.1f}s)")
+                logger.info(f"  Alternate face match: distance={d:.4f} ({time.time()-t2:.1f}s)")
                 if d < best_dist:
                     best_dist = d
             except Exception as e:

@@ -1,5 +1,7 @@
 # RentifyPro Setup Guide (Local Development)
 
+For temporary public user testing, see [Cloudflare Quick Tunnel setup](README-QUICK-TUNNEL.md).
+
 This guide covers full local setup for the RentifyPro website:
 - `frontend` (React + Vite)
 - `backend` (Node.js + Express)
@@ -9,7 +11,7 @@ This guide covers full local setup for the RentifyPro website:
 ## 1. Prerequisites
 
 Install these first:
-- Node.js 20+ (LTS recommended)
+- Node.js 20.19+ or 22.12+ (required by the installed Vite version)
 - npm (comes with Node.js)
 - Python 3.10 or 3.11
 - Git
@@ -19,20 +21,21 @@ Install these first:
 
 ## 2. Open Project Root
 
-From PowerShell:
+Open PowerShell in your own cloned `RentifyPro` folder. Run the commands below
+from that folder unless a step says to enter a service folder.
 
 ```powershell
-cd c:\Users\charlie\RentifyPro
+Set-Location 'C:\path\to\your\RentifyPro'
 ```
 
 ## 3. Install Node Dependencies
 
 ```powershell
 cd backend
-npm install
+npm ci
 
 cd ..\frontend
-npm install
+npm ci
 
 cd ..
 ```
@@ -72,8 +75,14 @@ does not override the v6 dataset.
 ### 5.1 Backend `.env`
 
 ```powershell
-Copy-Item backend\.env.example backend\.env
+if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
 ```
+
+The example is safe to commit. The populated `backend/.env` is private and is
+ignored by Git. Each teammate must fill its blank secret fields on their own
+computer. Use the local MongoDB URI in the example only if MongoDB runs on that
+computer; otherwise use their authorized Atlas URI. Do not copy another
+teammate's `.env` into the repository.
 
 Set at least the values below in `backend/.env`:
 
@@ -81,8 +90,8 @@ Set at least the values below in `backend/.env`:
 PORT=5000
 NODE_ENV=development
 
-MONGO_URI=mongodb+srv://<username>:<password>@<cluster-url>/rentifypro?retryWrites=true&w=majority&appName=RentifyPro
-MONGO_URI_DIRECT=mongodb://<username>:<password>@<host1>:27017,<host2>:27017,<host3>:27017/rentifypro?ssl=true&replicaSet=<replicaSet>&authSource=admin&retryWrites=true&w=majority
+MONGO_URI=mongodb://127.0.0.1:27017/rentifypro
+MONGO_URI_DIRECT=
 MONGO_DB_NAME=rentifypro
 
 JWT_SECRET=<strong-random-secret>
@@ -94,16 +103,21 @@ FRONTEND_URL=http://localhost:5173
 FACE_SERVICE_URL=http://localhost:8000
 CHATBOT_URL=http://localhost:8001
 INTERNAL_API_KEY=<shared-internal-secret>
+GEMINI_API_KEY=<private-gemini-key>
 FACE_SERVICE_AUTOSTART=true
 CHATBOT_SERVICE_AUTOSTART=true
 ```
 
-Optional but needed for specific features:
+Also set `GEMINI_API_KEY` before testing document validation. Without it, the
+ID details cannot be compared with registration details, so the selfie step
+will remain locked. Registration email and OTP delivery need working SMTP
+credentials.
+
+Other feature-specific settings:
 - SMTP for OTP email:
   `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_FROM_NAME`
   (or legacy `EMAIL_USER`, `EMAIL_PASS`)
 - `PAYMONGO_SECRET_KEY` (checkout/payment)
-- `GEMINI_API_KEY` (AI KYC/document checks)
 
 Document checks run through a database-backed queue so a Gemini quota or temporary
 provider failure does not reject an applicant. Recommended free-tier settings are:
@@ -125,10 +139,12 @@ it. The Super Admin makes the final decision in **Customers > Documents**. See
 ### 5.2 Frontend `.env`
 
 ```powershell
-Copy-Item frontend\.env.example frontend\.env
+if (-not (Test-Path frontend\.env)) { Copy-Item frontend\.env.example frontend\.env }
 ```
 
-Use:
+Use the local backend address below. An existing empty `frontend/.env` needs
+these two lines added manually. Restart Vite after changing `.env`; `VITE_`
+values are bundled into browser code, so never put secrets there.
 
 ```env
 VITE_API_BASE_URL=http://localhost:5000
@@ -138,10 +154,12 @@ VITE_SOCKET_URL=http://localhost:5000
 ### 5.3 Face Service `.env`
 
 ```powershell
-Copy-Item face-service\.env.example face-service\.env
+if (-not (Test-Path face-service\.env)) { Copy-Item face-service\.env.example face-service\.env }
 ```
 
-Make sure this matches backend values:
+Use the same MongoDB database and the same private `INTERNAL_API_KEY` as the
+backend. `FACE_SERVICE_PORT` must match the port in `FACE_SERVICE_URL` in
+`backend/.env`:
 
 ```env
 MONGO_URI=<same mongo uri as backend>
@@ -164,14 +182,14 @@ Run only backend + frontend terminals after setup.
 Terminal 1:
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\backend
+cd .\backend
 npm run dev
 ```
 
 Terminal 2:
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\frontend
+cd .\frontend
 npm run dev
 ```
 
@@ -180,14 +198,14 @@ npm run dev
 Terminal 1 (backend):
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\backend
+cd .\backend
 npm run dev
 ```
 
 Terminal 2 (face-service):
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\face-service
+cd .\face-service
 .\venv\Scripts\Activate.ps1
 python main.py
 ```
@@ -195,7 +213,7 @@ python main.py
 Terminal 3 (chatbot-service):
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\chatbot-service
+cd .\chatbot-service
 .\venv\Scripts\Activate.ps1
 python -m uvicorn app:app --host 127.0.0.1 --port 8001 --reload
 ```
@@ -203,7 +221,7 @@ python -m uvicorn app:app --host 127.0.0.1 --port 8001 --reload
 Terminal 4 (frontend):
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\frontend
+cd .\frontend
 npm run dev
 ```
 
@@ -218,7 +236,7 @@ Expected URLs:
 Useful backend checks:
 
 ```powershell
-cd c:\Users\charlie\RentifyPro\backend
+cd .\backend
 npm run db:check
 npm run services:check
 ```
@@ -245,7 +263,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - Confirm `chatbot-service/venv` exists and dependencies installed.
 - Retry:
 ```powershell
-cd c:\Users\charlie\RentifyPro\chatbot-service
+cd .\chatbot-service
 .\venv\Scripts\Activate.ps1
 python -m uvicorn app:app --host 127.0.0.1 --port 8001 --reload
 ```

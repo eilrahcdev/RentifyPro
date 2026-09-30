@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CalendarDays, Flag, LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
+import { Bell, CalendarDays, CircleHelp, Flag, LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
 import { LIVE_COUNTERS_REFRESH_EVENT } from "../utils/liveCounters";
 import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
 import { getSessionUser } from "../utils/sessionStore";
+import { openHelp } from "../utils/helpNavigation";
 
 const linkClassName = (activePage, itemKey) =>
   `rp-link-pill whitespace-nowrap ${
@@ -172,6 +173,7 @@ export default function Navbar({
     { key: "bookings", label: "Bookings", onClick: () => handleMobileNavigate(onNavigateToBookingHistory) },
     { key: "about", label: "About", onClick: () => handleMobileNavigate(onNavigateToAbout) },
     { key: "contacts", label: "Contacts", onClick: () => handleMobileNavigate(onNavigateToContacts) },
+    { key: "help", label: "Help", onClick: () => handleMobileNavigate(() => openHelp()) },
     { key: "messages", label: "Messages", onClick: () => handleMobileNavigate(onNavigateToChat) },
     {
       key: "notifications",
@@ -209,7 +211,7 @@ export default function Navbar({
   return (
       <>
       <nav className="rp-site-navbar fixed inset-x-0 top-0 z-50 px-3 sm:px-5 pt-3">
-        <div className="rp-glass mx-auto max-w-7xl rounded-[1.35rem] border border-white/70 shadow-[0_18px_40px_rgba(2,20,46,0.12)]">
+        <div className="rp-glass mx-auto max-w-7xl rounded-3xl border border-white/70 shadow-[0_18px_40px_rgba(2,20,46,0.12)]">
           <div className="rp-site-navbar__bar flex min-h-[4.25rem] items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6">
             <button
               onClick={handleHomeClick}
@@ -266,8 +268,8 @@ export default function Navbar({
             </div>
 
             <div className="rp-site-navbar__actions flex shrink-0 items-center gap-2 sm:gap-3">
-              {isLoggedIn && (
-                <div className="hidden lg:flex items-center gap-2 sm:gap-3">
+              <div className="hidden lg:flex items-center gap-2 sm:gap-3">
+                {isLoggedIn && (
                   <button
                     onClick={onNavigateToChat}
                     aria-label="Chatroom"
@@ -280,6 +282,17 @@ export default function Navbar({
                       </span>
                     )}
                   </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openHelp()}
+                  aria-label="Help"
+                  title="Help"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-[#0B75E7] shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/90"
+                >
+                  <CircleHelp size={18} className="text-[#0B75E7]" aria-hidden="true" />
+                </button>
+                {isLoggedIn && (
                   <button
                     onClick={handleNotificationClick}
                     aria-label="Notifications"
@@ -292,8 +305,8 @@ export default function Navbar({
                       </span>
                     )}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
               {!isLoggedIn ? (
                 <>
@@ -369,13 +382,13 @@ export default function Navbar({
             className="absolute inset-0 bg-slate-900/35 backdrop-blur-[1px]"
           />
 
-          <div className="absolute right-3 top-20 w-[min(92vw,352px)] overflow-hidden rounded-[1.4rem] border border-slate-200/90 bg-white/95 shadow-[0_30px_80px_rgba(15,23,42,0.28)] backdrop-blur">
+          <div className="absolute right-3 top-20 w-[min(92vw,352px)] overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_30px_80px_rgba(15,23,42,0.28)] backdrop-blur">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <p className="text-sm font-semibold text-slate-900">Navigation</p>
               <button
                 type="button"
                 onClick={() => setShowMobileMenu(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                className="rp-icon-button"
                 aria-label="Close menu"
               >
                 <X size={18} strokeWidth={2} />
@@ -484,7 +497,7 @@ function ProfileMenu({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-3 w-72 overflow-hidden rounded-[1.4rem] border border-slate-200/90 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.22)] backdrop-blur animate-fadeIn">
+        <div className="absolute right-0 z-50 mt-3 w-72 overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.22)] backdrop-blur animate-fadeIn">
           <div className="border-b border-slate-100 bg-slate-50/90 px-4 py-4">
             <div className="flex items-center gap-3">
               {avatar && !avatarError ? (

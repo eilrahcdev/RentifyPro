@@ -1,13 +1,16 @@
 import VehicleThumbnail from "../../components/VehicleThumbnail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, CarFront, CircleCheck, CircleX, Clock3, CreditCard, Flag, MapPin, RefreshCw, X, Users } from "lucide-react";
+import { CalendarDays, CarFront, Clock3, CreditCard, Flag, MapPin, RefreshCw, Users } from "lucide-react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { getTransactionFee } from "../../utils/fees";
 import { formatDurationMinutes, getDurationHoursFromMinutes, getDurationMinutesBetween } from "../../utils/dateUtils";
 import ReportIssueModal from "../../components/ReportIssueModal";
-import ModalPortal from "../../components/ModalPortal";
+import PaymentSuccessToast from "../../components/PaymentSuccessToast";
+import { showActionToast } from "../../utils/actionToast";
 import OwnerPageHeader from "../components/OwnerPageHeader";
+import ReturnReviewModal from "../components/ReturnReviewModal";
+import HelpLink from "../../components/HelpLink";
 import RequestFeedback from "../../components/RequestFeedback";
 import { BookingListSkeleton } from "../../components/LoadingSkeletons";
 import { bookingStatusLabel, bookingGuidance } from "../../utils/workflowStatus";
@@ -210,6 +213,7 @@ export default function Bookings() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reportBooking, setReportBooking] = useState(null);
   const [reportNotice, setReportNotice] = useState("");
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
   const [returnReview, setReturnReview] = useState(null);
   const [returnReviewNote, setReturnReviewNote] = useState("");
   const [partialPaymentDraft, setPartialPaymentDraft] = useState(null);
@@ -281,7 +285,7 @@ export default function Bookings() {
     [bookings, statusFilter]
   );
 
-  const runBookingAction = async (bookingId, action, label, fallback) => {
+  const runBookingAction = async (bookingId, action, label, fallback, onSuccess) => {
     if (actionLocks.current.has(bookingId)) return false;
     actionLocks.current.add(bookingId);
     setBookingActions((previous) => ({ ...previous, [bookingId]: label }));
@@ -289,8 +293,10 @@ export default function Bookings() {
     setReportNotice("");
     try {
       const response = await action();
+      if (response?.success === false) throw new Error(response.message || "The update could not be completed.");
       if (response.booking) setBookings((previous) => previous.map((booking) => booking._id === bookingId ? latestBooking(booking, response.booking) : booking));
-      setReportNotice(response.message || fallback);
+      if (onSuccess) onSuccess(response);
+      else showActionToast(fallback, { id: `owner-booking-${bookingId}` });
       return true;
     } catch (error) {
       if (error?.details?.booking) {
@@ -307,7 +313,7 @@ export default function Bookings() {
   const updateBookingStatus = (id, status) => runBookingAction(id,
     () => API.updateOwnerBookingStatus(id, status),
     status === "confirmed" ? "Approving booking..." : status === "rejected" ? "Rejecting booking..." : "Updating booking...",
-    "Booking " + bookingStatusLabel(status).toLowerCase() + ".");
+    status === "confirmed" ? "Booking approved." : status === "rejected" ? "Booking declined." : "Booking cancelled.");
 
   const updatePaymentStatus = async (booking, status, paymentAmountPaid) => {
     const saved = await runBookingAction(booking._id,
@@ -327,16 +333,26 @@ export default function Bookings() {
   };
 
   const reviewExtensionRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerBookingExtensionRequest(id, action), "Reviewing extension...", "Extension decision saved.");
+    () => API.reviewOwnerBookingExtensionRequest(id, action), "Reviewing extension...", action === "approve" ? "Extension approved." : "Extension declined.");
 
   const reviewCancellationRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerBookingCancellationRequest(id, action), "Reviewing cancellation...", "Cancellation decision saved.");
+    () => API.reviewOwnerBookingCancellationRequest(id, action), "Reviewing cancellation...", action === "approve" ? "Cancellation approved. Booking cancelled." : "Cancellation declined. Booking remains active.");
 
   const reviewWalkInRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerWalkInPaymentRequest(id, action), "Reviewing walk-in payment...", "Walk-in decision saved.");
+    () => API.reviewOwnerWalkInPaymentRequest(id, action), "Reviewing walk-in payment...", action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.");
 
   const confirmWalkInPayment = (id) => runBookingAction(id,
-    () => API.confirmOwnerWalkInPayment(id), "Confirming payment...", "Walk-in payment confirmed.");
+    () => API.confirmOwnerWalkInPayment(id), "Confirming payment...", "Walk-in payment confirmed.",
+    (response) => {
+      if (response.success && response.booking?.paymentStatus === "paid" && getWalkInStatus(response.booking) === "completed") {
+        setPaymentSuccessToast((current) => ({
+          id: (current?.id || 0) + 1,
+          message: "Walk-in payment received.",
+        }));
+      } else {
+        showActionToast(response.message || "Walk-in payment status updated.", { id: `owner-booking-${id}` });
+      }
+    });
 
   const openReturnReview = (booking, action) => {
     setReturnReview({ booking, action });
@@ -349,7 +365,7 @@ export default function Bookings() {
     if (!bookingId || !["confirm", "decline"].includes(action)) return;
     const saved = await runBookingAction(bookingId,
       () => API.reviewOwnerVehicleReturnRequest(bookingId, action, { note: returnReviewNote }),
-      "Saving return decision...", "Vehicle return decision saved.");
+      "Saving return decision...", action === "confirm" ? "Vehicle return confirmed." : "Return request declined. Booking remains active.");
     if (saved) { setReturnReview(null); setReturnReviewNote(""); }
   };
 
@@ -358,7 +374,13 @@ export default function Bookings() {
       <OwnerPageHeader
         title="Booking Management"
         description="Review renter requests, active rentals, and payment activity."
-        actions={<button type="button" disabled={loading || refreshing || loadingMore} onClick={() => loadBookings({ background: true })} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold disabled:opacity-50"><RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing..." : "Refresh"}</button>}
+        actions={<>
+          <HelpLink guide="manage-owner-bookings" className="shrink-0 whitespace-nowrap">
+            <span className="xl:hidden">Need help?</span>
+            <span className="hidden xl:inline">Need help with booking requests?</span>
+          </HelpLink>
+          <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => loadBookings({ background: true })} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50"><RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing..." : "Refresh"}</button>
+        </>}
       />
 
       <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -515,21 +537,8 @@ export default function Bookings() {
                 {extensionInfo.requestedReturnAt ? ` Requested return: ${formatDateTime(extensionInfo.requestedReturnAt)}.` : ""}
               </div>
             )}
-            {returnRequestInfo.status === "requested" && (
-              <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                The renter requested a vehicle return. Confirm only after you physically receive the vehicle.
-              </div>
-            )}
-            {returnRequestInfo.status === "confirmed" && (
-              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                Return confirmed. Inspect the vehicle, then mark it available from Vehicle Management when it is rental-ready.
-              </div>
-            )}
-            {returnRequestInfo.status === "declined" && (
-              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                Vehicle return request declined. The booking remains active.
-                {returnRequestInfo.reviewNote ? ` Note: ${returnRequestInfo.reviewNote}` : ""}
-              </div>
+            {returnRequestInfo.status === "declined" && returnRequestInfo.reviewNote && (
+              <p className="mt-3 text-sm text-slate-600">Decline note: {returnRequestInfo.reviewNote}</p>
             )}
 
 
@@ -694,38 +703,16 @@ export default function Bookings() {
                 )}
               </div>
               <div className="space-y-2 empty:hidden md:col-span-2">
-                {getWalkInStatus(booking) === "rejected" && (
-                  <p className="w-full text-xs text-rose-700">Walk-in request was rejected.</p>
-                )}
                 {getWalkInStatus(booking) === "approved" && (
                   <p className="w-full text-xs text-emerald-700">
                     Walk-in request approved. Confirm once remaining balance is received.
                   </p>
                 )}
-                {getWalkInStatus(booking) === "completed" && (
-                  <p className="w-full text-xs text-green-700">Walk-in payment has been confirmed.</p>
+                {extensionInfo.status === "rejected" && extensionInfo.reviewNote && (
+                  <p className="w-full text-xs text-slate-600">Extension note: {extensionInfo.reviewNote}</p>
                 )}
-                {extensionInfo.status === "approved" && (
-                  <p className="w-full text-xs text-violet-700">
-                    Extension approved. Updated return schedule is now {formatDateTime(booking.returnAt)}.
-                  </p>
-                )}
-                {extensionInfo.status === "rejected" && (
-                  <p className="w-full text-xs text-rose-700">
-                    Extension request rejected.
-                    {extensionInfo.reviewNote ? ` Note: ${extensionInfo.reviewNote}` : ""}
-                  </p>
-                )}
-                {cancellationInfo.status === "approved" && (
-                  <p className="w-full text-xs text-amber-700">
-                    Cancellation request approved. Booking has been cancelled.
-                  </p>
-                )}
-                {cancellationInfo.status === "rejected" && (
-                  <p className="w-full text-xs text-slate-700">
-                    Cancellation request rejected. Booking remains active.
-                    {cancellationInfo.reviewNote ? ` Note: ${cancellationInfo.reviewNote}` : ""}
-                  </p>
+                {cancellationInfo.status === "rejected" && cancellationInfo.reviewNote && (
+                  <p className="w-full text-xs text-slate-600">Cancellation note: {cancellationInfo.reviewNote}</p>
                 )}
               </div>
             </div>
@@ -747,6 +734,7 @@ export default function Bookings() {
         </div>
       )}
       <ReportIssueModal booking={reportBooking} perspective="owner" onClose={() => setReportBooking(null)} onSubmitted={(report) => setReportNotice(`Report ${report.caseReference} was submitted for administrator review.`)} />
+      <PaymentSuccessToast notice={paymentSuccessToast} />
       <ReturnReviewModal
         review={returnReview}
         note={returnReviewNote}
@@ -761,66 +749,6 @@ export default function Bookings() {
         onSubmit={reviewVehicleReturn}
       />
     </div>
-  );
-}
-
-function ReturnReviewModal({ review, note, loading, error, onNoteChange, onClose, onSubmit }) {
-  if (!review?.booking) return null;
-  const confirming = review.action === "confirm";
-  const vehicleName = review.booking.vehicle?.name || "this vehicle";
-
-  return (
-    <ModalPortal>
-      <div className="rp-modal-layer" role="dialog" aria-modal="true" aria-labelledby="return-review-title">
-        <button type="button" className="rp-modal-backdrop" onClick={loading ? undefined : onClose} aria-label="Close return review" />
-        <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)]">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
-            <div className="flex items-start gap-3">
-              <span className={`mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${confirming ? "bg-blue-100 text-blue-700" : "bg-rose-100 text-rose-700"}`}>
-                {confirming ? <CircleCheck size={24} strokeWidth={2} aria-hidden="true" /> : <CircleX size={24} strokeWidth={2} aria-hidden="true" />}
-              </span>
-              <div>
-                <h2 id="return-review-title" className="text-lg font-bold text-slate-900">
-                  {confirming ? "Confirm vehicle received" : "Decline return request"}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">Review the renter’s return request for {vehicleName}.</p>
-              </div>
-            </div>
-            <button type="button" onClick={onClose} disabled={loading} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50" aria-label="Close modal">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="space-y-4 p-5 sm:p-6">
-            <div className={`rounded-2xl border px-4 py-3 text-sm ${confirming ? "border-blue-200 bg-blue-50 text-blue-900" : "border-rose-200 bg-rose-50 text-rose-900"}`}>
-              {confirming
-                ? "Confirm only after you have physically received the vehicle. It will be placed under inspection/maintenance."
-                : "Declining keeps the booking active and the vehicle unavailable. The renter can submit another return request later."}
-            </div>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Optional note</span>
-              <textarea
-                value={note}
-                maxLength={500}
-                onChange={(event) => onNoteChange(event.target.value)}
-                placeholder={confirming ? "Condition or handover note" : "Reason for declining the request"}
-                className="min-h-24 w-full resize-y rounded-2xl border border-slate-200 px-3.5 py-3 text-sm text-slate-800 outline-none focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
-              />
-            </label>
-          </div>
-
-          <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-            {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-            <button type="button" onClick={onClose} disabled={loading} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              Cancel
-            </button>
-            <button type="button" onClick={onSubmit} disabled={loading} className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 ${confirming ? "bg-[#017FE6] hover:bg-[#006cc3]" : "bg-rose-600 hover:bg-rose-700"}`}>
-              {loading ? "Saving..." : confirming ? "Confirm vehicle received" : "Decline request"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
   );
 }
 

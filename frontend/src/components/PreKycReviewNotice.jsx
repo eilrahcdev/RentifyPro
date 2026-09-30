@@ -151,6 +151,9 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
         const supportingDetailsMismatch = type === "supporting"
           && status === "pending_review"
           && document?.reasonCode === "IDENTITY_DATA_MISMATCH";
+        const idDetailsMismatch = type === "id"
+          && status === "reupload_required"
+          && ["IDENTITY_DATA_MISMATCH", "REGISTRATION_DATA_INCOMPLETE"].includes(document?.reasonCode);
         const expectedType = documentTypeLabel(document?.selectedDocCategory, label);
         const detectedType = documentTypeLabel(document?.docCategory, "Unknown");
         return <div key={type} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
@@ -171,9 +174,10 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
           </dl>}
           {["pending_review", "reupload_required", "rejected"].includes(status) && document?.reason && <p className={`mt-2 break-words ${status === "pending_review" ? "text-amber-900" : "text-rose-700"}`}><span className="font-semibold">Next step:</span> {document.reason}</p>}
           {supportingDetailsMismatch && <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-            <button type="button" onClick={onCorrectDetails} className="font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Check registration details</button>
+            <button type="button" onClick={() => onCorrectDetails?.(type)} className="font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Check registration details</button>
             <button type="button" onClick={() => onResubmit?.(type)} className="font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Upload another document</button>
           </div>}
+          {idDetailsMismatch && <button type="button" onClick={() => onCorrectDetails?.(type)} className="mt-2 block font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Check registration details</button>}
           {["reupload_required", "rejected"].includes(status) && <button type="button" onClick={() => onResubmit?.(type)} className="mt-2 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Upload a new document</button>}
         </div>;
       })}

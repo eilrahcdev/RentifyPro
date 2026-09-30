@@ -12,10 +12,15 @@ const inferDefaultApiBase = () => {
   return isLocalHost ? "http://localhost:5000" : window.location.origin;
 };
 
-const configuredApiBase = trimTrailingSlashes(import.meta.env.VITE_API_BASE_URL || "");
-const rawApiBase = configuredApiBase || inferDefaultApiBase();
+const isQuickTunnelBuild = import.meta.env.MODE === "quick-tunnel";
+const configuredApiBase = isQuickTunnelBuild
+  ? ""
+  : trimTrailingSlashes(import.meta.env.VITE_API_BASE_URL || "");
+const rawApiBase = isQuickTunnelBuild
+  ? (typeof window !== "undefined" ? window.location.origin : "")
+  : configuredApiBase || inferDefaultApiBase();
 
-if (!configuredApiBase && typeof window !== "undefined") {
+if (!isQuickTunnelBuild && !configuredApiBase && typeof window !== "undefined") {
   const hostname = String(window.location.hostname || "").toLowerCase();
   if (hostname !== "localhost" && hostname !== "127.0.0.1" && hostname !== "::1") {
     console.warn(
@@ -26,4 +31,6 @@ if (!configuredApiBase && typeof window !== "undefined") {
 
 export const API_ORIGIN = rawApiBase.endsWith("/api") ? rawApiBase.slice(0, -4) : rawApiBase;
 export const API_BASE_URL = rawApiBase.endsWith("/api") ? rawApiBase : `${rawApiBase}/api`;
-export const SOCKET_URL = trimTrailingSlashes(import.meta.env.VITE_SOCKET_URL || API_ORIGIN);
+export const SOCKET_URL = isQuickTunnelBuild
+  ? API_ORIGIN
+  : trimTrailingSlashes(import.meta.env.VITE_SOCKET_URL || API_ORIGIN);
