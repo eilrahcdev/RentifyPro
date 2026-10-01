@@ -2050,22 +2050,39 @@ export const addBookingReview = async (req, res) => {
     const { rating, comment } = req.body;
     const numericRating = Number(rating);
 
-    if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
-      return res.status(400).json({ success: false, message: "Rating must be between 1 and 5." });
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ success: false, message: "Choose a whole-star rating from 1 to 5." });
+    }
+    if (comment != null && typeof comment !== "string") {
+      return res.status(400).json({ success: false, message: "Review text must be a message." });
+    }
+    const reviewComment = String(comment || "").trim();
+    if (comment && !reviewComment) {
+      return res.status(400).json({ success: false, message: "Write a review or leave this field blank." });
+    }
+    if (reviewComment.length > 1200) {
+      return res.status(400).json({ success: false, message: "Keep your review to 1,200 characters or fewer." });
+    }
+    if (reviewComment && (
+      /[\uFE00-\uFE0F\u{E0100}-\u{E01EF}\u20E3]|\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(reviewComment) ||
+      !/^[\p{L}\p{Nd}][\p{L}\p{M}\p{Nd}]*(?: [\p{L}\p{Nd}][\p{L}\p{M}\p{Nd}]*)*$/u.test(reviewComment)
+    )) {
+      return res.status(400).json({ success: false, message: "Use letters, numbers, and single spaces only." });
     }
 
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id });
+    const booking = await Booking.findOneAndUpdate(
+      { _id: req.params.id, renter: req.user._id, status: "completed", reviewRating: null },
+      { $set: { reviewRating: numericRating, reviewComment, reviewCreatedAt: new Date() } },
+      { new: true, runValidators: true }
+    );
     if (!booking) {
-      return res.status(404).json({ success: false, message: "Booking not found." });
+      const current = await Booking.findOne({ _id: req.params.id, renter: req.user._id });
+      if (!current) return res.status(404).json({ success: false, message: "Booking not found." });
+      if (current.status !== "completed") {
+        return res.status(400).json({ success: false, message: "Only completed bookings can be reviewed." });
+      }
+      return res.status(409).json({ success: false, message: "You already reviewed this rental." });
     }
-    if (booking.status !== "completed") {
-      return res.status(400).json({ success: false, message: "Only completed bookings can be reviewed." });
-    }
-
-    booking.reviewRating = numericRating;
-    booking.reviewComment = String(comment || "").trim();
-    booking.reviewCreatedAt = new Date();
-    await booking.save();
 
     eventBus.emit(NOTIFICATION_EVENTS.REVIEW_CREATED, {
       booking,

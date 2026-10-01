@@ -6,6 +6,7 @@ import {
 import API from "../utils/api";
 import Navbar from "../components/Navbar";
 import ChatWidget from "../components/ChatWidget";
+import { ChatHelpLink } from "../components/ChatLauncher";
 import BookingAccessModal from "../components/BookingAccessModal";
 import VehiclePreviewModal from "../components/VehiclePreviewModal";
 import { sanitizeBookingRange } from "../utils/dateUtils";
@@ -351,6 +352,8 @@ export default function VehiclesPage({
                   maxLength={MAX_VEHICLE_SEARCH_LENGTH}
                 />
               </div>
+
+              <ChatHelpLink onOpen={() => setShowAI(true)}>Need help choosing? Ask Rentify AI.</ChatHelpLink>
 
               {locationFilter && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">

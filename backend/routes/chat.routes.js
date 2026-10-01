@@ -31,8 +31,11 @@ import {
   applyChatbotGuardrails,
   buildRejectedChatbotResponse,
   buildChatbotPayload,
+  buildChatbotConversationContext,
+  fulfillVehicleAvailabilityStatus,
   normalizeChatbotResponse,
   normalizePendingVehicleSearch,
+  normalizeChatbotConversationContext,
   validateChatbotInput,
 } from "../utils/chatbotPayload.js";
 
@@ -56,7 +59,8 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
     const language = String(req.body?.language || "auto").trim().toLowerCase();
     const previousLanguage = ["en", "fil", "taglish"].includes(req.body?.previousLanguage)
       ? req.body.previousLanguage : null;
-    const previousContext = normalizePendingVehicleSearch(req.body?.pendingSearch);
+    const previousContext = normalizeChatbotConversationContext(req.body?.conversationContext)
+      || normalizePendingVehicleSearch(req.body?.pendingSearch);
     const validation = validateChatbotInput(rawMessage);
     if (!validation.isValid) {
       const rejectedResponse = buildRejectedChatbotResponse(
@@ -78,7 +82,7 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
     }
     await ensureChatbotServiceReady();
 
-    let payload = buildChatbotPayload(message, language);
+    const payload = buildChatbotPayload(message, language);
 
     const { data: classifierResponse } = await axios.post(
       `${chatbotBaseUrl}/chat`,
@@ -92,18 +96,28 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
     );
 
     const chatbotResponse = normalizeChatbotResponse(classifierResponse, payload.selectedLanguage);
-    const needsLiveVehicleData = chatbotResponse.valid && !chatbotResponse.requires_clarification && (
-      LIVE_VEHICLE_INTENTS.has(chatbotResponse.intent) ||
-      (chatbotResponse.intent === "rental_rate" && chatbotResponse.entities?.brand)
+    if (!chatbotResponse.valid) return res.json(applyChatbotGuardrails(chatbotResponse, payload));
+    const answers = [chatbotResponse, ...chatbotResponse.additional_answers];
+    const isVehicleSearch = (answer) => !answer.requires_clarification && (
+      LIVE_VEHICLE_INTENTS.has(answer.intent) || (answer.intent === "rental_rate" && answer.entities.brand)
     );
-    if (needsLiveVehicleData) {
-      const vehicles = await Vehicle.find({ availabilityStatus: "available" })
+    const isVehicleStatus = (answer) => !answer.requires_clarification
+      && answer.intent === "vehicle_availability_status"
+      && (answer.entities.brand || answer.conditions.vehicle_status_overview);
+    const needsLiveVehicleData = answers.some(isVehicleSearch);
+    const needsVehicleStatus = answers.some(isVehicleStatus);
+    const needsPrivateStatus = answers.some((answer) => !answer.requires_clarification && PRIVATE_BOOKING_STATUS_INTENTS.has(answer.intent));
+    let vehicleRecords = [];
+    if (needsLiveVehicleData || needsVehicleStatus) {
+      const vehicles = await Vehicle.find(needsVehicleStatus ? {} : { availabilityStatus: "available" })
         .select(
-          "name brand model description location availabilityStatus imageUrl images dailyRentalRate pricingUnit specs driverOptionEnabled driverDailyRate"
+          needsVehicleStatus && !needsLiveVehicleData
+            ? "name location availabilityStatus dailyRentalRate pricingUnit specs.type specs.subType specs.transmission specs.seats"
+            : "name brand model description location availabilityStatus imageUrl images dailyRentalRate pricingUnit specs driverOptionEnabled driverDailyRate"
         )
         .lean();
 
-      let realtimeAvailableVehicles = vehicles;
+      vehicleRecords = vehicles;
       if (vehicles.length > 0) {
         const vehicleIds = vehicles.map((vehicle) => vehicle._id);
         const lockedVehicleIds = await Booking.distinct("vehicle", {
@@ -112,47 +126,43 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
           actualReturnAt: null,
         });
         const lockedVehicleIdSet = new Set(lockedVehicleIds.map((id) => String(id)));
-        realtimeAvailableVehicles = vehicles.filter(
-          (vehicle) => !lockedVehicleIdSet.has(String(vehicle?._id || ""))
-        );
+        vehicleRecords = vehicles.map((vehicle) => lockedVehicleIdSet.has(String(vehicle._id))
+          ? { ...vehicle, availabilityStatus: "unavailable" } : vehicle);
       }
-      payload = buildChatbotPayload(
-        message,
-        language,
-        realtimeAvailableVehicles,
-        chatbotResponse.entities
-      );
     }
-
-    const finalResponse = applyChatbotGuardrails(chatbotResponse, payload);
-    if (chatbotResponse.valid && !chatbotResponse.requires_clarification
-      && PRIVATE_BOOKING_STATUS_INTENTS.has(chatbotResponse.intent)) {
-      res.set("Cache-Control", "no-store");
-      const replyWithStatus = (reply, reasonCode, usedLiveData = false) => res.json({
-        ...finalResponse,
-        reply,
-        reason_code: reasonCode,
-        requires_live_data: usedLiveData,
-        recommendations: [],
-      });
-      if (!req.cookies?.token) {
-        return replyWithStatus(renterBookingSignInReply(finalResponse.language), "authentication_required");
+    if (needsVehicleStatus || needsLiveVehicleData || needsPrivateStatus) res.set("Cache-Control", "no-store");
+    const fulfillAnswers = async () => {
+      const fulfilled = [];
+      for (const answer of answers) {
+        const answerPayload = buildChatbotPayload(answer.question || message, language,
+          isVehicleSearch(answer) ? vehicleRecords : [], answer.entities);
+        let final = applyChatbotGuardrails({ ...answer, additional_answers: [] }, answerPayload);
+        if (isVehicleStatus(answer)) final = fulfillVehicleAvailabilityStatus(final, vehicleRecords);
+        if (!answer.requires_clarification && PRIVATE_BOOKING_STATUS_INTENTS.has(answer.intent)) {
+          const authenticatedRenter = req.cookies?.token && req.user?.role === "user";
+          final = { ...final, recommendations: [], requires_live_data: Boolean(authenticatedRenter),
+            reason_code: !req.cookies?.token ? "authentication_required" : authenticatedRenter ? "authenticated_renter_booking_status" : "renter_account_required",
+            reply: !req.cookies?.token ? renterBookingSignInReply(final.language)
+              : !authenticatedRenter ? renterBookingRenterOnlyReply(final.language)
+                : await getRenterBookingStatusReply(req.user._id, answer.intent, final.language) };
+        }
+        fulfilled.push(final);
       }
+      const recommendations = [...new Map(fulfilled.flatMap((answer) => answer.recommendations)
+        .map((vehicle) => [vehicle._id, vehicle])).values()].slice(0, 3);
+      const contextAnswer = fulfilled.find((answer) => answer.recommendations.length)
+        || fulfilled.find((answer) => answer.requires_clarification) || fulfilled.at(-1);
+      return { ...fulfilled[0], additional_answers: fulfilled.slice(1), recommendations,
+        reply: fulfilled.length === 1 ? fulfilled[0].reply : fulfilled.map((answer, index) => `${index + 1}. ${answer.reply}`).join("\n\n"),
+        conversation_context: buildChatbotConversationContext(contextAnswer) };
+    };
+    if (needsPrivateStatus && req.cookies?.token) {
       return protect(req, res, async (authError) => {
         if (authError) return next(authError);
-        if (req.user?.role !== "user") {
-          return replyWithStatus(renterBookingRenterOnlyReply(finalResponse.language), "renter_account_required");
-        }
-        try {
-          const reply = await getRenterBookingStatusReply(
-            req.user._id, chatbotResponse.intent, finalResponse.language
-          );
-          return replyWithStatus(reply, "authenticated_renter_booking_status", true);
-        } catch (error) {
-          return next(error);
-        }
+        try { return res.json(await fulfillAnswers()); } catch (error) { return next(error); }
       });
     }
+    const finalResponse = await fulfillAnswers();
 
     if (!isProduction) {
       auditLog.info("CHATBOT", "RentifyAI routing", {

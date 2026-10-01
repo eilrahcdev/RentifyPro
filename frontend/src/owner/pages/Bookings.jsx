@@ -1,4 +1,6 @@
 import VehicleThumbnail from "../../components/VehicleThumbnail";
+import BookingDetails, { BookingInfo as Info } from "../../components/BookingDetails";
+import BookingActionRail from "../../components/BookingActionRail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, CarFront, Clock3, CreditCard, Flag, MapPin, RefreshCw, Users } from "lucide-react";
 import API from "../../utils/api";
@@ -232,7 +234,7 @@ export default function Bookings() {
     try {
       const response = await API.getOwnerBookings({
         view: statusFilter,
-        limit: 10,
+        limit: window.matchMedia("(max-width: 767px)").matches ? 5 : 10,
         ...(cursor ? { cursor } : {}),
       });
       const mapped = (response.bookings || []).map(normalizeBookingStatus);
@@ -423,14 +425,14 @@ export default function Bookings() {
           const cancellationInfo = getCancellationRequestInfo(booking);
 
           return (
-          <article key={booking._id} className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-100/70 sm:p-5">
+          <article key={booking._id} className="rp-booking-card group overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 gap-4">
-                <VehicleThumbnail vehicle={booking.vehicle} className="h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
+                <VehicleThumbnail vehicle={booking.vehicle} className="rp-booking-thumbnail h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
                 <div className="min-w-0 py-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#017FE6]">Booking #{String(booking._id || "").slice(-6).toUpperCase()}</p>
-                  <h3 className="mt-1 truncate text-xl font-bold text-slate-900">{booking.vehicle?.name || "Vehicle"}</h3>
-                  <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-slate-500"><Users size={16} strokeWidth={2} className="text-slate-400" aria-hidden="true" /> {booking.renter?.name || booking.renter?.email || "Renter details unavailable"}</p>
+                  <h3 className="rp-booking-vehicle-title mt-1 font-bold text-slate-900">{booking.vehicle?.name || "Vehicle"}</h3>
+                  <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-600"><Users size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" /><span className="min-w-0 break-words">{booking.renter?.name || booking.renter?.email || "Renter details unavailable"}</span></p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -493,10 +495,16 @@ export default function Bookings() {
             <p className="mt-3 text-sm text-slate-600">{bookingGuidance(booking, "owner")}</p>
             <RequestFeedback error={actionErrors[booking._id]} />
             {bookingActions[booking._id] && <p role="status" className="mt-2 text-sm text-blue-700">{bookingActions[booking._id]}</p>}
-            <div className="mt-5 grid grid-cols-1 gap-3 border-y border-slate-100 py-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+            <BookingDetails summary={<>
               <Info icon={CalendarDays} title="Pickup" value={formatDateTime(booking.pickupAt)} />
               <Info icon={CalendarDays} title="Return" value={formatDateTime(booking.returnAt)} />
               <Info icon={Clock3} title="Duration" value={formatDurationMinutes(getBookingDurationMinutesForPricing(booking))} />
+              <Info
+                icon={CreditCard}
+                title={isEstimatedLatePenalty ? "Estimated Total Payment" : "Total Payment"}
+                value={money(displayedTotalPayment)}
+              />
+            </>}>
               <Info icon={MapPin} title="Location" value={booking.vehicle?.location || "-"} />
               <Info title="Vehicle Rate" value={`${money(booking.vehicleHourlyRate ?? booking.vehicleDailyRate)} / hr`} />
               <Info
@@ -512,12 +520,7 @@ export default function Bookings() {
                 title={isEstimatedLatePenalty ? "Estimated Late Penalty" : "Late Penalty"}
                 value={money(displayedLatePenalty)}
               />
-              <Info
-                icon={CreditCard}
-                title={isEstimatedLatePenalty ? "Estimated Total Payment" : "Total Payment"}
-                value={money(displayedTotalPayment)}
-              />
-            </div>
+            </BookingDetails>
 
             {lateReturnInfo.isOverdue && (
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -544,17 +547,7 @@ export default function Bookings() {
 
 
             <div className="mt-4 grid min-w-0 grid-cols-1 items-start gap-3 border-t border-slate-100 pt-4 md:grid-cols-[minmax(0,1fr)_auto]">
-              <div
-                role="group"
-                aria-label={`Booking actions for ${booking.vehicle?.name || "vehicle"}. Scroll horizontally for more actions.`}
-                tabIndex={0}
-                onFocusCapture={(event) => {
-                  if (event.target !== event.currentTarget) {
-                    event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
-                  }
-                }}
-                className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 [&>button]:inline-flex [&>button]:h-11 [&>button]:shrink-0 [&>button]:items-center [&>button]:justify-center [&>button]:whitespace-nowrap [&>button]:focus-visible:outline [&>button]:focus-visible:outline-2 [&>button]:focus-visible:outline-offset-2 [&>button]:focus-visible:outline-blue-600"
-              >
+              <BookingActionRail label={`Booking actions for ${booking.vehicle?.name || "vehicle"}`}>
                 {booking.status === "pending" && (
                   <>
                     <button
@@ -666,7 +659,7 @@ export default function Bookings() {
                     </button>
                   )}
                 <button type="button" onClick={() => setReportBooking(booking)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"><Flag size={18} strokeWidth={2} aria-hidden="true" />Report renter</button>
-              </div>
+              </BookingActionRail>
 
               <div className="flex flex-col gap-2 md:items-end">
                 <div className="flex items-center gap-2 p-1">
@@ -727,7 +720,7 @@ export default function Bookings() {
             type="button"
             onClick={() => loadBookings({ cursor: bookingPage.nextCursor, append: true })}
             disabled={loadingMore}
-            className="rounded-lg border border-[#017FE6] px-4 py-2 text-sm font-medium text-[#017FE6] disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-lg border border-[#017FE6] px-4 py-2 text-sm font-medium text-[#017FE6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loadingMore ? "Loading..." : "Load more"}
           </button>
@@ -748,15 +741,6 @@ export default function Bookings() {
         }}
         onSubmit={reviewVehicleReturn}
       />
-    </div>
-  );
-}
-
-function Info({ title, value, icon: Icon }) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">{Icon && <Icon size={16} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />}{title}</p>
-      <p className="mt-1 font-semibold text-slate-800">{value}</p>
     </div>
   );
 }

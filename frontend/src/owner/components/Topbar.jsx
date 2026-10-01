@@ -90,7 +90,7 @@ export default function Topbar({ onNavigateToNotifications, onToggleSidebar, isS
       className="sticky top-0 z-30 border-b border-white/20 bg-[linear-gradient(90deg,#056ed9_0%,#017fe6_58%,#0787ee_100%)]"
     >
       {/* top bar */}
-      <div className="h-20 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3 sm:gap-6">
+      <div className="rp-owner-topbar h-20 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3 sm:gap-6">
 
         {/* left side */}
         <div className="min-w-0 flex items-center gap-2 sm:gap-3">
@@ -166,7 +166,7 @@ export default function Topbar({ onNavigateToNotifications, onToggleSidebar, isS
               }, 0);
             }}
             className="
-              h-11 px-3 sm:px-4 rounded-xl
+              h-11 min-w-11 px-3 sm:px-4 rounded-xl
               bg-white text-[#017FE6]
               font-semibold
               hover:bg-white/90 transition

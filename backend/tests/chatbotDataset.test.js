@@ -7,11 +7,62 @@ import datasetV6 from "../../chatbot-service/rentifypro_chatbot_dataset_v6.json"
 import {
   applyChatbotGuardrails,
   buildChatbotPayload,
+  fulfillVehicleAvailabilityStatus,
   getChatbotDatasetInfo,
   normalizeChatbotResponse,
   normalizePendingVehicleSearch,
+  normalizeChatbotConversationContext,
+  buildChatbotConversationContext,
   validateChatbotInput,
 } from "../utils/chatbotPayload.js";
+
+test("rejects poisoned conversation context and nested compound answers", () => {
+  const context = { intent: "available_vehicles", entities: { brand: "Toyota", model: "Vios", location: "Cebu", pax: 5 },
+    clarification: { required: false, type: null, field: null }, choices: [{ brand: "Toyota", model: "Vios" }] };
+  assert.deepEqual(normalizeChatbotConversationContext(context), context);
+  assert.equal(normalizeChatbotConversationContext({ ...context, renterId: "other" }), null);
+  assert.equal(normalizeChatbotConversationContext({ ...context, entities: { ...context.entities, paymentAmount: 1 } }), null);
+  assert.equal(normalizeChatbotConversationContext({ ...context, choices: [{ brand: "Toyota", model: "Vios", renterId: "other" }] }), null);
+  const answer = { intent: "payment_methods", confidence: 0.99, language: "en", entities: {}, conditions: {} };
+  assert.equal(normalizeChatbotResponse({ ...answer, additional_answers: [{ ...answer, additional_answers: [answer] }] }).valid, false);
+  assert.equal(normalizeChatbotResponse({ ...answer, additional_answers: [answer, answer, answer] }).valid, false);
+  assert.equal(normalizeChatbotResponse({ ...answer, additional_answers: [{ ...answer, entities: { renterId: "other" } }] }).valid, false);
+  assert.equal(normalizeChatbotResponse({ ...answer, intent: "constructor" }).valid, false);
+  assert.equal(normalizeChatbotConversationContext({ ...context, intent: "__proto__" }), null);
+});
+
+test("fulfills location, capacity, exclusions and dates against current public vehicle fields", () => {
+  const vehicles = [
+    { _id: "cebu-ford", name: "Ford Everest", location: "Cebu City", availabilityStatus: "available", dailyRentalRate: 1800, pricingUnit: "daily", specs: { type: "suv", seats: 7, transmission: "Automatic" } },
+    { _id: "manila-ford", name: "Ford Everest", location: "Manila", availabilityStatus: "available", dailyRentalRate: 1700, pricingUnit: "daily", specs: { type: "suv", seats: 7, transmission: "Automatic" } },
+    { _id: "toyota", name: "Toyota Fortuner", location: "Cebu City", availabilityStatus: "available", dailyRentalRate: 1600, pricingUnit: "daily", specs: { type: "suv", seats: 7, transmission: "Automatic" } },
+    { _id: "small", name: "Honda CRV", location: "Cebu City", availabilityStatus: "available", dailyRentalRate: 1500, pricingUnit: "daily", specs: { type: "suv", seats: 5, transmission: "Automatic" } },
+  ];
+  const classifier = { intent: "available_vehicles", confidence: 0.99, language: "en", entities: {
+    brand: null, model: null, category: "suv", location: "cebu", pax: 7, excluded_brands: ["Toyota"],
+    max_budget: 2000, currency: "PHP", rate_unit: "day", requested_schedule: "tomorrow" }, conditions: {} };
+  const result = applyChatbotGuardrails(classifier, buildChatbotPayload("show cars", "en", vehicles, classifier.entities));
+  assert.deepEqual(result.recommendations.map(({ _id }) => _id), ["cebu-ford"]);
+  assert.match(result.reply, /requested dates is not confirmed/);
+  const context = buildChatbotConversationContext(result);
+  assert.deepEqual(context.choices, [{ brand: "Ford", model: "Everest" }]);
+  assert.doesNotMatch(JSON.stringify(context), /dailyRate|displayRate|owner|payment|renterId/);
+  const refreshed = applyChatbotGuardrails(classifier, buildChatbotPayload("same search", "en",
+    vehicles.map((vehicle) => ({ ...vehicle, availabilityStatus: "unavailable" })), context.entities));
+  assert.deepEqual(refreshed.recommendations, []);
+  const status = fulfillVehicleAvailabilityStatus({ ...classifier, intent: "vehicle_availability_status",
+    conditions: { vehicle_status_overview: true } }, vehicles.map((vehicle) => ({ ...vehicle, availabilityStatus: "unavailable" })));
+  assert.match(status.reply, /1 currently unavailable and 0 available/);
+  assert.deepEqual(status.recommendations, []);
+  const missingUnit = { ...classifier, intent: "vehicle_availability_status", entities: {
+    brand: null, model: null, max_budget: 2000, currency: "PHP", location: "cebu" }, conditions: {},
+    requires_clarification: true, clarification: { required: true, type: "missing_entity", field: "rate_unit" },
+    reply: "Is your PHP 2,000 budget per day or per hour?" };
+  const askUnit = applyChatbotGuardrails(missingUnit, buildChatbotPayload("unavailable under 2000", "en"));
+  assert.equal(askUnit.clarification.field, "rate_unit");
+  assert.deepEqual(askUnit.recommendations, []);
+  assert.equal(askUnit.requires_live_data, false);
+});
 
 test("uses chatbot dataset v6 by default", () => {
   const info = getChatbotDatasetInfo();
@@ -21,6 +72,46 @@ test("uses chatbot dataset v6 by default", () => {
     "rentifypro_chatbot_dataset_v6.json"
   );
   assert.ok(info.intentsCount > 20, "v6 should expose more intents than v5");
+});
+
+test("keeps bounded clarification topics and inventory actions without storing private values", () => {
+  const response = applyChatbotGuardrails({ intent: "REJECT", confidence: 0.99, language: "en",
+    requires_clarification: true, clarification: { required: true, type: "ambiguous_intent", field: null },
+    topic: "payment", candidate_intents: ["payment_methods", "payment_downpayment", "unpaid_balance"],
+    entities: {}, reply: "Which payment question?" }, buildChatbotPayload("payment", "en"));
+  const context = buildChatbotConversationContext(response);
+  assert.equal(context.topic, "payment");
+  assert.deepEqual(context.candidate_intents, ["payment_methods", "payment_downpayment", "unpaid_balance"]);
+  assert.equal(normalizeChatbotConversationContext({ ...context, topic: "__proto__" }), null);
+  assert.equal(normalizeChatbotConversationContext({ ...context, candidate_intents: ["my_unpaid_balance"] }), null);
+  assert.equal(normalizeChatbotConversationContext({ ...context, conditions: { paymentAmount: 1 } }), null);
+  assert.equal(normalizeChatbotConversationContext({ ...context, topic: [] }), null);
+  assert.equal(normalizeChatbotResponse({ ...response, candidate_intents: ["unknown"] }).valid, false);
+  const status = { intent: "vehicle_availability_status", confidence: 0.99, language: "en", topic: "vehicles",
+    entities: {}, conditions: { vehicle_status_overview: true, vehicle_status_list: true, vehicle_status_unavailable: true } };
+  const records = [
+    { _id: "unavailable", name: "Honda City", availabilityStatus: "unavailable", owner: "PRIVATE-OWNER" },
+    { _id: "available", name: "Toyota Vios", availabilityStatus: "available" },
+  ];
+  const listed = fulfillVehicleAvailabilityStatus(status, records);
+  assert.match(listed.reply, /Honda City \(unavailable\)/);
+  assert.doesNotMatch(listed.reply, /Toyota Vios|PRIVATE-OWNER/);
+  assert.deepEqual(listed.recommendations, []);
+  assert.deepEqual(buildChatbotConversationContext(listed).conditions, status.conditions);
+  assert.deepEqual(buildChatbotConversationContext(listed).choices, [{ brand: "Honda", model: "City" }]);
+  const fresh = fulfillVehicleAvailabilityStatus(status, records.map((v) => ({ ...v, availabilityStatus: "available" })));
+  assert.match(fresh.reply, /no currently unavailable/);
+  assert.doesNotMatch(fresh.reply, /Honda City/);
+  assert.deepEqual(fresh.recommendations, []);
+  assert.match(fulfillVehicleAvailabilityStatus(status, []).reply, /no current vehicle listings/);
+  assert.equal(applyChatbotGuardrails({ ...status, conditions: { vehicle_status_list: "yes" } },
+    buildChatbotPayload("list unavailable", "en")).reason_code, "malformed_classifier");
+  const unavailablePayment = applyChatbotGuardrails({ intent: "payment_troubleshooting", confidence: 0.99,
+    language: "en", topic: "payment", entities: {}, conditions: { payment_option_unavailable: true },
+    reply: "GCash is definitely down and your payment succeeded." }, buildChatbotPayload("GCash unavailable", "en"));
+  assert.match(unavailablePayment.reply, /can't verify a payment-provider outage/);
+  assert.doesNotMatch(unavailablePayment.reply, /definitely down|payment succeeded/);
+  assert.equal(buildChatbotConversationContext(unavailablePayment).conditions.payment_option_unavailable, true);
 });
 
 test("uses chatbot dataset v6 even when a legacy override is configured", () => {
@@ -254,7 +345,7 @@ test("filters brand and model searches against live vehicle fixtures without fab
     emptyPayload
   );
   assert.deepEqual(emptyResult.recommendations, []);
-  assert.match(emptyResult.reply, /currently listed Nissan vehicles/i);
+  assert.match(emptyResult.reply, /available Nissan vehicles/i);
   assert.doesNotMatch(emptyResult.reply, /never supports/i);
 });
 
@@ -440,4 +531,62 @@ test("asks for the booking or model when the live reference is missing or ambigu
   assert.equal(response.clarification.type, "ambiguous_entity");
   assert.match(response.reply, /Civic and Civix/);
   assert.deepEqual(response.recommendations, []);
+});
+
+test("vehicle status distinguishes unavailable, available, missing and ambiguous listings without recommendations", () => {
+  const vehicles = [
+    { _id: "city", name: "Honda City", availabilityStatus: "unavailable",
+      owner: { email: "private-owner@example.invalid" }, specs: { type: "sedan", plateNumber: "PRIVATE-PLATE" } },
+    { _id: "vios", name: "Toyota Vios", availabilityStatus: "available", specs: { type: "sedan" } },
+  ];
+  for (const language of ["en", "fil", "taglish"]) {
+    const classifier = (entities, conditions = {}) => ({
+      intent: "vehicle_availability_status", confidence: 0.99, language, entities, conditions,
+    });
+    const unavailable = fulfillVehicleAvailabilityStatus(classifier({ brand: "Honda", model: "City" }), vehicles);
+    assert.equal(unavailable.reason_code, "vehicle_status_unavailable");
+    assert.match(unavailable.reply, /Honda City/);
+    assert.match(unavailable.reply, /unavailable/);
+    assert.deepEqual(unavailable.recommendations, []);
+    assert.doesNotMatch(JSON.stringify(unavailable), /private-owner|PRIVATE-PLATE/);
+    const available = fulfillVehicleAvailabilityStatus(classifier({ brand: "Toyota", model: "Vios" }), vehicles);
+    assert.equal(available.reason_code, "vehicle_status_available");
+    assert.deepEqual(available.recommendations, []);
+    const missing = fulfillVehicleAvailabilityStatus(classifier({ brand: "Ford", model: "Everest" }), vehicles);
+    assert.equal(missing.reason_code, "vehicle_status_not_found");
+    const overview = fulfillVehicleAvailabilityStatus(classifier(
+      { brand: null, model: null }, { vehicle_status_overview: true }
+    ), vehicles);
+    assert.equal(overview.reason_code, "vehicle_status_overview");
+    assert.match(overview.reply, /1.*unavailable.*1.*available/);
+    const ambiguous = fulfillVehicleAvailabilityStatus(classifier({ brand: "Honda", model: "City" }), [
+      ...vehicles, { _id: "city-2", name: "Honda City", availabilityStatus: "available" },
+    ]);
+    assert.equal(ambiguous.reason_code, "ambiguous_vehicle_listing");
+    assert.equal(ambiguous.clarification.field, "model");
+    assert.deepEqual(ambiguous.recommendations, []);
+  }
+});
+
+test("unavailable explanations stay canonical and empty available searches do not claim no listing exists", () => {
+  const entities = { brand: "Honda", model: "City" };
+  const vehicles = [{ _id: "city", name: "Honda City", availabilityStatus: "unavailable" }];
+  const search = applyChatbotGuardrails({
+    intent: "vehicle_brand_search", confidence: 0.99, language: "en", entities,
+  }, buildChatbotPayload("Honda City", "auto", vehicles, entities));
+  assert.match(search.reply, /couldn't find any available Honda City/);
+  assert.match(search.reply, /does not confirm that no listing exists/);
+  assert.deepEqual(search.recommendations, []);
+  const explanation = applyChatbotGuardrails({
+    intent: "vehicle_unavailability", confidence: 0.99, language: "en",
+    reply: "All unavailable vehicles will be available tomorrow.",
+  }, buildChatbotPayload("Show unavailable cars", "auto", vehicles));
+  assert.match(explanation.reply, /Vehicles page/);
+  assert.doesNotMatch(explanation.reply, /tomorrow/);
+  assert.deepEqual(explanation.recommendations, []);
+  const invalid = normalizeChatbotResponse({
+    intent: "vehicle_availability_status", confidence: 0.99, language: "en",
+    conditions: { vehicle_status_overview: "yes" },
+  });
+  assert.equal(invalid.valid, false);
 });

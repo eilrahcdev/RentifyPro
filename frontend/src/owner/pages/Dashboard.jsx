@@ -19,7 +19,6 @@ import {
   EyeOff,
   Flame,
   History,
-  ImageOff,
   Inbox,
   ListTodo,
   Wallet,
@@ -27,6 +26,7 @@ import {
 } from "lucide-react";
 import API from "../../utils/api";
 import { OwnerDashboardSkeleton } from "../../components/LoadingSkeletons";
+import VehicleThumbnail from "../../components/VehicleThumbnail";
 import { getSocket } from "../../utils/socket";
 import {
   formatDisplayName,
@@ -262,8 +262,6 @@ const getRenterProfile = (renter) => {
     initials,
   };
 };
-
-const getVehicleImage = (booking) => resolveAssetUrl(booking?.vehicle?.imageUrl || booking?.vehicle?.images?.[0] || "");
 
 const getBookingSortTime = (booking) =>
   toDate(
@@ -1337,12 +1335,11 @@ export default function Dashboard() {
                   const tone = getBookingStatusTone(booking);
                   const extension = getExtensionRequestInfo(booking);
                   const lateReturn = getLateReturnInfo(booking);
-                  const vehicleImage = getVehicleImage(booking);
 
                   return (
                     <div key={booking._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start gap-3">
-                        <VehicleThumbnail imageUrl={vehicleImage} name={booking.vehicle?.name || "Vehicle"} />
+                        <DashboardVehicleThumbnail vehicle={booking.vehicle} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -1439,10 +1436,7 @@ export default function Dashboard() {
         <Modal onClose={() => { setExtensionReviewBooking(null); setReviewError(""); }} title="Review Extension Request">
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <VehicleThumbnail
-                imageUrl={getVehicleImage(extensionReviewBooking)}
-                name={extensionReviewBooking.vehicle?.name || "Vehicle"}
-              />
+              <DashboardVehicleThumbnail vehicle={extensionReviewBooking.vehicle} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-slate-900">{extensionReviewBooking.vehicle?.name || "Vehicle"}</p>
                 <p className="truncate text-sm text-slate-500">{getRenterProfile(extensionReviewBooking.renter).displayName}</p>
@@ -1495,10 +1489,7 @@ export default function Dashboard() {
         <Modal onClose={() => { setRenterRequestReview(null); setReviewError(""); }} title={`Review ${renterRequestReview.label}`}>
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <VehicleThumbnail
-                imageUrl={getVehicleImage(renterRequestReview.booking)}
-                name={renterRequestReview.booking.vehicle?.name || "Vehicle"}
-              />
+              <DashboardVehicleThumbnail vehicle={renterRequestReview.booking.vehicle} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-slate-900">
                   {renterRequestReview.booking.vehicle?.name || "Vehicle"}
@@ -1620,12 +1611,12 @@ function SummaryCard({
   return (
     <Panel className="h-full !p-3 sm:!p-4">
       <div className="relative flex h-full flex-col gap-3 sm:flex-row sm:items-start xl:gap-2">
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl ${iconClassName}`}>
-          <SummaryIcon className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden="true" />
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${iconClassName}`}>
+          <SummaryIcon className="h-4 w-4 sm:h-[18px] sm:w-[18px] min-[1400px]:h-5 min-[1400px]:w-5" strokeWidth={2} aria-hidden="true" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between gap-2">
-            <p className={`text-xs font-medium leading-4 text-slate-600 sm:text-sm ${hasVisibilityToggle ? "sm:pr-11 xl:text-xs min-[1400px]:text-sm" : ""}`}>{title}</p>
+            <p className={`text-sm font-bold leading-5 text-slate-900 sm:text-base sm:leading-6 min-[1400px]:text-lg ${hasVisibilityToggle ? "sm:pr-11" : ""}`}>{title}</p>
             {hasVisibilityToggle && (
               <button
                 type="button"
@@ -1634,11 +1625,11 @@ function SummaryCard({
                 aria-label={isValueVisible ? `Hide ${title}` : `Show ${title}`}
                 title={isValueVisible ? `Hide ${title}` : `Show ${title}`}
               >
-                {isValueVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                {isValueVisible ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             )}
           </div>
-          <p className={`mt-1 break-words font-bold tracking-tight text-slate-900 ${hasVisibilityToggle ? "text-lg sm:pr-12 sm:text-2xl xl:text-lg min-[1400px]:text-2xl" : "text-xl sm:text-2xl"}`}>{value}</p>
+          <p className={`mt-1 break-words font-semibold tracking-tight text-slate-900 ${hasVisibilityToggle ? "text-lg sm:pr-12 sm:text-2xl xl:text-lg min-[1400px]:text-2xl" : "text-xl sm:text-2xl"}`}>{value}</p>
           {subtitle && (
             <button
               type="button"
@@ -1755,17 +1746,12 @@ function InfoLine({ label, value }) {
   );
 }
 
-function VehicleThumbnail({ imageUrl, name, small = false }) {
-  return imageUrl ? (
-    <img
-      src={imageUrl}
-      alt={name}
-      className={`${small ? "h-12 w-12" : "h-14 w-14"} shrink-0 rounded-2xl object-cover border border-slate-200`}
+function DashboardVehicleThumbnail({ vehicle }) {
+  return (
+    <VehicleThumbnail
+      vehicle={vehicle}
+      className="h-16 w-24 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-32"
     />
-  ) : (
-    <div className={`${small ? "h-12 w-12" : "h-14 w-14"} shrink-0 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400`}>
-      <ImageOff size={small ? 16 : 18} />
-    </div>
   );
 }
 
@@ -1960,7 +1946,6 @@ function ViewAllDashboardModal({
 }
 
 function DashboardVehicleCard({ vehicle }) {
-  const imageUrl = resolveAssetUrl(vehicle?.imageUrl || vehicle?.images?.[0] || "");
   const availability = String(vehicle?.availabilityStatus || "available").toLowerCase();
   const isAvailable = availability === "available";
   const vehicleType = formatVehicleTypeLabel(vehicle?.specs?.type, vehicle?.specs?.subType, {
@@ -1973,7 +1958,7 @@ function DashboardVehicleCard({ vehicle }) {
 
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-      <VehicleThumbnail imageUrl={imageUrl} name={vehicle?.name || "Vehicle"} />
+      <DashboardVehicleThumbnail vehicle={vehicle} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold text-slate-900">{vehicle?.name || "Vehicle"}</p>
         <p className="mt-1 truncate text-sm text-slate-500">{details || "Vehicle details unavailable"}</p>
@@ -2000,7 +1985,7 @@ function DashboardBookingCard({ booking }) {
 
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-      <VehicleThumbnail imageUrl={getVehicleImage(booking)} name={booking?.vehicle?.name || "Vehicle"} />
+      <DashboardVehicleThumbnail vehicle={booking?.vehicle} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold text-slate-900">{booking?.vehicle?.name || "Vehicle"}</p>
         <p className="mt-1 truncate text-sm text-slate-500">{renter.displayName}</p>
@@ -2065,7 +2050,7 @@ function DashboardEarningsCard({ booking, isRevenueVisible }) {
 
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-      <VehicleThumbnail imageUrl={getVehicleImage(booking)} name={booking?.vehicle?.name || "Vehicle"} />
+      <DashboardVehicleThumbnail vehicle={booking?.vehicle} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold text-slate-900">{booking?.vehicle?.name || "Vehicle"}</p>
         <p className="mt-1 truncate text-sm text-slate-500">{renter.displayName}</p>

@@ -434,7 +434,7 @@ export default function VehicleDetailsPage({
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="rp-renter-page min-h-screen">
       <Navbar
         activePage="vehicles"
         isLoggedIn={isLoggedIn}
@@ -468,7 +468,7 @@ export default function VehicleDetailsPage({
 
               <div className="min-w-0 max-w-3xl">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-[clamp(1.72rem,4.1vw,2.65rem)] font-bold tracking-[-0.045em] text-slate-900">
+                  <h1 className="break-words text-[clamp(1.72rem,4.1vw,2.65rem)] font-bold tracking-[-0.04em] text-slate-900">
                     {currentVehicle?.name || "Vehicle"}
                   </h1>
                   <span
@@ -480,8 +480,8 @@ export default function VehicleDetailsPage({
                   </span>
                 </div>
                 <p className="rp-detail-meta mt-2.5">
-                  <MapPin size={16} strokeWidth={2} className="text-[#0B75E7]" aria-hidden="true" />
-                  {currentVehicle?.location || "Location not provided"}
+                  <MapPin size={16} strokeWidth={2} className="shrink-0 text-[#0B75E7]" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{currentVehicle?.location || "Location not provided"}</span>
                 </p>
               </div>
             </div>
@@ -492,19 +492,19 @@ export default function VehicleDetailsPage({
                 {money(hourlyRate)}
                 <span> / hour</span>
               </p>
+              <a href="#booking-form" className="rp-detail-booking-link mt-3 inline-flex min-h-11 items-center font-semibold text-blue-700 underline underline-offset-4">Choose dates and book</a>
             </div>
           </div>
         </section>
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.65fr_1fr] xl:gap-6">
-          <div className="space-y-5 sm:space-y-6">
-            <section className="rp-surface p-5 sm:p-6">
+        <div className="rp-vehicle-details-layout">
+            <section className="rp-detail-gallery rp-surface p-5 sm:p-6">
               <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
                 <VehicleCover
                   vehicle={currentVehicle}
                   src={galleryImages[activeImageIndex]}
                   alt={currentVehicle?.name || "Vehicle"}
-                  className="min-h-[250px] sm:min-h-[360px] lg:min-h-[440px] rounded-none border-0 shadow-none"
+                  className="min-h-[220px] sm:min-h-[320px] lg:min-h-[360px] rounded-none border-0 shadow-none"
                   contentClassName="p-5 sm:p-7 lg:p-9"
                 />
 
@@ -555,69 +555,8 @@ export default function VehicleDetailsPage({
               )}
             </section>
 
-            <section className="rp-surface p-5 sm:p-6">
-              <h2 className="rp-detail-section-title">Vehicle Specifications</h2>
-              <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-                <SpecItem icon={CarFront} label="Type" value={vehicleTypeLabel} />
-                <SpecItem icon={Users} label="Seats" value={`${seats}`} />
-                <SpecItem icon={Settings} label="Transmission" value={transmission} />
-                <SpecItem icon={Fuel} label="Fuel" value={fuel} />
-                <SpecItem icon={ShieldCheck} label="Plate Number" value={plateNumber} />
-                <SpecItem
-                  icon={BadgeCheck}
-                  label="Driver Option"
-                  value={driverOptionEnabled ? "With driver available" : "Self-drive only"}
-                />
-              </div>
-            </section>
-
-            <section className="rp-surface p-5 sm:p-6">
-              <h2 className="rp-detail-section-title">About This Vehicle</h2>
-              <p className="mt-3 text-[0.96rem] leading-7 text-slate-600">
-                {currentVehicle?.description || "No additional description provided by the owner."}
-              </p>
-            </section>
-
-            <section className="rp-surface p-5 sm:p-6">
-              <h2 className="rp-detail-section-title">Owner Information</h2>
-              <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 sm:p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-[#0B75E7] text-white font-bold sm:h-16 sm:w-16">
-                      {ownerInitials}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-slate-900">{ownerName}</p>
-                        {ownerVerified && <BadgeCheck size={18} className="text-[#0B75E7]" />}
-                      </div>
-                      <p className="mt-1 break-words text-sm text-slate-500">
-                        {ownerEmail || "Verified RentifyPro owner"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleChatOwner}
-                    disabled={isOwnVehicle}
-                    className="rp-btn-secondary inline-flex items-center gap-2 self-start px-3.5 py-2.5 text-xs sm:text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <MessageCircle size={18} strokeWidth={2} aria-hidden="true" />
-                    Chat Owner
-                  </button>
-                </div>
-              </div>
-              {chatOwnerError && (
-                <p className="mt-3 text-sm text-red-600">{chatOwnerError}</p>
-              )}
-            </section>
-
-          </div>
-
-          <aside className="space-y-5 xl:flex xl:h-full xl:flex-col xl:space-y-6">
-            <section className="rp-surface p-5 sm:p-6 xl:sticky xl:top-24">
-              <h2 className="rp-detail-section-title">Book This Vehicle</h2>
+            <section id="booking-form" aria-labelledby="booking-form-title" className="rp-vehicle-booking rp-surface p-5 sm:p-6">
+              <h2 id="booking-form-title" tabIndex={-1} className="rp-detail-section-title">Book This Vehicle</h2>
               <p className="rp-detail-section-copy mt-1.5">
                 Choose pickup and return dates within 6 months, then review your total.
               </p>
@@ -625,7 +564,7 @@ export default function VehicleDetailsPage({
               <div className="mt-5 space-y-5">
                 <div>
                   <label className="rp-detail-form-label">Pickup Date & Time</label>
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <div className="rp-detail-date-fields grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <input
                       type="date"
                       aria-label="Pickup date"
@@ -648,7 +587,7 @@ export default function VehicleDetailsPage({
 
                 <div>
                   <label className="rp-detail-form-label">Return Date & Time</label>
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <div className="rp-detail-date-fields grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <input
                       type="date"
                       aria-label="Return date"
@@ -786,7 +725,48 @@ export default function VehicleDetailsPage({
               </div>
             </section>
 
-            <section className="rp-surface p-5 sm:p-6 xl:flex xl:flex-1 xl:flex-col">
+            <div className="rp-detail-information space-y-5 sm:space-y-6">
+              <section className="rp-surface p-5 sm:p-6">
+                <h2 className="rp-detail-section-title">Vehicle Specifications</h2>
+                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+                  <SpecItem icon={CarFront} label="Type" value={vehicleTypeLabel} />
+                  <SpecItem icon={Users} label="Seats" value={`${seats}`} />
+                  <SpecItem icon={Settings} label="Transmission" value={transmission} />
+                  <SpecItem icon={Fuel} label="Fuel" value={fuel} />
+                  <SpecItem icon={ShieldCheck} label="Plate Number" value={plateNumber} />
+                  <SpecItem icon={BadgeCheck} label="Driver Option" value={driverOptionEnabled ? "With driver available" : "Self-drive only"} />
+                </div>
+              </section>
+              <section className="rp-surface p-5 sm:p-6">
+                <h2 className="rp-detail-section-title">About This Vehicle</h2>
+                <p className="mt-3 break-words text-[0.96rem] leading-7 text-slate-600">
+                  {currentVehicle?.description || "No additional description provided by the owner."}
+                </p>
+              </section>
+              <section className="rp-surface p-5 sm:p-6">
+                <h2 className="rp-detail-section-title">Owner Information</h2>
+                <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-[#0B75E7] font-bold text-white sm:h-16 sm:w-16">{ownerInitials}</div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="break-words text-base font-semibold text-slate-900">{ownerName}</p>
+                          {ownerVerified && <BadgeCheck size={18} className="shrink-0 text-[#0B75E7]" />}
+                        </div>
+                        <p className="mt-1 break-words text-sm text-slate-500">{ownerEmail || "Verified RentifyPro owner"}</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={handleChatOwner} disabled={isOwnVehicle} className="rp-btn-secondary inline-flex shrink-0 items-center gap-2 self-start px-3.5 py-2.5 text-xs sm:text-sm disabled:cursor-not-allowed disabled:opacity-60">
+                      <MessageCircle size={18} strokeWidth={2} aria-hidden="true" />Chat Owner
+                    </button>
+                  </div>
+                </div>
+                {chatOwnerError && <p className="mt-3 text-sm text-red-600">{chatOwnerError}</p>}
+              </section>
+            </div>
+
+            <section className="rp-detail-reviews rp-surface flex flex-col p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="rp-detail-section-title">Reviews</h2>
@@ -837,14 +817,13 @@ export default function VehicleDetailsPage({
                 </button>
               </div>
             </section>
-          </aside>
         </div>
       </main>
 
       {showReviewsModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center px-4 py-6">
-          <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
+          <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
               <div>
                 <h3 className="text-xl font-bold">All Reviews</h3>
                 <p className="text-sm text-slate-500 mt-1">
@@ -875,7 +854,7 @@ export default function VehicleDetailsPage({
               </div>
             </div>
 
-            <div className="p-5 max-h-[65vh] overflow-y-auto space-y-3">
+            <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-5">
               {sortedReviews.length > 0 ? (
                 sortedReviews.map((review) => (
                   <article key={review.id} className="rounded-xl border border-slate-200 p-4">
@@ -913,12 +892,12 @@ export default function VehicleDetailsPage({
 function SpecItem({ icon, label, value }) {
   const IconComponent = icon;
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/80 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
+    <div className="min-w-0 rounded-2xl border border-slate-200/90 bg-slate-50/80 px-3 py-3.5 sm:px-4">
       <p className="flex items-center gap-1.5 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-slate-500">
-        <IconComponent size={16} strokeWidth={2} className="text-[#0B75E7]" aria-hidden="true" />
+        <IconComponent size={16} strokeWidth={2} className="shrink-0 text-[#0B75E7]" aria-hidden="true" />
         {label}
       </p>
-      <p className="mt-2 text-[0.95rem] font-semibold leading-snug text-slate-900">{value}</p>
+      <p className="mt-2 break-words text-[0.95rem] font-semibold leading-snug text-slate-900">{value}</p>
     </div>
   );
 }

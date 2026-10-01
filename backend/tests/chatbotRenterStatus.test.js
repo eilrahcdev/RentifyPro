@@ -62,6 +62,7 @@ test("chatbot reads only the authenticated renter's bookings and denies guests, 
       active: "my_active_bookings", overdue: "my_overdue_return",
       unpaid: "my_unpaid_balance", status: "booking_status",
       "active-fil": "my_active_bookings", "unpaid-taglish": "my_unpaid_balance",
+      mixed: "payment_methods", malformed: "payment_methods",
     };
     res.json({
       intent: intents[req.body.message], confidence: 0.995,
@@ -69,6 +70,10 @@ test("chatbot reads only the authenticated renter's bookings and denies guests, 
         : req.body.message.endsWith("-taglish") ? "taglish" : "en",
       reply: "Classifier placeholder", alternatives: [], entities: { brand: null, model: null },
       conditions: {}, requires_clarification: false,
+      ...(req.body.message === "mixed" || req.body.message === "malformed" ? { additional_answers: [{
+        intent: "my_unpaid_balance", confidence: 0.99, language: "en", conditions: {},
+        entities: req.body.message === "malformed" ? { renterId: "renter-b" } : { brand: null, model: null },
+      }] } : {}),
     });
   });
   const classifierServer = await listen(classifier);
@@ -155,10 +160,27 @@ test("chatbot reads only the authenticated renter's bookings and denies guests, 
     assert.equal(bookedFor.at(-1), "renter-b");
 
     const beforeRevocation = bookedFor.length;
-    revoked = true;
-    const revokedReply = await post("status", renter);
-    assert.equal(revokedReply.status, 401);
+    const mixedGuest = await post("mixed", null, { renterId: "renter-a" });
+    assert.match(mixedGuest.body.reply, /PayMongo/);
+    assert.match(mixedGuest.body.reply, /sign in/i);
+    assert.equal(mixedGuest.cache, "no-store");
     assert.equal(bookedFor.length, beforeRevocation);
+    const mixedOwner = await post("mixed", tokenFor("owner-a"));
+    assert.match(mixedOwner.body.reply, /renter account/i);
+    assert.equal(bookedFor.length, beforeRevocation);
+    const malformed = await post("malformed", renter);
+    assert.equal(malformed.body.intent, "REJECT");
+    assert.equal(bookedFor.length, beforeRevocation);
+    const mixedRenter = await post("mixed", renter, { renterId: "renter-b", conversationContext: { intent: "my_unpaid_balance", entities: { renterId: "renter-b" } } });
+    assert.match(mixedRenter.body.reply, /PayMongo/);
+    assert.match(mixedRenter.body.reply, /PHP 990\.00/);
+    assert.equal(bookedFor.at(-1), "renter-a");
+    assert.deepEqual(mixedRenter.body.conversation_context.entities, { brand: null, model: null });
+    const beforeMixedRevocation = bookedFor.length;
+    revoked = true;
+    const revokedReply = await post("mixed", renter);
+    assert.equal(revokedReply.status, 401);
+    assert.equal(bookedFor.length, beforeMixedRevocation);
     assert.doesNotMatch(JSON.stringify(revokedReply.body), /PHP 990/);
   } finally {
     Booking.find = original.bookingFind;

@@ -19,7 +19,7 @@ export default function AuthShell({
   children,
 }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-100">
+    <div className="rp-auth-page relative min-h-screen overflow-hidden bg-slate-100">
       {/* ── Mobile-only fixed car background (below lg) ── */}
       <div className="auth-mobile-bg pointer-events-none fixed inset-0 z-0 lg:hidden">
         <img

@@ -4,6 +4,7 @@ import API from "../utils/api";
 import { getSessionUser, SESSION_USER_UPDATED_EVENT } from "../utils/sessionStore";
 import { formatVehicleType } from "../utils/vehicleText";
 import { HELP_ASK_AI_EVENT } from "../utils/helpNavigation";
+import AutoResizeTextarea from "./AutoResizeTextarea";
 
 const CHAT_WIDGET_STORAGE_KEY_PREFIX = "rentifypro.chatWidget.v2";
 const LEGACY_CHAT_WIDGET_STORAGE_KEY = "rentifypro.chatWidget.v1";
@@ -155,6 +156,8 @@ const normalizeMessage = (message) => {
       ? message.replyStyle : null,
     pendingSearch: sender === "bot" && message.pendingSearch && typeof message.pendingSearch === "object"
       ? message.pendingSearch : null,
+    conversationContext: sender === "bot" && message.conversationContext && typeof message.conversationContext === "object"
+      ? message.conversationContext : null,
     showViewAvailableVehicles:
       sender === "bot" ? Boolean(message.showViewAvailableVehicles) : false,
   };
@@ -462,6 +465,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       .reverse()
       .find((item) => item.sender === "bot" && !isWelcomeMessage(item));
     const pendingSearch = lastBotMessage?.pendingSearch || null;
+    const conversationContext = lastBotMessage?.conversationContext || null;
 
     const requestConversationId = conversationIdRef.current;
     const userMessageId = `user-${Date.now()}`;
@@ -481,7 +485,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
     const thinkingStartedAt = Date.now();
 
     try {
-      const response = await API.chatWithBot({ message, language: "auto", previousLanguage, pendingSearch });
+      const response = await API.chatWithBot({ message, language: "auto", previousLanguage, pendingSearch, conversationContext });
       const remainingThinkingTime = Math.max(
         0,
         MIN_THINKING_DISPLAY_MS - (Date.now() - thinkingStartedAt)
@@ -508,6 +512,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
             replyStyle: ["en", "fil", "taglish"].includes(response.language) ? response.language : null,
             pendingSearch: response.intent === "available_vehicles" && response.clarification?.field === "rate_unit"
               ? response.entities : null,
+            conversationContext: response.conversation_context || null,
             text:
               response.reply ||
               (activeLanguage === "filipino"
@@ -705,16 +710,17 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       </div>
 
       <div className="border-t border-slate-200/80 bg-white/95 p-3.5 backdrop-blur">
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50">
-          <input
+        <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50">
+          <AutoResizeTextarea
             ref={inputRef}
+            maxRows={3}
             aria-label="Message Rentify AI"
             value={draft}
             onChange={(event) =>
               updateDraftForLanguage(language, limitDraftInput(event.target.value))
             }
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 sendMessage();
               }
@@ -724,7 +730,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
                 ? "Magtanong tungkol sa sasakyan o booking..."
                 : "Ask about vehicles or booking..."
             }
-            className="h-10 min-w-0 flex-1 bg-transparent px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+            className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400"
             maxLength={CHAT_INPUT_MAX_LENGTH}
           />
           <button

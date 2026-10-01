@@ -6,6 +6,7 @@ import { LIVE_COUNTERS_REFRESH_EVENT } from "../utils/liveCounters";
 import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
 import { getSessionUser } from "../utils/sessionStore";
 import { openHelp } from "../utils/helpNavigation";
+import ChatLauncher from "./ChatLauncher";
 
 const linkClassName = (activePage, itemKey) =>
   `rp-link-pill whitespace-nowrap ${
@@ -425,21 +426,7 @@ export default function Navbar({
         </div>
       )}
 
-      {onShowAI && !isAIOpen && (
-        <button
-          onClick={onShowAI}
-          aria-label="Open Rentify AI"
-          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[70] flex h-14 w-14 items-center justify-center text-white transition-all duration-300 hover:scale-105 hover:opacity-95 sm:bottom-8 sm:right-10 sm:h-16 sm:w-16"
-        >
-          <img
-            src="/rentify-ai-logo-bubble-optimized.png"
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-contain drop-shadow-xl"
-          />
-          <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-green-400" />
-        </button>
-      )}
+      {onShowAI && <ChatLauncher isOpen={isAIOpen} onOpen={onShowAI} />}
     </>
   );
 }

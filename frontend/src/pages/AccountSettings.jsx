@@ -1026,13 +1026,15 @@ const AccountSettings = ({
         onNavigateToNotifications={onNavigateToNotifications}
         onNavigateToAccountSettings={onNavigateToAccountSettings}
         onNavigateToReports={onNavigateToReports}
+        isAIOpen={showAI}
+        onShowAI={() => setShowAI(true)}
         onLogout={onLogout}
       />
 
       <div className="min-h-screen bg-transparent pt-24">
         <div className="rp-page-shell mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:flex-row">
           <aside className="w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
-            <div className="rp-minimal-card space-y-1 p-5">
+            <div className="rp-account-navigation rp-minimal-card space-y-1 p-5">
               {[
                 { label: "Profile Settings", icon: User },
                 { label: "Change Password", icon: Lock },
@@ -1058,7 +1060,7 @@ const AccountSettings = ({
 
           </aside>
 
-          <main className="flex-1 space-y-8 pb-12">
+          <main className="rp-account-content min-w-0 flex-1 space-y-8 pb-12">
             <div className="rp-page-header mb-6">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
               <p className="text-base text-gray-500 max-w-xl">
@@ -1980,22 +1982,6 @@ const AccountSettings = ({
           </main>
         </div>
       </div>
-
-      {!showAI && (
-        <button
-          onClick={() => setShowAI(true)}
-          aria-label="Open Rentify AI"
-          className="fixed bottom-8 right-10 z-[70] flex h-16 w-16 items-center justify-center transition-all duration-300 hover:scale-105 hover:opacity-95"
-        >
-          <img
-            src="/rentify-ai-logo-bubble-optimized.png"
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-contain drop-shadow-xl"
-          />
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white" />
-        </button>
-      )}
 
       <ChatWidget
         isOpen={showAI}

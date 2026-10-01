@@ -238,7 +238,10 @@ class ChatbotClassifierTests(unittest.TestCase):
             with self.subTest(message=message):
                 result = classify_message(message, "auto")
                 self.assertEqual(result["intent"], intent, result)
-                self.assertEqual(result["entities"], {"brand": brand, "model": model})
+                self.assertEqual(result["entities"]["brand"], brand)
+                self.assertEqual(result["entities"]["model"], model)
+                if "bukas" in message:
+                    self.assertIn("bukas", result["entities"]["requested_schedule"])
 
     def test_tagalog_brand_questions_keep_filipino_language_without_inventing_models(self):
         cases = {
@@ -363,6 +366,230 @@ class ChatbotClassifierTests(unittest.TestCase):
         self.assertEqual(followup["intent"], "available_vehicles")
         self.assertEqual(followup["language"], "taglish")
         self.assertEqual(followup["entities"]["rate_unit"], "day")
+
+
+class ChatbotLanguageAndAvailabilityTests(unittest.TestCase):
+    def test_language_questions_state_actual_supported_languages(self):
+        for message, named_language in [
+            ("do you know spanish?", "Spanish"),
+            ("walang bisaya?", "Bisaya"),
+            ("marunong ka ba mag ilonggo?", "Ilonggo"),
+            ("are you good at ilocano?", "Ilocano"),
+            ("Hindi ka marunong mag Ilokano?", "Ilocano"),
+            ("Bisaya lang please", "Bisaya"),
+            ("Kaya mo mag bisya?", "Bisaya"),
+            ("Can you reply in Spanish?", "Spanish"),
+            ("Can you translate deposit into Spanish?", "Spanish"),
+        ]:
+            with self.subTest(message=message):
+                result = classify_message(message)
+                self.assertEqual(result["intent"], "chat_language_support")
+                self.assertFalse(result["requires_clarification"])
+                self.assertFalse(result["requires_live_data"])
+                self.assertIn(named_language, result["reply"])
+                self.assertIn("English", result["reply"])
+                self.assertIn("Filipino", result["reply"])
+                self.assertIn("Taglish", result["reply"])
+                self.assertNotRegex(result["reply"], r"^(Yes|Oo)\b")
+                self.assertTrue("supported" in result["reply"] or "suportado" in result["reply"])
+        mixed = classify_message("Can you speak Spanish and Tagalog?")
+        self.assertIn("Spanish replies aren't supported", mixed["reply"])
+        self.assertIn("I can reply in Filipino", mixed["reply"])
+        for message in ["What languages do you support?", "Can you speak Tagalog?", "Can you speak Klingon?"]:
+            self.assertEqual(classify_message(message)["intent"], "chat_language_support")
+        directed = classify_message("Reply in Filipino: do you know Spanish?")
+        self.assertEqual(directed["language"], "fil")
+        self.assertIn("Hindi pa suportado", directed["reply"])
+        for message, style in [("Tagalog please", "fil"), ("English lang", "en"), ("Taglish pls", "taglish")]:
+            result = classify_message(message, previous_language="en")
+            self.assertEqual(result["intent"], "chat_language_support")
+            self.assertEqual(result["language"], style)
+
+    def test_unavailable_page_and_list_requests_do_not_recommend_available_cars(self):
+        for message in [
+            "Bakit hindi lumalabas yung unavailable na sasakyan sa vehicles page?",
+            "Why did a vehicle disappear from the available list?",
+        ]:
+            with self.subTest(message=message):
+                result = classify_message(message)
+                self.assertEqual(result["intent"], "vehicle_unavailability")
+                self.assertFalse(result["requires_live_data"])
+                self.assertIn("Vehicles page", result["reply"])
+        for message in ["Show me unavailable cars", "Ipakita ang mga unavailable na sasakyan"]:
+            result = classify_message(message)
+            self.assertEqual(result["intent"], "vehicle_availability_status")
+            self.assertTrue(result["conditions"]["vehicle_status_list"])
+            self.assertTrue(result["requires_live_data"])
+        alternatives = classify_message("Hindi available yung gusto ko. Ano pa pwede?")
+        self.assertEqual(alternatives["intent"], "available_vehicles")
+        self.assertTrue(alternatives["requires_live_data"])
+        self.assertEqual(alternatives["entities"]["brand"], None)
+
+    def test_vehicle_status_preserves_model_and_requires_a_live_lookup(self):
+        for message, model in [
+            ("Is the Honda City currently unavailable?", "City"),
+            ("May Toyota Vios kahit unavailable?", "Vios"),
+            ("Unavailable ba yung Toyota Vios o wala kayong listing?", "Vios"),
+            ("When will Honda City be available again? It is unavailable.", "City"),
+            ("When will Honda City be available again?", "City"),
+        ]:
+            with self.subTest(message=message):
+                result = classify_message(message)
+                self.assertEqual(result["intent"], "vehicle_availability_status")
+                self.assertTrue(result["requires_live_data"])
+                self.assertEqual(result["entities"]["model"], model)
+        for message in ["Are there unavailable vehicles?", "Are all your vehicles unavailable?", "May unavailable bang SUV?"]:
+            result = classify_message(message)
+            self.assertEqual(result["intent"], "vehicle_availability_status")
+            self.assertTrue(result["conditions"]["vehicle_status_overview"])
+        unknown = classify_message("When will the unavailable car be available again?")
+        self.assertEqual(unknown["intent"], "vehicle_availability_status")
+        self.assertTrue(unknown["requires_clarification"])
+        self.assertEqual(unknown["clarification"]["field"], "model")
+        self.assertFalse(unknown["requires_live_data"])
+
+    def test_scope_gate_precedes_brand_and_policy_aliases(self):
+        messages = [
+            "Cancel my Netflix subscription", "Pay my electricity bill with GCash",
+            "How much is Toyota stock?", "How many passengers fit an airplane?",
+            "What are library late book return fees?", "Does flight insurance include travel insurance?",
+            "Do you rent Honda generators?", "Maya savings interest rate?",
+            "How do I drive a manual car?", "How can I get a driver license online?",
+            "Amazon payment methods?", "Generate a poem about renting a Toyota",
+            "Can I extend my student visa?", "How do I book a hotel in Cebu?",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                result = classify_message(message)
+                self.assertEqual(result["intent"], "REJECT")
+                self.assertEqual(result["reason_code"], "outside_scope")
+                self.assertFalse(result["requires_live_data"])
+                self.assertFalse(result["requires_clarification"])
+                self.assertEqual(result["entities"], {"brand": None, "model": None})
+
+    def test_practical_paraphrases_and_textese(self):
+        cases = {
+            "may matic ba kau?": "available_transmission",
+            "pano po mag rent dito": "how_to_book",
+            "pno icancel ung booking q?": "booking_cancellation",
+            "pde iextend ung renta?": "booking_extension",
+            "ano reqs pra maka rent?": "rental_requirements",
+            "di q gets": "unclear_message",
+            "saan makikita status ng booking q": "booking_status",
+            "What do I need before I can hire a vehicle?": "rental_requirements",
+            "May I rent a car on the day I make the request?": "same_day_rental",
+            "Can I have two rentals for the exact same weekend?": "schedule_conflict",
+            "Have I already cleared all my rental payments?": "my_unpaid_balance",
+            "May kulang pa ba sa bayad ko?": "my_unpaid_balance",
+            "Magkano pa kailangan kong bayaran?": "my_unpaid_balance",
+            "Is there any rental currently running on my account?": "my_active_bookings",
+            "Lagpas na ba ako sa oras ng pagsoli?": "my_overdue_return",
+        }
+        for message, intent in cases.items():
+            with self.subTest(message=message):
+                result = classify_message(message)
+                self.assertEqual(result["intent"], intent, result)
+
+    def test_compound_questions_keep_live_rates_payment_and_scope_separate(self):
+        result = classify_message("How much is Toyota Vios per day and can I pay 30% with GCash?")
+        self.assertEqual(result["intent"], "rental_rate")
+        self.assertEqual(result["entities"]["model"], "Vios")
+        self.assertEqual([item["intent"] for item in result["additional_answers"]], ["payment_downpayment", "payment_methods"])
+        mixed = classify_message("What payment methods are supported? How much is Toyota stock?")
+        self.assertEqual(mixed["intent"], "payment_methods")
+        self.assertEqual(mixed["additional_answers"][0]["reason_code"], "outside_scope")
+        unsupported = classify_message("How to book? What payment methods? How to cancel a booking? How to extend a booking?")
+        self.assertEqual(unsupported["intent"], "REJECT")
+        self.assertEqual(unsupported["reason_code"], "too_many_questions")
+
+    def test_search_followups_keep_filters_but_refresh_live_data(self):
+        context = {"intent": "available_vehicles", "entities": {"brand": None, "model": None,
+            "category": "suv", "max_budget": 2000, "currency": "PHP", "transmission": "automatic", "location": "cebu"},
+            "clarification": {"required": True, "type": "missing_entity", "field": "rate_unit"}, "choices": []}
+        daily = classify_message("per day", previous_context=context)
+        self.assertEqual(daily["intent"], "available_vehicles")
+        self.assertEqual(daily["entities"]["location"], "cebu")
+        self.assertEqual(daily["entities"]["rate_unit"], "day")
+        self.assertTrue(daily["requires_live_data"])
+        affirmative = classify_message("yes", previous_context=context)
+        self.assertEqual(affirmative["clarification"]["field"], "rate_unit")
+        self.assertFalse(affirmative["requires_live_data"])
+        context["entities"] = daily["entities"]
+        context["choices"] = [{"brand": "Ford", "model": "Everest"}, {"brand": "Toyota", "model": "Fortuner"}]
+        tomorrow = classify_message("How about tomorrow?", previous_context=context)
+        self.assertEqual(tomorrow["intent"], "available_vehicles")
+        self.assertEqual(tomorrow["entities"]["max_budget"], 2000)
+        first = classify_message("How much is the first one?", previous_context=context)
+        self.assertEqual(first["intent"], "rental_rate")
+        self.assertEqual(first["entities"]["brand"], "Ford")
+        self.assertEqual(first["entities"]["model"], "Everest")
+        changed = classify_message("What about Honda?", previous_context={"intent": "vehicle_brand_search",
+            "entities": {"brand": "Toyota", "model": "Vios"}})
+        self.assertEqual(changed["entities"], {"brand": "Honda", "model": None})
+        fresh = classify_message("How much is Toyota stock?", previous_context=context)
+        self.assertEqual(fresh["reason_code"], "outside_scope")
+        missing = classify_message("third one", previous_context=context)
+        self.assertEqual(missing["reason_code"], "missing_vehicle_choice")
+        self.assertFalse(missing["requires_live_data"])
+        private_text = classify_message("Toyota Vios tomorrow, contact bob@example.com")
+        self.assertEqual(private_text["entities"]["requested_schedule"], "tomorrow")
+        self.assertNotIn("bob", private_text["entities"]["requested_schedule"])
+        stock = classify_message("Do you have Toyota cars in stock?")
+        self.assertNotEqual(stock["reason_code"], "outside_scope")
+
+    def test_negated_transmission_and_brand_order_do_not_change_the_requested_filters(self):
+        result = classify_message("Not manual, show automatic cars instead")
+        self.assertEqual(result["entities"]["transmission"], "automatic")
+        self.assertEqual(result["entities"]["excluded_transmissions"], ["manual"])
+        excluded = classify_message("I don't want Toyota, show Honda instead")
+        self.assertEqual(excluded["entities"]["brand"], "Honda")
+        self.assertEqual(excluded["entities"]["excluded_brands"], ["Toyota"])
+
+    def test_unavailable_status_budget_clarification_retains_overview_and_location(self):
+        initial = classify_message("Are there unavailable SUVs in Cebu under PHP 2000?")
+        self.assertEqual(initial["intent"], "vehicle_availability_status")
+        self.assertEqual(initial["clarification"]["field"], "rate_unit")
+        self.assertFalse(initial["requires_live_data"])
+        followup = classify_message("per day", previous_context={"intent": initial["intent"],
+            "entities": initial["entities"], "clarification": initial["clarification"]})
+        self.assertEqual(followup["intent"], "vehicle_availability_status")
+        self.assertEqual(followup["entities"]["location"], "cebu")
+        self.assertTrue(followup["conditions"]["vehicle_status_overview"])
+        self.assertTrue(followup["requires_live_data"])
+
+    def test_yes_confirms_only_an_explicit_brand_suggestion_and_untrusted_context_is_ignored(self):
+        suggestion = classify_message("toyotaa")
+        yes = classify_message("yes", previous_context={"intent": "REJECT", "entities": suggestion["entities"],
+            "clarification": suggestion["clarification"], "suggested_brand": suggestion["suggested_brand"]})
+        self.assertEqual(yes["entities"]["brand"], "Toyota")
+        self.assertTrue(yes["requires_live_data"])
+        poisoned = classify_message("per day", previous_context={"intent": "my_unpaid_balance", "entities": {"renterId": "someone-else"}})
+        self.assertNotEqual(poisoned["intent"], "my_unpaid_balance")
+        for malformed in [{"intent": []}, {"intent": "available_vehicles", "entities": {"rate_unit": []}}]:
+            self.assertEqual(classify_message("per day", previous_context=malformed)["intent"], "rental_rate")
+        other = classify_message("What is another renter's balance?")
+        self.assertEqual(other["reason_code"], "private_record_scope")
+
+    def test_other_contexts_are_not_promoted_to_vehicle_status(self):
+        for message in ["my payment method is unavailable", "why is my Netflix account unavailable"]:
+            result = classify_message(message)
+            self.assertNotIn(result["intent"], {"vehicle_unavailability", "vehicle_availability_status"})
+        for message in ["does the vehicle owner speak Spanish?", "is the driver Ilonggo?", "may sasakyan ba sa Ilocos?"]:
+            self.assertNotEqual(classify_message(message)["reason_code"], "language_capability")
+
+    def test_topic_and_action_context_rejects_injected_metadata(self):
+        valid = {"intent": "REJECT", "topic": "payment", "entities": {},
+            "clarification": {"required": True, "type": "ambiguous_intent", "field": None},
+            "candidate_intents": ["payment_methods", "payment_downpayment", "unpaid_balance"]}
+        self.assertEqual(classify_message("methods", previous_context=valid)["reason_code"], "clarification_answer")
+        for invalid in [
+            {**valid, "candidate_intents": ["my_unpaid_balance"]},
+            {**valid, "topic": []},
+            {**valid, "conditions": {"paymentAmount": 1}},
+            {**valid, "clarification": {"required": True, "type": [], "field": []}},
+            {**valid, "candidate_intents": [[], "payment_methods"]},
+        ]:
+            self.assertNotEqual(classify_message("methods", previous_context=invalid)["reason_code"], "clarification_answer")
 
 
 if __name__ == "__main__":

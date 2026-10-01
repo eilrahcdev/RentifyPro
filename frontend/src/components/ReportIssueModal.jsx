@@ -6,6 +6,7 @@ import ReportModalFrame from "./ReportModalFrame";
 import EvidenceFilePicker from "./EvidenceFilePicker";
 import ReportReview from "./ReportReview";
 import ReportSubmissionError from "./ReportSubmissionError";
+import AutoResizeTextarea from "./AutoResizeTextarea";
 import useReportSubmission from "../hooks/useReportSubmission";
 import { validateReportEvidenceFiles } from "../utils/fileValidation";
 import { getReportCategoryLabel, validateReportCategory, validateReportDescription } from "../utils/reportValidation";
@@ -97,7 +98,7 @@ function BookingReportForm({ booking, perspective = "renter", onClose, onSubmitt
           <div>
             <label htmlFor="report-description" className="mb-1.5 block text-sm font-semibold text-slate-800">Incident details <span className="font-normal text-slate-500">(required)</span></label>
             <p id="report-description-help" className="mb-1.5 text-xs leading-4 text-slate-500">20–3,000 characters after trimming spaces.</p>
-            <textarea
+            <AutoResizeTextarea
               id="report-description"
               ref={descriptionRef}
               value={description}
@@ -112,9 +113,10 @@ function BookingReportForm({ booking, perspective = "renter", onClose, onSubmitt
                 if (fieldErrors.description) setFieldErrors((current) => ({ ...current, description: validateReportDescription(value) }));
               }}
               onBlur={() => { if (description) setFieldErrors((current) => ({ ...current, description: validateReportDescription(description) })); }}
-              rows={3}
+              minRows={2}
+              maxRows={6}
               placeholder="Explain what happened and when..."
-              className={`block w-full resize-none rounded-xl border px-3 py-2 text-sm leading-5 outline-none focus:ring-4 ${fieldErrors.description ? "border-rose-500 focus:ring-rose-100" : "border-slate-300 focus:border-blue-500 focus:ring-blue-100"}`}
+              className={`block w-full rounded-xl border px-3 py-2 text-sm leading-5 outline-none focus:ring-4 ${fieldErrors.description ? "border-rose-500 focus:ring-rose-100" : "border-slate-300 focus:border-blue-500 focus:ring-blue-100"}`}
             />
             <span id="report-description-count" className="mt-1 block text-right text-xs text-slate-500">{description.trim().length}/3,000 characters</span>
             {fieldErrors.description && <p id="report-description-error" role="alert" className="mt-1.5 text-sm text-rose-700">{fieldErrors.description}</p>}

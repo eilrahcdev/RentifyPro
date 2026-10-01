@@ -13,6 +13,7 @@ import { validateVehicleImageFiles } from "../../utils/fileValidation";
 import OwnerPageHeader from "../components/OwnerPageHeader";
 import HelpLink from "../../components/HelpLink";
 import VehiclePhotoReviews from "../../components/VehiclePhotoReviews";
+import AutoResizeTextarea from "../../components/AutoResizeTextarea";
 import {
   LISTING_LIMITS,
   getPlateNumberLimit,
@@ -365,9 +366,10 @@ function VehicleModal({
 
               <div>
                 <label htmlFor="owner-vehicle-description" className={labelClass}>Description</label>
-                <textarea {...listingInputProps("description")}
-                  className={`${fieldClass("description")} h-auto min-h-24 py-2.5`}
-                  rows={3}
+                <AutoResizeTextarea {...listingInputProps("description")}
+                  className={`${fieldClass("description")} py-2.5`}
+                  minRows={2}
+                  maxRows={6}
                   placeholder="Describe the vehicle condition, notable features, and renter expectations."
                   value={form.description}
                   onChange={(e) => updateField("description", e.target.value)}

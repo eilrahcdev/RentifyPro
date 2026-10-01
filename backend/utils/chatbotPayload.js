@@ -16,6 +16,9 @@ const chatbotConfig = JSON.parse(fs.readFileSync(CHATBOT_CONFIG_PATH, "utf-8"));
 const CHATBOT_MAX_INPUT_LENGTH = Number(chatbotConfig.max_message_length || 500);
 const TOP_RECOMMENDATIONS = Number(chatbotConfig.recommendation_limit || 3);
 const CONFIGURED_VEHICLE_BRANDS = chatbotConfig.vehicle_brands;
+const CHATBOT_TOPICS = chatbotConfig.topics;
+const STATUS_CONDITION_KEYS = new Set(["vehicle_status_overview", "vehicle_status_unavailable", "vehicle_status_list"]);
+const CONTEXT_CONDITION_KEYS = new Set([...STATUS_CONDITION_KEYS, "payment_option_unavailable"]);
 if (!Array.isArray(CONFIGURED_VEHICLE_BRANDS) || CONFIGURED_VEHICLE_BRANDS.length === 0) {
   throw new Error("chatbot_config.json must define a non-empty vehicle_brands array");
 }
@@ -209,7 +212,8 @@ function loadDataset() {
 }
 
 function getIntent(intentId) {
-  return loadDataset().intentsById[intentId] || null;
+  const intents = loadDataset().intentsById;
+  return typeof intentId === "string" && Object.hasOwn(intents, intentId) ? intents[intentId] : null;
 }
 
 function getIntentAnswers(intentId, language) {
@@ -235,7 +239,7 @@ function normalizeVehicleEntities(value) {
   if (typeof value !== "object" || Array.isArray(value)) {
     return { valid: false, value: { brand: null, model: null } };
   }
-  const allowedKeys = new Set(["brand", "model", "category", "max_budget", "currency", "rate_unit", "transmission"]);
+  const allowedKeys = new Set(["brand", "model", "category", "max_budget", "currency", "rate_unit", "transmission", "location", "pax", "excluded_brands", "excluded_transmissions", "requested_schedule"]);
   if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
     return { valid: false, value: { brand: null, model: null } };
   }
@@ -249,20 +253,88 @@ function normalizeVehicleEntities(value) {
   const currency = value.currency == null ? null : cleanText(value.currency).toUpperCase();
   const rateUnit = value.rate_unit == null ? null : cleanText(value.rate_unit).toLowerCase();
   const transmission = value.transmission == null ? null : cleanText(value.transmission).toLowerCase();
+  const location = value.location == null ? null : cleanText(value.location);
+  const schedule = value.requested_schedule == null ? null : cleanText(value.requested_schedule);
+  const excluded = value.excluded_brands ?? [];
+  const excludedTransmissions = value.excluded_transmissions ?? [];
   const valid = (!rawBrand || Boolean(brand)) && (!rawModel || Boolean(model))
     && (category === null || ["sedan", "suv", "van", "pickup", "motorcycle"].includes(category))
     && (maxBudget === null || (Number.isFinite(maxBudget) && maxBudget > 0 && maxBudget <= 10000000))
     && (currency === null || currency === "PHP")
     && (rateUnit === null || ["day", "hour"].includes(rateUnit))
     && (transmission === null || ["automatic", "manual"].includes(transmission))
-    && (maxBudget === null || currency === "PHP");
+    && (maxBudget === null || currency === "PHP")
+    && (location === null || (typeof value.location === "string" && location.length > 0 && location.length <= 80))
+    && (schedule === null || (typeof value.requested_schedule === "string" && schedule.length > 0 && schedule.length <= 100))
+    && (value.pax == null || (Number.isInteger(value.pax) && value.pax >= 1 && value.pax <= 99))
+    && Array.isArray(excluded) && excluded.length <= CONFIGURED_VEHICLE_BRANDS.length
+    && excluded.every((item) => CONFIGURED_VEHICLE_BRANDS.includes(item))
+    && Array.isArray(excludedTransmissions) && excludedTransmissions.length <= 2
+    && excludedTransmissions.every((item) => ["automatic", "manual"].includes(item));
   const normalized = { brand: brand || null, model };
   if (category !== null) normalized.category = category;
   if (maxBudget !== null) normalized.max_budget = maxBudget;
   if (currency !== null) normalized.currency = currency;
   if (rateUnit !== null) normalized.rate_unit = rateUnit;
   if (transmission !== null) normalized.transmission = transmission;
+  if (location !== null) normalized.location = location;
+  if (schedule !== null) normalized.requested_schedule = schedule;
+  if (value.pax != null) normalized.pax = value.pax;
+  if (excluded.length) normalized.excluded_brands = [...new Set(excluded)];
+  if (excludedTransmissions.length) normalized.excluded_transmissions = [...new Set(excludedTransmissions)];
   return { valid, value: normalized };
+}
+
+function normalizeConversationTopic(value, intent) {
+  const topic = value.topic ?? null;
+  const candidates = value.candidate_intents ?? [];
+  const spec = typeof topic === "string" && Object.hasOwn(CHATBOT_TOPICS, topic) ? CHATBOT_TOPICS[topic] : null;
+  const valid = (topic === null || (Boolean(spec) && (intent === "REJECT" || spec.intents.includes(intent))))
+    && Array.isArray(candidates) && candidates.length <= 3
+    && candidates.every((id) => typeof id === "string" && getIntent(id)
+      && (spec ? spec.candidates.includes(id) : ["vehicle_availability_status", "payment_troubleshooting"].includes(id)));
+  return { valid, topic, candidate_intents: valid ? [...new Set(candidates)] : [] };
+}
+
+export function normalizeChatbotConversationContext(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["intent", "entities", "clarification", "choices", "suggested_brand", "topic", "conditions", "candidate_intents"].includes(key))) return null;
+  if (value.intent !== "REJECT" && !getIntent(value.intent)) return null;
+  const entities = normalizeVehicleEntities(value.entities);
+  const clarification = normalizeClarification(value.clarification, Boolean(value.clarification?.required));
+  const choices = value.choices ?? [];
+  const metadata = normalizeConversationTopic(value, value.intent);
+  const conditions = normalizeConditions(value.conditions);
+  if (!entities.valid || !clarification.valid || !metadata.valid || !conditions.valid
+    || Object.keys(conditions.value).some((key) => !CONTEXT_CONDITION_KEYS.has(key))
+    || (Object.keys(conditions.value).some((key) => STATUS_CONDITION_KEYS.has(key)) && !["REJECT", "vehicle_availability_status"].includes(value.intent))
+    || (conditions.value.payment_option_unavailable && !["REJECT", "payment_troubleshooting"].includes(value.intent))
+    || !Array.isArray(choices) || choices.length > TOP_RECOMMENDATIONS) return null;
+  if (value.suggested_brand != null && !CONFIGURED_VEHICLE_BRANDS.includes(value.suggested_brand)) return null;
+  if (choices.some((choice) => !choice || typeof choice !== "object"
+    || Object.keys(choice).some((key) => !["brand", "model"].includes(key))
+    || !CONFIGURED_VEHICLE_BRANDS.includes(choice.brand) || typeof choice.model !== "string"
+    || !choice.model.trim() || choice.model.length > 80)) return null;
+  return { intent: value.intent, entities: entities.value, clarification: clarification.value,
+    ...(metadata.topic ? { topic: metadata.topic } : {}),
+    ...(metadata.candidate_intents.length ? { candidate_intents: metadata.candidate_intents } : {}),
+    ...(Object.keys(conditions.value).length ? { conditions: conditions.value } : {}),
+    choices: choices.map(({ brand, model }) => ({ brand, model })),
+    ...(value.suggested_brand ? { suggested_brand: value.suggested_brand } : {}) };
+}
+
+export function buildChatbotConversationContext(response) {
+  if (response.intent === "REJECT" && response.reason_code !== "brand_spelling_clarification"
+    && !(response.requires_clarification && response.candidate_intents?.length)) return null;
+  return normalizeChatbotConversationContext({
+    intent: response.intent, entities: response.entities,
+    clarification: response.clarification,
+    topic: response.topic, candidate_intents: response.candidate_intents,
+    conditions: Object.fromEntries(Object.entries(response.conditions || {}).filter(([key]) => CONTEXT_CONDITION_KEYS.has(key))),
+    choices: (response.status_choices?.length ? response.status_choices : response.recommendations || []).filter(({ brand, model }) => brand && model)
+      .slice(0, TOP_RECOMMENDATIONS).map(({ brand, model }) => ({ brand, model })),
+    ...(response.suggested_brand ? { suggested_brand: response.suggested_brand } : {}),
+  });
 }
 
 export function normalizePendingVehicleSearch(value) {
@@ -284,7 +356,7 @@ export function normalizePendingVehicleSearch(value) {
 function normalizeConditions(value) {
   if (value == null) return { valid: true, value: {} };
   if (typeof value !== "object" || Array.isArray(value)) return { valid: false, value: {} };
-  const booleanKeys = new Set(["remaining_balance", "payment_after_due_date"]);
+  const booleanKeys = new Set(["remaining_balance", "payment_after_due_date", ...CONTEXT_CONDITION_KEYS]);
   const result = {};
   for (const [key, item] of Object.entries(value)) {
     if (key === "downpayment_percent") {
@@ -310,7 +382,7 @@ function normalizeClarification(value, required) {
 }
 
 function hasSignalSlots(slots = {}) {
-  return Boolean(slots.type || slots.transmission || slots.pax || slots.budget || slots.brand || slots.model);
+  return Boolean(slots.type || slots.transmission || slots.pax || slots.budget || slots.brand || slots.model || slots.location || slots.excluded_brands?.length || slots.excluded_transmissions?.length);
 }
 
 function extractSlots(message) {
@@ -514,16 +586,20 @@ function compareVehicles(a, b, slots) {
   return comparisons.find((value) => value !== 0) || 0;
 }
 
-function filterVehiclesForChatbot(vehicles, slots) {
+function filterVehiclesForChatbot(vehicles, slots, availableOnly = true) {
   const normalized = (Array.isArray(vehicles) ? vehicles : [])
     .map((vehicle) => normalizeVehicleForChatbot(vehicle))
-    .filter((vehicle) => vehicle.isAvailable);
+    .filter((vehicle) => !availableOnly || vehicle.isAvailable);
   const modelResolution = resolveRequestedModelFromLiveVehicles(slots.model, slots.brand, normalized);
   const resolvedSlots = {
     ...slots,
     model: modelResolution.model,
   };
   const strict = normalized.filter((vehicle) => {
+    if (resolvedSlots.excluded_brands?.includes(vehicle.brand)) return false;
+    if (resolvedSlots.excluded_transmissions?.length && (!["automatic", "manual"].includes(vehicle.transmission)
+      || resolvedSlots.excluded_transmissions.includes(vehicle.transmission))) return false;
+    if (resolvedSlots.location && !normalizeText(vehicle.location).includes(normalizeText(resolvedSlots.location))) return false;
     if (resolvedSlots.brand && vehicle.brand !== resolvedSlots.brand) return false;
     if (resolvedSlots.model) {
       const requestedModel = normalizeText(resolvedSlots.model);
@@ -595,9 +671,9 @@ function buildBrandSearchReply(intent, language, payload, recommendations) {
   const total = payload.vehicles.length;
 
   if (!recommendations.length) {
-    if (selectedLanguage === "filipino") return `Wala akong nakitang kasalukuyang listahan ng ${label} na tugma sa paghahanap mo.`;
-    if (selectedLanguage === "taglish") return `Wala akong nakitang currently listed na ${label} vehicle na match sa search mo.`;
-    return `I couldn't find any currently listed ${label} vehicles matching your search.`;
+    if (selectedLanguage === "filipino") return `Wala akong nakitang available na ${label} na tugma sa paghahanap mo. Hindi nito pinapatunayang walang listing; maaaring unavailable ang unit.`;
+    if (selectedLanguage === "taglish") return `Wala akong nakitang available na ${label} vehicle na match sa search mo. This does not confirm that no listing exists; the unit may be unavailable.`;
+    return `I couldn't find any available ${label} vehicles matching your search. This does not confirm that no listing exists; a unit may be unavailable.`;
   }
 
   if (intent === "rental_rate") {
@@ -683,7 +759,8 @@ export function buildChatbotPayload(message, language, vehicles = [], entities =
     type: classifierEntities.category || extracted.type,
     budget: Object.hasOwn(classifierEntities, "max_budget") ? classifierEntities.max_budget : entities ? null : extracted.budget,
     rateUnit: classifierEntities.rate_unit || null,
-    transmission: classifierEntities.transmission || extracted.transmission,
+    transmission: classifierEntities.transmission || (classifierEntities.excluded_transmissions?.length ? "" : extracted.transmission),
+    pax: classifierEntities.pax || extracted.pax,
   };
   const liveVehiclePayload = filterVehiclesForChatbot(vehicles, initialSlots);
   return {
@@ -696,7 +773,7 @@ export function buildChatbotPayload(message, language, vehicles = [], entities =
   };
 }
 
-export function normalizeChatbotResponse(response, fallbackLanguage = DEFAULT_LANGUAGE) {
+export function normalizeChatbotResponse(response, fallbackLanguage = DEFAULT_LANGUAGE, depth = 0) {
   if (!response || typeof response !== "object") {
     return { valid: false, intent: "REJECT", score: 0, reply: "", alternatives: [], recommendations: [] };
   }
@@ -715,8 +792,15 @@ export function normalizeChatbotResponse(response, fallbackLanguage = DEFAULT_LA
   const intentValid = intent === "REJECT" || Boolean(getIntent(intent));
   const scoreValid = Number.isFinite(score) && score >= 0 && score <= 1;
   const languageValid = SUPPORTED_REPLY_STYLES.has(language);
+  const rawAdditional = response.additional_answers ?? [];
+  const additional = Array.isArray(rawAdditional) && rawAdditional.length <= 2 && (depth === 0 || rawAdditional.length === 0)
+    ? rawAdditional.map((item) => normalizeChatbotResponse(item, language, depth + 1)) : null;
+  const questionValid = response.question == null || (typeof response.question === "string" && response.question.length <= CHATBOT_MAX_INPUT_LENGTH);
+  const suggestionValid = response.suggested_brand == null || CONFIGURED_VEHICLE_BRANDS.includes(response.suggested_brand);
+  const metadata = normalizeConversationTopic(response, intent);
   const valid = intentValid && scoreValid && languageValid && alternativesValid
-    && normalizedEntities.valid && normalizedConditions.valid && clarification.valid;
+    && normalizedEntities.valid && normalizedConditions.valid && clarification.valid
+    && questionValid && suggestionValid && metadata.valid && additional !== null && additional.every((item) => item.valid);
   return {
     ...response,
     valid,
@@ -730,11 +814,15 @@ export function normalizeChatbotResponse(response, fallbackLanguage = DEFAULT_LA
     alternatives: alternatives.filter(Boolean),
     top_preds: Array.isArray(response.top_preds) ? response.top_preds : [],
     recommendations: [],
+    status_choices: [],
     requires_clarification: Boolean(response.requires_clarification),
     reason_code: cleanText(response.reason_code || response.decision_reason),
     entities: normalizedEntities.value,
     conditions: normalizedConditions.value,
     clarification: clarification.value,
+    topic: metadata.topic,
+    candidate_intents: metadata.candidate_intents,
+    additional_answers: additional || [],
   };
 }
 
@@ -762,13 +850,21 @@ export function buildRejectedChatbotResponse(language, reason = "fallback", repl
 export function applyChatbotGuardrails(response, payload) {
   const normalized = normalizeChatbotResponse(response, payload.selectedLanguage);
   if (!normalized.valid) return buildRejectedChatbotResponse(payload.selectedLanguage, "malformed_classifier");
+  if (normalized.intent === "vehicle_availability_status" && !normalized.entities.brand
+    && !normalized.conditions.vehicle_status_overview
+    && !(normalized.clarification?.field === "rate_unit" && normalized.entities.max_budget)) {
+    const reply = getIntent(normalized.intent).clarification[normalized.language];
+    return { ...normalized, reply, recommendations: [], requires_live_data: false,
+      requires_clarification: true, reason_code: "missing_vehicle",
+      clarification: { required: true, type: "missing_entity", field: "model" } };
+  }
   if (normalized.intent !== "REJECT" && normalized.clarification?.type === "missing_entity") {
     return { ...normalized, reply: normalized.reply, recommendations: [], requires_live_data: false };
   }
   if (normalized.intent === "REJECT" || normalized.requires_clarification) {
     const rejected = buildRejectedChatbotResponse(
       LANGUAGE_NAME_BY_CODE[normalized.language] || payload.selectedLanguage,
-      "clarification",
+      normalized.requires_clarification ? "clarification" : normalized.reason_code || "fallback",
       normalized.reply
     );
     return {
@@ -781,6 +877,10 @@ export function applyChatbotGuardrails(response, payload) {
       entities: normalized.entities,
       conditions: normalized.conditions,
       clarification: normalized.clarification,
+      requires_clarification: normalized.requires_clarification,
+      suggested_brand: normalized.suggested_brand,
+      topic: normalized.topic,
+      candidate_intents: normalized.candidate_intents,
     };
   }
 
@@ -801,6 +901,13 @@ export function applyChatbotGuardrails(response, payload) {
   }
   const canonicalReply = getCanonicalAnswer(normalized.intent, selectedLanguage);
   let reply = CONVERSATIONAL_INTENTS.has(normalized.intent) ? normalized.reply || canonicalReply : canonicalReply || normalized.reply;
+  if (normalized.intent === "payment_troubleshooting" && normalized.conditions.payment_option_unavailable) {
+    reply = {
+      english: "I can't verify a payment-provider outage here. Open your booking's checkout to see the payment methods currently offered. If an option is missing or fails, use another method offered there. If you were already charged, check the booking's payment status before paying again. Use Report issue on the booking if the problem continues; don't share passwords, OTPs, or full card details.",
+      filipino: "Hindi ko makukumpirma rito kung may outage ang payment provider. Buksan ang checkout ng booking para makita ang kasalukuyang payment methods. Kung wala o pumalya ang isang option, pumili ng ibang inaalok doon. Kung nabawasan ka na, tingnan muna ang payment status bago muling magbayad. Gamitin ang Report issue kung patuloy ang problema; huwag ibigay ang password, OTP, o buong card details.",
+      taglish: "I can't verify a payment-provider outage here. Open your booking checkout para makita ang currently offered methods. If an option is missing or fails, choose another method offered there. Kung charged ka na, check the booking payment status before paying again. Use Report issue if the problem continues; don't share passwords, OTPs, or full card details.",
+    }[selectedLanguage];
+  }
   let recommendations = [];
   if (RECOMMENDATION_INTENTS.has(normalized.intent) || (normalized.intent === "rental_rate" && payload.slots.brand)) {
     recommendations = payload.vehicles.slice(0, TOP_RECOMMENDATIONS);
@@ -817,6 +924,13 @@ export function applyChatbotGuardrails(response, payload) {
     };
     reply = dueReplies[selectedLanguage];
   }
+  if ((RECOMMENDATION_INTENTS.has(normalized.intent) || normalized.intent === "rental_rate") && normalized.entities.requested_schedule) {
+    reply += {
+      english: " Availability for the requested dates is not confirmed. Select both pickup and return dates and times on the vehicle page; the booking checks the schedule before accepting a request.",
+      filipino: " Hindi pa kumpirmado ang availability sa hiniling na petsa. Piliin ang pickup at return dates at oras sa vehicle page; sinusuri ang schedule bago tanggapin ang request.",
+      taglish: " Hindi pa confirmed ang availability for your dates. Select pickup and return dates and times sa vehicle page; the booking checks the schedule before accepting a request.",
+    }[selectedLanguage];
+  }
   return {
     ...normalized,
     reply,
@@ -832,6 +946,90 @@ export function applyChatbotGuardrails(response, payload) {
     requires_live_data: Boolean(datasetIntent?.requires_live_data),
     live_source: cleanText(datasetIntent?.live_source),
   };
+}
+
+export function fulfillVehicleAvailabilityStatus(response, vehicles) {
+  const normalized = normalizeChatbotResponse(response);
+  if (!normalized.valid || normalized.intent !== "vehicle_availability_status") {
+    return buildRejectedChatbotResponse(normalized.language, "malformed_classifier");
+  }
+  if (normalized.requires_clarification) return normalized;
+  if (!normalized.entities.brand && !normalized.conditions.vehicle_status_overview) {
+    return applyChatbotGuardrails(normalized, buildChatbotPayload("", normalized.language));
+  }
+  const entities = normalized.entities;
+  const matches = filterVehiclesForChatbot(vehicles, {
+    brand: entities.brand, model: entities.model, type: entities.category,
+    transmission: entities.transmission, location: entities.location, pax: entities.pax,
+    budget: entities.max_budget, rateUnit: entities.rate_unit,
+    excluded_brands: entities.excluded_brands, excluded_transmissions: entities.excluded_transmissions,
+  }, false);
+  const style = normalized.language;
+  const result = (reply, reason, clarification = null) => ({
+    ...normalized, reply, reason_code: reason, recommendations: [],
+    requires_live_data: true,
+    requires_clarification: Boolean(clarification),
+    clarification: clarification || { required: false, type: null, field: null },
+  });
+  const askWhich = (reason, labels) => result({
+    en: `${labels ? `I found multiple matching listings: ${labels}. ` : ""}Which vehicle or listing do you mean?`,
+    fil: `${labels ? `May magkakatugmang listing: ${labels}. ` : ""}Aling sasakyan o listing ang tinutukoy mo?`,
+    taglish: `${labels ? `May multiple matching listings: ${labels}. ` : ""}Which vehicle or listing ang tinutukoy mo?`,
+  }[style], reason, { required: true, type: "ambiguous_entity", field: "model" });
+  if (matches.modelCandidates.length > 1) {
+    return askWhich("ambiguous_vehicle_model", joinNaturalList(matches.modelCandidates, LANGUAGE_NAME_BY_CODE[style]));
+  }
+  const items = matches.vehicles;
+  if (!items.length) {
+    return result({
+      en: normalized.conditions.vehicle_status_overview ? "There are no current vehicle listings matching those filters. Try changing your search filters." : "I couldn't find a matching current vehicle listing. Try the exact vehicle name or listing.",
+      fil: normalized.conditions.vehicle_status_overview ? "Walang kasalukuyang vehicle listings na tugma sa filters na iyon. Subukang baguhin ang search filters." : "Wala akong nakitang kasalukuyang listing na tugma. Subukan ang eksaktong pangalan o listing ng sasakyan.",
+      taglish: normalized.conditions.vehicle_status_overview ? "No current vehicle listings match those filters. Try changing your search filters." : "Wala akong nakitang matching current vehicle listing. Try the exact vehicle name or listing.",
+    }[style], "vehicle_status_not_found");
+  }
+  if (normalized.conditions.vehicle_status_overview) {
+    const available = items.filter((vehicle) => vehicle.isAvailable).length;
+    const unavailable = items.length - available;
+    if (normalized.conditions.vehicle_status_list) {
+      const listed = normalized.conditions.vehicle_status_unavailable ? items.filter((vehicle) => !vehicle.isAvailable) : items;
+      const labels = listed.slice(0, TOP_RECOMMENDATIONS).map((vehicle) =>
+        `${vehicle.name} (${vehicle.isAvailable ? "available" : "unavailable"})`);
+      const names = joinNaturalList(labels, LANGUAGE_NAME_BY_CODE[style]);
+      const remaining = Math.max(0, listed.length - labels.length);
+      const publicChoices = listed.slice(0, TOP_RECOMMENDATIONS);
+      return { ...result({
+        en: `${listed.length ? `Current matching listings: ${names}${remaining ? `; ${remaining} more` : ""}.` : "There are no currently unavailable listings matching those filters."} The Vehicles page shows only available vehicles. These status results do not confirm availability for future dates.`,
+        fil: `${listed.length ? `Kasalukuyang listings na tugma: ${names}${remaining ? `; ${remaining} pa` : ""}.` : "Walang unavailable listings na tugma sa filters ngayon."} Available lamang ang nasa Vehicles page. Hindi nito kinukumpirma ang availability sa susunod na petsa.`,
+        taglish: `${listed.length ? `Current matching listings: ${names}${remaining ? `; ${remaining} more` : ""}.` : "No currently unavailable listings match those filters."} Available vehicles lang ang nasa Vehicles page. Future-date availability is not confirmed by these status results.`,
+      }[style], "vehicle_status_list"),
+        status_choices: publicChoices.every((vehicle) => vehicle.brand && vehicle.model)
+          ? publicChoices.map(({ brand, model }) => ({ brand, model })) : [],
+      };
+    }
+    return result({
+      en: `There are ${unavailable} currently unavailable and ${available} available matching vehicle listings. The Vehicles page shows only available vehicles. I can't confirm a future availability date from the current status alone.`,
+      fil: `May ${unavailable} unavailable at ${available} available na magkakatugmang vehicle listing ngayon. Available lamang ang nasa Vehicles page. Hindi makukumpirma ang petsa ng muling availability mula sa kasalukuyang status lamang.`,
+      taglish: `May ${unavailable} currently unavailable and ${available} available matching vehicle listings. The Vehicles page only shows available vehicles. Current status alone cannot confirm a future availability date.`,
+    }[style], "vehicle_status_overview");
+  }
+  if (items.length > 1) {
+    return askWhich("ambiguous_vehicle_listing", joinNaturalList(
+      items.slice(0, TOP_RECOMMENDATIONS).map((vehicle) => vehicle.name), LANGUAGE_NAME_BY_CODE[style]
+    ));
+  }
+  const vehicle = items[0];
+  if (vehicle.isAvailable) {
+    return result({
+      en: `${vehicle.name} is currently available. Provide your pickup and return schedule to check your dates. If it is missing from the Vehicles page, check your search filters.`,
+      fil: `Available ngayon ang ${vehicle.name}. Ibigay ang pickup at return schedule para matingnan ang napili mong petsa. Kung wala ito sa Vehicles page, tingnan ang search filters mo.`,
+      taglish: `${vehicle.name} is currently available. Provide your pickup and return schedule to check your dates. Check your search filters if it is missing from the Vehicles page.`,
+    }[style], "vehicle_status_available");
+  }
+  return result({
+    en: `${vehicle.name} has a current listing but is unavailable, so it is hidden from the available Vehicles page and cannot be recommended for booking. I can't confirm when it will be available again; check with the owner through RentifyPro.`,
+    fil: `May kasalukuyang listing ang ${vehicle.name}, pero unavailable ito kaya hindi lumalabas sa available Vehicles page at hindi inirerekomenda para i-book. Hindi ko makukumpirma kung kailan ito magiging available; makipag-ugnayan sa owner sa RentifyPro.`,
+    taglish: `${vehicle.name} has a current listing but is unavailable, kaya hidden sa available Vehicles page at hindi booking recommendation. I can't confirm when it will be available again; check with the owner through RentifyPro.`,
+  }[style], "vehicle_status_unavailable");
 }
 
 export function getChatbotDatasetInfo() {

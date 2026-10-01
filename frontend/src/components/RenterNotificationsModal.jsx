@@ -141,10 +141,10 @@ export default function RenterNotificationsModal({
     <div className="rp-modal-layer">
       <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close notifications dialog" />
       <div
-        className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-[0_25px_80px_rgba(15,23,42,0.25)] overflow-hidden"
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Today&apos;s Notifications</h2>
             <p className="text-xs text-slate-500">
@@ -160,7 +160,7 @@ export default function RenterNotificationsModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 max-h-[55vh] overflow-y-auto">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
           {notificationsError && <p className="text-sm text-rose-600 mb-3">{notificationsError}</p>}
           {!notificationsLoading && !notificationsError && dailyNotifications.length === 0 && (
             <p className="text-sm text-slate-600">
@@ -198,7 +198,7 @@ export default function RenterNotificationsModal({
           </div>}
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
           <button
             onClick={handleMarkAllAsRead}
             disabled={!unreadDailyCount || notificationsUpdating}

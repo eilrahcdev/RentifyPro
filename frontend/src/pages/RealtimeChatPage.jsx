@@ -599,7 +599,7 @@ export default function RealtimeChatPage({
   const isShowingThread = !isMobileView || !showConversationList;
 
   return (
-    <div className="min-h-screen">
+    <div className="rp-renter-page min-h-screen">
       <Navbar
         activePage=""
         isLoggedIn={isLoggedIn}

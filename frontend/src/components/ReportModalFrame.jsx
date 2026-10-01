@@ -62,7 +62,7 @@ export default function ReportModalFrame({
         aria-busy={submitting}
         onCancel={(event) => { event.preventDefault(); dismiss(); }}
         onKeyDown={trapFocus}
-        className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto bg-transparent p-0 text-slate-900 backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm"
+        className="rp-report-dialog fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto bg-transparent p-0 text-slate-900 backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm"
       >
         <div className="flex min-h-full items-center justify-center p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
           <form

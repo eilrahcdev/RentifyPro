@@ -4,6 +4,7 @@ import App from "./App";
 import ActionToastHost from "./components/ActionToast";
 import "./index.css";
 import "./components/VehicleImageFrame.css";
+import "./responsive.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -77,7 +77,7 @@ function BookingCardSkeleton() {
     <article className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-4">
-          <Block className="h-20 w-24 shrink-0 !rounded-2xl sm:h-24 sm:w-32" />
+          <Block className="rp-booking-thumbnail h-20 w-24 shrink-0 !rounded-2xl sm:h-24 sm:w-32" />
           <div className="min-w-0 flex-1 space-y-2 py-1">
             <Block className="h-3 w-24" />
             <Block className="h-6 w-44 max-w-full" />
@@ -89,7 +89,7 @@ function BookingCardSkeleton() {
           <Block className="h-7 w-20 !rounded-full" />
         </div>
       </div>
-      <div className="mt-5 grid gap-3 border-t border-neutral-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-2 border-t border-neutral-200 pt-5 sm:gap-3 xl:grid-cols-4">
         {[0, 1, 2, 3].map((item) => (
           <div key={item} className="space-y-2 rounded-xl bg-neutral-100 p-3">
             <Block className="h-3 w-16" />
@@ -97,7 +97,8 @@ function BookingCardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="mt-5 flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
+      <Block className="mt-2 h-11 w-full" />
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
         <Block className="h-11 w-28" />
         <Block className="h-11 w-24" />
       </div>

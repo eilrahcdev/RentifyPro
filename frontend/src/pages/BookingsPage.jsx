@@ -1,4 +1,5 @@
 import VehicleThumbnail from "../components/VehicleThumbnail";
+import BookingDetails, { BookingInfo as Info } from "../components/BookingDetails";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RequestFeedback from "../components/RequestFeedback";
 import { BookingListSkeleton } from "../components/LoadingSkeletons";
@@ -16,6 +17,7 @@ import {
   Pencil,
   RefreshCw,
   Send,
+  Star,
   Trash2,
   WalletCards,
   X,
@@ -25,6 +27,7 @@ import { getSocket } from "../utils/socket";
 import Navbar from "../components/Navbar";
 import HelpLink from "../components/HelpLink";
 import BookingAccessModal from "../components/BookingAccessModal";
+import BookingReviewModal from "../components/BookingReviewModal";
 import ChatWidget from "../components/ChatWidget";
 import { requestLiveCountersRefresh } from "../utils/liveCounters";
 import { getTransactionFee } from "../utils/fees";
@@ -43,6 +46,7 @@ import { resolveAssetUrl } from "../utils/media";
 import ReportIssueModal from "../components/ReportIssueModal";
 import MessageReportModal from "../components/MessageReportModal";
 import ChatMessageInput from "../components/ChatMessageInput";
+import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import ModalPortal from "../components/ModalPortal";
 import PaymentSuccessToast from "../components/PaymentSuccessToast";
 import { showActionToast } from "../utils/actionToast";
@@ -61,6 +65,18 @@ const CURRENT_BOOKING_STATUSES = ["pending", "confirmed", "extended"];
 const ACTIVE_BOOKING_STATUSES = ["confirmed", "extended"];
 const PAST_BOOKING_STATUSES = ["completed", "cancelled", "rejected"];
 const BOOKING_NAVIGATION_STORAGE_KEY = "rentifypro:booking-navigation";
+const REVIEW_PROMPT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+const reviewPromptKey = (userId, bookingId) => `rentifypro:review-prompt:${userId}:${bookingId}`;
+
+const isRecentReturnedBooking = (booking) => {
+  if (booking?.status !== "completed" || booking?.reviewRating || !booking?.actualReturnAt) return false;
+  const returnedAt = new Date(booking.actualReturnAt).getTime();
+  const age = Date.now() - returnedAt;
+  return Number.isFinite(age) && age >= 0 && age <= REVIEW_PROMPT_WINDOW_MS &&
+    getOutstandingBalance(booking) <= 0 &&
+    !["requested", "approved"].includes(getWalkInStatus(booking));
+};
 
 const getInitialBookingView = () => {
   try {
@@ -369,7 +385,10 @@ export default function BookingsPage({
   const [bookingClock, setBookingClock] = useState(() => Date.now());
   const [bookingPage, setBookingPage] = useState({ hasMore: false, nextCursor: null });
   const [loadingMore, setLoadingMore] = useState(false);
-  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [reviewPromptCandidates, setReviewPromptCandidates] = useState([]);
+  const [reviewPromptBooking, setReviewPromptBooking] = useState(null);
+  const seenReviewPromptKeys = useRef(new Set());
+  const autoReviewPromptShownForUser = useRef("");
   const [reportBooking, setReportBooking] = useState(null);
   const [reportNotice, setReportNotice] = useState("");
   const [chatReportMessage, setChatReportMessage] = useState(null);
@@ -392,6 +411,7 @@ export default function BookingsPage({
   const [paymentRetrySignal, setPaymentRetrySignal] = useState(0);
   const [paymentErrors, setPaymentErrors] = useState({});
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
+  const arrivedFromPayment = useRef(Boolean(new URLSearchParams(window.location.search).get("payment")));
   const toastedCheckoutIds = useRef(new Set());
   const [approvalModalBooking, setApprovalModalBooking] = useState(null);
   const [paymentConfirmBooking, setPaymentConfirmBooking] = useState(null);
@@ -412,6 +432,18 @@ export default function BookingsPage({
   const [showAI, setShowAI] = useState(false);
   const currentUserId = user?._id || getSessionUser()?._id || "";
 
+  const hasSeenReviewPrompt = useCallback((bookingId) => {
+    const key = reviewPromptKey(currentUserId, bookingId);
+    if (seenReviewPromptKeys.current.has(key)) return true;
+    try { return window.localStorage.getItem(key) === "1"; } catch { return false; }
+  }, [currentUserId]);
+
+  const markReviewPromptSeen = useCallback((bookingId) => {
+    const key = reviewPromptKey(currentUserId, bookingId);
+    seenReviewPromptKeys.current.add(key);
+    try { window.localStorage.setItem(key, "1"); } catch { /* The card action remains available. */ }
+  }, [currentUserId]);
+
   useEffect(() => {
     const timer = window.setInterval(() => setBookingClock(Date.now()), 30000);
     return () => window.clearInterval(timer);
@@ -426,7 +458,7 @@ export default function BookingsPage({
     try {
       const bookingResponse = await API.getMyBookings({
         view: statusFilter,
-        limit: 10,
+        limit: window.matchMedia("(max-width: 767px)").matches ? 5 : 10,
         ...(cursor ? { cursor } : {}),
       });
       if (sequence !== requestSequence.current) return;
@@ -444,6 +476,15 @@ export default function BookingsPage({
       }
     }
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !currentUserId) return undefined;
+    let active = true;
+    API.getMyBookings({ view: "history", limit: 10 })
+      .then((response) => { if (active) setReviewPromptCandidates(response.bookings || []); })
+      .catch(() => { if (active) setReviewPromptCandidates([]); });
+    return () => { active = false; };
+  }, [isLoggedIn, currentUserId]);
 
   const upsertBooking = (incomingBooking) => {
     if (!incomingBooking?._id) return;
@@ -564,6 +605,29 @@ export default function BookingsPage({
   const activePaymentRecovery = recoveryBookingPaid ? null : paymentRecovery;
 
   useEffect(() => {
+    if (!isLoggedIn || !currentUserId || loading || loadError || reviewPromptBooking ||
+      autoReviewPromptShownForUser.current === currentUserId ||
+      arrivedFromPayment.current || activePaymentRecovery || paymentSuccessToast ||
+      paymentConfirmBooking || payingBookingId || verifyingBookingId ||
+      approvalModalBooking || cancellationModalBooking || extensionModalBooking ||
+      reportBooking || chatReportMessage || chatBooking || showAI) return;
+
+    const byId = new Map(reviewPromptCandidates.map((booking) => [String(booking._id), booking]));
+    bookings.forEach((booking) => byId.set(String(booking._id), booking));
+    const candidate = [...byId.values()]
+      .filter((booking) => isRecentReturnedBooking(booking) && !hasSeenReviewPrompt(booking._id))
+      .sort((a, b) => new Date(b.actualReturnAt) - new Date(a.actualReturnAt))[0];
+    if (!candidate) return;
+    autoReviewPromptShownForUser.current = currentUserId;
+    markReviewPromptSeen(candidate._id);
+    setReviewPromptBooking(candidate);
+  }, [isLoggedIn, currentUserId, loading, loadError, reviewPromptBooking, activePaymentRecovery,
+    paymentSuccessToast,
+    paymentConfirmBooking, payingBookingId, verifyingBookingId, approvalModalBooking,
+    cancellationModalBooking, extensionModalBooking, reportBooking, chatReportMessage,
+    chatBooking, showAI, bookings, reviewPromptCandidates, hasSeenReviewPrompt, markReviewPromptSeen]);
+
+  useEffect(() => {
     if (!recoveryBookingPaid || !paymentRecovery) return;
     setPaymentRecovery(null);
     setPaymentSuccessToast((current) => current?.kind === "retry" ? null : current);
@@ -594,25 +658,6 @@ export default function BookingsPage({
       setError(err.message || "Failed to cancel booking.");
     } finally {
       setCancellingBookingId("");
-    }
-  };
-
-  const submitReview = async (bookingId) => {
-    const draft = reviewDrafts[bookingId];
-    if (!draft || !draft.rating) return;
-
-    try {
-      const response = await API.reviewBooking(bookingId, {
-        rating: Number(draft.rating),
-        comment: draft.comment || "",
-      });
-      if (response?.success === false) throw new Error(response.message || "Failed to submit review.");
-      setBookings((prev) =>
-        prev.map((booking) => (booking._id === bookingId ? response.booking : booking))
-      );
-      showActionToast("Review submitted.", { id: `renter-review-${bookingId}` });
-    } catch (err) {
-      setError(err.message || "Failed to submit review.");
     }
   };
 
@@ -1164,7 +1209,9 @@ export default function BookingsPage({
         <div className="rp-page-header rp-bookings-page-header">
           <h1 className="rp-bookings-page-header__title text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">My bookings</h1>
           <p className="rp-bookings-page-header__description text-sm text-slate-500">Manage your reservations, payments, and trip updates.</p>
-          <HelpLink guide="booking-payments" className="rp-bookings-page-header__help">Need help with payments?</HelpLink>
+          <div className="rp-bookings-page-header__help rp-ai-booking-help">
+            <HelpLink guide="booking-payments">Need help with payments?</HelpLink>
+          </div>
           <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => load({ background: true })} className="rp-bookings-page-header__refresh inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50" aria-label={refreshing ? "Refreshing bookings" : "Refresh bookings"}>
             <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
             <span className="rp-bookings-page-header__refresh-label">{refreshing ? "Refreshing..." : "Refresh"}</span>
@@ -1253,6 +1300,10 @@ export default function BookingsPage({
             );
             const canResolveOverdue =
               lateReturnInfo.isOverdue && ["confirmed", "extended"].includes(String(booking.status || "").toLowerCase());
+            const hasSettledLateReturn =
+              String(booking.status || "").toLowerCase() === "completed" &&
+              String(booking.paymentStatus || "").toLowerCase() === "paid" &&
+              getOutstandingBalance(booking) <= 0;
             const pickupAtMs = booking.pickupAt ? new Date(booking.pickupAt).getTime() : Number.NaN;
             const canRequestVehicleReturn =
               ["confirmed", "extended"].includes(String(booking.status || "").toLowerCase()) &&
@@ -1264,11 +1315,11 @@ export default function BookingsPage({
             <article key={booking._id} className="rp-booking-card group overflow-hidden p-4 sm:p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 gap-4">
-                  <VehicleThumbnail vehicle={booking.vehicle} className="h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 shadow-inner sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
+                  <VehicleThumbnail vehicle={booking.vehicle} className="rp-booking-thumbnail h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 shadow-inner sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
                   <div className="min-w-0 py-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#017FE6]">Rental booking</p>
-                    <h2 className="mt-1 truncate text-xl font-bold text-slate-900">{booking.vehicle?.name || "Vehicle"}</h2>
-                    <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-slate-500"><MapPin size={16} strokeWidth={2} className="text-slate-400" aria-hidden="true" /> {booking.vehicle?.location || "Location to be confirmed"}</p>
+                    <h2 className="rp-booking-vehicle-title mt-1 font-bold text-slate-900">{booking.vehicle?.name || "Vehicle"}</h2>
+                    <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-600"><MapPin size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" /><span className="min-w-0 break-words">{booking.vehicle?.location || "Location to be confirmed"}</span></p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 md:justify-end">
@@ -1311,10 +1362,16 @@ export default function BookingsPage({
 
               <p className="mt-3 text-sm text-slate-600">{bookingGuidance(booking)}</p>
               {booking.status === "rejected" && <button type="button" onClick={onNavigateToVehicles} className="mt-2 text-sm font-semibold text-blue-700 underline">Browse other vehicles</button>}
-              <div className="mt-5 grid grid-cols-1 gap-3 border-y border-slate-100 py-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <BookingDetails summary={<>
                 <Info icon={CalendarDays} title="Pickup" value={formatDate(booking.pickupAt)} />
                 <Info icon={CalendarDays} title="Return" value={formatDate(booking.returnAt)} />
                 <Info icon={Clock3} title="Duration" value={formatDurationMinutes(getBookingDurationMinutesForPricing(booking))} />
+                <Info
+                  icon={WalletCards}
+                  title={isEstimatedLatePenalty ? "Estimated Amount Payable" : "Amount Payable"}
+                  value={moneyWithCents(displayedAmountPayable)}
+                />
+              </>}>
                 <Info
                   title="Vehicle Rate"
                   value={`${money(booking.vehicleHourlyRate ?? booking.vehicleDailyRate)} / hr`}
@@ -1333,14 +1390,9 @@ export default function BookingsPage({
                   value={moneyWithCents(displayedLatePenalty)}
                 />
                 <Info title="Transaction Fee" value={moneyWithCents(getBookingTransactionFee(booking))} />
-                <Info
-                  icon={WalletCards}
-                  title={isEstimatedLatePenalty ? "Estimated Amount Payable" : "Amount Payable"}
-                  value={moneyWithCents(displayedAmountPayable)}
-                />
-              </div>
+              </BookingDetails>
 
-              {lateReturnInfo.isOverdue && (
+              {lateReturnInfo.isOverdue && !hasSettledLateReturn && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                   Late return detected: overdue by {formatDurationMinutes(lateReturnInfo.overdueMinutes)}.
                   {lateReturnInfo.penaltyFee > 0
@@ -1366,9 +1418,9 @@ export default function BookingsPage({
                 <p className="mt-3 text-sm text-slate-600">Owner note: {returnRequestInfo.reviewNote}</p>
               )}
 
-              <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-                <div className="mr-auto flex min-w-0 max-w-full items-center gap-2">
-                  <span className="min-w-0 truncate text-sm text-slate-600">
+              <div className="rp-booking-actions mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+                <div className="rp-booking-contact mr-auto flex min-w-0 max-w-full items-center gap-2">
+                  <span className="min-w-0 break-words text-sm text-slate-600">
                     Owner: <span className="font-medium text-slate-900">{ownerDisplayName}</span>
                   </span>
                   <button
@@ -1450,53 +1502,18 @@ export default function BookingsPage({
                 )}
 
                 {booking.status === "completed" && !booking.reviewRating && (
-                  <>
-                    <select
-                      className="border rounded-lg px-2 py-2 text-sm"
-                      value={reviewDrafts[booking._id]?.rating || ""}
-                      onChange={(e) =>
-                        setReviewDrafts((prev) => ({
-                          ...prev,
-                          [booking._id]: {
-                            ...prev[booking._id],
-                            rating: e.target.value,
-                          },
-                        }))
-                      }
-                    >
-                      <option value="">Rating</option>
-                      {[5, 4, 3, 2, 1].map((rating) => (
-                        <option key={rating} value={rating}>
-                          {rating}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="border rounded-lg px-3 py-2 text-sm min-w-[220px]"
-                      placeholder="Leave a review"
-                      value={reviewDrafts[booking._id]?.comment || ""}
-                      onChange={(e) =>
-                        setReviewDrafts((prev) => ({
-                          ...prev,
-                          [booking._id]: {
-                            ...prev[booking._id],
-                            comment: e.target.value,
-                          },
-                        }))
-                      }
-                    />
-                    <button
-                      onClick={() => submitReview(booking._id)}
-                      className="px-3 py-2 rounded-lg bg-[#017FE6] text-white text-sm"
-                    >
-                      Submit Review
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => { markReviewPromptSeen(booking._id); setReviewPromptBooking(booking); }}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#017FE6] px-4 text-sm font-semibold text-white hover:bg-[#006cc3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                  >
+                    <Star size={17} strokeWidth={2} aria-hidden="true" /> Rate this rental
+                  </button>
                 )}
 
                 {booking.reviewRating && (
-                  <span className="text-sm text-green-700">
-                    Review submitted: {booking.reviewRating}/5
+                  <span className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-emerald-800">
+                    <Star size={16} strokeWidth={2} fill="currentColor" aria-hidden="true" /> Your review: {booking.reviewRating}/5
                   </span>
                 )}
 
@@ -1529,7 +1546,7 @@ export default function BookingsPage({
               type="button"
               onClick={() => load({ cursor: bookingPage.nextCursor, append: true })}
               disabled={loadingMore}
-              className="rounded-lg border border-[#017FE6] px-4 py-2 text-sm font-medium text-[#017FE6] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-[#017FE6] px-4 py-2 text-sm font-medium text-[#017FE6] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loadingMore ? "Loading..." : "Load more"}
             </button>
@@ -1544,7 +1561,7 @@ export default function BookingsPage({
             onClick={closeChatModal}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="flex w-full max-w-2xl max-h-[86vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)] flex-col">
+            <div className="flex w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)] flex-col">
               <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1836,7 +1853,7 @@ export default function BookingsPage({
             onClick={() => setApprovalModalBooking(null)}
           />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+            <div className="rp-booking-dialog relative w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
               <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
                 <h3 className="text-lg font-semibold text-slate-900">Payment Not Available Yet</h3>
                 <p className="text-sm text-slate-600 mt-1">
@@ -1875,7 +1892,7 @@ export default function BookingsPage({
               onClick={payingBookingId ? undefined : () => setPaymentConfirmBooking(null)}
               aria-label="Close payment confirmation"
             />
-            <section className="relative z-10 flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:max-h-[90dvh] sm:rounded-3xl">
+            <section className="rp-payment-dialog relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:rounded-3xl">
               <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
@@ -1914,6 +1931,15 @@ export default function BookingsPage({
                     ? "The owner confirmed receipt and finalized this fee. Pay online below, or choose Request Walk-in Payment to ask the owner to accept the remaining balance in person."
                     : "Payment reminder: complete payment within the booked rental duration, or request walk-in settlement upon return."}
                 </div>
+
+                <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm" aria-label="Payment breakdown">
+                  <Line label="Rental Amount" value={money(confirmBaseRentalAmount)} />
+                  {confirmHasLateReturnFee && <Line label="Late-return Fee" value={moneyWithCents(confirmLateReturnFee)} strong />}
+                  <Line label="Transaction Fee" value={moneyWithCents(getBookingTransactionFee(paymentConfirmBooking))} />
+                  <Line label="Already Paid" value={moneyWithCents(confirmPaidAmount)} />
+                  <Line label="Total Amount Payable" value={moneyWithCents(confirmTotalPayable)} strong />
+                  <Line label="Remaining Balance" value={moneyWithCents(confirmRemainingAmount)} />
+                </section>
 
                 <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <p id="booking-payment-method-label" className="text-sm font-semibold text-slate-800">Payment Method</p>
@@ -1988,17 +2014,6 @@ export default function BookingsPage({
                     <Line label="Late Fee Rate" value={`${moneyWithCents(confirmLateReturnInfo?.penaltyRatePerHour || 0)} / hour`} />
                   </section>
                 )}
-
-                <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-                  <Line label="Rental Amount" value={money(confirmBaseRentalAmount)} />
-                  {confirmHasLateReturnFee && (
-                    <Line label="Late-return Fee" value={moneyWithCents(confirmLateReturnFee)} strong />
-                  )}
-                  <Line label="Transaction Fee" value={moneyWithCents(getBookingTransactionFee(paymentConfirmBooking))} />
-                  <Line label="Already Paid" value={moneyWithCents(confirmPaidAmount)} />
-                  <Line label="Total Amount Payable" value={moneyWithCents(confirmTotalPayable)} strong />
-                  <Line label="Remaining Balance" value={moneyWithCents(confirmRemainingAmount)} />
-                </section>
 
                 <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <p className="text-sm font-semibold text-slate-800">Pay Now Option</p>
@@ -2082,7 +2097,7 @@ export default function BookingsPage({
             }}
           />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+            <div className="rp-booking-dialog relative w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
               <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-r from-violet-500/10 via-white to-white">
                 <h3 className="text-lg font-semibold text-slate-900">Request Rental Extension</h3>
                 <p className="text-sm text-slate-600 mt-1">
@@ -2112,11 +2127,11 @@ export default function BookingsPage({
                     className="border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
-                <textarea
+                <AutoResizeTextarea
                   value={extensionForm.note}
                   onChange={(event) => setExtensionForm((prev) => ({ ...prev, note: event.target.value }))}
-                  rows={3}
                   maxLength={500}
+                  aria-label="Optional note to owner"
                   placeholder="Optional note to owner"
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 />
@@ -2151,7 +2166,7 @@ export default function BookingsPage({
             }}
           />
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-booking-title">
-            <div className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_90px_rgba(15,23,42,0.32)]">
+            <div className="rp-booking-dialog w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-[0_25px_90px_rgba(15,23,42,0.32)]">
               <div className="border-b border-rose-100 bg-gradient-to-r from-rose-50 via-white to-white px-6 pb-5 pt-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -2215,6 +2230,17 @@ export default function BookingsPage({
             }
           : paymentSuccessToast}
       />
+      {reviewPromptBooking && (
+        <BookingReviewModal
+          key={reviewPromptBooking._id}
+          booking={reviewPromptBooking}
+          onClose={() => setReviewPromptBooking(null)}
+          onSubmitted={(reviewedBooking) => {
+            setBookings((previous) => previous.map((booking) => booking._id === reviewedBooking._id ? reviewedBooking : booking));
+            setReviewPromptCandidates((previous) => previous.map((booking) => booking._id === reviewedBooking._id ? reviewedBooking : booking));
+          }}
+        />
+      )}
       <ReportIssueModal booking={reportBooking} perspective="renter" onClose={() => setReportBooking(null)} onSubmitted={(report) => setReportNotice(`Report ${report.caseReference} was submitted for administrator review.`)} />
       <MessageReportModal
         message={chatReportMessage}
@@ -2248,18 +2274,9 @@ function OwnerAvatar({ owner }) {
   );
 }
 
-function Info({ title, value, icon: Icon }) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">{Icon && <Icon size={16} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />}{title}</p>
-      <p className="mt-1 font-semibold text-slate-800">{value}</p>
-    </div>
-  );
-}
-
 function Line({ label, value, strong = false }) {
   return (
-    <div className={`flex justify-between ${strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+    <div className={`rp-payment-line ${strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>
       <span>{label}</span>
       <span>{value}</span>
     </div>

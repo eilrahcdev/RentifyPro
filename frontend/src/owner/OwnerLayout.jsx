@@ -111,7 +111,7 @@ export default function OwnerLayout({ onLogout }) {
   }, [activePage]);
 
   return (
-    <div className="relative flex min-h-screen bg-[#f6f9fc] lg:h-screen">
+    <div className="rp-owner-workspace relative flex min-h-dvh bg-[#f6f9fc] lg:h-dvh">
       {isSidebarOpen && (
         <button
           type="button"
@@ -131,7 +131,7 @@ export default function OwnerLayout({ onLogout }) {
       />
 
       {/* main area */}
-      <div inert={isSidebarOpen} className="flex min-h-screen flex-1 flex-col overflow-hidden lg:h-screen">
+      <div inert={isSidebarOpen} className="flex min-h-dvh min-w-0 flex-1 flex-col overflow-hidden lg:h-dvh">
         {/* top bar */}
         <Topbar
           isSidebarOpen={isSidebarOpen}

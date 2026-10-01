@@ -26,7 +26,10 @@
         "kumusta po",
         "hello, may tanong ako",
         "hi, I need help",
-        "hello hello hello"
+        "hello hello hello",
+        "Good day Rentify AI",
+        "Hello chatbot, can we start?",
+        "Magandang araw sa iyo"
       ],
       "responses": {
         "en": [
@@ -50,7 +53,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -64,7 +67,10 @@
         "kamusta ka na",
         "ayos ka ba today",
         "how's it going",
-        "okay ka lang ba"
+        "okay ka lang ba",
+        "Are you doing okay today?",
+        "How are things with you?",
+        "Kumusta ang araw mo chatbot?"
       ],
       "responses": {
         "en": [
@@ -86,7 +92,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -104,7 +110,10 @@
         "AI ka ba",
         "robot ka ba",
         "totoo ka ba",
-        "ikaw ba yung chatbot"
+        "ikaw ba yung chatbot",
+        "Who is replying to me here?",
+        "Tell me who Rentify AI is",
+        "Sino itong kausap ko dito?"
       ],
       "responses": {
         "en": [
@@ -129,7 +138,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -162,7 +171,10 @@
         "tibo ka ba",
         "lesbiyana ka ba",
         "silahis ka ba",
-        "bading ba si Rentify AI"
+        "bading ba si Rentify AI",
+        "Does this chatbot have a gender?",
+        "Are you a male or female assistant?",
+        "May kasarian ka bang chatbot?"
       ],
       "hard_negatives": [
         "can a gay renter book a car",
@@ -178,7 +190,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "assistant identity",
-      "reviewed_at": "2026-09-25",
+      "reviewed_at": "2026-10-02",
       "priority": 30,
       "responses": {
         "en": [
@@ -211,11 +223,27 @@
         "kaya mo ba magsalita ng Tagalog",
         "marunong ka bang mag Filipino",
         "pwede ka bang sumagot sa Tagalog",
-        "anong language ang kaya mo"
+        "anong language ang kaya mo",
+        "do you know Spanish",
+        "walang Bisaya",
+        "marunong ka ba mag Ilonggo",
+        "are you good at Ilocano",
+        "Can you reply in Spanish",
+        "Bisaya lang please",
+        "what languages do you support",
+        "can you speak Spanish and Tagalog",
+        "hindi ka marunong mag Ilocano",
+        "can you understand Cebuano",
+        "Which languages can this chatbot reply in?",
+        "Do you support Spanish responses?",
+        "Kaya mo bang sumagot sa Hiligaynon?"
       ],
       "hard_negatives": [
         "what is your name",
-        "what can you help me with"
+        "what can you help me with",
+        "may sasakyan ba sa Ilocos",
+        "does the vehicle owner speak Spanish",
+        "is the driver Ilonggo"
       ],
       "clarification": {
         "en": "Are you asking which languages I can use in my replies?",
@@ -225,17 +253,17 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "chatbot-service supported reply styles",
-      "reviewed_at": "2026-09-22",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "responses": {
         "en": [
-          "Yes. I can understand and reply in English, Filipino, or Taglish. Ask your question in whichever of these feels most natural to you."
+          "I can understand and reply in English, Filipino, or Taglish. Ask your question in whichever of these feels most natural to you."
         ],
         "fil": [
-          "Oo. Naiintindihan at nasasagot ko ang English, Filipino, at Taglish. Magtanong ka lang sa alinman sa mga ito."
+          "Naiintindihan at nasasagot ko ang English, Filipino, at Taglish. Magtanong ka lang sa alinman sa mga ito."
         ],
         "taglish": [
-          "Oo. I can understand and reply in English, Filipino, or Taglish. Magtanong ka lang kung alin ang mas natural para sa iyo."
+          "I can understand and reply in English, Filipino, or Taglish. Magtanong ka lang kung alin ang mas natural para sa iyo."
         ]
       },
       "fallback_only": false
@@ -250,7 +278,10 @@
         "maraming salamat",
         "thanks po",
         "salamat po",
-        "salamat, appreciate it"
+        "salamat, appreciate it",
+        "Thanks for explaining that to me",
+        "I appreciate your assistance",
+        "Maraming salamat sa paliwanag mo"
       ],
       "responses": {
         "en": [
@@ -276,7 +307,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -297,7 +328,10 @@
         "I see",
         "noted",
         "sure",
-        "okay thanks"
+        "okay thanks",
+        "Understood, okay",
+        "Got your explanation",
+        "Sige naiintindihan ko na"
       ],
       "responses": {
         "en": [
@@ -324,7 +358,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -342,7 +376,10 @@
         "sige bye",
         "yun lang",
         "that's all",
-        "okay that's all"
+        "okay that's all",
+        "I have no more questions, goodbye",
+        "See you next time chatbot",
+        "Wala na akong tanong, paalam"
       ],
       "responses": {
         "en": [
@@ -368,7 +405,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -390,7 +427,10 @@
         "I'm bored",
         "bored ako",
         "nakakatawa",
-        "astig"
+        "astig",
+        "Haha that made me laugh",
+        "Nice talking with you",
+        "Ang saya mong kausap"
       ],
       "responses": {
         "en": [
@@ -412,7 +452,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -425,7 +465,11 @@
         "ano ibig sabihin",
         "what do you mean",
         "I don't get it",
-        "confused ako"
+        "confused ako",
+        "di q gets",
+        "Could you explain that again?",
+        "I did not understand your answer",
+        "Hindi ko naintindihan ang paliwanag"
       ],
       "responses": {
         "en": [
@@ -456,7 +500,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": true
     },
@@ -474,7 +518,10 @@
         "abc",
         "lalalala",
         "jfjfjf",
-        "sksksk"
+        "sksksk",
+        "zxqvzxqv",
+        "qjzxqqzz",
+        "zzxvqjxz"
       ],
       "responses": {
         "en": [
@@ -500,7 +547,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": true
     },
@@ -524,7 +571,10 @@
         "ano pwede mong itulong",
         "paano mo ako matutulungan",
         "what services can you help with",
-        "ano kaya mong i assist"
+        "ano kaya mong i assist",
+        "What can Rentify AI assist me with?",
+        "Show me the topics you can help with",
+        "Ano ang puwede kong itanong sa iyo?"
       ],
       "responses": {
         "en": [
@@ -554,7 +604,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -582,7 +632,10 @@
         "how much yung van",
         "magkano SUV per day",
         "magkano car rental",
-        "rate ng sasakyan"
+        "rate ng sasakyan",
+        "Tell me the rental pricing per hour",
+        "What does a daily vehicle rental cost?",
+        "Magkano ang renta kada oras?"
       ],
       "responses": {
         "en": [
@@ -619,7 +672,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles/:id and the booking price summary",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -632,7 +685,10 @@
         "may insurance ba sa renta",
         "kasama insurance",
         "may insurance included",
-        "included ba ang insurance coverage"
+        "included ba ang insurance coverage",
+        "Does the rental price cover vehicle insurance?",
+        "Where do I confirm the insurance coverage?",
+        "Kasama ba sa presyo ng renta ang insurance?"
       ],
       "responses": {
         "en": [
@@ -654,7 +710,7 @@
       "requires_live_data": true,
       "live_source": "The selected vehicle listing and booking terms",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -666,7 +722,11 @@
         "may security deposit ba",
         "magkano deposit",
         "refundable ba ang deposit",
-        "deposit"
+        "deposit",
+        "How much money is held temporarily and returned after rental",
+        "Is a refundable security deposit required?",
+        "What is the rental security deposit policy?",
+        "Magkano ang refundable security deposit?"
       ],
       "responses": {
         "en": [
@@ -697,7 +757,7 @@
       "requires_live_data": true,
       "live_source": "The selected vehicle checkout and booking terms",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -721,7 +781,10 @@
         "can I use GCash",
         "pwede Maya",
         "credit card payment",
-        "debit card"
+        "debit card",
+        "What online payment options can I choose?",
+        "Is Maya accepted for rental payments?",
+        "Anong paraan ng pagbayad ang tinatanggap dito?"
       ],
       "responses": {
         "en": [
@@ -744,7 +807,9 @@
       ],
       "hard_negatives": [
         "can I pay 30 percent first",
-        "can I pay the remaining balance in person"
+        "can I pay the remaining balance in person",
+        "My GCash payment failed",
+        "The checkout payment option is unavailable"
       ],
       "clarification": {
         "en": "Are you asking about available payment methods, the 30% down payment, or paying the remaining balance?",
@@ -754,7 +819,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 20,
       "fallback_only": false
     },
@@ -767,7 +832,12 @@
         "kailangan ba ng driver's license",
         "what are your rental requirements",
         "ano kailangan sa booking",
-        "requirements para sa car rental"
+        "requirements para sa car rental",
+        "What do I need before I can hire a vehicle",
+        "ano reqs pra maka rent",
+        "What must I prepare before renting here?",
+        "Which rental documents are necessary?",
+        "Ano ang kailangang ihanda bago magrenta dito?"
       ],
       "responses": {
         "en": [
@@ -791,7 +861,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -803,7 +873,10 @@
         "minimum age for rental",
         "ilang taon minimum para mag rent",
         "pwede ba 17 years old",
-        "age requirement for booking"
+        "age requirement for booking",
+        "Is there an age limit for renters?",
+        "Can someone aged seventeen rent here?",
+        "Ano ang pinakamababang edad ng renter?"
       ],
       "responses": {
         "en": [
@@ -825,7 +898,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "backend/middleware/validate.middleware.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -837,7 +910,10 @@
         "need ba ng ID",
         "kailangan ba ng valid ID",
         "ID or address proof required",
-        "need ko ba mag submit ng ID at address"
+        "need ko ba mag submit ng ID at address",
+        "Must I provide both ID and address evidence?",
+        "What identity and address proof do you need?",
+        "Kailangan ba ang ID pati patunay ng tirahan?"
       ],
       "responses": {
         "en": [
@@ -860,7 +936,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -877,7 +953,10 @@
         "available ba kayo na SUV or van",
         "may available na sedan",
         "what cars can I book right now",
-        "do you have SUVs"
+        "do you have SUVs",
+        "Find cars I can rent currently",
+        "What vehicles are ready to rent now?",
+        "Ano ang mga sasakyang available ngayon?"
       ],
       "responses": {
         "en": [
@@ -912,7 +991,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles plus active booking availability",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -956,7 +1035,10 @@
         "what Toyota vehicles are available",
         "are there any Mitsubishi vehicles",
         "I am looking for a Toyota",
-        "show me available Nissan vehicles"
+        "show me available Nissan vehicles",
+        "Find currently available Mitsubishi cars",
+        "May Hyundai ba na puwedeng rentahan?",
+        "Show available Kia listings"
       ],
       "hard_negatives": [
         "what vehicle categories do you have",
@@ -977,7 +1059,7 @@
       "requires_live_data": true,
       "live_source": "Current renter-visible Vehicle listings filtered by the shared brand glossary and Vehicle.name",
       "policy_source": "chatbot-service/chatbot_config.json vehicle_brands",
-      "reviewed_at": "2026-09-22",
+      "reviewed_at": "2026-10-02",
       "priority": 60,
       "responses": {
         "en": [
@@ -1002,7 +1084,12 @@
         "anong transmission available",
         "pwede automatic transmission",
         "may manual option din ba",
-        "automatic?"
+        "automatic?",
+        "Do you have cars that do not need a clutch pedal",
+        "may matic ba kau",
+        "Find vehicles with automatic transmission",
+        "Are manual transmission rentals available?",
+        "May sasakyang manual transmission ba?"
       ],
       "responses": {
         "en": [
@@ -1025,7 +1112,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1038,7 +1125,10 @@
         "kailangan bang full tank pagbalik",
         "should I refill before return",
         "dapat ba puno ang gasolina sa balik",
-        "full tank required ba"
+        "full tank required ba",
+        "Should I refill the fuel before returning?",
+        "Must the returned car have a full fuel tank?",
+        "Dapat bang magpakarga bago isauli ang sasakyan?"
       ],
       "responses": {
         "en": [
@@ -1069,7 +1159,7 @@
       "requires_live_data": true,
       "live_source": "The selected vehicle listing and booking terms",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1083,7 +1173,10 @@
         "capacity ng van ninyo",
         "good for 7 passengers ba",
         "how many pax ang kaya",
-        "ilang seats available"
+        "ilang seats available",
+        "Find a rental that seats eight people",
+        "What can carry six passengers?",
+        "May sasakyang kasya ang siyam na tao?"
       ],
       "responses": {
         "en": [
@@ -1109,7 +1202,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles/:id",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -1122,7 +1215,10 @@
         "pwede pumili ng exact unit",
         "can I choose a specific car model",
         "may option ba to request a model",
-        "pwede specific model if available"
+        "pwede specific model if available",
+        "Can I choose a particular vehicle model?",
+        "Am I allowed to request a specific model?",
+        "Puwede bang pumili ng eksaktong modelo?"
       ],
       "responses": {
         "en": [
@@ -1144,7 +1240,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1159,9 +1255,16 @@
         "anong oras ang pagkuha sa booking ko",
         "pickup schedule ko",
         "when is pickup",
-        "kailan nakatakda ang pagkuha sa booking"
+        "kailan nakatakda ang pagkuha sa booking",
+        "What hour is my rental pickup scheduled?",
+        "What is the pickup time for that booking?",
+        "Anong oras ang nakatakdang pagkuha ng booking ko?"
       ],
-      "aliases": ["pickup time", "pickup schedule", "oras ng pickup"],
+      "aliases": [
+        "pickup time",
+        "pickup schedule",
+        "oras ng pickup"
+      ],
       "hard_negatives": [
         "can I rent today",
         "what time do I return the vehicle",
@@ -1169,9 +1272,15 @@
         "what vehicles are available"
       ],
       "responses": {
-        "en": ["Your pickup time is the time scheduled on your booking. Check the booking details, or tell me which booking or vehicle you mean."],
-        "fil": ["Ang oras ng pagkuha ay ang nakatakdang oras sa booking mo. Tingnan ang detalye ng booking o sabihin kung aling booking o sasakyan ang tinutukoy mo."],
-        "taglish": ["Your pickup time is in your booking schedule. Check the booking details or sabihin kung aling booking or vehicle ang tinutukoy mo."]
+        "en": [
+          "Your pickup time is the time scheduled on your booking. Check the booking details, or tell me which booking or vehicle you mean."
+        ],
+        "fil": [
+          "Ang oras ng pagkuha ay ang nakatakdang oras sa booking mo. Tingnan ang detalye ng booking o sabihin kung aling booking o sasakyan ang tinutukoy mo."
+        ],
+        "taglish": [
+          "Your pickup time is in your booking schedule. Check the booking details or sabihin kung aling booking or vehicle ang tinutukoy mo."
+        ]
       },
       "clarification": {
         "en": "Which booking or vehicle do you mean? Pickup time is set in that booking's schedule.",
@@ -1181,7 +1290,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/me",
       "policy_source": "backend/models/Booking.js pickupAt",
-      "reviewed_at": "2026-09-24",
+      "reviewed_at": "2026-10-02",
       "priority": 40,
       "fallback_only": false
     },
@@ -1195,17 +1304,22 @@
         "ano booking process",
         "steps para makapag booking",
         "how to book po",
-        "paano ang booking steps"
+        "paano ang booking steps",
+        "How can I reserve a vehicle through RentifyPro",
+        "pano po mag rent dito",
+        "Walk me through requesting a vehicle rental",
+        "How do I submit a reservation here?",
+        "Paano gumawa ng rental request sa app?"
       ],
       "responses": {
         "en": [
-          "To book, verify your account, choose a vehicle, set your pickup and return schedule, review the booking details, and complete the required payment or verification steps."
+          "Open Vehicles, choose a listing, set your pickup and return schedule, and review the rates and fees. Choose Book Now after completing any required verification. Track the request in Bookings; it is confirmed only when the owner approves it. Payment opens for eligible approved bookings."
         ],
         "fil": [
-          "Para mag-book, i-verify ang account, pumili ng sasakyan, itakda ang pickup at return schedule, i-review ang booking details, at kumpletuhin ang required payment o verification steps."
+          "Buksan ang Vehicles, pumili ng listing, itakda ang pickup at return schedule, at suriin ang rates at fees. Piliin ang Book Now matapos ang kinakailangang verification. Subaybayan sa Bookings; confirmed lamang ito kapag inaprubahan ng owner. Magbubukas ang payment sa eligible approved bookings."
         ],
         "taglish": [
-          "To book, verify your account, choose a vehicle, set your schedule, review the details, then complete the required payment and verification steps."
+          "Open Vehicles, choose a listing, set pickup and return, then review rates and fees. Choose Book Now after required verification. Track it in Bookings; confirmed lang kapag owner approved. Payment opens for eligible approved bookings."
         ]
       },
       "description": "Handles approved RentifyPro guidance for how to book.",
@@ -1221,7 +1335,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 40,
       "fallback_only": false
     },
@@ -1233,7 +1347,11 @@
         "is same day booking allowed",
         "pwede ba mag rent ngayon",
         "pwede same day rental",
-        "can I book for today agad"
+        "can I book for today agad",
+        "May I rent a car on the day I make the request",
+        "Can I request a rental for later today?",
+        "Is booking and collecting on the same day possible?",
+        "Puwede bang ngayon mag-book at kunin ang sasakyan?"
       ],
       "responses": {
         "en": [
@@ -1257,7 +1375,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles plus the selected booking schedule",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -1270,7 +1388,10 @@
         "may discount ba kapag maagang booking",
         "discount for early booking",
         "may promo sa advance booking",
-        "pwede discount if I book early"
+        "pwede discount if I book early",
+        "Does reserving early reduce the rental price?",
+        "Are there discounts for advance reservations?",
+        "May bawas presyo ba kapag maagang nag-book?"
       ],
       "responses": {
         "en": [
@@ -1292,7 +1413,7 @@
       "requires_live_data": true,
       "live_source": "Active promotions shown by the RentifyPro platform",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1307,7 +1428,11 @@
         "pwede 30 percent",
         "pwede partial payment",
         "mag downpayment",
-        "30% lang muna"
+        "30% lang muna",
+        "Can I split the rental bill and pay the rest later",
+        "May I pay only thirty percent upfront?",
+        "Is full payment required or can I pay a down payment?",
+        "Puwede bang tatlumpung porsiyento muna ang bayad?"
       ],
       "responses": {
         "en": [
@@ -1342,7 +1467,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1354,7 +1479,11 @@
         "walk-in payment",
         "pay remaining balance",
         "pwede cash sa natitirang balance",
-        "in person payment"
+        "in person payment",
+        "Could I settle what is left when I collect the car",
+        "Is in-person balance payment offered?",
+        "Can I settle the remaining rental balance face to face?",
+        "Puwede bang personal bayaran ang natitirang balanse?"
       ],
       "responses": {
         "en": [
@@ -1386,7 +1515,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/bookings/:id and the booking payment state",
       "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 30,
       "fallback_only": false
     },
@@ -1404,7 +1533,11 @@
         "active booking",
         "completed booking",
         "cancelled booking",
-        "nasaan na booking ko"
+        "nasaan na booking ko",
+        "saan makikita status ng booking q",
+        "Check the current status of my reservation",
+        "Did my own booking get approved?",
+        "Ano na ang kasalukuyang status ng booking ko?"
       ],
       "responses": {
         "en": [
@@ -1426,7 +1559,9 @@
       ],
       "hard_negatives": [
         "how many bookings can I have",
-        "can my bookings overlap"
+        "can my bookings overlap",
+        "Which cars are unavailable?",
+        "What is the payment status after a failed charge?"
       ],
       "clarification": {
         "en": "Are you asking for your current booking status or the general booking limits?",
@@ -1436,7 +1571,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/me",
       "policy_source": "backend/models/Booking.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -1449,7 +1584,12 @@
         "is there a current booking on my account",
         "may active booking ba ako",
         "may booking pa ba ako",
-        "meron ba akong kasalukuyang renta"
+        "meron ba akong kasalukuyang renta",
+        "Is there any rental currently running on my account",
+        "May ginagamit pa ba akong rental ngayon",
+        "Which of my rentals are still active?",
+        "Am I renting any vehicle at the moment?",
+        "May aktibo pa ba akong nirentahang sasakyan?"
       ],
       "aliases": [],
       "hard_negatives": [
@@ -1458,15 +1598,21 @@
         "what vehicles are available"
       ],
       "responses": {
-        "en": ["I can check your current bookings after verifying your renter session."],
-        "fil": ["Mache-check ko ang kasalukuyan mong bookings kapag na-verify ang renter session mo."],
-        "taglish": ["I can check your current bookings after ma-verify ang renter session mo."]
+        "en": [
+          "I can check your current bookings after verifying your renter session."
+        ],
+        "fil": [
+          "Mache-check ko ang kasalukuyan mong bookings kapag na-verify ang renter session mo."
+        ],
+        "taglish": [
+          "I can check your current bookings after ma-verify ang renter session mo."
+        ]
       },
       "clarification": {},
       "requires_live_data": true,
       "live_source": "Authenticated renter-scoped Booking records",
       "policy_source": "backend/services/bookingEligibility.service.js",
-      "reviewed_at": "2026-09-25",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1482,7 +1628,11 @@
         "overdue na ba ang return ko",
         "late na ba ang balik ko",
         "may late return ba ako",
-        "nahuli ba ako sa pagsoli ng sasakyan"
+        "nahuli ba ako sa pagsoli ng sasakyan",
+        "Lagpas na ba ako sa oras ng pagsoli",
+        "Is my own rental already overdue?",
+        "Have I passed my scheduled vehicle return?",
+        "Lumampas na ba ako sa oras ng pagbabalik?"
       ],
       "aliases": [],
       "hard_negatives": [
@@ -1491,15 +1641,21 @@
         "can I extend my booking"
       ],
       "responses": {
-        "en": ["I can check your return status after verifying your renter session."],
-        "fil": ["Mache-check ko ang return status mo kapag na-verify ang renter session mo."],
-        "taglish": ["I can check your return status after ma-verify ang renter session mo."]
+        "en": [
+          "I can check your return status after verifying your renter session."
+        ],
+        "fil": [
+          "Mache-check ko ang return status mo kapag na-verify ang renter session mo."
+        ],
+        "taglish": [
+          "I can check your return status after ma-verify ang renter session mo."
+        ]
       },
       "clarification": {},
       "requires_live_data": true,
       "live_source": "Authenticated renter-scoped Booking records",
       "policy_source": "backend/services/bookingEligibility.service.js",
-      "reviewed_at": "2026-09-25",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1514,7 +1670,14 @@
         "do I still owe anything",
         "may unpaid balance ba ako",
         "may balance pa ba ako",
-        "magkano pa ang balance ko"
+        "magkano pa ang balance ko",
+        "How much balance do I have left on my rental",
+        "Magkano pa kailangan kong bayaran",
+        "May kulang pa ba sa bayad ko",
+        "Have I already cleared all my rental payments",
+        "Check what I personally still owe",
+        "Do my rentals have a balance left to pay?",
+        "Magkano pa ang utang ko sa renta?"
       ],
       "aliases": [],
       "hard_negatives": [
@@ -1523,15 +1686,21 @@
         "can I pay the remaining balance in person"
       ],
       "responses": {
-        "en": ["I can check balances recorded on your bookings after verifying your renter session."],
-        "fil": ["Mache-check ko ang balance sa bookings mo kapag na-verify ang renter session mo."],
-        "taglish": ["I can check your booking balances after ma-verify ang renter session mo."]
+        "en": [
+          "I can check balances recorded on your bookings after verifying your renter session."
+        ],
+        "fil": [
+          "Mache-check ko ang balance sa bookings mo kapag na-verify ang renter session mo."
+        ],
+        "taglish": [
+          "I can check your booking balances after ma-verify ang renter session mo."
+        ]
       },
       "clarification": {},
       "requires_live_data": true,
       "live_source": "Authenticated renter-scoped Booking records",
       "policy_source": "backend/services/bookingEligibility.service.js and backend/utils/bookingPayment.js",
-      "reviewed_at": "2026-09-25",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1544,7 +1713,12 @@
         "extend rental",
         "pwede mag extend",
         "paano mag extend ng rental",
-        "more days rental"
+        "more days rental",
+        "My rental ends tonight can I keep it until tomorrow",
+        "pde iextend ung renta",
+        "How do I add another day to my rental?",
+        "May I request a longer rental period?",
+        "Paano dagdagan ang araw ng renta ko?"
       ],
       "responses": {
         "en": [
@@ -1579,7 +1753,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id",
       "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1592,7 +1766,11 @@
         "I want to cancel",
         "pwede i-cancel",
         "paano mag cancel ng booking",
-        "cancel my reservation"
+        "cancel my reservation",
+        "pno icancel ung booking q",
+        "I need to cancel my rental reservation",
+        "Where can I cancel a booking request?",
+        "Paano kanselahin ang rental request ko?"
       ],
       "responses": {
         "en": [
@@ -1618,7 +1796,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id and its payment state",
       "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 45,
       "fallback_only": false
     },
@@ -1631,7 +1809,10 @@
         "may driver ba",
         "pwede may driver",
         "need a driver",
-        "rental with driver"
+        "rental with driver",
+        "Can a driver come with the rented vehicle?",
+        "Do you offer rentals with a chauffeur?",
+        "May kasamang driver ba ang nirentahang sasakyan?"
       ],
       "responses": {
         "en": [
@@ -1653,7 +1834,7 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles/:id",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1668,7 +1849,10 @@
         "SUV",
         "cars and motorcycles",
         "anong types ng vehicle",
-        "ano mga puwedeng rentahan"
+        "ano mga puwedeng rentahan",
+        "What categories of rental vehicles are supported?",
+        "Which kinds of vehicle can be listed here?",
+        "Anong mga kategorya ng sasakyan ang meron dito?"
       ],
       "responses": {
         "en": [
@@ -1695,7 +1879,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -1708,7 +1892,11 @@
         "rating",
         "mag review",
         "paano mag rate",
-        "can I review the vehicle"
+        "can I review the vehicle",
+        "Where do I leave feedback after returning the vehicle",
+        "How can I rate a completed vehicle rental?",
+        "Where can I read vehicle reviews?",
+        "Paano magbigay ng rating matapos ang renta?"
       ],
       "responses": {
         "en": [
@@ -1730,7 +1918,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1744,7 +1932,10 @@
         "chat notification",
         "notification settings",
         "may notification ako",
-        "manage notifications"
+        "manage notifications",
+        "Where are rental alerts shown?",
+        "How do I see my booking notifications?",
+        "Saan makikita ang mga abiso sa booking?"
       ],
       "responses": {
         "en": [
@@ -1768,7 +1959,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 35,
       "fallback_only": false
     },
@@ -1781,7 +1972,11 @@
         "message owner",
         "send message",
         "paano mag message sa owner",
-        "chat"
+        "chat",
+        "How do I contact the person renting out the vehicle",
+        "Where can I send the vehicle owner a message?",
+        "How do I chat with my rental owner?",
+        "Paano kausapin ang may-ari sa Messages?"
       ],
       "responses": {
         "en": [
@@ -1803,7 +1998,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 10,
       "fallback_only": false
     },
@@ -1818,7 +2013,10 @@
         "selfie verification",
         "liveness check",
         "secure ba",
-        "paano ang verification"
+        "paano ang verification",
+        "How is my uploaded identity document protected?",
+        "Is my verification information kept private?",
+        "Ligtas ba ang dokumentong ipinasa ko sa verification?"
       ],
       "responses": {
         "en": [
@@ -1841,7 +2039,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "backend/routes/kyc.routes.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 0,
       "fallback_only": false
     },
@@ -1861,7 +2059,11 @@
         "How many pending requests can I make?",
         "May booking limit ba?",
         "maximum open bookings",
-        "ilan pending booking pwede"
+        "ilan pending booking pwede",
+        "How many rental requests may I keep open",
+        "Is there a maximum number of pending rental requests?",
+        "How many bookings may I request at once?",
+        "Ilang pending na rental request ang pinapayagan?"
       ],
       "hard_negatives": [
         "what is my booking status",
@@ -1876,7 +2078,7 @@
       "requires_live_data": false,
       "live_source": "Authenticated GET /api/bookings/eligibility for personal counts",
       "policy_source": "backend/services/bookingEligibility.service.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 40,
       "responses": {
         "en": [
@@ -1906,7 +2108,11 @@
         "Can my rentals overlap?",
         "May conflict ba if same schedule?",
         "two bookings at the same time",
-        "same pickup and return dates"
+        "same pickup and return dates",
+        "Can I have two rentals for the exact same weekend",
+        "Can rental dates overlap between two bookings?",
+        "Are simultaneous rental schedules allowed?",
+        "Puwede bang magkasabay ang oras ng dalawang booking?"
       ],
       "hard_negatives": [
         "how many bookings can I have",
@@ -1921,7 +2127,7 @@
       "requires_live_data": false,
       "live_source": "Authenticated GET /api/bookings/eligibility for a specific date range",
       "policy_source": "backend/services/bookingEligibility.service.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 40,
       "responses": {
         "en": [
@@ -1953,7 +2159,11 @@
         "Late ako magsoli, ano mangyayari?",
         "How much is the late fee?",
         "overdue na ang return ko",
-        "what is the grace period for late return"
+        "what is the grace period for late return",
+        "Will I be charged if I bring the car back after the agreed time",
+        "Explain the late vehicle return charges",
+        "What rules apply when returning after the scheduled time?",
+        "Ano ang patakaran kapag huli ang pagsauli?"
       ],
       "hard_negatives": [
         "how much is the rental per day",
@@ -1969,7 +2179,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id for an exact snapshotted policy or fee",
       "policy_source": "backend/utils/lateReturnPolicy.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 40,
       "responses": {
         "en": [
@@ -2005,7 +2215,10 @@
         "What happens if I don't pay the remaining balance?",
         "Can unpaid late fees block another booking?",
         "does partial payment stop another booking",
-        "may outstanding balance ako"
+        "may outstanding balance ako",
+        "Will an outstanding rental balance stop a new booking?",
+        "What happens if a remaining balance becomes overdue?",
+        "Makaka-book ba ulit kung may due na balanse?"
       ],
       "hard_negatives": [
         "can I pay the balance in person",
@@ -2020,7 +2233,7 @@
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/eligibility and GET /api/bookings/me",
       "policy_source": "backend/services/bookingEligibility.service.js",
-      "reviewed_at": "2026-09-21",
+      "reviewed_at": "2026-10-02",
       "priority": 55,
       "responses": {
         "en": [
@@ -2033,6 +2246,469 @@
           "An ordinary partial payment does not block another booking before the balance is due. A due balance after return or a finalized unpaid late-return penalty can block booking, so check your live eligibility."
         ]
       },
+      "fallback_only": false
+    },
+    {
+      "id": "vehicle_unavailability",
+      "description": "Explains why unavailable vehicles are absent from the available Vehicles page without listing them as recommendations.",
+      "aliases": [
+        "unavailable vehicles page",
+        "hidden unavailable vehicles"
+      ],
+      "examples": [
+        "Why are unavailable vehicles hidden from the Vehicles page?",
+        "Bakit hindi lumalabas yung unavailable na sasakyan sa vehicles page?",
+        "Why did a vehicle disappear from the available list?",
+        "Hindi ko makita ang unavailable na kotse",
+        "Why are unavailable listings hidden from the Vehicles page?",
+        "Why can I only see available cars on the page?",
+        "Bakit hindi ipinapakita sa page ang unavailable listings?"
+      ],
+      "hard_negatives": [
+        "show me available cars",
+        "Is the Honda City currently unavailable?",
+        "why is my Netflix account unavailable",
+        "my payment method is unavailable",
+        "How many unavailable cars are there now?",
+        "List the unavailable listings"
+      ],
+      "clarification": {
+        "en": "Are you asking why unavailable vehicles are hidden, or checking a specific vehicle's current status?",
+        "fil": "Tinatanong mo ba kung bakit hindi ipinapakita ang unavailable na sasakyan, o ang status ng isang partikular na sasakyan?",
+        "taglish": "Are you asking why unavailable vehicles are hidden, or checking a specific vehicle's status?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/pages/VehiclesPage.jsx and public vehicle availability rules",
+      "reviewed_at": "2026-10-02",
+      "priority": 45,
+      "responses": {
+        "en": [
+          "The Vehicles page shows vehicles currently available to rent. Vehicles marked unavailable or blocked by an open booking are filtered out. Unavailable vehicles are not offered as booking recommendations. Tell me the model or type if you need available alternatives."
+        ],
+        "fil": [
+          "Available na sasakyan lamang ang ipinapakita sa Vehicles page. Hindi lumalabas ang mga minarkahang unavailable o may humaharang na open booking. Hindi sila inirerekomenda para i-book. Sabihin ang modelo o uri kung kailangan mo ng available na alternatibo."
+        ],
+        "taglish": [
+          "The Vehicles page only shows vehicles currently available to rent. Hidden ang vehicles marked unavailable or blocked by an open booking. Hindi sila booking recommendations. Tell me the model or type if you need available alternatives."
+        ]
+      },
+      "fallback_only": false
+    },
+    {
+      "id": "vehicle_availability_status",
+      "description": "Checks current public vehicle status, distinguishing unavailable units from missing listings without revealing booking details or promising a future availability date.",
+      "aliases": [
+        "vehicle availability status"
+      ],
+      "examples": [
+        "Are there unavailable vehicles?",
+        "Are all your vehicles unavailable?",
+        "Is the Honda City currently unavailable?",
+        "Unavailable ba yung Toyota Vios o wala kayong listing?",
+        "When will the unavailable car be available again?",
+        "May unavailable bang SUV?",
+        "Is there any unavailable vehicle right now?",
+        "Which vehicles are currently unavailable?",
+        "May unavailable na sasakyan ngayon ba?",
+        "List unavailable vehicle listings",
+        "Show me the unavailable cars",
+        "Show me unavailable cars",
+        "Ipakita ang mga unavailable na sasakyan"
+      ],
+      "hard_negatives": [
+        "show me available vehicles",
+        "what is my booking status",
+        "is my payment overdue",
+        "is Toyota stock available"
+      ],
+      "clarification": {
+        "en": "Which vehicle or listing are you asking about?",
+        "fil": "Aling sasakyan o listing ang tinutukoy mo?",
+        "taglish": "Which vehicle or listing ang tinutukoy mo?"
+      },
+      "requires_live_data": true,
+      "live_source": "Public Vehicle listing status plus active unreturned booking locks",
+      "policy_source": "backend/controllers/vehicle.controller.js public availability rules",
+      "reviewed_at": "2026-10-02",
+      "priority": 45,
+      "responses": {
+        "en": [
+          "I can check a vehicle's current public availability. Unavailable vehicles are hidden from the Vehicles page. A future availability date cannot be confirmed from its status alone."
+        ],
+        "fil": [
+          "Maaari kong tingnan ang kasalukuyang public availability ng sasakyan. Hindi lumalabas sa Vehicles page ang unavailable na sasakyan. Hindi makukumpirma ang petsa ng muling availability mula sa status lamang."
+        ],
+        "taglish": [
+          "I can check a vehicle's current public availability. Hidden sa Vehicles page ang unavailable vehicles. Status alone cannot confirm when a vehicle will be available again."
+        ]
+      },
+      "fallback_only": false
+    },
+    {
+      "id": "payment_troubleshooting",
+      "description": "Payment charged but not recorded or possible duplicate payment",
+      "examples": [
+        "GCash charged me but my booking is unpaid",
+        "I paid twice for my RentifyPro booking",
+        "My rental payment is still processing",
+        "Nabawasan ang GCash ko pero unpaid pa ang booking",
+        "Dalawang beses akong nagbayad sa rental",
+        "My GCash was deducted but my rental is unpaid",
+        "Why is the payment option unavailable at checkout?",
+        "Ayaw gumana ng Maya sa pagbayad ko"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Open Bookings and use Check payment status before paying again. A wallet charge or checkout return alone does not confirm a recorded payment. If it remains unpaid or you suspect a duplicate charge, keep the payment reference and use Report issue on the booking for administrator review. Do not send passwords, OTPs, or full card details. A refund is subject to review; I cannot confirm one here."
+        ],
+        "fil": [
+          "Buksan ang Bookings at gamitin ang Check payment status bago magbayad ulit. Hindi sapat ang bawas sa wallet o pagbabalik mula checkout para makumpirma ang payment. Kung unpaid pa rin o may dobleng charge, itabi ang payment reference at gamitin ang Report issue sa booking para sa administrator review. Huwag ibigay ang password, OTP, o buong card details. Hindi ko makukumpirma ang refund dito."
+        ],
+        "taglish": [
+          "Open Bookings and use Check payment status bago magbayad ulit. Wallet deduction or checkout return alone does not confirm a recorded payment. Kung unpaid pa rin or may duplicate charge, keep the payment reference and use Report issue sa booking for administrator review. Huwag mag-send ng password, OTP, or full card details. Refunds need review; I cannot confirm one here."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/data/helpContent.js booking-payments; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "payment_checkout_expired",
+      "description": "Expired payment checkout recovery",
+      "examples": [
+        "My RentifyPro payment link expired",
+        "The checkout expired before I paid",
+        "Expired na yung link sa payment ng booking",
+        "What should I do with an expired checkout?",
+        "The payment link timed out before I could pay",
+        "Paso na ang checkout link ko, paano magbayad?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Open your booking and use Check payment status first. If the checkout is expired and no payment was recorded, use Pay Now again when the booking still allows payment. If money was deducted, follow the payment-status check and report the issue before starting another payment."
+        ],
+        "fil": [
+          "Buksan ang booking at gamitin muna ang Check payment status. Kung expired ang checkout at walang naitalang payment, gamitin ulit ang Pay Now kung pinapayagan pa ng booking. Kung nabawasan ang pera mo, tingnan ang payment status at i-report ang problema bago magbayad ulit."
+        ],
+        "taglish": [
+          "Check payment status muna sa booking. If checkout expired and no payment was recorded, use Pay Now again kapag eligible pa ang booking. Kung may deduction, check the status and report the issue before paying again."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/pages/BookingsPage.jsx checkout-status handling",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "account_password_reset",
+      "description": "Password reset through the existing account flow",
+      "examples": [
+        "I forgot my RentifyPro password",
+        "How can I reset my login password",
+        "Nakalimutan ko ang password ko sa RentifyPro",
+        "I cannot remember my sign-in password",
+        "Where do I request a password reset?",
+        "Paano makapasok kung nakalimutan ang password?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "On Sign In, choose Forgot Password, enter your registered email, and follow the reset-code and new-password steps. Check your spam folder if the email is missing; request a new code if it expires. Keep the code and password private. I cannot reset your password in chat."
+        ],
+        "fil": [
+          "Sa Sign In, piliin ang Forgot Password, ilagay ang registered email, at sundin ang reset-code at bagong password na mga hakbang. Tingnan ang spam folder kung walang email; humingi ng bagong code kung expired. Panatilihing pribado ang code at password. Hindi ako nagre-reset ng password sa chat."
+        ],
+        "taglish": [
+          "Choose Forgot Password sa Sign In, enter your registered email, then follow the code and new-password steps. Check spam if needed and request a new code if expired. Keep the code and password private; hindi ako nagre-reset ng password sa chat."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "backend/controllers/auth.controller.js forgotPassword/verifyPasswordResetOtp/resetPassword",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "verification_troubleshooting",
+      "description": "Rejected documents or selfie checks without bypassing verification",
+      "examples": [
+        "My verification was rejected",
+        "My selfie does not match my ID",
+        "My RentifyPro identity check failed",
+        "Rejected ang verification ko",
+        "Ayaw magmatch ng selfie at ID",
+        "What do I do when my ID verification fails?",
+        "The selfie check keeps rejecting me",
+        "Bakit rejected ang dokumento ko sa verification?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Open Account Settings > Verification and read the reason shown. Use Resubmit verification when available and follow the accepted-document and selfie instructions. For a selfie mismatch, retake a clear photo in good lighting using your own matching ID. A passed selfie does not complete document review. I cannot approve or bypass verification in chat."
+        ],
+        "fil": [
+          "Buksan ang Account Settings > Verification at basahin ang dahilan. Gamitin ang Resubmit verification kung available at sundin ang accepted-document at selfie instructions. Kung hindi tugma ang selfie, kumuha ng malinaw na larawan sa maayos na ilaw gamit ang sarili mong katugmang ID. Hindi awtomatikong tapos ang document review kapag pumasa ang selfie. Hindi ko maaaprubahan o malalampasan ang verification sa chat."
+        ],
+        "taglish": [
+          "Open Account Settings > Verification and read the reason. Use Resubmit verification kapag available, then follow the document and selfie instructions. For mismatch, retake a clear selfie with good lighting and your own matching ID. Passed selfie does not finish document review; hindi ko ito maa-approve or bypass sa chat."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/data/helpContent.js verify-identity; backend/controllers/auth.controller.js",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "rental_problem_support",
+      "description": "Owner no-show or vehicle breakdown support using existing reports",
+      "examples": [
+        "The owner did not show up at pickup",
+        "My rental car broke down",
+        "Nasira yung nirentahan kong sasakyan",
+        "Hindi dumating ang owner sa pickup",
+        "The rented car has broken down during my trip",
+        "The owner did not arrive to hand over the vehicle",
+        "Hindi sumipot ang owner sa pagkuha ng sasakyan"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Open the booking and contact the owner through RentifyPro Messages. Use Report issue on that booking to send the problem and relevant evidence for administrator review. For a breakdown, move to a safe place if possible and avoid continuing to use an unsafe vehicle. Keep the booking record; cancellation, replacement, charges, and refunds require review and are not automatically confirmed by chat."
+        ],
+        "fil": [
+          "Buksan ang booking at kausapin ang owner sa RentifyPro Messages. Gamitin ang Report issue sa booking at ilakip ang kaugnay na ebidensya para sa administrator review. Kung nasira ang sasakyan, pumunta sa ligtas na lugar kung maaari at huwag patuloy na gamitin ang delikadong sasakyan. Panatilihin ang booking record; kailangan ng review ang cancellation, replacement, charges, at refund."
+        ],
+        "taglish": [
+          "Contact the owner through RentifyPro Messages from your booking, then use Report issue with relevant evidence for administrator review. Kung breakdown, move to a safe place if possible and avoid using an unsafe vehicle. Cancellation, replacement, charges, and refunds need review; hindi automatic ang mga ito sa chat."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/pages/BookingsPage.jsx Report issue and Messages",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "owner_listing_guidance",
+      "description": "Owner vehicle creation and price editing",
+      "examples": [
+        "How do I list my first vehicle",
+        "How do I change my vehicle price",
+        "Where can I add a car as an owner",
+        "Paano ilista ang sasakyan ko",
+        "How do I publish my vehicle as an owner?",
+        "Where do owners change listing rates?",
+        "Saan ko babaguhin ang presyo ng listing ko?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "In the owner workspace, open My Vehicles > Add Vehicle. Enter the required vehicle details, location, rate, availability, and photos, then review and save. To change a listing or price, open its Edit control, review the changes, and confirm Save Changes. Complete the required owner verification first if the site asks for it."
+        ],
+        "fil": [
+          "Sa owner workspace, buksan ang My Vehicles > Add Vehicle. Ilagay ang vehicle details, location, rate, availability, at photos, pagkatapos ay suriin at i-save. Para baguhin ang listing o presyo, buksan ang Edit, suriin ang pagbabago, at kumpirmahin ang Save Changes. Kumpletuhin muna ang owner verification kung hinihingi ng site."
+        ],
+        "taglish": [
+          "Open My Vehicles > Add Vehicle sa owner workspace. Fill in the vehicle details, location, rate, availability, and photos, then review and save. For price or listing edits, choose Edit, review, and confirm Save Changes. Complete owner verification first if required."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/data/helpContent.js list-vehicle; frontend/src/owner/pages/Vehicles.jsx",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "owner_booking_guidance",
+      "description": "Owner approval and management guidance",
+      "examples": [
+        "How do I approve a rental request",
+        "How can an owner manage booking requests",
+        "Saan iaapprove ang booking request",
+        "Where do I accept a renter booking request?",
+        "How can I decline a request for my car?",
+        "Paano pamahalaan ang mga booking request bilang owner?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Open Bookings in the owner workspace, review the vehicle and pickup/return schedule, then use Approve or Decline on an eligible request. Extension, cancellation, and walk-in requests have separate review controls. Confirm payment only after receiving the money, and confirm vehicle return only after receiving the vehicle. Chat does not perform these actions."
+        ],
+        "fil": [
+          "Buksan ang Bookings sa owner workspace, suriin ang sasakyan at pickup/return schedule, at gamitin ang Approve o Decline sa eligible request. May hiwalay na review ang extension, cancellation, at walk-in requests. Kumpirmahin lang ang payment kapag natanggap ang pera, at return kapag natanggap ang sasakyan. Hindi ginagawa ng chat ang mga aksyong ito."
+        ],
+        "taglish": [
+          "Open owner Bookings, review the vehicle and pickup/return schedule, then choose Approve or Decline when available. Separate ang extension, cancellation, and walk-in reviews. Confirm payment only after receiving money and vehicle return only after receiving the vehicle. Chat does not perform these actions."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/data/helpContent.js manage-owner-bookings; frontend/src/owner/pages/Bookings.jsx",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "owner_earnings_guidance",
+      "description": "Where owners see earnings without disclosing private totals",
+      "examples": [
+        "Where can I see my owner earnings",
+        "How do I check rental income",
+        "Saan makikita ang kita ko bilang owner",
+        "Where can an owner view rental revenue?",
+        "How do I open my owner earnings dashboard?",
+        "Paano tingnan ang kita mula sa mga renta ko?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Sign in to your owner account and open Dashboard or Analytics to see your recorded earnings and trends. These figures belong to your authenticated owner account. I can explain where to look, but I cannot confirm an earnings amount from a public chat question."
+        ],
+        "fil": [
+          "Mag-sign in sa owner account at buksan ang Dashboard o Analytics para makita ang recorded earnings at trends. Para sa authenticated owner account mo ang mga halagang iyon. Maituturo ko kung saan titingin, pero hindi ko makukumpirma ang halaga sa public chat."
+        ],
+        "taglish": [
+          "Sign in as owner and open Dashboard or Analytics for recorded earnings and trends. Private sa authenticated owner account ang figures. I can show where to look, pero hindi ko makukumpirma ang amount sa public chat."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/owner/pages/Analytics.jsx; frontend/src/owner/pages/Dashboard.jsx",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "pickup_location",
+      "description": "Pickup address through listing and booking details",
+      "examples": [
+        "Where do I pick up my rental car",
+        "Where is the pickup location",
+        "Saan ko kukunin ang sasakyan",
+        "What place do I collect the booked vehicle from?",
+        "Where should I meet for rental pickup?",
+        "Saang lugar ko kukunin ang naka-book na sasakyan?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Check the vehicle listing location and your booking details, then confirm the exact pickup arrangement with the owner through RentifyPro Messages. I cannot infer a private pickup address from a general question. Which vehicle or booking are you referring to?"
+        ],
+        "fil": [
+          "Tingnan ang location sa vehicle listing at detalye ng booking, pagkatapos ay kumpirmahin ang eksaktong lugar ng pagkuha sa owner gamit ang RentifyPro Messages. Hindi ko mahuhulaan ang pribadong pickup address. Aling sasakyan o booking ang tinutukoy mo?"
+        ],
+        "taglish": [
+          "Check the listing location and booking details, then confirm the exact pickup arrangement with the owner through RentifyPro Messages. Hindi ko mahuhulaan ang private pickup address. Which vehicle or booking do you mean?"
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "frontend/src/data/helpContent.js request-booking; backend/models/Vehicle.js location",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
+      "fallback_only": false
+    },
+    {
+      "id": "rental_refund_guidance",
+      "description": "Refund eligibility and status without inventing a result",
+      "examples": [
+        "How much money will I get back if I cancel",
+        "Can I get a refund for my rental",
+        "Kailan ibabalik ang refund sa booking",
+        "How do I ask for my rental money back?",
+        "Where can I check whether a refund is possible?",
+        "Paano magtanong tungkol sa refund ng renta?"
+      ],
+      "aliases": [],
+      "hard_negatives": [],
+      "responses": {
+        "en": [
+          "Check the cancellation and payment details on your booking for eligibility, deductions, and any recorded refund status. Follow the cancellation request shown there if it is available. The owner or administrator may need to review it; I cannot promise a refund amount or completion date in chat."
+        ],
+        "fil": [
+          "Tingnan ang cancellation at payment details sa booking para sa eligibility, deductions, at recorded refund status. Sundin ang cancellation request kung available. Maaaring kailangan ng owner o administrator review; hindi ko maipapangako ang refund amount o petsa sa chat."
+        ],
+        "taglish": [
+          "Check cancellation and payment details on the booking for eligibility, deductions, and recorded refund status. Use the cancellation request when available. Owner or administrator review may be needed; hindi ko maipapangako ang refund amount or completion date sa chat."
+        ]
+      },
+      "clarification": {
+        "en": "Which RentifyPro booking or step are you asking about?",
+        "fil": "Aling RentifyPro booking o hakbang ang tinutukoy mo?",
+        "taglish": "Which RentifyPro booking or step ang tinutukoy mo?"
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "backend/controllers/booking.controller.js cancellation; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-02",
+      "priority": 2,
       "fallback_only": false
     }
   ],

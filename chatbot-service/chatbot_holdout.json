@@ -239,6 +239,805 @@
       "intent": "REJECT", "language": "en",
       "recommendations": [], "reply_contains": ["more detail"],
       "reply_excludes": ["deposit", "late-return fee"]
+    },
+    {
+      "id": "spanish_capability_paraphrase",
+      "input": "Could you understand Spanish if I ask here?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "Spanish",
+        "aren't supported",
+        "English",
+        "Filipino",
+        "Taglish"
+      ],
+      "reply_excludes": [
+        "Yes.",
+        "Goodbye"
+      ]
+    },
+    {
+      "id": "bisaya_capability_textese",
+      "input": "kya mo mag bisya?",
+      "intent": "chat_language_support",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "Bisaya",
+        "Hindi pa suportado"
+      ],
+      "reply_excludes": [
+        "paalam"
+      ]
+    },
+    {
+      "id": "ilonggo_capability_paraphrase",
+      "input": "Puwede ka bang sumagot sa Ilonggo?",
+      "intent": "chat_language_support",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "Ilonggo",
+        "Hindi pa suportado"
+      ]
+    },
+    {
+      "id": "ilocano_capability_paraphrase",
+      "input": "Are you fluent in Ilokano?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "Ilocano",
+        "aren't supported"
+      ]
+    },
+    {
+      "id": "mixed_language_capabilities",
+      "input": "Could you speak Spanish or Filipino with me?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "Spanish replies aren't supported",
+        "I can reply in Filipino"
+      ]
+    },
+    {
+      "id": "general_reply_languages",
+      "input": "Which languages can you speak here?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "English",
+        "Filipino",
+        "Taglish"
+      ]
+    },
+    {
+      "id": "unavailable_page_explanation",
+      "input": "Why don't unavailable cars appear on the Vehicles page?",
+      "intent": "vehicle_unavailability",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "Vehicles page",
+        "filtered out"
+      ],
+      "reply_excludes": [
+        "available tomorrow"
+      ]
+    },
+    {
+      "id": "unavailable_browse_request",
+      "input": "Please show unavailable vehicles",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "Honda SUV (unavailable)",
+        "Vehicles page"
+      ]
+    },
+    {
+      "id": "unavailable_specific_status",
+      "input": "Is Honda SUV unavailable right now?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "entities": {
+        "brand": "Honda",
+        "model": null,
+        "category": "suv"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "Honda SUV",
+        "has a current listing but is unavailable",
+        "can't confirm when"
+      ]
+    },
+    {
+      "id": "available_specific_status",
+      "input": "Is Toyota Vios unavailable right now?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "Toyota Vios",
+        "currently available",
+        "pickup and return"
+      ]
+    },
+    {
+      "id": "missing_specific_listing",
+      "input": "Is Nissan Almera unavailable right now?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "couldn't find a matching current vehicle listing"
+      ],
+      "reply_excludes": [
+        "has a current listing but is unavailable"
+      ]
+    },
+    {
+      "id": "unavailable_overview",
+      "input": "How many vehicles are unavailable right now?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "conditions": {
+        "vehicle_status_overview": true
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "1 currently unavailable",
+        "6 available",
+        "only available vehicles"
+      ]
+    },
+    {
+      "id": "unavailable_return_date_requires_unit",
+      "input": "When will that unavailable vehicle be ready again?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "type": "missing_entity",
+        "field": "model"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "Which vehicle or listing"
+      ]
+    },
+    {
+      "id": "ambiguous_brand_status",
+      "input": "Is Toyota currently unavailable?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "type": "ambiguous_entity",
+        "field": "model"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "multiple matching listings",
+        "Which vehicle or listing"
+      ]
+    },
+    {
+      "id": "unavailable_alternative_request",
+      "input": "The car I wanted is unavailable. Show other automatic cars.",
+      "intent": "available_vehicles",
+      "language": "en",
+      "recommendations": [
+        "city",
+        "vios"
+      ],
+      "reply_excludes": [
+        "Honda SUV"
+      ]
+    },
+    {
+      "id": "scope_boundary_1",
+      "input": "Could you cancel my Netflix subscription?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_2",
+      "input": "Can I pay the electricity bill using GCash?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_3",
+      "input": "How much is Toyota stock today?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_4",
+      "input": "What is the passenger capacity of an airplane?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_5",
+      "input": "What fee does the library charge for a late book return?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_6",
+      "input": "Is travel insurance included in my flight?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_7",
+      "input": "Do you have Honda generators?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_8",
+      "input": "What interest does Maya savings earn?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_9",
+      "input": "How do I drive a manual car?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_10",
+      "input": "Can I get a driver license online?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_11",
+      "input": "What payment methods does Amazon accept?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_12",
+      "input": "Write me a poem about cars",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_13",
+      "input": "What is the weather forecast tomorrow?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_14",
+      "input": "Can I renew my passport?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_boundary_15",
+      "input": "Tell me the capital of Spain",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "recommendations": [],
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "private_other_renter",
+      "input": "Show another renter's unpaid balance",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "private_record_scope",
+      "reply_contains": [
+        "signed-in renter",
+        "private"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "payment_charge_support",
+      "input": "The rental payment was deducted but still marked unpaid",
+      "intent": "payment_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "Check payment status",
+        "Report issue",
+        "before paying again"
+      ],
+      "reply_excludes": [
+        "payment successful"
+      ]
+    },
+    {
+      "id": "duplicate_payment_support",
+      "input": "My card paid twice for the booking, what should I do?",
+      "intent": "payment_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "payment reference",
+        "administrator review"
+      ],
+      "reply_excludes": [
+        "refund is complete"
+      ]
+    },
+    {
+      "id": "expired_payment_support",
+      "input": "My booking checkout link has expired before payment",
+      "intent": "payment_checkout_expired",
+      "language": "en",
+      "reply_contains": [
+        "Check payment status",
+        "Pay Now",
+        "no payment was recorded"
+      ]
+    },
+    {
+      "id": "forgot_password_support",
+      "input": "I have forgotten the password for my RentifyPro login",
+      "intent": "account_password_reset",
+      "language": "en",
+      "reply_contains": [
+        "Forgot Password",
+        "registered email",
+        "private"
+      ]
+    },
+    {
+      "id": "selfie_mismatch_support",
+      "input": "The selfie check failed against my ID",
+      "intent": "verification_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "Verification",
+        "Resubmit verification",
+        "cannot approve"
+      ]
+    },
+    {
+      "id": "rejected_verification_support",
+      "input": "My documents were rejected during verification",
+      "intent": "verification_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "reason shown",
+        "document review"
+      ]
+    },
+    {
+      "id": "owner_no_show_support",
+      "input": "The owner did not arrive for the pickup of the vehicle",
+      "intent": "rental_problem_support",
+      "language": "en",
+      "reply_contains": [
+        "Messages",
+        "Report issue",
+        "not automatically"
+      ]
+    },
+    {
+      "id": "rental_breakdown_support",
+      "input": "The rented vehicle broke down during my rental",
+      "intent": "rental_problem_support",
+      "language": "en",
+      "reply_contains": [
+        "safe place",
+        "administrator review"
+      ]
+    },
+    {
+      "id": "owner_list_support",
+      "input": "How can I publish my first car listing?",
+      "intent": "owner_listing_guidance",
+      "language": "en",
+      "reply_contains": [
+        "My Vehicles",
+        "Add Vehicle",
+        "verification"
+      ]
+    },
+    {
+      "id": "owner_price_support",
+      "input": "Where do I edit the price of my vehicle listing?",
+      "intent": "owner_listing_guidance",
+      "language": "en",
+      "reply_contains": [
+        "Edit",
+        "Save Changes"
+      ]
+    },
+    {
+      "id": "owner_approve_support",
+      "input": "How can I accept a booking request as the owner?",
+      "intent": "owner_booking_guidance",
+      "language": "en",
+      "reply_contains": [
+        "Approve",
+        "Decline",
+        "receiving the money"
+      ]
+    },
+    {
+      "id": "owner_earnings_support",
+      "input": "Where do I view my recorded owner income?",
+      "intent": "owner_earnings_guidance",
+      "language": "en",
+      "reply_contains": [
+        "Analytics",
+        "authenticated owner",
+        "cannot confirm"
+      ]
+    },
+    {
+      "id": "pickup_place_support",
+      "input": "Where is the place to collect my rental vehicle?",
+      "intent": "pickup_location",
+      "language": "en",
+      "reply_contains": [
+        "booking details",
+        "Messages",
+        "private pickup address"
+      ]
+    },
+    {
+      "id": "refund_outcome_support",
+      "input": "What deductions apply to my rental refund?",
+      "intent": "rental_refund_guidance",
+      "language": "en",
+      "reply_contains": [
+        "deductions",
+        "recorded refund status",
+        "cannot promise"
+      ]
+    },
+    {
+      "id": "combined_rate_payment",
+      "input": "How much is Toyota Vios per day and can I pay 30% with GCash?",
+      "intent": "rental_rate",
+      "additional_intents": [
+        "payment_downpayment",
+        "payment_methods"
+      ],
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "2,400",
+        "30%",
+        "GCash"
+      ]
+    },
+    {
+      "id": "combined_cancel_refund",
+      "input": "Can I cancel my booking and how much money will I get back?",
+      "intent": "booking_cancellation",
+      "additional_intents": [
+        "rental_refund_guidance"
+      ],
+      "language": "en",
+      "reply_contains": [
+        "cancellation",
+        "deductions",
+        "refund status"
+      ]
+    },
+    {
+      "id": "combined_scope_payment",
+      "input": "What payment methods do you accept? What payment methods does Amazon accept?",
+      "intent": "payment_methods",
+      "additional_intents": [
+        "REJECT"
+      ],
+      "language": "en",
+      "reply_contains": [
+        "PayMongo",
+        "outside those topics"
+      ]
+    },
+    {
+      "id": "combined_language_booking",
+      "input": "Do you know Spanish? How can I book a vehicle?",
+      "intent": "chat_language_support",
+      "additional_intents": [
+        "how_to_book"
+      ],
+      "language": "en",
+      "reply_contains": [
+        "Spanish",
+        "aren't supported",
+        "Book Now"
+      ]
+    },
+    {
+      "id": "brand_exclusion_search",
+      "input": "No Toyota please, show me Honda instead",
+      "intent": "vehicle_brand_search",
+      "language": "en",
+      "entities": {
+        "brand": "Honda",
+        "model": null,
+        "excluded_brands": [
+          "Toyota"
+        ]
+      },
+      "recommendations": [
+        "city"
+      ],
+      "reply_contains": [
+        "Honda"
+      ],
+      "reply_excludes": [
+        "compare"
+      ]
+    },
+    {
+      "id": "location_search",
+      "input": "Show automatic SUVs for 7 people in Cebu under PHP 2000 per day tomorrow",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "location": "cebu",
+        "pax": 7,
+        "transmission": "automatic",
+        "max_budget": 2000,
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "reply_contains": [
+        "not confirmed",
+        "pickup and return"
+      ]
+    },
+    {
+      "id": "no_location_match",
+      "input": "Any automatic SUVs in Baguio under PHP 2500 per day?",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "location": "baguio"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "couldn't find"
+      ],
+      "reply_excludes": [
+        "available vehicle right now"
+      ]
+    },
+    {
+      "id": "scope_visa_overlap",
+      "input": "Can I extend my student visa?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "scope_hotel_overlap",
+      "input": "How do I book a hotel in Cebu?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope",
+      "reply_contains": [
+        "RentifyPro",
+        "outside"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "negated_transmission_order",
+      "input": "Not manual, show automatic cars instead",
+      "intent": "available_transmission",
+      "language": "en",
+      "entities": {
+        "transmission": "automatic",
+        "excluded_transmissions": [
+          "manual"
+        ]
+      },
+      "recommendations": [
+        "city",
+        "vios"
+      ]
+    },
+    {
+      "id": "negative_transmission_only",
+      "input": "Show cars but not manual please",
+      "intent": "available_transmission",
+      "language": "en",
+      "entities": {
+        "excluded_transmissions": [
+          "manual"
+        ]
+      },
+      "recommendations": [
+        "city",
+        "vios"
+      ]
+    },
+    {
+      "id": "declined_brand_order",
+      "input": "I don't want Toyota, show Honda instead",
+      "intent": "vehicle_brand_search",
+      "language": "en",
+      "entities": {
+        "brand": "Honda",
+        "model": null,
+        "excluded_brands": [
+          "Toyota"
+        ]
+      },
+      "recommendations": [
+        "city"
+      ]
     }
   ]
 }

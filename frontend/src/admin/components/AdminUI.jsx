@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import AppIcon, { ICON_SIZE } from "../../components/AppIcon";
+import AutoResizeTextarea from "../../components/AutoResizeTextarea";
 import { useState } from "react";
 
 export function StatusBadge({ value }) {
@@ -193,7 +194,7 @@ export function DocumentReviewDialog({ document, onClose, onApprove, onReject })
             <p className="mt-1 break-words">{document.approvalBlockedReason || "The required identity comparison has not passed. Ask the applicant to correct their details or upload the matching ID."}</p>
           </div>}
           <label htmlFor="document-rejection-reason" className="block text-sm font-semibold text-slate-800">Reason and correction instructions (required to reject)</label>
-          <textarea id="document-rejection-reason" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value); setReasonError(""); }} maxLength={500} aria-invalid={Boolean(reasonError)} aria-describedby="document-rejection-help" className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Explain the issue and what the applicant should upload or correct." />
+          <AutoResizeTextarea id="document-rejection-reason" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value); setReasonError(""); }} minRows={2} maxRows={6} maxLength={500} aria-invalid={Boolean(reasonError)} aria-describedby="document-rejection-help" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Explain the issue and what the applicant should upload or correct." />
           <p id="document-rejection-help" className="text-xs text-slate-500">Use 10 to 500 characters. This explanation will be shown to the applicant.</p>
           {reasonError && <p role="alert" className="text-sm text-rose-700">{reasonError}</p>}
         </div>

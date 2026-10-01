@@ -186,6 +186,7 @@ try {
 
   for (const width of [1440, 1024, 768, 430, 390, 360]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 640, deviceScaleFactor: 1, mobile: false });
+    await send("Emulation.setTouchEmulationEnabled", { enabled: width < 768 });
     assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `review width ${width}`);
     await assertCompact("Booking review", width);
     await click("Back to edit");
@@ -248,6 +249,7 @@ try {
   assert.ok((await body()).includes("This is the exact reported message."));
   for (const width of [1440, 1024, 768, 430, 390, 360]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 640, deviceScaleFactor: 1, mobile: false });
+    await send("Emulation.setTouchEmulationEnabled", { enabled: width < 768 });
     assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `message review width ${width}`);
     await assertCompact("Message review", width);
     await click("Back to edit");

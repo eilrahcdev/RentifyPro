@@ -1,5 +1,6 @@
 import { CircleCheck, CircleX, X } from "lucide-react";
 import ModalPortal from "../../components/ModalPortal";
+import AutoResizeTextarea from "../../components/AutoResizeTextarea";
 
 export default function ReturnReviewModal({ review, note, loading, error, onNoteChange, onClose, onSubmit }) {
   if (!review?.booking) return null;
@@ -36,12 +37,12 @@ export default function ReturnReviewModal({ review, note, loading, error, onNote
             </div>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Optional note</span>
-              <textarea
+              <AutoResizeTextarea
                 value={note}
                 maxLength={500}
                 onChange={(event) => onNoteChange(event.target.value)}
                 placeholder={confirming ? "Condition or handover note" : "Reason for declining the request"}
-                className="min-h-24 w-full resize-y rounded-2xl border border-slate-200 px-3.5 py-3 text-sm text-slate-800 outline-none focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-2xl border border-slate-200 px-3.5 py-3 text-sm text-slate-800 outline-none focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
               />
             </label>
           </div>

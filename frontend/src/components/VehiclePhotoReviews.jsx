@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API, { API_BASE_URL } from "../utils/api";
+import AutoResizeTextarea from "./AutoResizeTextarea";
 
 const vehiclePhotoUrl = (id) => `${API_BASE_URL}/vehicle-photos/${id}/file`;
 
@@ -51,7 +52,7 @@ export default function VehiclePhotoReviews({ admin = false, vehicleType, onSele
         <p className="mt-1 text-sm text-slate-600">{photo.reason}</p>
         {admin ? <form onSubmit={(event) => decide(event, photo)} className="mt-3 space-y-2">
           <label className="flex gap-2 text-sm"><input type="checkbox" name="exterior" />Clear exterior suitable for a cover</label>
-          <label className="block text-sm">Review reason<textarea name="reason" required minLength={5} maxLength={500} className="mt-1 w-full rounded border p-2" /></label>
+          <label className="block text-sm">Review reason<AutoResizeTextarea name="reason" required minLength={5} maxLength={500} className="mt-1 w-full rounded border p-2" /></label>
           <div className="flex gap-2"><button disabled={busy} type="submit" value="approved" className="rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-50">Approve</button><button disabled={busy} type="submit" value="rejected" className="rounded border px-3 py-2 text-sm disabled:opacity-50">Reject</button></div>
         </form> : photo.status === "approved" && <button type="button" disabled={busy} onClick={() => choose(photo)} className="mt-3 rounded-lg border px-3 py-2 text-sm">Add approved photo</button>}
       </article>)}

@@ -50,8 +50,8 @@ export default function VehiclePreviewModal({
     <div className="rp-modal-layer">
       <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close vehicle preview" />
 
-      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
-        <div className="border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white px-5 py-4 sm:px-6">
+      <div className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+        <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white px-5 py-4 sm:px-6">
           <button
             type="button"
             onClick={onClose}
@@ -68,7 +68,7 @@ export default function VehiclePreviewModal({
           </p>
         </div>
 
-        <div className="max-h-[calc(92vh-92px)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6 sm:py-6">
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.05fr_1fr]">
             <VehicleCover
               vehicle={vehicle}
@@ -106,8 +106,8 @@ export default function VehiclePreviewModal({
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     {ownerAvatar ? (
                       <img
                         src={ownerAvatar}
@@ -119,7 +119,7 @@ export default function VehiclePreviewModal({
                         {getInitialsFromName(ownerName)}
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0 break-words">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Car Owner</p>
                       <div className="mt-0.5 flex items-center gap-1.5">
                         <p className="text-sm font-semibold text-slate-900">{ownerName}</p>

@@ -1443,7 +1443,7 @@ export const getOwnerReviews = async (req, res) => {
       reviewRating: { $exists: true },
       reviewCreatedAt: { $exists: true },
     })
-      .populate("renter", "name email avatar")
+      .populate("renter", "name avatar")
       .populate("vehicle", "name")
       .sort({ reviewCreatedAt: -1 })
       .lean();

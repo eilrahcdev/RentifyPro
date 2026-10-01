@@ -11,6 +11,28 @@
   "recommendation_limit": 3,
   "evaluation_min_accuracy": 0.9,
   "unique_typo_min_length": 4,
+  "supported_reply_languages": {
+    "English": "en",
+    "Filipino": "fil",
+    "Taglish": "taglish"
+  },
+  "language_aliases": {
+    "english": "English",
+    "filipino": "Filipino",
+    "tagalog": "Filipino",
+    "taglish": "Taglish",
+    "spanish": "Spanish",
+    "espanol": "Spanish",
+    "español": "Spanish",
+    "bisaya": "Bisaya",
+    "bisya": "Bisaya",
+    "cebuano": "Cebuano",
+    "ilonggo": "Ilonggo",
+    "hiligaynon": "Hiligaynon",
+    "ilocano": "Ilocano",
+    "ilokano": "Ilocano",
+    "iloko": "Ilocano"
+  },
   "informal_text_normalizations": {
     "r u": "are you",
     "are u": "are you",
@@ -42,7 +64,100 @@
     "merun": "meron",
     "mron": "meron",
     "aq": "ako",
-    "rptor": "raptor"
+    "rptor": "raptor",
+    "pno": "paano",
+    "pano": "paano",
+    "kau": "kayo",
+    "q": "ko",
+    "ung": "yung",
+    "pra": "para",
+    "reqs": "requirements",
+    "di q": "hindi ko",
+    "mag rent": "magrenta",
+    "iextend": "extend",
+    "icancel": "cancel"
+  },
+  "topics": {
+    "vehicles": {
+      "intents": ["rental_rate", "insurance_included", "security_deposit", "available_vehicles", "vehicle_brand_search", "available_transmission", "full_tank_return", "passenger_capacity", "choose_specific_model", "same_day_rental", "advance_booking_discount", "driver_option", "vehicle_categories", "vehicle_unavailability", "vehicle_availability_status"],
+      "keywords": ["vehicle", "vehicles", "car", "cars", "sasakyan", "kotse", "listing", "listings", "suv", "van", "transmission", "passengers", "driver", "fuel", "insurance"],
+      "candidates": ["available_vehicles", "rental_rate", "vehicle_availability_status"],
+      "clarification": {
+        "en": "Are you looking for vehicles to rent, rental prices, or the status of unavailable listings?",
+        "fil": "Naghahanap ka ba ng sasakyang marerentahan, presyo ng renta, o status ng unavailable listings?",
+        "taglish": "Vehicles to rent, rental prices, or unavailable listing status ba ang gusto mong malaman?"
+      }
+    },
+    "booking": {
+      "intents": ["booking_pickup_time", "how_to_book", "booking_status", "my_active_bookings", "my_overdue_return", "booking_extension", "booking_cancellation", "booking_limits", "schedule_conflict", "late_return_policy", "rental_problem_support", "pickup_location"],
+      "keywords": ["booking", "bookings", "reservation", "reservations", "pickup", "return", "extend", "extension", "cancel", "cancellation", "late"],
+      "candidates": ["how_to_book", "booking_status", "booking_cancellation"],
+      "clarification": {
+        "en": "Do you want to make a booking, check your own booking status, or cancel a booking?",
+        "fil": "Gusto mo bang mag-book, tingnan ang sarili mong booking status, o magkansela ng booking?",
+        "taglish": "Do you want to book, check your own booking status, or cancel a booking?"
+      }
+    },
+    "payment": {
+      "intents": ["payment_methods", "payment_downpayment", "walk_in_payment", "unpaid_balance", "my_unpaid_balance", "payment_troubleshooting", "payment_checkout_expired", "rental_refund_guidance"],
+      "keywords": ["payment", "payments", "pay", "paid", "bayad", "bayaran", "gcash", "maya", "card", "checkout", "balance", "balanse", "downpayment", "refund"],
+      "candidates": ["payment_methods", "payment_downpayment", "unpaid_balance"],
+      "clarification": {
+        "en": "Are you asking about payment methods, the 30% down payment, or remaining-balance rules?",
+        "fil": "Payment methods, 30% down payment, o mga tuntunin sa natitirang balanse ba ang tinatanong mo?",
+        "taglish": "Payment methods, 30% down payment, or remaining-balance rules ba ang tanong mo?"
+      }
+    },
+    "verification": {
+      "intents": ["rental_requirements", "minimum_age", "id_or_proof_of_address", "verification_security", "verification_troubleshooting"],
+      "keywords": ["verification", "verify", "requirements", "documents", "document", "id", "identity", "selfie", "age", "edad"],
+      "candidates": ["rental_requirements", "verification_troubleshooting", "verification_security"],
+      "clarification": {
+        "en": "Do you need rental requirements, help with a rejected verification, or information about document security?",
+        "fil": "Kailangan mo ba ng rental requirements, tulong sa rejected verification, o impormasyon sa seguridad ng dokumento?",
+        "taglish": "Rental requirements, rejected verification help, or document security ba ang tanong mo?"
+      }
+    },
+    "account": {
+      "intents": ["account_password_reset"],
+      "keywords": ["account", "login", "password", "sign in"],
+      "candidates": ["account_password_reset"],
+      "clarification": {
+        "en": "Are you having trouble signing in or resetting your password? Describe what happens so I can point you to the right account step.",
+        "fil": "May problema ba sa pag-sign in o pag-reset ng password? Sabihin kung ano ang nangyayari para maituro ko ang tamang hakbang.",
+        "taglish": "Sign-in or password reset problem ba? Tell me what happens so I can point you to the right account step."
+      }
+    },
+    "support": {
+      "intents": ["reviews_ratings", "notifications", "messaging"],
+      "keywords": ["reviews", "review", "ratings", "rating", "notifications", "notification", "message", "messages", "messaging", "contact"],
+      "candidates": ["reviews_ratings", "notifications", "messaging"],
+      "clarification": {
+        "en": "Are you asking about reviews, notifications, or messaging an owner?",
+        "fil": "Reviews, notifications, o pag-message sa owner ba ang tinatanong mo?",
+        "taglish": "Reviews, notifications, or messaging an owner ba ang tanong mo?"
+      }
+    },
+    "owner": {
+      "intents": ["owner_listing_guidance", "owner_booking_guidance", "owner_earnings_guidance"],
+      "keywords": ["owner", "earnings", "income", "revenue", "publish", "approve", "decline"],
+      "candidates": ["owner_listing_guidance", "owner_booking_guidance", "owner_earnings_guidance"],
+      "clarification": {
+        "en": "Do you need help listing your vehicle, managing booking requests, or viewing owner earnings?",
+        "fil": "Kailangan mo ba ng tulong sa pag-list ng sasakyan, booking requests, o pagtingin sa owner earnings?",
+        "taglish": "Listing a vehicle, managing booking requests, or viewing owner earnings ba ang kailangan mo?"
+      }
+    },
+    "conversation": {
+      "intents": ["chat_greeting", "chat_wellbeing", "chat_identity", "chat_gender_identity", "chat_language_support", "chat_gratitude", "chat_acknowledgement", "chat_goodbye", "chat_casual_conversation", "unclear_message", "nonsense_message", "help_request"],
+      "keywords": ["language", "languages", "dialect", "dialects", "wika", "speak", "bot", "chatbot"],
+      "candidates": ["help_request", "chat_identity", "chat_language_support"],
+      "clarification": {
+        "en": "Would you like to know what I can help with, who I am, or which languages I support?",
+        "fil": "Gusto mo bang malaman ang maitutulong ko, kung sino ako, o ang mga wikang suportado ko?",
+        "taglish": "Do you want to know what I can help with, who I am, or which languages I support?"
+      }
+    }
   },
   "vehicle_brands": [
     "Toyota",

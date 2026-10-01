@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import API from "../utils/api";
 import EvidenceFilePicker from "./EvidenceFilePicker";
+import AutoResizeTextarea from "./AutoResizeTextarea";
 import { validateReportEvidenceFiles } from "../utils/fileValidation";
 import OwnerPageHeader from "../owner/components/OwnerPageHeader";
 
@@ -121,7 +122,7 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
   };
 
   return (
-    <section className={embedded ? "space-y-5" : "min-h-screen bg-slate-50 px-4 py-8 sm:px-6"}>
+    <section className={`rp-reports-page ${embedded ? "space-y-5" : "min-h-screen bg-slate-50 px-4 py-8 sm:px-6"}`}>
       <div className={ownerHeader ? "space-y-5" : "mx-auto max-w-6xl space-y-5"}>
         {ownerHeader ? (
           <OwnerPageHeader
@@ -238,7 +239,7 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
                       <button type="button" onClick={() => { setAppealingId(report._id); setAppealText(""); }} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">Appeal decision</button>
                     ) : (
                       <div className="space-y-3">
-                        <textarea value={appealText} onChange={(event) => setAppealText(event.target.value.slice(0, 2000))} rows={4} placeholder="Explain why this decision should be reconsidered." className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                        <AutoResizeTextarea value={appealText} onChange={(event) => setAppealText(event.target.value.slice(0, 2000))} minRows={2} maxRows={6} aria-label="Appeal explanation" placeholder="Explain why this decision should be reconsidered." className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setAppealingId("")} disabled={submitting} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold">Cancel</button>
                           <button type="button" onClick={() => void submitAppeal(report)} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
@@ -265,7 +266,7 @@ function InformationForm({ open, text, files, submitting, onOpen, onCancel, onTe
         <button type="button" onClick={onOpen} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Provide requested information</button>
       ) : (
         <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <textarea value={text} onChange={(event) => onTextChange(event.target.value.slice(0, 2000))} rows={4} placeholder="Provide the details requested by the administrator." className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          <AutoResizeTextarea value={text} onChange={(event) => onTextChange(event.target.value.slice(0, 2000))} minRows={2} maxRows={6} aria-label="Requested report information" placeholder="Provide the details requested by the administrator." className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
           <EvidenceFilePicker files={files} onChange={onFilesChange} onError={onFileError} disabled={submitting} />
           <div className="flex gap-2">
             <button type="button" onClick={onCancel} disabled={submitting} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Cancel</button>

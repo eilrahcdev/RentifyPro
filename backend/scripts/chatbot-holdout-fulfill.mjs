@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
-import { applyChatbotGuardrails, buildChatbotPayload } from "../utils/chatbotPayload.js";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { applyChatbotGuardrails, buildChatbotPayload, fulfillVehicleAvailabilityStatus, buildChatbotConversationContext } from "../utils/chatbotPayload.js";
 
 // Fixed renter-visible snapshot. The unavailable record exercises visibility filtering.
 const vehicles = [
@@ -12,20 +14,33 @@ const vehicles = [
   { _id: "hidden", name: "Honda SUV", dailyRentalRate: 1000, pricingUnit: "daily", availabilityStatus: "unavailable", specs: { type: "suv", seats: 7, transmission: "Automatic" } },
 ];
 
-const requests = JSON.parse(readFileSync(0, "utf8"));
-const responses = requests.map(({ message, classifier }) => {
-  const payload = buildChatbotPayload(message, "auto", vehicles, classifier.entities);
-  const response = applyChatbotGuardrails(classifier, payload);
+const locations = { vios: "Manila", everest: "Cebu City", fortuner: "Davao City", raptor: "Davao City", city: "Cebu City", van: "Manila", hidden: "Cebu City" };
+for (const vehicle of vehicles) vehicle.location = locations[vehicle._id];
+export function fulfillHoldoutRequests(requests, includeRecommendationDetails = false) {
+  return requests.map(({ message, classifier }) => {
+  const answers = [classifier, ...(classifier.additional_answers || [])].map((answer) => {
+    const payload = buildChatbotPayload(answer.question || message, "auto", vehicles, answer.entities);
+    const canonical = applyChatbotGuardrails({ ...answer, additional_answers: [] }, payload);
+    return canonical.intent === "vehicle_availability_status" && !canonical.requires_clarification
+      ? fulfillVehicleAvailabilityStatus(canonical, vehicles) : canonical;
+  });
+  const response = answers[0];
   return {
     intent: response.intent,
     language: response.language,
     entities: response.entities,
     conditions: response.conditions,
     clarification: response.clarification,
-    reply: response.reply,
-    recommendations: response.recommendations.map(({ _id, displayRate, displayRateUnit }) => ({
+    reply: answers.map((answer) => answer.reply).join("\n\n"),
+    reason_code: response.reason_code,
+    additional_intents: answers.slice(1).map((answer) => answer.intent),
+    conversation_context: buildChatbotConversationContext(response),
+    recommendations: includeRecommendationDetails ? response.recommendations : response.recommendations.map(({ _id, displayRate, displayRateUnit }) => ({
       id: _id, displayRate, displayRateUnit,
     })),
   };
-});
-process.stdout.write(JSON.stringify(responses));
+  });
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.stdout.write(JSON.stringify(fulfillHoldoutRequests(JSON.parse(readFileSync(0, "utf8")))));
+}
