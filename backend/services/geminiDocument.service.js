@@ -1,105 +1,236 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { assertGeminiSensitiveDataAllowed } from "../utils/geminiDataPolicy.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
+import {
+  ID_DOCUMENT_TYPES,
+  SUPPORTING_DOCUMENT_TYPES,
+  resolveSupportedDocumentType,
+} from "./documentValidation.service.js";
 
-const ID_DOC_TYPES = [
-  "PhilSys National ID",
-  "Philippine Passport",
-  "LTO Driver's License",
-  "UMID",
-  "PRC ID",
-  "SSS ID",
-  "GSIS ID",
-  "PhilHealth ID",
-  "Postal ID",
-  "Voter's ID",
+const clean = (value, max = 200) => String(value || "").trim().slice(0, max);
+const toStringArray = (value) => Array.isArray(value)
+  ? value.map((entry) => clean(entry, 100)).filter(Boolean).slice(0, 8)
+  : [];
+const toStrictBoolean = (value) => value === true;
+const STRUCTURAL_BOOLEAN_FIELDS = [
+  "official_markings_present",
+  "layout_consistent",
+  "holder_portrait_present",
+  "document_number_region_present",
+  "birth_date_region_present",
+  "expiration_date_region_present",
+  "machine_readable_zone_present",
+  "business_registration_features_present",
 ];
+const ALLOWED_DOCUMENT_SURFACES = new Set([
+  "PHYSICAL_DOCUMENT",
+  "OFFICIAL_DIGITAL_DOCUMENT",
+  "SCREENSHOT",
+  "PLAIN_PAPER",
+  "HANDWRITTEN_NOTE",
+  "PRINTED_TEXT",
+  "UNRELATED_IMAGE",
+  "UNKNOWN",
+]);
 
-const SUPPORTING_DOC_TYPES = [
-  "DTI Business Name Registration",
-  "SEC Certificate of Registration",
-  "Mayor's/Business Permit",
-  "BIR Certificate of Registration (Form 2303)",
-  "Barangay Business Clearance",
-  "CDA Certificate of Registration",
-];
-
-const normalizeText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-const normalizeCountry = (value) => {
-  const cleaned = normalizeText(value);
-  if (cleaned.includes("philippines") || cleaned === "ph" || cleaned === "phl") return "PH";
-  return cleaned ? cleaned.toUpperCase() : "";
+export const normalizeDocumentConfidence = (value) => {
+  const raw = Number.isFinite(Number(value)) ? Number(value) : 0;
+  return Math.max(0, Math.min(100, raw > 0 && raw <= 1 ? raw * 100 : raw));
 };
 
-const pickAllowedDocTypes = (docType) =>
-  docType === "supporting" ? SUPPORTING_DOC_TYPES : ID_DOC_TYPES;
-
-const isAllowedDocType = (docType, allowed) => {
-  const normalized = normalizeText(docType);
-  if (!normalized) return false;
-  return allowed.some((entry) => {
-    const normEntry = normalizeText(entry);
-    return normEntry === normalized || normEntry.includes(normalized) || normalized.includes(normEntry);
-  });
-};
+export const requiresManualDocumentReview = (confidence, minimum = 70) =>
+  normalizeDocumentConfidence(confidence) < Math.max(0, Math.min(100, Number(minimum) || 0));
 
 const safeJsonParse = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(text); } catch { return null; }
 };
 
-const safeStringify = (value) => {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[unserializable]";
-  }
-};
+const summarizeGeminiError = (error) => [
+  String(error?.message || ""),
+  error?.status ? `status=${error.status}` : "",
+  error?.code ? `code=${error.code}` : "",
+].filter(Boolean).join(" | ");
 
-const GEMINI_LIMIT_MESSAGE =
-  "Document verification is temporarily busy due to high demand. Please try again in a few minutes.";
-const GEMINI_UNAVAILABLE_MESSAGE =
-  "Document verification is temporarily unavailable right now. Please try again later.";
-
-const summarizeGeminiError = (error) => {
-  const message = String(error?.message || "");
-  const parts = [message];
-  if (error?.status) parts.push(`status=${error.status}`);
-  if (error?.code) parts.push(`code=${error.code}`);
-  if (error?.response?.status) parts.push(`responseStatus=${error.response.status}`);
-  if (error?.response?.data) parts.push(`responseData=${safeStringify(error.response.data)}`);
-  if (error?.stack) parts.push(`stack=${String(error.stack)}`);
-  return parts.filter(Boolean).join(" | ");
-};
-
-const toSafeGeminiError = (error) => {
-  const raw = summarizeGeminiError(error);
-  const isLimitError =
-    /\b429\b/i.test(raw) ||
-    /quota/i.test(raw) ||
-    /rate[\s-]*limit/i.test(raw) ||
-    /resource[\s-]*exhausted/i.test(raw) ||
-    /too many requests/i.test(raw);
-
-  auditLog.error("KYC", "Gemini document verification failed", { detail: raw });
-
-  const safe = new Error(isLimitError ? GEMINI_LIMIT_MESSAGE : GEMINI_UNAVAILABLE_MESSAGE);
-  safe.status = isLimitError ? 429 : 503;
+const toSafeGeminiError = (error, { timedOut = false } = {}) => {
+  const detail = summarizeGeminiError(error);
+  const isLimitError = /\b429\b|quota|rate[\s-]*limit|resource[\s-]*exhausted|too many requests/i.test(detail);
+  const providerStatus = Number(error?.status);
+  const status = timedOut ? 504
+    : Number.isInteger(providerStatus) && providerStatus >= 400 && providerStatus <= 599
+      ? providerStatus : isLimitError ? 429 : 503;
+  const retryable = [408, 429, 500, 502, 503, 504].includes(status);
+  auditLog.error("KYC", "Gemini document extraction failed", { detail, httpStatus: status, retryable });
+  const safe = new Error(status === 429
+    ? "Document screening is temporarily busy. We will retry automatically."
+    : retryable
+      ? "Document screening is temporarily unavailable. We will send the document for manual review if retries do not succeed."
+      : "Automated screening is unavailable. A reviewer will check this document manually.");
+  safe.status = status;
+  safe.retryable = retryable;
+  if (timedOut) safe.code = "GEMINI_REQUEST_TIMEOUT";
+  safe.publicMessage = safe.message;
   return safe;
 };
 
-export async function verifyPhilippinesDocument({ base64, mimeType = "image/jpeg", docType = "id" }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is missing in backend .env");
+const documentRequestTimeoutMs = () => {
+  const configured = Number(process.env.KYC_GEMINI_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 1 && configured <= 2_147_483_647
+    ? Math.floor(configured) : 30_000;
+};
 
-  if (!base64) throw new Error("Document image missing");
+export const buildDocumentExtractionInstruction = ({ docType = "id" } = {}) => {
+  const isId = docType === "id";
+  const allowedTypes = isId ? ID_DOCUMENT_TYPES : SUPPORTING_DOCUMENT_TYPES;
+  const fieldInstructions = isId
+    ? "Extract the holder's full name, birth date, document number, issue date, and expiration date when visibly present."
+    : "Extract the registered person name, business name, document reference, permit or registration number, issue date, and expiration date when visibly present. For a BIR Certificate of Registration or Notice to Issue Receipt/Invoice, extract the 9-digit TIN and its branch code into separate fields. Do not treat a TIN as a permit number. Do not invent a permit or document number if none is visible.";
+
+  return `Independently inspect one uploaded Philippine ${isId ? "identity" : "business registration"} document for RentifyPro.
+Do not approve, reject, or compare the upload with any registration data. No user-selected document type is provided to you.
+Follow this order exactly: image quality, document recognition, independent document classification, document structure, then visible-field extraction.
+
+Recognition rules:
+- Matching names, dates, numbers, or field labels do not prove that an upload is a document.
+- A plain sheet of paper, handwritten note, typed or printed personal information, screenshot of text, unrelated image, unsupported document, or ambiguous image must have recognized_document=false and document_type="UNKNOWN".
+- Do not choose the closest allowed type. Use "UNKNOWN" whenever the visible layout and official features do not confidently establish one exact type.
+- recognized_document may be true only when the upload visibly has the expected official layout and structural characteristics of the classified type.
+- Do not infer, invent, or complete values that are not clearly visible.
+
+Allowed exact document_type values:
+${allowedTypes.map((item) => `- ${item}`).join("\n")}
+- UNKNOWN
+
+document_surface must be exactly one of: PHYSICAL_DOCUMENT, OFFICIAL_DIGITAL_DOCUMENT, SCREENSHOT, PLAIN_PAPER, HANDWRITTEN_NOTE, PRINTED_TEXT, UNRELATED_IMAGE, UNKNOWN.
+For a Philippine Passport, confirm the passport layout, holder portrait, document-number area, biographic-data area, expiration-date area, and machine-readable zone.
+For an LTO Driver's License, confirm the license-card layout, official markings, holder portrait, license-number area, birth-date area, and expiration-date area.
+For a PhilSys National ID or another supported ID, confirm the expected card layout, official markings, holder portrait, document-number area, and birth-date area.
+For a supporting business document, confirm the official layout, issuing-body markings, and business-registration features. The identifier area may show a permit or registration number, a TIN and branch code on a BIR document, or no reference number on a Barangay Business Clearance.
+Set authenticity_uncertain=true when the document is recognized but its official structure or visible security characteristics cannot be confidently assessed. Set suspected_tampering=true only for visible signs of alteration; do not claim issuer or database authentication.
+${fieldInstructions}
+
+Return JSON only with this exact structure:
+{
+  "image_readable": boolean,
+  "recognized_document": boolean,
+  "document_type": string,
+  "issuing_country": string,
+  "classification_confidence": number,
+  "document_surface": string,
+  "structural_features": {
+    "official_markings_present": boolean,
+    "layout_consistent": boolean,
+    "holder_portrait_present": boolean,
+    "document_number_region_present": boolean,
+    "birth_date_region_present": boolean,
+    "expiration_date_region_present": boolean,
+    "machine_readable_zone_present": boolean,
+    "business_registration_features_present": boolean
+  },
+  "authenticity_uncertain": boolean,
+  "suspected_tampering": boolean,
+  "warnings": string[],
+  "extraction_confidence": number,
+  "extracted_data": {
+    "full_name": string,
+    "birth_date": "YYYY-MM-DD" | "",
+    "document_number": string,
+    "issue_date": "YYYY-MM-DD" | "",
+    "expiration_date": "YYYY-MM-DD" | "",
+    "business_name": string,
+    "permit_number": string,
+    "tax_identification_number": string,
+    "branch_code": string
+  }
+}`;
+};
+
+export const normalizeDocumentInspection = (parsed) => {
+  const features = parsed?.structural_features;
+  const data = parsed?.extracted_data;
+  const rawType = parsed?.document_type ?? parsed?.doc_type;
+  const rawCountry = parsed?.issuing_country ?? parsed?.country;
+  const rawClassificationConfidence = Number(parsed?.classification_confidence);
+  const rawExtractionConfidence = Number(parsed?.extraction_confidence ?? parsed?.confidence);
+  const surface = clean(parsed?.document_surface, 40).toUpperCase();
+  const completeResponse = parsed
+    && typeof parsed === "object"
+    && !Array.isArray(parsed)
+    && typeof parsed.image_readable === "boolean"
+    && typeof parsed.recognized_document === "boolean"
+    && typeof rawType === "string"
+    && typeof rawCountry === "string"
+    && Number.isFinite(rawClassificationConfidence)
+    && ALLOWED_DOCUMENT_SURFACES.has(surface)
+    && features
+    && typeof features === "object"
+    && !Array.isArray(features)
+    && STRUCTURAL_BOOLEAN_FIELDS.every((field) => typeof features[field] === "boolean")
+    && typeof parsed.authenticity_uncertain === "boolean"
+    && typeof parsed.suspected_tampering === "boolean"
+    && Number.isFinite(rawExtractionConfidence)
+    && data
+    && typeof data === "object"
+    && !Array.isArray(data);
+
+  if (!completeResponse) {
+    const error = new Error("The document extraction service returned an incomplete response.");
+    error.status = 503;
+    throw error;
+  }
+
+  return {
+    image_readable: toStrictBoolean(parsed.image_readable),
+    recognized_document: toStrictBoolean(parsed.recognized_document),
+    document_type: clean(rawType, 140) || "UNKNOWN",
+    issuing_country: clean(rawCountry, 40),
+    classification_confidence: normalizeDocumentConfidence(rawClassificationConfidence),
+    document_surface: surface,
+    structural_features: Object.fromEntries(
+      STRUCTURAL_BOOLEAN_FIELDS.map((field) => [field, toStrictBoolean(features[field])])
+    ),
+    authenticity_uncertain: toStrictBoolean(parsed.authenticity_uncertain),
+    suspected_tampering: toStrictBoolean(parsed.suspected_tampering),
+    warnings: toStringArray(parsed.warnings || parsed.quality_issues),
+    extraction_confidence: normalizeDocumentConfidence(rawExtractionConfidence),
+    extracted_data: {
+      full_name: clean(data.full_name, 160),
+      birth_date: clean(data.birth_date, 40),
+      document_number: clean(data.document_number, 120),
+      issue_date: clean(data.issue_date, 40),
+      expiration_date: clean(data.expiration_date, 40),
+      business_name: clean(data.business_name, 180),
+      permit_number: clean(data.permit_number, 120),
+      tax_identification_number: clean(data.tax_identification_number, 40),
+      branch_code: clean(data.branch_code, 20),
+    },
+  };
+};
+
+export async function verifyPhilippinesDocument({
+  base64,
+  mimeType = "image/jpeg",
+  docType = "id",
+  selectedDocType = "",
+}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    const error = new Error("Gemini document extraction is not configured.");
+    error.status = 503;
+    error.retryable = false;
+    throw error;
+  }
+  try {
+    assertGeminiSensitiveDataAllowed();
+  } catch (error) {
+    error.retryable = false;
+    throw error;
+  }
+  if (!base64) {
+    const error = new Error("The uploaded document file is missing.");
+    error.status = 400;
+    error.permanent = true;
+    throw error;
+  }
 
   const cleanBase64 = String(base64).includes("base64,")
     ? String(base64).split("base64,")[1]
@@ -107,106 +238,47 @@ export async function verifyPhilippinesDocument({ base64, mimeType = "image/jpeg
   const approxBytes = Math.floor(cleanBase64.length * 0.75);
   const maxBytes = Number(process.env.KYC_DOC_MAX_BYTES || 4 * 1024 * 1024);
   if (approxBytes > maxBytes) {
-    return {
-      passed: false,
-      confidence: 0,
-      country: "",
-      doc_type: "Unknown",
-      reason: "Document file is too large. Please upload a smaller image.",
-    };
+    const error = new Error("The document is too large to process.");
+    error.status = 413;
+    error.permanent = true;
+    throw error;
   }
 
-  const allowedDocTypes = pickAllowedDocTypes(docType);
-  const docLabel = docType === "supporting" ? "supporting business document" : "government ID";
-  const allowedList = allowedDocTypes.map((entry) => `- ${entry}`).join("\n");
+  const selectedCanonical = resolveSupportedDocumentType(selectedDocType, docType);
+  if (!selectedCanonical) {
+    const error = new Error("The selected document type is not supported.");
+    error.status = 400;
+    error.permanent = true;
+    throw error;
+  }
 
-  const instruction = `
-You are a strict document verification system for RentifyPro.
-
-You will receive a single document image (photo or scan).
-
-Task:
-1) Decide if the document is a REAL ${docLabel} issued in the Philippines.
-2) Identify the document type ONLY from the allowed list below.
-3) If it is NOT from the Philippines or the type is unclear, fail.
-
-Allowed document types:
-${allowedList}
-
-Return ONLY JSON:
-{
-  "passed": boolean,
-  "confidence": number,
-  "country": "PH" | "Unknown",
-  "doc_type": "one of the allowed list" | "Unknown",
-  "reason": string
-}
-`.trim();
-
+  // The selected type is intentionally validated here but never included in the model prompt.
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelName = process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash-lite";
   const model = genAI.getGenerativeModel({
-    model: modelName,
-    systemInstruction: instruction,
+    model: process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite",
+    systemInstruction: buildDocumentExtractionInstruction({ docType }),
   });
 
   let result;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), documentRequestTimeoutMs());
   try {
     result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: "Document image:" },
-            { inlineData: { data: cleanBase64, mimeType } },
-            { text: "Analyze and return JSON only." },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.2,
-      },
-    });
+      contents: [{
+        role: "user",
+        parts: [
+          { text: "Inspect this upload independently and return the required JSON only." },
+          { inlineData: { data: cleanBase64, mimeType } },
+        ],
+      }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0 },
+    }, { signal: controller.signal });
   } catch (error) {
-    throw toSafeGeminiError(error);
+    throw toSafeGeminiError(error, { timedOut: controller.signal.aborted });
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const text = result?.response?.text?.() ?? "";
-  const parsed = safeJsonParse(text.trim());
-
-  if (!parsed || typeof parsed.passed !== "boolean") {
-    return {
-      passed: false,
-      confidence: 0,
-      country: "",
-      doc_type: "Unknown",
-      reason: "AI returned an invalid response. Please upload a clearer document image.",
-    };
-  }
-
-  const country = normalizeCountry(parsed.country);
-  const docTypeValue = String(parsed.doc_type || "Unknown").trim();
-  const allowed = isAllowedDocType(docTypeValue, allowedDocTypes);
-  const confidence = Number.isFinite(Number(parsed.confidence)) ? Number(parsed.confidence) : 0;
-
-  if (!parsed.passed || country !== "PH" || !allowed) {
-    return {
-      passed: false,
-      confidence,
-      country: country || "Unknown",
-      doc_type: allowed ? docTypeValue : "Unknown",
-      reason:
-        parsed.reason ||
-        "Only valid Philippine documents are accepted. Please upload a supported Philippine document.",
-    };
-  }
-
-  return {
-    passed: true,
-    confidence,
-    country: "PH",
-    doc_type: docTypeValue,
-    reason: parsed.reason || "Document verified.",
-  };
+  const parsed = safeJsonParse(result?.response?.text?.() || "");
+  return normalizeDocumentInspection(parsed);
 }

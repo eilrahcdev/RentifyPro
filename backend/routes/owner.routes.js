@@ -1,3 +1,4 @@
+import { parseVehicleListing, prepareApprovedVehicleImages } from "../middleware/vehiclePhoto.middleware.js";
 // Owner signup routes
 import express from "express";
 import {
@@ -13,11 +14,7 @@ import {
   updateOwnerVehicle,
 } from "../controllers/ownerVehicle.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
-import { authorize } from "../middleware/rbac.middleware.js";
-import {
-  uploadVehicleImages,
-  validateUploadedVehicleImages,
-} from "../middleware/upload.middleware.js";
+import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
 import {
   validateBookingStatusUpdate,
   validatePaymentStatusUpdate,
@@ -33,10 +30,14 @@ import {
   getOwnerAnalytics,
   updateOwnerBookingStatus,
   updateOwnerBookingPaymentStatus,
+  reviewOwnerBookingExtensionRequest,
+  confirmOwnerVehicleReturn,
+  reviewOwnerBookingCancellationRequest,
   reviewOwnerWalkInPaymentRequest,
   confirmOwnerWalkInPayment,
 } from "../controllers/ownerDashboard.controller.js";
 import { otpLimiter } from "../middleware/security.middleware.js";
+import { requireModerationCapability } from "../middleware/moderation.middleware.js";
 
 const router = express.Router();
 
@@ -48,9 +49,11 @@ router.post(
   "/vehicles",
   protect,
   authorize("owner"),
-  uploadVehicleImages.array("images", 8),
-  validateUploadedVehicleImages,
+  requireKyc,
+  requireModerationCapability("listing"),
+  parseVehicleListing,
   validateVehicleCreate,
+  prepareApprovedVehicleImages,
   createOwnerVehicle
 );
 router.put(
@@ -58,9 +61,10 @@ router.put(
   protect,
   authorize("owner"),
   validateObjectIdParam("id"),
-  uploadVehicleImages.array("images", 8),
-  validateUploadedVehicleImages,
+  requireModerationCapability("listing"),
+  parseVehicleListing,
   validateVehicleUpdate,
+  prepareApprovedVehicleImages,
   updateOwnerVehicle
 );
 router.patch(
@@ -68,10 +72,11 @@ router.patch(
   protect,
   authorize("owner"),
   validateObjectIdParam("id"),
+  requireModerationCapability("listing"),
   validateVehicleAvailability,
   setOwnerVehicleAvailability
 );
-router.delete("/vehicles/:id", protect, authorize("owner"), validateObjectIdParam("id"), deleteOwnerVehicle);
+router.delete("/vehicles/:id", protect, authorize("owner"), validateObjectIdParam("id"), requireModerationCapability("listing"), deleteOwnerVehicle);
 
 router.get("/bookings", protect, authorize("owner"), getOwnerBookings);
 router.patch(
@@ -82,6 +87,20 @@ router.patch(
   validateBookingStatusUpdate,
   updateOwnerBookingStatus
 );
+router.post(
+  "/bookings/:id/confirm-return",
+  protect,
+  authorize("owner"),
+  validateObjectIdParam("id"),
+  confirmOwnerVehicleReturn
+);
+router.patch(
+  "/bookings/:id/return-request",
+  protect,
+  authorize("owner"),
+  validateObjectIdParam("id"),
+  confirmOwnerVehicleReturn
+);
 router.patch(
   "/bookings/:id/payment-status",
   protect,
@@ -89,6 +108,20 @@ router.patch(
   validateObjectIdParam("id"),
   validatePaymentStatusUpdate,
   updateOwnerBookingPaymentStatus
+);
+router.patch(
+  "/bookings/:id/extension-request",
+  protect,
+  authorize("owner"),
+  validateObjectIdParam("id"),
+  reviewOwnerBookingExtensionRequest
+);
+router.patch(
+  "/bookings/:id/cancellation-request",
+  protect,
+  authorize("owner"),
+  validateObjectIdParam("id"),
+  reviewOwnerBookingCancellationRequest
 );
 router.patch(
   "/bookings/:id/walk-in-request",

@@ -5,8 +5,8 @@ export default function CategoryCard({ category, onClick }) {
 
   return (
     <div onClick={onClick} className="bg-gray-50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 cursor-pointer hover:-translate-y-2 group">
-      <div className="overflow-hidden rounded-xl mb-6">
-        <img src={category.image} alt={category.title} className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500" />
+      <div className="rp-image-frame mb-6">
+        <img src={category.image} alt={category.title} className="rp-image-fit" />
       </div>
 
       <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">

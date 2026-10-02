@@ -1,0 +1,24 @@
+/* Self-hosted Manrope: one variable font covers every UI weight. */
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/manrope/Manrope-Variable.ttf") format("truetype");
+}
+
+@layer base {
+  :root {
+    --rp-font-family: "Manrope", "Segoe UI", sans-serif;
+    font-family: var(--rp-font-family);
+  }
+
+  body { font-weight: 400; }
+  button, input, select, textarea, optgroup { font-family: inherit; }
+  button, [role="button"], label, legend { font-weight: 600; }
+  input, select, textarea { font-weight: 400; }
+  small { font-weight: 500; }
+  /* Promotional headings opt into 800; operational headings default to 700. */
+  h1 { font-weight: 700; }
+  h2, h3, h4, h5, h6, strong, b { font-weight: 700; }
+}

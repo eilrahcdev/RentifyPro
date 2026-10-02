@@ -1,9 +1,11 @@
 import PreKycFace from "../models/PreKycFace.js";
 
-export async function isPreKycFaceVerified(email) {
+export async function isPreKycFaceVerified(email, sessionId = "") {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) return false;
-  const record = await PreKycFace.findOne({ email: normalizedEmail, status: "approved" }).select("status");
+  const query = { email: normalizedEmail, status: "approved" };
+  if (sessionId) query.sessionId = String(sessionId).trim();
+  const record = await PreKycFace.findOne(query).select("status");
   return Boolean(record);
 }
 

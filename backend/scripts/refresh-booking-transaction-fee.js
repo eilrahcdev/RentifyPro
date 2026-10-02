@@ -3,14 +3,14 @@ import mongoose from "mongoose";
 import connectDB from "../config/db.js";
 import Booking from "../models/Booking.js";
 import { getTransactionFee } from "../utils/fees.js";
+import {
+  getBookingDriverHourlyRate,
+  getBookingDurationHours,
+  getBookingVehicleHourlyRate,
+  roundCurrency,
+} from "../utils/pricing.js";
 
 dotenv.config();
-
-const roundCurrency = (value) => {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.round(numeric * 100) / 100;
-};
 
 const getRentalTotal = (booking) => {
   const directTotal = Number(booking?.totalAmount);
@@ -24,16 +24,16 @@ const getRentalTotal = (booking) => {
     return baseAmount + driverAmount;
   }
 
-  const vehicleDailyRate = Number(booking?.vehicleDailyRate);
-  const bookingDays = Number(booking?.bookingDays || 1);
-  if (Number.isFinite(vehicleDailyRate) && vehicleDailyRate > 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
-    const driverDailyRate = Number(booking?.driverDailyRate || 0);
+  const durationHours = getBookingDurationHours(booking);
+  const vehicleHourlyRate = getBookingVehicleHourlyRate(booking);
+  if (Number.isFinite(vehicleHourlyRate) && vehicleHourlyRate > 0 && Number.isFinite(durationHours) && durationHours > 0) {
+    const driverHourlyRate = getBookingDriverHourlyRate(booking);
     const driverSelected = Boolean(booking?.driverSelected);
     const driverAmountFromRate =
-      driverSelected && Number.isFinite(driverDailyRate) && driverDailyRate > 0
-        ? driverDailyRate * bookingDays
+      driverSelected && Number.isFinite(driverHourlyRate) && driverHourlyRate > 0
+        ? driverHourlyRate * durationHours
         : 0;
-    return vehicleDailyRate * bookingDays + driverAmountFromRate;
+    return roundCurrency(vehicleHourlyRate * durationHours + driverAmountFromRate);
   }
 
   return 0;
@@ -41,10 +41,9 @@ const getRentalTotal = (booking) => {
 
 const shouldUpdateBooking = (booking, fee) => {
   const status = String(booking?.paymentStatus || "").toLowerCase();
-  const persisted = Number(booking?.blockchainGasFee);
+  const persisted = Number(booking?.transactionFee);
   if (!["unpaid", "partial"].includes(status)) return false;
-  if (!Number.isFinite(persisted)) return false;
-  return persisted > 0 && persisted < fee;
+  return !Number.isFinite(persisted) || persisted < fee;
 };
 
 const updateBooking = async (booking, fee) => {
@@ -54,7 +53,7 @@ const updateBooking = async (booking, fee) => {
   const safePaid = Number.isFinite(paidAmount) && paidAmount > 0 ? Math.min(paidAmount, totalPayable) : 0;
   const remaining = roundCurrency(Math.max(totalPayable - safePaid, 0));
 
-  booking.blockchainGasFee = fee;
+  booking.transactionFee = fee;
   booking.paymentAmountDue = remaining;
   await booking.save();
 };
@@ -69,7 +68,10 @@ const main = async () => {
 
   const candidates = await Booking.find({
     paymentStatus: { $in: ["unpaid", "partial"] },
-    blockchainGasFee: { $gt: 0, $lt: fee },
+    $or: [
+      { transactionFee: { $exists: false } },
+      { transactionFee: { $lt: fee } },
+    ],
   });
 
   console.log(`Found ${candidates.length} booking(s) to refresh.`);

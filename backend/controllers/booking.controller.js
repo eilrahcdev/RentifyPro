@@ -1,35 +1,69 @@
+import {
+  getBookingLatePenaltyFee,
+  getEffectiveTransactionFee,
+  getBookingPayableAmount,
+  getBookingPaidAmount,
+  getBookingRemainingAmount,
+} from "../utils/bookingPayment.js";
 import Booking from "../models/Booking.js";
+import { getBookingHorizonEnd, BOOKING_HORIZON_MESSAGE } from "../utils/bookingDatePolicy.js";
 import Vehicle from "../models/Vehicle.js";
-import { createNotification } from "../utils/notification.js";
+import { findRenterScheduleConflict, getRenterBookingEligibility } from "../services/bookingEligibility.service.js";
+import { acquireBookingMutationLock, BookingPolicyError } from "../utils/bookingMutationLock.js";
+import eventBus from "../events/eventBus.js";
+import { NOTIFICATION_EVENTS } from "../events/notification.events.js";
 import { emitToUser } from "../socket/index.js";
 import {
-  createPayMongoCheckoutSession,
-  getPayMongoCheckoutAmountInCentavos,
   getPayMongoCheckoutId,
   getPayMongoCheckoutMetadata,
   getPayMongoCheckoutReferenceNumber,
   getPayMongoCheckoutSession,
   getPayMongoCheckoutUrl,
-  getPayMongoPaymentIntentId,
   isPayMongoCheckoutPaid,
 } from "../utils/paymongo.js";
+import {
+  acquirePaymentCheckoutLock, applyCapturedBookingCheckout, getOrCreateBookingCheckout,
+} from "../services/bookingPayment.service.js";
 import { getTransactionFee } from "../utils/fees.js";
 import { syncVehicleAvailabilityByBookingState } from "../utils/vehicleAvailability.js";
+import { normalizePhilippineMobile } from "../utils/phone.js";
 import {
-  applyLedgerRecordToBooking,
-  getBookingLedgerEligibility,
-  getSepoliaTxUrl,
-  recordBookingTransactionOnChain as recordBookingTransactionOnLedger,
-} from "../utils/blockchainBooking.js";
+  createBookingLateReturnPolicySnapshot,
+  getBookingLateReturnPenaltyRatePerHour as getBookingLatePenaltyRatePerHour,
+  getBookingLateReturnPolicy,
+  getEstimatedLateReturnPenaltyFee,
+} from "../utils/lateReturnPolicy.js";
+import {
+  HOURLY_RATE_UNIT,
+  getBookingDriverHourlyRate,
+  getBookingDurationHours,
+  getBookingDurationMinutes,
+  getBookingVehicleHourlyRate,
+  getDurationHoursFromMinutes,
+  getDurationMinutes,
+  getLegacyBookingDays,
+  getVehicleHourlyRate,
+  roundCurrency,
+} from "../utils/pricing.js";
 
 const toDate = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const calculateDays = (pickupAt, returnAt) => {
-  const ms = returnAt.getTime() - pickupAt.getTime();
-  return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+const parseBookingDateTime = (value) => {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/);
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1).map((part) => Number(part || 0));
+  const calendarDate = new Date(0);
+  calendarDate.setUTCFullYear(year, month - 1, day);
+  if (
+    year < 1 || calendarDate.getUTCFullYear() !== year ||
+    calendarDate.getUTCMonth() !== month - 1 || calendarDate.getUTCDate() !== day ||
+    hour > 23 || minute > 59 || second > 59
+  ) return null;
+  return toDate(value);
 };
 
 const boolFromValue = (value) => {
@@ -44,11 +78,43 @@ const getImageUrl = (req, pathValue) => {
   return `${req.protocol}://${req.get("host")}/${String(pathValue).replace(/\\/g, "/")}`;
 };
 
-const frontendBaseUrl = () =>
-  (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/+$/, "");
+const normalizeOriginText = (value) => String(value || "").trim().replace(/\/+$/, "");
 
-const buildPaymentRedirectUrls = (bookingId) => {
-  const base = frontendBaseUrl();
+const getConfiguredFrontendBaseUrl = () => {
+  const configuredOrigins = String(process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((origin) => normalizeOriginText(origin))
+    .filter((origin) => /^https?:\/\//i.test(origin))
+    .filter((origin) => !origin.includes("*"));
+
+  return configuredOrigins[0] || "";
+};
+
+const getOriginFromReferer = (refererValue) => {
+  const referer = String(refererValue || "").trim();
+  if (!referer) return "";
+  try {
+    return normalizeOriginText(new URL(referer).origin);
+  } catch {
+    return "";
+  }
+};
+
+const frontendBaseUrl = (req) => {
+  const originHeader = normalizeOriginText(req?.get?.("origin"));
+  if (/^https?:\/\//i.test(originHeader)) return originHeader;
+
+  const refererOrigin = getOriginFromReferer(req?.get?.("referer"));
+  if (/^https?:\/\//i.test(refererOrigin)) return refererOrigin;
+
+  const configured = getConfiguredFrontendBaseUrl();
+  if (configured) return configured;
+
+  return "http://localhost:5173";
+};
+
+const buildPaymentRedirectUrls = (bookingId, req) => {
+  const base = frontendBaseUrl(req);
   const id = encodeURIComponent(String(bookingId));
   return {
     successUrl: `${base}/bookings?payment=success&bookingId=${id}`,
@@ -62,9 +128,8 @@ const buildReferenceNumber = (bookingId) => {
   return `BOOK-${shortId}-${suffix}`;
 };
 
-const getBlockchainRecordingFee = () => getTransactionFee();
-
 const DOWNPAYMENT_RATE = 0.3;
+const MIN_SAME_DAY_RENTAL_MS = 60 * 60 * 1000;
 const PAYMENT_SCOPES = new Set(["downpayment", "full"]);
 const PAYMENT_CHANNELS = new Set(["ewallet", "card"]);
 const PAYMENT_CHANNEL_METHOD_TYPES = {
@@ -72,12 +137,14 @@ const PAYMENT_CHANNEL_METHOD_TYPES = {
   card: ["card"],
 };
 const WALK_IN_PAYMENT_STATUSES = new Set(["none", "requested", "approved", "rejected", "completed"]);
-
-const roundCurrency = (value) => {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.round(numeric * 100) / 100;
-};
+const ACTIVE_WALK_IN_SETTLEMENT_STATUSES = new Set(["requested", "approved"]);
+const ACTIVE_BOOKING_STATUSES = new Set(["confirmed", "extended"]);
+const ACTIVE_OVERLAP_STATUSES = ["pending", "confirmed", "extended"];
+const PAYMENT_ALLOWED_STATUSES = new Set(["confirmed", "extended", "completed"]);
+const EXTENSION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
+const CANCELLATION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
+const RETURN_STATUSES = new Set(["none", "requested", "confirmed", "declined"]);
+const LATE_RETURN_ACTIONS = new Set(["none", "extend_requested", "proceed_late_return", "return_confirmed"]);
 
 const resolvePaymentScope = (value, fallback = "downpayment") => {
   const normalized = String(value || "").trim().toLowerCase();
@@ -101,15 +168,7 @@ const buildRenterName = (user = {}, renterProfile = {}) => {
 };
 
 const normalizePayMongoPhone = (phoneValue) => {
-  const raw = String(phoneValue || "").trim();
-  if (!raw) return "";
-  const digits = raw.replace(/[^\d]/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("63")) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length === 11) return `+63${digits.slice(1)}`;
-  if (digits.startsWith("9") && digits.length === 10) return `+63${digits}`;
-  if (raw.startsWith("+")) return raw;
-  return `+${digits}`;
+  return normalizePhilippineMobile(phoneValue);
 };
 
 const logPayMongoError = (context, error) => {
@@ -121,83 +180,115 @@ const logPayMongoError = (context, error) => {
   });
 };
 
-const shouldApplyConfiguredFeeFallback = (booking) => {
-  const paymentStatus = String(booking?.paymentStatus || "unpaid").toLowerCase();
-  return paymentStatus === "unpaid" || paymentStatus === "partial";
+const getBookingReturnBoundaryWithGrace = (booking, graceMinutes = 0) => {
+  const returnAt = toDate(booking?.returnAt);
+  if (!returnAt) return null;
+  const grace = Math.max(0, Math.floor(Number(graceMinutes || 0)));
+  if (grace <= 0) return returnAt;
+  return new Date(returnAt.getTime() + grace * 60 * 1000);
 };
 
-const getEffectiveBlockchainGasFee = (booking) => {
-  const configured = getBlockchainRecordingFee();
-  const persisted = Number(booking?.blockchainGasFee);
-  if (Number.isFinite(persisted) && persisted > 0) {
-    const roundedPersisted = Math.round(persisted * 100) / 100;
-    if (!shouldApplyConfiguredFeeFallback(booking)) {
-      return roundedPersisted;
-    }
-    return Math.round(Math.max(roundedPersisted, configured) * 100) / 100;
-  }
-  if (!shouldApplyConfiguredFeeFallback(booking)) {
-    return 0;
-  }
-  return configured;
+const getBookingOverdueMinutes = (booking, now = new Date(), graceMinutes = 0) => {
+  const boundaryAt = getBookingReturnBoundaryWithGrace(booking, graceMinutes);
+  const current = toDate(now);
+  if (!boundaryAt || !current) return 0;
+  if (current.getTime() <= boundaryAt.getTime()) return 0;
+  return Math.max(0, getDurationMinutes(boundaryAt, current));
 };
 
-const getBookingRentalAmountForPayment = (booking) => {
-  const directTotal = Number(booking?.totalAmount);
-  if (Number.isFinite(directTotal) && directTotal > 0) {
-    return directTotal;
+const recalculateBookingAmountsForRange = (booking, nextReturnAt) => {
+  const pickupAt = toDate(booking?.pickupAt);
+  const returnAt = toDate(nextReturnAt);
+  if (!pickupAt || !returnAt || returnAt.getTime() <= pickupAt.getTime()) {
+    return null;
   }
 
-  const baseAmount = Number(booking?.baseAmount);
-  const driverAmount = Number(booking?.driverAmount);
-  if (Number.isFinite(baseAmount) && Number.isFinite(driverAmount) && baseAmount + driverAmount > 0) {
-    return baseAmount + driverAmount;
+  const bookingDurationMinutes = getDurationMinutes(pickupAt, returnAt);
+  const bookingDurationHours = getDurationHoursFromMinutes(bookingDurationMinutes);
+  const bookingDays = getLegacyBookingDays(bookingDurationMinutes);
+  if (bookingDurationMinutes <= 0 || bookingDurationHours <= 0) {
+    return null;
   }
 
-  const vehicleDailyRate = Number(booking?.vehicleDailyRate);
-  const bookingDays = Number(booking?.bookingDays || 1);
-  if (Number.isFinite(vehicleDailyRate) && vehicleDailyRate > 0 && Number.isFinite(bookingDays) && bookingDays > 0) {
-    const driverDailyRate = Number(booking?.driverDailyRate || 0);
-    const driverSelected = Boolean(booking?.driverSelected);
-    const driverAmountFromRate =
-      driverSelected && Number.isFinite(driverDailyRate) && driverDailyRate > 0
-        ? driverDailyRate * bookingDays
-        : 0;
-    return vehicleDailyRate * bookingDays + driverAmountFromRate;
-  }
+  const vehicleHourlyRate = getBookingVehicleHourlyRate(booking);
+  const driverHourlyRate = Boolean(booking?.driverSelected) ? getBookingDriverHourlyRate(booking) : 0;
+  const baseAmount = roundCurrency(vehicleHourlyRate * bookingDurationHours);
+  const driverAmount = roundCurrency(driverHourlyRate * bookingDurationHours);
+  const totalAmount = roundCurrency(baseAmount + driverAmount);
 
-  return 0;
+  booking.returnAt = returnAt;
+  booking.bookingDays = bookingDays;
+  booking.bookingDurationMinutes = bookingDurationMinutes;
+  booking.bookingDurationHours = bookingDurationHours;
+  booking.baseAmount = baseAmount;
+  booking.driverAmount = driverAmount;
+  booking.totalAmount = totalAmount;
+  booking.rentalRateUnit = HOURLY_RATE_UNIT;
+  return {
+    bookingDurationMinutes,
+    bookingDurationHours,
+    bookingDays,
+    baseAmount,
+    driverAmount,
+    totalAmount,
+  };
 };
 
-const getBookingPayableAmount = (booking) => {
-  const rentalAmount = getBookingRentalAmountForPayment(booking);
-  const gasFee = getEffectiveBlockchainGasFee(booking);
-  const safeRentalAmount = Number.isFinite(rentalAmount) && rentalAmount > 0 ? rentalAmount : 0;
-  const safeGasFee = Number.isFinite(gasFee) && gasFee >= 0 ? gasFee : 0;
-  return roundCurrency(safeRentalAmount + safeGasFee);
-};
-
-const getBookingPaidAmount = (booking) => {
+const syncBookingPaymentSnapshot = (booking) => {
   const totalPayable = getBookingPayableAmount(booking);
-  const persistedPaid = Number(booking?.paymentAmountPaid || 0);
-  if (Number.isFinite(persistedPaid) && persistedPaid > 0) {
-    return Math.min(roundCurrency(persistedPaid), totalPayable);
-  }
-  if (String(booking?.paymentStatus || "").toLowerCase() === "paid") {
-    return totalPayable;
-  }
-  return 0;
-};
+  const existingPaidAmount = Number(booking?.paymentAmountPaid || 0);
+  const normalizedPaidAmount = Number.isFinite(existingPaidAmount) && existingPaidAmount > 0
+    ? Math.min(roundCurrency(existingPaidAmount), totalPayable)
+    : 0;
+  const remainingAmount = roundCurrency(Math.max(totalPayable - normalizedPaidAmount, 0));
 
-const getBookingRemainingAmount = (booking) => {
-  const totalPayable = getBookingPayableAmount(booking);
-  const paidAmount = getBookingPaidAmount(booking);
-  return roundCurrency(Math.max(totalPayable - paidAmount, 0));
+  booking.paymentAmountPaid = normalizedPaidAmount;
+  booking.paymentAmountDue = remainingAmount;
+  if (remainingAmount <= 0) {
+    booking.paymentStatus = "paid";
+    booking.paidAt = booking.paidAt || new Date();
+    booking.paymentCheckoutAmount = 0;
+    booking.paymentScope = "full";
+  } else if (normalizedPaidAmount > 0) {
+    booking.paymentStatus = "partial";
+    booking.paidAt = null;
+  } else {
+    booking.paymentStatus = "unpaid";
+    booking.paidAt = null;
+  }
 };
 
 const normalizeWalkInStatus = (value, fallback = "none") => {
   const normalized = String(value || "").trim().toLowerCase();
   if (WALK_IN_PAYMENT_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+export const isOnlineBalancePaymentBlockedByWalkIn = (booking) =>
+  String(booking?.paymentStatus || "").trim().toLowerCase() === "partial" &&
+  ACTIVE_WALK_IN_SETTLEMENT_STATUSES.has(normalizeWalkInStatus(booking?.walkInPaymentStatus, "none"));
+
+const normalizeExtensionStatus = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (EXTENSION_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+const normalizeCancellationStatus = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (CANCELLATION_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+const normalizeReturnStatus = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (RETURN_STATUSES.has(normalized)) return normalized;
+  return fallback;
+};
+
+const normalizeLateReturnAction = (value, fallback = "none") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (LATE_RETURN_ACTIONS.has(normalized)) return normalized;
   return fallback;
 };
 
@@ -211,6 +302,21 @@ const toIdString = (value) => {
   const raw = value?._id || value;
   const normalized = String(raw || "").trim();
   return normalized || null;
+};
+
+const normalizeIdText = (value) => String(value || "").trim();
+
+const getVerifiedCheckoutIds = (booking) => {
+  const ids = Array.isArray(booking?.paymongoVerifiedCheckoutIds)
+    ? booking.paymongoVerifiedCheckoutIds
+    : [];
+  return [...new Set(ids.map((id) => normalizeIdText(id)).filter(Boolean))];
+};
+
+const hasVerifiedCheckoutId = (booking, checkoutId) => {
+  const normalizedId = normalizeIdText(checkoutId);
+  if (!normalizedId) return false;
+  return getVerifiedCheckoutIds(booking).includes(normalizedId);
 };
 
 const resetWalkInPaymentState = (booking, { clearBalancePaymentMethod = true } = {}) => {
@@ -243,6 +349,63 @@ const serializeWalkInPayment = (booking) => ({
   confirmationNote: toOptionalText(booking?.walkInConfirmationNote),
 });
 
+const serializeLateReturn = (booking) => {
+  const overdueMinutes = Math.max(0, Math.round(Number(booking?.lateReturnOverdueMinutes || 0)));
+  const policy = getBookingLateReturnPolicy(booking);
+  const penaltyFee = roundCurrency(Number(booking?.lateReturnPenaltyFee || 0));
+  return {
+    isOverdue: Boolean(booking?.lateReturnIsOverdue),
+    overdueMinutes,
+    detectedAt: booking?.lateReturnDetectedAt || null,
+    notifiedAt: booking?.lateReturnNotifiedAt || null,
+    penaltyRatePerHour: getBookingLatePenaltyRatePerHour(booking),
+    penaltyFee,
+    estimatedPenaltyFee: getEstimatedLateReturnPenaltyFee(booking),
+    feeType: policy.feeType,
+    feeValue: policy.value,
+    graceMinutes: policy.graceMinutes,
+    action: normalizeLateReturnAction(booking?.lateReturnAction, "none"),
+    resolvedAt: booking?.lateReturnResolvedAt || null,
+    resolvedBy: toIdString(booking?.lateReturnResolvedBy),
+  };
+};
+
+const serializeReturnRequest = (booking) => ({
+  status: normalizeReturnStatus(booking?.returnStatus, "none"),
+  requestedAt: booking?.returnRequestedAt || null,
+  requestedBy: toIdString(booking?.returnRequestedBy),
+  confirmedAt: booking?.returnConfirmedAt || booking?.actualReturnAt || null,
+  confirmedBy: toIdString(booking?.returnConfirmedBy),
+  reviewedAt: booking?.returnReviewedAt || null,
+  reviewedBy: toIdString(booking?.returnReviewedBy),
+  reviewAction: String(booking?.returnReviewAction || "").trim().toLowerCase() || null,
+  reviewNote: toOptionalText(booking?.returnReviewNote),
+});
+
+const serializeExtensionRequest = (booking) => ({
+  status: normalizeExtensionStatus(booking?.extensionStatus, "none"),
+  requestedAt: booking?.extensionRequestedAt || null,
+  requestedBy: toIdString(booking?.extensionRequestedBy),
+  currentReturnAt: booking?.extensionCurrentReturnAt || null,
+  requestedReturnAt: booking?.extensionRequestedReturnAt || null,
+  requestNote: toOptionalText(booking?.extensionRequestNote),
+  reviewedAt: booking?.extensionReviewedAt || null,
+  reviewedBy: toIdString(booking?.extensionReviewedBy),
+  reviewAction: String(booking?.extensionReviewAction || "").trim().toLowerCase() || null,
+  reviewNote: toOptionalText(booking?.extensionReviewNote),
+});
+
+const serializeCancellationRequest = (booking) => ({
+  status: normalizeCancellationStatus(booking?.cancellationStatus, "none"),
+  requestedAt: booking?.cancellationRequestedAt || null,
+  requestedBy: toIdString(booking?.cancellationRequestedBy),
+  requestNote: toOptionalText(booking?.cancellationRequestNote),
+  reviewedAt: booking?.cancellationReviewedAt || null,
+  reviewedBy: toIdString(booking?.cancellationReviewedBy),
+  reviewAction: String(booking?.cancellationReviewAction || "").trim().toLowerCase() || null,
+  reviewNote: toOptionalText(booking?.cancellationReviewNote),
+});
+
 const getBookingParties = (booking) => {
   const ownerId = String(booking?.owner?._id || booking?.owner || "");
   const renterId = String(booking?.renter?._id || booking?.renter || "");
@@ -261,73 +424,35 @@ const buildBookingAccessQuery = (bookingId, user) => {
   return query;
 };
 
-const mapEligibilityReasonToMessage = (reason) => {
-  if (reason === "booking_cancelled") {
-    return "Cancelled bookings cannot be recorded on-chain.";
-  }
-  if (reason === "payment_not_completed") {
-    return "Booking can only be recorded on-chain after payment is completed.";
-  }
-  return "Booking is not eligible for blockchain recording yet.";
-};
-
-const recordBookingOnChainIfEligible = async (booking) => {
-  if (!booking || booking.blockchainTxHash) {
-    return {
-      attempted: false,
-      recorded: Boolean(booking?.blockchainTxHash),
-      warning: null,
-      reason: booking?.blockchainTxHash ? "already_linked" : null,
-    };
-  }
-
-  const eligibility = getBookingLedgerEligibility(booking);
-  if (!eligibility.eligible) {
-    return {
-      attempted: false,
-      recorded: false,
-      warning: null,
-      reason: eligibility.reason,
-    };
-  }
-
-  try {
-    const ledgerRecord = await recordBookingTransactionOnLedger({ booking });
-    applyLedgerRecordToBooking(booking, ledgerRecord);
-    await booking.save();
-    return {
-      attempted: true,
-      recorded: true,
-      warning: null,
-      reason: null,
-    };
-  } catch (error) {
-    return {
-      attempted: true,
-      recorded: false,
-      warning: "Blockchain recording is temporarily unavailable.",
-      reason: "record_failed",
-    };
-  }
-};
-
 const serializeBooking = (req, booking) => {
   const vehicle = booking.vehicle || {};
   const rawImages = Array.isArray(vehicle.images) ? vehicle.images : [];
   const images = rawImages.map((pathValue) => getImageUrl(req, pathValue));
+  const bookingDurationMinutes = getBookingDurationMinutes(booking);
+  const bookingDurationHours = getBookingDurationHours(booking);
+  const vehicleHourlyRate = getBookingVehicleHourlyRate(booking);
+  const driverHourlyRate = getBookingDriverHourlyRate(booking);
 
   return {
     _id: booking._id,
     pickupAt: booking.pickupAt,
     returnAt: booking.returnAt,
     bookingDays: booking.bookingDays,
-    vehicleDailyRate: booking.vehicleDailyRate,
+    bookingDurationMinutes,
+    bookingDurationHours,
+    rentalRateUnit: HOURLY_RATE_UNIT,
+    vehicleDailyRate: vehicleHourlyRate,
+    vehicleHourlyRate,
     driverSelected: booking.driverSelected,
-    driverDailyRate: booking.driverDailyRate,
+    driverDailyRate: driverHourlyRate,
+    driverHourlyRate,
     baseAmount: booking.baseAmount,
     driverAmount: booking.driverAmount,
     totalAmount: booking.totalAmount,
-    blockchainGasFee: getEffectiveBlockchainGasFee(booking),
+    lateReturnPolicy: getBookingLateReturnPolicy(booking),
+    lateReturnPenaltyRatePerHour: getBookingLatePenaltyRatePerHour(booking),
+    lateReturnPenaltyFee: getBookingLatePenaltyFee(booking),
+    transactionFee: getEffectiveTransactionFee(booking),
     amountPayable: getBookingPayableAmount(booking),
     paymentAmountPaid: getBookingPaidAmount(booking),
     paymentAmountDue: getBookingRemainingAmount(booking),
@@ -342,6 +467,16 @@ const serializeBooking = (req, booking) => {
     payment_method: booking.paymentMethod || null,
     balancePaymentMethod: booking.balancePaymentMethod || null,
     balance_payment_method: booking.balancePaymentMethod || null,
+    autoCompletedAt: booking.autoCompletedAt || null,
+    actualReturnAt: booking.actualReturnAt || null,
+    returnRequest: serializeReturnRequest(booking),
+    return_request: serializeReturnRequest(booking),
+    lateReturn: serializeLateReturn(booking),
+    late_return: serializeLateReturn(booking),
+    extensionRequest: serializeExtensionRequest(booking),
+    extension_request: serializeExtensionRequest(booking),
+    cancellationRequest: serializeCancellationRequest(booking),
+    cancellation_request: serializeCancellationRequest(booking),
     walkInPayment: serializeWalkInPayment(booking),
     walk_in_payment: serializeWalkInPayment(booking),
     paymongoReference: booking.paymongoReference || null,
@@ -352,30 +487,6 @@ const serializeBooking = (req, booking) => {
     paymentRequestedAt: booking.paymentRequestedAt || null,
     paymentUpdatedAt: booking.paymentUpdatedAt || null,
     paidAt: booking.paidAt || null,
-    blockchainTxHash: booking.blockchainTxHash || null,
-    blockchainRecordedAt: booking.blockchainRecordedAt || null,
-    blockchainExplorerUrl: booking.blockchainTxHash ? getSepoliaTxUrl(booking.blockchainTxHash) : null,
-    blockchain: booking.blockchain
-      ? {
-          network: booking.blockchain.network || null,
-          chainId: booking.blockchain.chainId || null,
-          contractAddress: booking.blockchain.contractAddress || null,
-          version: booking.blockchain.version || null,
-          bookingKey: booking.blockchain.bookingKey || null,
-          bookingHash: booking.blockchain.bookingHash || null,
-          renterIdHash: booking.blockchain.renterIdHash || null,
-          ownerId: booking.blockchain.ownerId || null,
-          amountInCents:
-            Number.isFinite(Number(booking.blockchain.amountInCents)) ? booking.blockchain.amountInCents : null,
-          paymentStatus: booking.blockchain.paymentStatus || null,
-          paymentStatusCode:
-            Number.isFinite(Number(booking.blockchain.paymentStatusCode))
-              ? booking.blockchain.paymentStatusCode
-              : null,
-          blockNumber:
-            Number.isFinite(Number(booking.blockchain.blockNumber)) ? booking.blockchain.blockNumber : null,
-        }
-      : null,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
     reviewRating: booking.reviewRating,
@@ -387,12 +498,28 @@ const serializeBooking = (req, booking) => {
           name: vehicle.name,
           description: vehicle.description,
           location: vehicle.location,
-          dailyRentalRate: vehicle.dailyRentalRate,
+          dailyRentalRate: getVehicleHourlyRate(vehicle, {
+            rateField: "dailyRentalRate",
+            unitField: "pricingUnit",
+          }),
+          hourlyRentalRate: getVehicleHourlyRate(vehicle, {
+            rateField: "dailyRentalRate",
+            unitField: "pricingUnit",
+          }),
+          pricingUnit: HOURLY_RATE_UNIT,
           driverOptionEnabled: Boolean(vehicle.driverOptionEnabled),
-          driverDailyRate: vehicle.driverDailyRate || 0,
+          driverDailyRate: getVehicleHourlyRate(vehicle, {
+            rateField: "driverDailyRate",
+            unitField: "pricingUnit",
+          }),
+          driverHourlyRate: getVehicleHourlyRate(vehicle, {
+            rateField: "driverDailyRate",
+            unitField: "pricingUnit",
+          }),
           specs: vehicle.specs || {},
           images,
-          imageUrl: images[0] || getImageUrl(req, vehicle.imageUrl),
+          imageUrl: getImageUrl(req, vehicle.imageUrl) || images[0],
+          coverDisplayMode: vehicle.coverDisplayMode || "auto",
         }
       : null,
     owner: booking.owner || null,
@@ -404,13 +531,174 @@ const bookingPopulate = [
   {
     path: "vehicle",
     select:
-      "name description location images imageUrl dailyRentalRate driverOptionEnabled driverDailyRate specs owner",
+      "name description location images imageUrl coverDisplayMode dailyRentalRate pricingUnit driverOptionEnabled driverDailyRate specs owner",
   },
-  { path: "owner", select: "name email avatar role walletAddress" },
-  { path: "renter", select: "name email avatar role walletAddress" },
+  { path: "owner", select: "name email avatar role" },
+  { path: "renter", select: "name email avatar role" },
 ];
 
+// Booking history is an account ledger, not a TTL-managed resource.  These
+// list helpers deliberately page results so a long-lived account cannot turn a
+// normal page visit into an unbounded database query or response.
+const BOOKING_LIST_DEFAULT_LIMIT = 10;
+const BOOKING_LIST_MAX_LIMIT = 50;
+const LIST_CURRENT_BOOKING_STATUSES = ["pending", "confirmed", "extended"];
+const LIST_ACTIVE_BOOKING_STATUSES = ["confirmed", "extended"];
+const LIST_PAST_BOOKING_STATUSES = ["completed", "cancelled", "rejected"];
+
+const parseBookingListLimit = (value) => {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return BOOKING_LIST_DEFAULT_LIMIT;
+  return Math.min(parsed, BOOKING_LIST_MAX_LIMIT);
+};
+
+const parseBookingListCursor = (value) => {
+  if (!value || typeof value !== "string") return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const timestamp = toDate(decoded?.at);
+    const id = String(decoded?.id || "");
+    if (!timestamp || !Booking.base.Types.ObjectId.isValid(id)) return null;
+    return { at: timestamp, id };
+  } catch {
+    return null;
+  }
+};
+
+const createBookingListCursor = (booking, sortField) => {
+  const sortValue = toDate(booking?.[sortField]);
+  if (!sortValue || !booking?._id) return null;
+  return Buffer.from(
+    JSON.stringify({ at: sortValue.toISOString(), id: String(booking._id) })
+  ).toString("base64url");
+};
+
+const cursorFilter = (cursor, sortField, direction) => {
+  if (!cursor) return {};
+  const comparison = direction === "asc" ? "$gt" : "$lt";
+  return {
+    $or: [
+      { [sortField]: { [comparison]: cursor.at } },
+      { [sortField]: cursor.at, _id: { [comparison]: cursor.id } },
+    ],
+  };
+};
+
+const buildBookingListDefinition = ({ role, status, view }) => {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  const normalizedView = String(view || "").trim().toLowerCase();
+
+  if (normalizedStatus === "cancelled") {
+    return { filter: { status: { $in: ["cancelled", "rejected"] } }, sortField: "updatedAt", direction: "desc" };
+  }
+
+  if ([...LIST_ACTIVE_BOOKING_STATUSES, ...LIST_PAST_BOOKING_STATUSES].includes(normalizedStatus)) {
+    return {
+      filter: { status: normalizedStatus },
+      sortField: normalizedStatus === "confirmed" || normalizedStatus === "extended" ? "pickupAt" : "updatedAt",
+      direction: normalizedStatus === "confirmed" || normalizedStatus === "extended" ? "asc" : "desc",
+    };
+  }
+
+  if (role === "renter" && normalizedView === "current") {
+    return { filter: { status: { $in: LIST_CURRENT_BOOKING_STATUSES } }, sortField: "pickupAt", direction: "asc" };
+  }
+
+  if (normalizedView === "active") {
+    return { filter: { status: { $in: LIST_ACTIVE_BOOKING_STATUSES } }, sortField: "pickupAt", direction: "asc" };
+  }
+
+  if (role === "renter" && normalizedView === "unsettled") {
+    return {
+      filter: {
+        status: { $in: [...LIST_ACTIVE_BOOKING_STATUSES, "completed"] },
+        paymentStatus: { $ne: "refunded" },
+        $and: [
+          {
+            $or: [
+              { paymentStatus: { $in: ["unpaid", "partial"] } },
+              { paymentAmountDue: { $gt: 0 } },
+            ],
+          },
+          {
+            $or: [
+              { status: "completed" },
+              { status: { $in: LIST_ACTIVE_BOOKING_STATUSES }, returnAt: { $lt: new Date() } },
+              { walkInPaymentStatus: { $in: ["requested", "approved"] } },
+            ],
+          },
+        ],
+      },
+      sortField: "updatedAt",
+      direction: "desc",
+    };
+  }
+
+  if (["past", "history"].includes(normalizedView)) {
+    return { filter: { status: { $in: LIST_PAST_BOOKING_STATUSES } }, sortField: "updatedAt", direction: "desc" };
+  }
+
+  if (role === "owner" && normalizedView === "action") {
+    return {
+      filter: {
+        $or: [
+          { status: "pending" },
+          { extensionStatus: "requested" },
+          { cancellationStatus: "requested" },
+          { walkInPaymentStatus: "requested" },
+          { returnStatus: "requested" },
+          { status: { $in: ["confirmed", "extended"] }, lateReturnIsOverdue: true },
+        ],
+      },
+      sortField: "updatedAt",
+      direction: "desc",
+    };
+  }
+
+  return { filter: {}, sortField: "updatedAt", direction: "desc" };
+};
+
+const listBookingsForParty = async ({ req, partyField, role }) => {
+  const { filter, sortField, direction } = buildBookingListDefinition({
+    role,
+    status: req.query.status,
+    view: req.query.view,
+  });
+  const limit = parseBookingListLimit(req.query.limit);
+  const cursor = parseBookingListCursor(req.query.cursor);
+  const paginationFilter = cursorFilter(cursor, sortField, direction);
+  const query = {
+    [partyField]: req.user._id,
+    $and: [filter, paginationFilter],
+  };
+  const sortDirection = direction === "asc" ? 1 : -1;
+
+  const documents = await Booking.find(query)
+    .populate(bookingPopulate)
+    .sort({ [sortField]: sortDirection, _id: sortDirection })
+    .limit(limit + 1);
+
+  const hasMore = documents.length > limit;
+  const bookings = hasMore ? documents.slice(0, limit) : documents;
+  await autoSyncBookingLifecycles(req, bookings);
+  const autoSynced = await autoSyncBookingPayments(bookings);
+  for (const booking of autoSynced) {
+    emitBookingUpdateToParties(req, booking);
+  }
+
+  return {
+    bookings: bookings.map((booking) => serializeBooking(req, booking)),
+    page: {
+      hasMore,
+      nextCursor: hasMore ? createBookingListCursor(bookings[bookings.length - 1], sortField) : null,
+      limit,
+    },
+  };
+};
+
 export const createBooking = async (req, res) => {
+  let renterLock;
   let lockAcquired = false;
   let lockedVehicleId = null;
   const releaseVehicleLock = async () => {
@@ -434,17 +722,41 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    const pickupAt = toDate(pickupRaw);
-    const returnAt = toDate(returnRaw);
+    const pickupAt = parseBookingDateTime(pickupRaw);
+    const returnAt = parseBookingDateTime(returnRaw);
     if (!pickupAt || !returnAt) {
       return res.status(400).json({ success: false, message: "Invalid pickup or return date/time." });
     }
 
     const now = new Date();
+    const horizonEnd = getBookingHorizonEnd(now);
+    if (pickupAt > horizonEnd || returnAt > horizonEnd) {
+      return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
+    }
     if (pickupAt < now || returnAt <= pickupAt) {
       return res.status(400).json({
         success: false,
         message: "Pickup must be in the future and return must be after pickup.",
+      });
+    }
+
+    const isSameDayRental =
+      pickupAt.getFullYear() === returnAt.getFullYear() &&
+      pickupAt.getMonth() === returnAt.getMonth() &&
+      pickupAt.getDate() === returnAt.getDate();
+    if (isSameDayRental && returnAt.getTime() - pickupAt.getTime() < MIN_SAME_DAY_RENTAL_MS) {
+      return res.status(400).json({
+        success: false,
+        message: "For same-day rentals, return must be at least 1 hour after pickup.",
+      });
+    }
+
+    renterLock = await acquireBookingMutationLock(req.user._id);
+    const eligibility = await getRenterBookingEligibility(req.user._id, { pickupAt, returnAt });
+    if (!eligibility.eligible) {
+      return res.status(409).json({
+        success: false, code: eligibility.reasons[0].code,
+        message: eligibility.reasons[0].message, eligibility,
       });
     }
 
@@ -471,7 +783,7 @@ export const createBooking = async (req, res) => {
 
     const overlappingBooking = await Booking.findOne({
       vehicle: vehicle._id,
-      status: { $in: ["pending", "confirmed"] },
+      status: { $in: ACTIVE_OVERLAP_STATUSES },
       pickupAt: { $lt: returnAt },
       returnAt: { $gt: pickupAt },
     });
@@ -484,10 +796,24 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    const bookingDays = calculateDays(pickupAt, returnAt);
+    const bookingDurationMinutes = getDurationMinutes(pickupAt, returnAt);
+    const bookingDurationHours = getDurationHoursFromMinutes(bookingDurationMinutes);
+    const bookingDays = getLegacyBookingDays(bookingDurationMinutes);
+    if (bookingDurationMinutes <= 0 || bookingDurationHours <= 0) {
+      await releaseVehicleLock();
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking duration.",
+      });
+    }
     const driverSelected = boolFromValue(driverSelectedRaw);
     const driverDailyRate =
-      driverSelected && lockedVehicle.driverOptionEnabled ? Number(lockedVehicle.driverDailyRate || 0) : 0;
+      driverSelected && lockedVehicle.driverOptionEnabled
+        ? getVehicleHourlyRate(lockedVehicle, {
+            rateField: "driverDailyRate",
+            unitField: "pricingUnit",
+          })
+        : 0;
 
     if (driverSelected && !lockedVehicle.driverOptionEnabled) {
       await releaseVehicleLock();
@@ -497,14 +823,24 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    const vehicleDailyRate = Number(lockedVehicle.dailyRentalRate || 0);
-    const baseAmount = vehicleDailyRate * bookingDays;
-    const driverAmount = driverDailyRate * bookingDays;
-    const totalAmount = baseAmount + driverAmount;
-    const blockchainGasFee = getBlockchainRecordingFee();
-    const paymentAmountDue = roundCurrency(totalAmount + blockchainGasFee);
+    const vehicleDailyRate = getVehicleHourlyRate(lockedVehicle, {
+      rateField: "dailyRentalRate",
+      unitField: "pricingUnit",
+    });
+    const baseAmount = roundCurrency(vehicleDailyRate * bookingDurationHours);
+    const driverAmount = roundCurrency(driverDailyRate * bookingDurationHours);
+    const totalAmount = roundCurrency(baseAmount + driverAmount);
+    const transactionFee = getTransactionFee();
+    const paymentAmountDue = roundCurrency(totalAmount + transactionFee);
+    const lateReturnPolicySnapshot = createBookingLateReturnPolicySnapshot({
+      vehicle: lockedVehicle,
+      vehicleHourlyRate: vehicleDailyRate,
+      driverHourlyRate: driverDailyRate,
+      driverSelected,
+    });
 
     let booking;
+    await renterLock.renew();
     booking = await Booking.create({
       vehicle: lockedVehicle._id,
       renter: req.user._id,
@@ -512,13 +848,16 @@ export const createBooking = async (req, res) => {
       pickupAt,
       returnAt,
       bookingDays,
+      bookingDurationMinutes,
+      bookingDurationHours,
+      rentalRateUnit: HOURLY_RATE_UNIT,
       vehicleDailyRate,
       driverSelected,
       driverDailyRate,
       baseAmount,
       driverAmount,
       totalAmount,
-      blockchainGasFee,
+      transactionFee,
       status: "pending",
       paymentStatus: "unpaid",
       paymentAmountPaid: 0,
@@ -526,15 +865,43 @@ export const createBooking = async (req, res) => {
       paymentCheckoutAmount: 0,
       paymentScope: null,
       paymentChannel: null,
+      ...lateReturnPolicySnapshot,
+      lateReturnPenaltyFee: 0,
+      lateReturnIsOverdue: false,
+      lateReturnDetectedAt: null,
+      lateReturnNotifiedAt: null,
+      lateReturnOverdueMinutes: 0,
+      lateReturnAction: "none",
+      lateReturnResolvedAt: null,
+      lateReturnResolvedBy: null,
+      extensionStatus: "none",
+      extensionRequestedAt: null,
+      extensionRequestedBy: null,
+      extensionCurrentReturnAt: null,
+      extensionRequestedReturnAt: null,
+      extensionRequestNote: "",
+      extensionReviewedAt: null,
+      extensionReviewedBy: null,
+      extensionReviewAction: "",
+      extensionReviewNote: "",
+      autoCompletedAt: null,
+      actualReturnAt: null,
+      returnStatus: "none",
+      returnRequestedAt: null,
+      returnRequestedBy: null,
+      returnConfirmedAt: null,
+      returnConfirmedBy: null,
+      returnReviewedAt: null,
+      returnReviewedBy: null,
+      returnReviewAction: "",
+      returnReviewNote: "",
     });
     await releaseVehicleLock();
 
-    await createNotification({
-      user: vehicle.owner,
-      type: "booking_status",
-      title: "New booking request",
-      message: `${req.user.name || "A renter"} requested to book ${vehicle.name}.`,
-      data: { bookingId: booking._id, vehicleId: vehicle._id, status: "pending" },
+    eventBus.emit(NOTIFICATION_EVENTS.BOOKING_CREATED, {
+      booking,
+      actor: req.user,
+      vehicle,
     });
 
     const populated = await Booking.findById(booking._id).populate(bookingPopulate);
@@ -548,28 +915,46 @@ export const createBooking = async (req, res) => {
       message: "Booking created successfully.",
       booking: payload,
     });
-  } catch {
+  } catch (error) {
     try {
       await releaseVehicleLock();
     } catch {
       // Do not hide the original booking error.
     }
+    if (error instanceof BookingPolicyError) {
+      return res.status(409).json({ success: false, code: error.code, message: error.message });
+    }
     res.status(500).json({ success: false, message: "Failed to create booking." });
+  } finally {
+    await renterLock?.release();
+  }
+};
+
+export const getMyBookingEligibility = async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const { pickupAt, returnAt } = req.query;
+    const hasRange = pickupAt !== undefined || returnAt !== undefined;
+    const validRange = typeof pickupAt === "string" && typeof returnAt === "string" &&
+      pickupAt && returnAt && parseBookingDateTime(pickupAt) && parseBookingDateTime(returnAt) && toDate(returnAt) > toDate(pickupAt);
+    if (hasRange && !validRange) {
+      return res.status(400).json({ success: false, message: "Provide a valid pickup and return date range." });
+    }
+    const horizonEnd = getBookingHorizonEnd();
+    if (hasRange && (toDate(pickupAt) > horizonEnd || toDate(returnAt) > horizonEnd)) {
+      return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
+    }
+    const eligibility = await getRenterBookingEligibility(req.user._id, { pickupAt, returnAt });
+    return res.json({ success: true, eligibility });
+  } catch {
+    return res.status(500).json({ success: false, message: "Unable to check booking eligibility. Please try again." });
   }
 };
 
 export const getMyBookings = async (req, res) => {
   try {
-    const status = req.query.status;
-    const query = { renter: req.user._id };
-    if (status === "cancelled") {
-      query.status = { $in: ["cancelled", "rejected"] };
-    } else if (status && status !== "all") {
-      query.status = status;
-    }
-
-    const bookings = await Booking.find(query).populate(bookingPopulate).sort({ createdAt: -1 });
-    res.json({ success: true, bookings: bookings.map((booking) => serializeBooking(req, booking)) });
+    const result = await listBookingsForParty({ req, partyField: "renter", role: "renter" });
+    res.json({ success: true, ...result });
   } catch {
     res.status(500).json({ success: false, message: "Failed to fetch bookings." });
   }
@@ -577,16 +962,8 @@ export const getMyBookings = async (req, res) => {
 
 export const getOwnerBookings = async (req, res) => {
   try {
-    const status = req.query.status;
-    const query = { owner: req.user._id };
-    if (status === "cancelled") {
-      query.status = { $in: ["cancelled", "rejected"] };
-    } else if (status && status !== "all") {
-      query.status = status;
-    }
-
-    const bookings = await Booking.find(query).populate(bookingPopulate).sort({ createdAt: -1 });
-    res.json({ success: true, bookings: bookings.map((booking) => serializeBooking(req, booking)) });
+    const result = await listBookingsForParty({ req, partyField: "owner", role: "owner" });
+    res.json({ success: true, ...result });
   } catch {
     res.status(500).json({ success: false, message: "Failed to fetch owner bookings." });
   }
@@ -602,6 +979,12 @@ export const getBookingById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
 
+    const lifecycleSync = await syncBookingLifecycleState(req, booking, { emitUpdate: false });
+    const autoSync = await autoSyncBookingPaymentFromPayMongo(booking);
+    if (lifecycleSync.updated || autoSync.updated) {
+      emitBookingUpdateToParties(req, booking);
+    }
+
     return res.json({
       success: true,
       booking: serializeBooking(req, booking),
@@ -613,45 +996,323 @@ export const getBookingById = async (req, res) => {
 
 export const cancelMyBooking = async (req, res) => {
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id });
+    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
-    if (!["pending", "confirmed"].includes(booking.status)) {
+
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
+
+    const normalizedStatus = String(booking.status || "").trim().toLowerCase();
+    if (!["pending", "confirmed", "extended"].includes(normalizedStatus)) {
       return res.status(400).json({ success: false, message: "Booking can no longer be cancelled." });
     }
 
-    booking.status = "cancelled";
-    await booking.save();
-    await syncVehicleAvailabilityByBookingState(booking.vehicle);
+    if (normalizeReturnStatus(booking.returnStatus, "none") === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "A vehicle return is waiting for owner confirmation and can no longer be cancelled.",
+      });
+    }
 
-    await createNotification({
-      user: booking.owner,
-      type: "booking_status",
-      title: "Booking cancelled",
-      message: "A renter cancelled a booking.",
-      data: { bookingId: booking._id, status: "cancelled" },
+    if (normalizedStatus !== "pending") {
+      const cancellationStatus = normalizeCancellationStatus(booking.cancellationStatus, "none");
+      if (cancellationStatus === "requested") {
+        return res.status(409).json({
+          success: false,
+          message: "A cancellation request is already waiting for owner approval.",
+        });
+      }
+
+      const now = new Date();
+      booking.cancellationStatus = "requested";
+      booking.cancellationRequestedAt = now;
+      booking.cancellationRequestedBy = req.user._id;
+      booking.cancellationRequestNote = toOptionalText(req.body?.note, 500);
+      booking.cancellationReviewedAt = null;
+      booking.cancellationReviewedBy = null;
+      booking.cancellationReviewAction = "";
+      booking.cancellationReviewNote = "";
+      await booking.save();
+
+      eventBus.emit(NOTIFICATION_EVENTS.CANCELLATION_REQUESTED, {
+        booking,
+        actor: req.user,
+        status: normalizedStatus,
+      });
+
+      const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
+      const payload = serializeBooking(req, refreshed);
+      const { ownerId, renterId } = getBookingParties(refreshed);
+      emitToUser(ownerId, "booking:updated", payload);
+      emitToUser(renterId, "booking:updated", payload);
+
+      return res.json({
+        success: true,
+        message: "Cancellation request submitted. Waiting for owner approval.",
+        booking: payload,
+      });
+    }
+
+    booking.status = "cancelled";
+    booking.cancellationStatus = "none";
+    booking.cancellationRequestedAt = null;
+    booking.cancellationRequestedBy = null;
+    booking.cancellationRequestNote = "";
+    booking.cancellationReviewedAt = null;
+    booking.cancellationReviewedBy = null;
+    booking.cancellationReviewAction = "";
+    booking.cancellationReviewNote = "";
+    await booking.save();
+    await syncVehicleAvailabilityByBookingState(booking.vehicle?._id || booking.vehicle);
+
+    eventBus.emit(NOTIFICATION_EVENTS.BOOKING_CANCELLED, {
+      booking,
+      actor: req.user,
+      cancelledBy: "renter",
     });
 
     const populated = await Booking.findById(booking._id).populate(bookingPopulate);
     const payload = serializeBooking(req, populated);
-    emitToUser(String(booking.owner), "booking:updated", payload);
-    emitToUser(String(booking.renter), "booking:updated", payload);
+    const { ownerId, renterId } = getBookingParties(populated);
+    emitToUser(ownerId, "booking:updated", payload);
+    emitToUser(renterId, "booking:updated", payload);
 
-    res.json({ success: true, booking: payload });
+    res.json({ success: true, message: "Booking cancelled.", booking: payload });
   } catch {
     res.status(500).json({ success: false, message: "Failed to cancel booking." });
   }
 };
 
-export const createBookingPayment = async (req, res) => {
+export const requestBookingExtension = async (req, res) => {
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(
+    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found." });
+    }
+
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
+
+    const normalizedStatus = String(booking.status || "").trim().toLowerCase();
+    if (["cancelled", "rejected", "completed"].includes(normalizedStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "This booking can no longer be extended.",
+      });
+    }
+    if (!ACTIVE_BOOKING_STATUSES.has(normalizedStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only active approved bookings can be extended.",
+      });
+    }
+
+    if (normalizeReturnStatus(booking.returnStatus, "none") === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "A vehicle return is already waiting for owner confirmation.",
+      });
+    }
+
+    const extensionStatus = normalizeExtensionStatus(booking.extensionStatus, "none");
+    if (extensionStatus === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "An extension request is already pending owner approval.",
+      });
+    }
+
+    const requestedReturnAt = parseBookingDateTime(req.body?.newReturnAt);
+    if (!requestedReturnAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid new return date and time.",
+      });
+    }
+    if (requestedReturnAt > getBookingHorizonEnd()) {
+      return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
+    }
+
+    const currentReturnAt = toDate(booking.returnAt);
+    if (!currentReturnAt || requestedReturnAt.getTime() <= currentReturnAt.getTime()) {
+      return res.status(400).json({
+        success: false,
+        message: "New return date/time must be later than the current return schedule.",
+      });
+    }
+
+    const vehicleId = booking.vehicle?._id || booking.vehicle;
+    const conflictingBooking = await Booking.findOne({
+      _id: { $ne: booking._id },
+      vehicle: vehicleId,
+      status: { $in: ACTIVE_OVERLAP_STATUSES },
+      pickupAt: { $lt: requestedReturnAt },
+      returnAt: { $gt: booking.pickupAt },
+    }).select("_id");
+
+    if (conflictingBooking) {
+      return res.status(409).json({
+        success: false,
+        message: "Cannot request extension because the selected schedule overlaps another booking.",
+      });
+    }
+
+    if (await findRenterScheduleConflict(booking, requestedReturnAt)) {
+      return res.status(409).json({
+        success: false, code: "RENTER_SCHEDULE_CONFLICT",
+        message: "This extension overlaps another one of your bookings. Choose an earlier return time or resolve the conflicting booking first.",
+      });
+    }
+
+    const requestNote = toOptionalText(req.body?.note, 500);
+    const now = new Date();
+    booking.extensionStatus = "requested";
+    booking.extensionRequestedAt = now;
+    booking.extensionRequestedBy = req.user._id;
+    booking.extensionCurrentReturnAt = currentReturnAt;
+    booking.extensionRequestedReturnAt = requestedReturnAt;
+    booking.extensionRequestNote = requestNote;
+    booking.extensionReviewedAt = null;
+    booking.extensionReviewedBy = null;
+    booking.extensionReviewAction = "";
+    booking.extensionReviewNote = "";
+    booking.lateReturnAction = "extend_requested";
+    booking.paymentUpdatedAt = now;
+    await booking.save();
+
+    eventBus.emit(NOTIFICATION_EVENTS.EXTENSION_REQUESTED, {
+      booking,
+      actor: req.user,
+      requestedReturnAt,
+    });
+
+    const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
+    const payload = serializeBooking(req, refreshed);
+    const { ownerId, renterId } = getBookingParties(refreshed);
+    emitToUser(ownerId, "booking:updated", payload);
+    emitToUser(renterId, "booking:updated", payload);
+
+    return res.json({
+      success: true,
+      message: "Extension request submitted. Waiting for owner approval.",
+      booking: payload,
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Failed to request extension." });
+  }
+};
+
+export const requestBookingReturn = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found." });
+    }
+
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
+
+    const normalizedStatus = String(booking.status || "").trim().toLowerCase();
+    if (["cancelled", "rejected", "completed"].includes(normalizedStatus)) {
+      if (
+        normalizedStatus === "completed" &&
+        normalizeReturnStatus(booking.returnStatus, "none") === "confirmed"
+      ) {
+        return res.json({
+          success: true,
+          message: "The owner has already confirmed this vehicle return.",
+          booking: serializeBooking(req, booking),
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: "This booking can no longer request a vehicle return.",
+      });
+    }
+    if (!ACTIVE_BOOKING_STATUSES.has(normalizedStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only active approved bookings can request a vehicle return.",
+      });
+    }
+
+    const pickupAt = toDate(booking.pickupAt);
+    const now = new Date();
+    if (!pickupAt || now.getTime() < pickupAt.getTime()) {
+      return res.status(400).json({
+        success: false,
+        message: "Vehicle return can only be requested after the rental has started.",
+      });
+    }
+
+    if (normalizeReturnStatus(booking.returnStatus, "none") === "requested") {
+      return res.json({
+        success: true,
+        message: "Vehicle return has already been requested. Waiting for owner confirmation.",
+        booking: serializeBooking(req, booking),
+      });
+    }
+
+    if (normalizeExtensionStatus(booking.extensionStatus, "none") === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "An extension request is pending. Please wait for owner review first.",
+      });
+    }
+
+    booking.returnStatus = "requested";
+    booking.returnRequestedAt = now;
+    booking.returnRequestedBy = req.user._id;
+    booking.returnConfirmedAt = null;
+    booking.returnConfirmedBy = null;
+    booking.returnReviewedAt = null;
+    booking.returnReviewedBy = null;
+    booking.returnReviewAction = "";
+    booking.returnReviewNote = "";
+
+    await booking.save();
+    await Vehicle.updateOne(
+      { _id: booking.vehicle?._id || booking.vehicle },
+      { $set: { availabilityStatus: "unavailable" } }
+    );
+
+    eventBus.emit(NOTIFICATION_EVENTS.VEHICLE_RETURN_REQUESTED, {
+      booking,
+      actor: req.user,
+    });
+
+    const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
+    const payload = serializeBooking(req, refreshed);
+    const { ownerId, renterId } = getBookingParties(refreshed);
+    emitToUser(ownerId, "booking:updated", payload);
+    emitToUser(renterId, "booking:updated", payload);
+
+    return res.json({
+      success: true,
+      message: "Vehicle return requested. The vehicle remains unavailable until the owner confirms receipt and completes inspection.",
+      booking: payload,
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Failed to request vehicle return." });
+  }
+};
+
+// Backward-compatible handler for older clients. This route now starts the
+// physical-return workflow and never completes a booking by itself.
+export const proceedBookingLateReturn = requestBookingReturn;
+
+export const createBookingPayment = async (req, res) => {
+  let releaseCheckoutLock;
+  try {
+    let booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).select("+paymentCheckoutAttempt").populate(
       bookingPopulate
     );
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
+    releaseCheckoutLock = await acquirePaymentCheckoutLock(booking._id, req.user._id);
+    booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).select("+paymentCheckoutAttempt").populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
     const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
     if (!["unpaid", "partial"].includes(normalizedPaymentStatus)) {
       return res.status(400).json({
@@ -666,21 +1327,34 @@ export const createBookingPayment = async (req, res) => {
         message: "Cancelled bookings cannot be paid.",
       });
     }
-    if (booking.status !== "confirmed") {
+    const normalizedBookingStatus = String(booking.status || "").trim().toLowerCase();
+    if (!PAYMENT_ALLOWED_STATUSES.has(normalizedBookingStatus)) {
       return res.status(400).json({
         success: false,
-        message: "Booking payment is only available after owner approval.",
+        message: "Booking payment is only available for approved, extended, or completed bookings.",
+        booking: serializeBooking(req, booking),
+      });
+    }
+    if (isOnlineBalancePaymentBlockedByWalkIn(booking)) {
+      const walkInStatus = normalizeWalkInStatus(booking.walkInPaymentStatus, "none");
+      return res.status(409).json({
+        success: false,
+        code: "WALK_IN_BALANCE_IN_PROGRESS",
+        message:
+          walkInStatus === "approved"
+            ? "Your walk-in payment request has been approved. Please pay the remaining balance directly to the owner."
+            : "Walk-in payment approval is still pending. Online checkout is unavailable until the owner reviews the request.",
         booking: serializeBooking(req, booking),
       });
     }
 
-    const effectiveBlockchainGasFee = getEffectiveBlockchainGasFee(booking);
-    const persistedGasFee = Number(booking.blockchainGasFee);
+    const effectiveTransactionFee = getEffectiveTransactionFee(booking);
+    const persistedTransactionFee = Number(booking.transactionFee);
     if (
-      (!Number.isFinite(persistedGasFee) || persistedGasFee < effectiveBlockchainGasFee) &&
-      effectiveBlockchainGasFee > 0
+      (!Number.isFinite(persistedTransactionFee) || persistedTransactionFee < effectiveTransactionFee) &&
+      effectiveTransactionFee > 0
     ) {
-      booking.blockchainGasFee = effectiveBlockchainGasFee;
+      booking.transactionFee = effectiveTransactionFee;
     }
 
     const totalPayable = getBookingPayableAmount(booking);
@@ -734,7 +1408,7 @@ export const createBookingPayment = async (req, res) => {
 
     const referenceNumber = buildReferenceNumber(booking._id);
     const amountInCentavos = Math.round(amountToCharge * 100);
-    const { successUrl, cancelUrl } = buildPaymentRedirectUrls(booking._id);
+    const { successUrl, cancelUrl } = buildPaymentRedirectUrls(booking._id, req);
     const renterProfile = booking?.renter || {};
     const renterName = buildRenterName(req.user, renterProfile);
     const vehicleName = booking.vehicle?.name || "vehicle rental";
@@ -745,13 +1419,20 @@ export const createBookingPayment = async (req, res) => {
     const renterPhone = normalizePayMongoPhone(
       req.user?.phone || renterProfile.phone || renterProfile.mobile || renterProfile.phoneNumber
     );
+    if (!renterPhone) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A valid mobile number is required before checkout. Please update your profile with a 10-digit Philippine mobile number starting with 9.",
+      });
+    }
     const billing = {
       name: renterName,
       email: renterEmail,
       phone: renterPhone,
     };
 
-    const checkoutSession = await createPayMongoCheckoutSession({
+    const { checkout: checkoutSession } = await getOrCreateBookingCheckout(booking, {
       amountInCentavos,
       itemName,
       description,
@@ -771,7 +1452,8 @@ export const createBookingPayment = async (req, res) => {
         paymentAmount: amountToCharge,
         totalPayable,
         remainingAmount,
-        blockchainGasFee: Number(getEffectiveBlockchainGasFee(booking) || 0),
+        transactionFee: Number(getEffectiveTransactionFee(booking) || 0),
+        manualPaymentRevision: Number(booking.manualPaymentRevision || 0),
       },
     });
 
@@ -783,20 +1465,6 @@ export const createBookingPayment = async (req, res) => {
         message: "Failed to create payment checkout URL.",
       });
     }
-
-    booking.paymentMethod = "PayMongo";
-    resetWalkInPaymentState(booking);
-    booking.paymongoReference = getPayMongoCheckoutReferenceNumber(checkoutSession) || referenceNumber;
-    booking.paymongoCheckoutId = checkoutId;
-    booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
-    booking.paymentScope = effectiveScope;
-    booking.paymentChannel = requestedChannel;
-    booking.paymentCheckoutAmount = amountToCharge;
-    booking.paymentAmountPaid = paidAmount;
-    booking.paymentAmountDue = remainingAmount;
-    booking.paymentRequestedAt = new Date();
-    booking.paymentUpdatedAt = new Date();
-    await booking.save();
 
     const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
     const payload = serializeBooking(req, refreshed);
@@ -822,6 +1490,9 @@ export const createBookingPayment = async (req, res) => {
       booking: payload,
     });
   } catch (error) {
+    if (!error?.isPayMongoError && error?.statusCode) {
+      return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+    }
     if (error?.isPayMongoError) {
       logPayMongoError("Checkout session creation failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;
@@ -832,7 +1503,194 @@ export const createBookingPayment = async (req, res) => {
     }
     console.error("[Booking Payment] Checkout session creation failed", error);
     return res.status(500).json({ success: false, message: "Failed to create booking payment." });
+  } finally {
+    await releaseCheckoutLock?.();
   }
+};
+
+const shouldAutoSyncBookingPayment = (booking) => {
+  if (!booking) return false;
+
+  const bookingStatus = String(booking?.status || "").trim().toLowerCase();
+  if (!PAYMENT_ALLOWED_STATUSES.has(bookingStatus)) return false;
+
+  const paymentStatus = String(booking?.paymentStatus || "").trim().toLowerCase();
+  if (!["unpaid", "partial"].includes(paymentStatus)) return false;
+
+  const checkoutId = normalizeIdText(booking?.paymongoCheckoutId);
+  if (!checkoutId) return false;
+
+  if (paymentStatus === "partial") {
+    const checkoutAmount = roundCurrency(Number(booking?.paymentCheckoutAmount || 0));
+    if (!(checkoutAmount > 0)) return false;
+  }
+
+  return true;
+};
+
+const doesCheckoutMetadataMatchBooking = (booking, metadata = {}) => {
+  const expectedBookingId = normalizeIdText(booking?._id);
+  const expectedRenterId = normalizeIdText(booking?.renter?._id || booking?.renter);
+  const expectedOwnerId = normalizeIdText(booking?.owner?._id || booking?.owner);
+
+  const metadataBookingId = normalizeIdText(metadata?.bookingId);
+  const metadataRenterId = normalizeIdText(metadata?.renterId);
+  const metadataOwnerId = normalizeIdText(metadata?.ownerId);
+
+  if (metadataBookingId && metadataBookingId !== expectedBookingId) return false;
+  if (metadataRenterId && metadataRenterId !== expectedRenterId) return false;
+  if (metadataOwnerId && metadataOwnerId !== expectedOwnerId) return false;
+
+  return true;
+};
+
+const autoSyncBookingPaymentFromPayMongo = async (booking) => {
+  if (!shouldAutoSyncBookingPayment(booking)) {
+    return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+  }
+
+  const checkoutId = normalizeIdText(booking?.paymongoCheckoutId);
+  if (!checkoutId) {
+    return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+  }
+
+  try {
+    const checkoutSession = await getPayMongoCheckoutSession(checkoutId);
+    const sessionCheckoutId = getPayMongoCheckoutId(checkoutSession) || checkoutId;
+    const sessionMetadata = getPayMongoCheckoutMetadata(checkoutSession);
+
+    if (!doesCheckoutMetadataMatchBooking(booking, sessionMetadata)) {
+      return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+    }
+
+    if (!isPayMongoCheckoutPaid(checkoutSession) || hasVerifiedCheckoutId(booking, sessionCheckoutId)) {
+      return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+    }
+
+    const result = await applyCapturedBookingCheckout(booking, checkoutSession);
+    if (result.booking !== booking) {
+      const updated = result.booking.toObject ? result.booking.toObject() : result.booking;
+      for (const [key, value] of Object.entries(updated)) {
+        if (!["vehicle", "renter", "owner"].includes(key)) booking[key] = value;
+      }
+      if (booking.$locals) booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
+    }
+    return { updated: result.updated, paymentStatus: String(result.booking.paymentStatus || "").toLowerCase() };
+  } catch (error) {
+    if (error?.isPayMongoError) {
+      logPayMongoError("Automatic payment sync failed", error);
+      return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+    }
+    return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+  }
+};
+
+const emitBookingUpdateToParties = (req, booking) => {
+  if (!booking?._id) return;
+  const payload = serializeBooking(req, booking);
+  const { ownerId, renterId } = getBookingParties(booking);
+  if (ownerId) emitToUser(ownerId, "booking:updated", payload);
+  if (renterId) emitToUser(renterId, "booking:updated", payload);
+};
+
+export async function notifyBookingPaymentRecorded(req, bookingId) {
+  const booking = await Booking.findById(bookingId).populate(bookingPopulate);
+  if (!booking) return;
+  const { ownerId, renterId } = getBookingParties(booking);
+  eventBus.emit(NOTIFICATION_EVENTS.PAYMENT_RECEIVED, {
+    booking, actor: req.user, ownerId, renterId, paymentStatus: booking.paymentStatus,
+  });
+  emitBookingUpdateToParties(req, booking);
+}
+
+const syncBookingLifecycleState = async (req, booking, { emitUpdate = false } = {}) => {
+  if (!booking?._id) return { updated: false };
+
+  const now = new Date();
+  const lateReturnPolicy = getBookingLateReturnPolicy(booking);
+  const normalizedStatus = String(booking?.status || "").trim().toLowerCase();
+  const isActiveStatus = ACTIVE_BOOKING_STATUSES.has(normalizedStatus);
+  const returnAt = toDate(booking?.returnAt);
+  if (!returnAt) return { updated: false };
+
+  if (!isActiveStatus) {
+    return { updated: false };
+  }
+
+  if (now.getTime() < returnAt.getTime()) {
+    return { updated: false };
+  }
+
+  const overdueMinutes = getBookingOverdueMinutes(booking, now, lateReturnPolicy.graceMinutes);
+  if (overdueMinutes <= 0) {
+    return { updated: false };
+  }
+  let changed = false;
+
+  if (!booking.lateReturnIsOverdue) {
+    booking.lateReturnIsOverdue = true;
+    changed = true;
+  }
+  if (Number(booking.lateReturnOverdueMinutes || 0) !== overdueMinutes) {
+    booking.lateReturnOverdueMinutes = overdueMinutes;
+    changed = true;
+  }
+  if (!booking.lateReturnDetectedAt) {
+    booking.lateReturnDetectedAt = now;
+    changed = true;
+  }
+  const penaltyRatePerHour = getBookingLatePenaltyRatePerHour(booking);
+  if (roundCurrency(Number(booking.lateReturnPenaltyRatePerHour || 0)) !== penaltyRatePerHour) {
+    booking.lateReturnPenaltyRatePerHour = penaltyRatePerHour;
+    changed = true;
+  }
+
+  let shouldNotifyOverdue = false;
+  if (!booking.lateReturnNotifiedAt) {
+    booking.lateReturnNotifiedAt = now;
+    shouldNotifyOverdue = true;
+    changed = true;
+  }
+
+  if (changed) {
+    await booking.save();
+  }
+
+  if (shouldNotifyOverdue) {
+    eventBus.emit(NOTIFICATION_EVENTS.BOOKING_OVERDUE, {
+      booking,
+      overdueMinutes,
+    });
+  }
+
+  if ((changed || shouldNotifyOverdue) && emitUpdate) {
+    emitBookingUpdateToParties(req, booking);
+  }
+
+  return { updated: changed || shouldNotifyOverdue, status: String(booking.status || "").toLowerCase() };
+};
+
+const autoSyncBookingLifecycles = async (req, bookings = []) => {
+  const updatedBookings = [];
+  for (const booking of bookings) {
+    const result = await syncBookingLifecycleState(req, booking, { emitUpdate: true });
+    if (result.updated) {
+      updatedBookings.push(booking);
+    }
+  }
+  return updatedBookings;
+};
+
+const autoSyncBookingPayments = async (bookings = []) => {
+  const updatedBookings = [];
+  const candidates = bookings.filter((booking) => shouldAutoSyncBookingPayment(booking)).slice(0, 5);
+  for (const booking of candidates) {
+    const result = await autoSyncBookingPaymentFromPayMongo(booking);
+    if (result.updated) {
+      updatedBookings.push(booking);
+    }
+  }
+  return updatedBookings;
 };
 
 export const setBookingBalancePaymentMethod = async (req, res) => {
@@ -843,16 +1701,17 @@ export const setBookingBalancePaymentMethod = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
     if (["cancelled", "rejected"].includes(booking.status)) {
       return res.status(400).json({
         success: false,
         message: "Cancelled bookings cannot be updated for payment.",
       });
     }
-    if (booking.status !== "confirmed") {
+    if (!PAYMENT_ALLOWED_STATUSES.has(String(booking.status || "").trim().toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: "Booking must be confirmed before setting payment options.",
+        message: "Booking must be approved, extended, or completed before setting payment options.",
       });
     }
 
@@ -919,21 +1778,11 @@ export const setBookingBalancePaymentMethod = async (req, res) => {
     const payload = serializeBooking(req, refreshed);
     const { ownerId, renterId } = getBookingParties(refreshed);
 
-    await createNotification({
-      user: ownerId,
-      type: "booking_payment",
-      title: "Walk-in payment requested",
-      message: `${req.user.name || "Your renter"} requested walk-in payment approval for ${
-        refreshed.vehicle?.name || "a booking"
-      }.`,
-      data: { bookingId: refreshed._id, walkInPaymentStatus: "requested" },
-    });
-    await createNotification({
-      user: renterId,
-      type: "booking_payment",
-      title: "Walk-in payment request sent",
-      message: "Your request is now waiting for owner approval.",
-      data: { bookingId: refreshed._id, walkInPaymentStatus: "requested" },
+    eventBus.emit(NOTIFICATION_EVENTS.WALKIN_PAYMENT_REQUESTED, {
+      booking: refreshed,
+      actor: req.user,
+      ownerId,
+      renterId,
     });
 
     emitToUser(ownerId, "booking:updated", payload);
@@ -957,6 +1806,7 @@ export const verifyBookingPayment = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
+    await syncBookingLifecycleState(req, booking, { emitUpdate: false });
     if (["cancelled", "rejected"].includes(booking.status)) {
       return res.status(400).json({
         success: false,
@@ -964,25 +1814,20 @@ export const verifyBookingPayment = async (req, res) => {
       });
     }
     const wasPaid = booking.paymentStatus === "paid";
-    if (!wasPaid && booking.status !== "confirmed") {
+    if (!wasPaid && !PAYMENT_ALLOWED_STATUSES.has(String(booking.status || "").trim().toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: "Booking payment can only be verified after owner approval.",
+        message: "Booking payment can only be verified for approved, extended, or completed bookings.",
       });
     }
-    let isPaid = wasPaid;
+    let isPaid = wasPaid && hasVerifiedCheckoutId(booking, req.body?.checkoutId || booking.paymongoCheckoutId);
+    let checkoutStatus = "";
+    let verificationApplied = false;
 
-    if (!wasPaid) {
+    if (!wasPaid || (!isPaid && req.body?.checkoutId)) {
       const checkoutIdInput = String(req.body?.checkoutId || "").trim();
       const storedCheckoutId = String(booking.paymongoCheckoutId || "").trim();
-      if (checkoutIdInput && storedCheckoutId && checkoutIdInput !== storedCheckoutId) {
-        return res.status(400).json({
-          success: false,
-          message: "Checkout reference does not match this booking.",
-        });
-      }
-
-      const checkoutId = storedCheckoutId || checkoutIdInput;
+      const checkoutId = checkoutIdInput || storedCheckoutId;
       if (!checkoutId) {
         return res.status(400).json({
           success: false,
@@ -991,44 +1836,10 @@ export const verifyBookingPayment = async (req, res) => {
       }
 
       const checkoutSession = await getPayMongoCheckoutSession(checkoutId);
+      checkoutStatus = String(checkoutSession?.attributes?.status || "").toLowerCase();
       const sessionCheckoutId = getPayMongoCheckoutId(checkoutSession);
       const sessionReferenceNumber = getPayMongoCheckoutReferenceNumber(checkoutSession);
       const sessionMetadata = getPayMongoCheckoutMetadata(checkoutSession);
-      const sessionAmountInCentavos = getPayMongoCheckoutAmountInCentavos(checkoutSession);
-
-      if (storedCheckoutId && sessionCheckoutId && sessionCheckoutId !== storedCheckoutId) {
-        return res.status(400).json({
-          success: false,
-          message: "Payment checkout session does not belong to this booking.",
-        });
-      }
-
-      const storedReferenceNumber = String(booking.paymongoReference || "").trim();
-      if (storedReferenceNumber && sessionReferenceNumber && sessionReferenceNumber !== storedReferenceNumber) {
-        return res.status(400).json({
-          success: false,
-          message: "Payment reference does not match this booking.",
-        });
-      }
-
-      const configuredCheckoutAmount = roundCurrency(Number(booking.paymentCheckoutAmount || 0));
-      const expectedCheckoutAmount =
-        configuredCheckoutAmount > 0
-          ? configuredCheckoutAmount
-          : String(booking.paymentStatus || "").toLowerCase() === "partial"
-            ? getBookingRemainingAmount(booking)
-            : getBookingPayableAmount(booking);
-      const expectedAmountInCentavos = Math.round(expectedCheckoutAmount * 100);
-      if (
-        !Number.isFinite(expectedAmountInCentavos) ||
-        expectedAmountInCentavos <= 0 ||
-        sessionAmountInCentavos !== expectedAmountInCentavos
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Payment amount does not match this booking.",
-        });
-      }
 
       const expectedBookingId = String(booking._id || "");
       const expectedRenterId = String(booking.renter?._id || booking.renter || "");
@@ -1036,99 +1847,60 @@ export const verifyBookingPayment = async (req, res) => {
       const metadataBookingId = String(sessionMetadata?.bookingId || "");
       const metadataRenterId = String(sessionMetadata?.renterId || "");
       const metadataOwnerId = String(sessionMetadata?.ownerId || "");
+      const metadataMatchesBooking = metadataBookingId && metadataBookingId === expectedBookingId;
+      const metadataMatchesRenter = !metadataRenterId || metadataRenterId === expectedRenterId;
+      const metadataMatchesOwner = !metadataOwnerId || metadataOwnerId === expectedOwnerId;
+      const metadataMatchesExpected = metadataMatchesBooking && metadataMatchesRenter && metadataMatchesOwner;
 
-      if (
-        (metadataBookingId && metadataBookingId !== expectedBookingId) ||
-        (metadataRenterId && metadataRenterId !== expectedRenterId) ||
-        (metadataOwnerId && metadataOwnerId !== expectedOwnerId)
-      ) {
+      if (!metadataMatchesRenter || !metadataMatchesOwner || (metadataBookingId && !metadataMatchesBooking)) {
         return res.status(400).json({
           success: false,
           message: "Payment metadata does not match this booking.",
         });
       }
 
-      isPaid = isPayMongoCheckoutPaid(checkoutSession);
+      const storedReferenceNumber = String(booking.paymongoReference || "").trim();
+      const matchesStoredCheckout = Boolean(
+        storedCheckoutId &&
+          ((sessionCheckoutId && sessionCheckoutId === storedCheckoutId) || checkoutId === storedCheckoutId)
+      );
+      const matchesStoredReference = Boolean(
+        storedReferenceNumber && sessionReferenceNumber && sessionReferenceNumber === storedReferenceNumber
+      );
 
-      booking.paymentMethod = "PayMongo";
-      booking.paymongoCheckoutId = getPayMongoCheckoutId(checkoutSession) || checkoutId;
-      booking.paymongoReference =
-        getPayMongoCheckoutReferenceNumber(checkoutSession) || booking.paymongoReference;
-      booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
-      booking.paymentUpdatedAt = new Date();
-
-      if (isPaid) {
-        const totalPayable = getBookingPayableAmount(booking);
-        const paidBefore = getBookingPaidAmount(booking);
-        const paidAfter = Math.min(totalPayable, roundCurrency(paidBefore + expectedCheckoutAmount));
-        const remainingAfter = roundCurrency(Math.max(totalPayable - paidAfter, 0));
-
-        booking.paymentAmountPaid = paidAfter;
-        booking.paymentAmountDue = remainingAfter;
-        booking.paymentCheckoutAmount = 0;
-
-        if (remainingAfter <= 0) {
-          booking.paymentStatus = "paid";
-          booking.paidAt = booking.paidAt || new Date();
-        } else {
-          booking.paymentStatus = "partial";
-          booking.paidAt = null;
-        }
-        resetWalkInPaymentState(booking);
+      if (!metadataMatchesExpected && !matchesStoredCheckout && !matchesStoredReference) {
+        return res.status(400).json({
+          success: false,
+          message: "Payment checkout session does not belong to this booking.",
+        });
       }
 
-      await booking.save();
+      isPaid = isPayMongoCheckoutPaid(checkoutSession);
+      const result = await applyCapturedBookingCheckout(booking, checkoutSession);
+      verificationApplied = result.updated;
     }
-
-    const blockchainResult = await recordBookingOnChainIfEligible(booking);
 
     const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
     const payload = serializeBooking(req, refreshed);
     const { ownerId, renterId } = getBookingParties(refreshed);
 
-    if (isPaid && !wasPaid) {
-      const isNowPaidInFull = payload.paymentStatus === "paid";
-      await createNotification({
-        user: ownerId,
-        type: "booking_payment",
-        title: isNowPaidInFull ? "Booking paid" : "Downpayment received",
-        message: isNowPaidInFull
-          ? `${req.user.name || "A renter"} completed payment for ${
-              refreshed.vehicle?.name || "a booking"
-            }.`
-          : `${req.user.name || "A renter"} paid a downpayment for ${
-              refreshed.vehicle?.name || "a booking"
-            }.`,
-        data: { bookingId: refreshed._id, paymentStatus: payload.paymentStatus },
-      });
-      await createNotification({
-        user: renterId,
-        type: "booking_payment",
-        title: isNowPaidInFull ? "Payment successful" : "Downpayment successful",
-        message: isNowPaidInFull
-          ? `Your payment for ${refreshed.vehicle?.name || "your booking"} was successful.`
-          : `Your downpayment for ${refreshed.vehicle?.name || "your booking"} was successful.`,
-        data: { bookingId: refreshed._id, paymentStatus: payload.paymentStatus },
+    if (verificationApplied) {
+      eventBus.emit(NOTIFICATION_EVENTS.PAYMENT_RECEIVED, {
+        booking: refreshed,
+        actor: req.user,
+        ownerId,
+        renterId,
+        paymentStatus: payload.paymentStatus,
       });
     }
 
     emitToUser(ownerId, "booking:updated", payload);
     emitToUser(renterId, "booking:updated", payload);
 
-    const hasTxHash = Boolean(payload.blockchainTxHash);
-    const blockchainWarning = blockchainResult?.warning || null;
     let message = "Payment is not completed yet.";
 
     if (payload.paymentStatus === "paid") {
-      if (hasTxHash && wasPaid) {
-        message = "Payment already verified. Booking is recorded on blockchain.";
-      } else if (hasTxHash) {
-        message = "Payment verified successfully. Booking was automatically recorded on blockchain.";
-      } else if (blockchainWarning) {
-        message = `Payment verified successfully. Blockchain recording is pending: ${blockchainWarning}`;
-      } else {
-        message = "Payment verified successfully. Blockchain recording is pending.";
-      }
+      message = wasPaid ? "Payment already verified." : "Payment verified successfully.";
     } else if (payload.paymentStatus === "partial") {
       const remaining = Number(payload.paymentAmountDue || 0).toLocaleString("en-PH", {
         minimumFractionDigits: 2,
@@ -1141,18 +1913,17 @@ export const verifyBookingPayment = async (req, res) => {
       success: true,
       paid: payload.paymentStatus === "paid",
       paymentCaptured: isPaid,
+      checkoutStatus,
       paymentStatus: payload.paymentStatus,
       checkoutId: payload.paymongoCheckoutId,
       referenceNumber: payload.paymongoReference,
       booking: payload,
-      blockchain: {
-        recorded: hasTxHash,
-        pending: payload.paymentStatus === "paid" && !hasTxHash,
-        warning: blockchainWarning,
-      },
       message,
     });
   } catch (error) {
+    if (!error?.isPayMongoError && error?.statusCode) {
+      return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+    }
     if (error?.isPayMongoError) {
       logPayMongoError("Payment verification failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;
@@ -1166,87 +1937,49 @@ export const verifyBookingPayment = async (req, res) => {
   }
 };
 
-export const recordBookingTransactionOnChain = async (req, res) => {
-  try {
-    const booking = await Booking.findOne(buildBookingAccessQuery(req.params.id, req.user)).populate(
-      bookingPopulate
-    );
-    if (!booking) {
-      return res.status(404).json({ success: false, message: "Booking not found." });
-    }
-
-    if (booking.blockchainTxHash) {
-      return res.json({
-        success: true,
-        message: "Booking is already recorded on-chain.",
-        booking: serializeBooking(req, booking),
-      });
-    }
-
-    const eligibility = getBookingLedgerEligibility(booking);
-    if (!eligibility.eligible) {
-      return res.status(400).json({
-        success: false,
-        message: mapEligibilityReasonToMessage(eligibility.reason),
-      });
-    }
-
-    const blockchainResult = await recordBookingOnChainIfEligible(booking);
-    if (!blockchainResult.recorded) {
-      return res.status(503).json({
-        success: false,
-        message: "Blockchain recording is temporarily unavailable.",
-      });
-    }
-
-    const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
-    const payload = serializeBooking(req, refreshed);
-    const { ownerId: normalizedOwnerId, renterId } = getBookingParties(refreshed);
-
-    emitToUser(normalizedOwnerId, "booking:updated", payload);
-    emitToUser(renterId, "booking:updated", payload);
-
-    return res.json({
-      success: true,
-      message: "Booking transaction was recorded on blockchain.",
-      booking: payload,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to record booking on blockchain.",
-    });
-  }
-};
-
 export const addBookingReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
     const numericRating = Number(rating);
 
-    if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
-      return res.status(400).json({ success: false, message: "Rating must be between 1 and 5." });
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ success: false, message: "Choose a whole-star rating from 1 to 5." });
+    }
+    if (comment != null && typeof comment !== "string") {
+      return res.status(400).json({ success: false, message: "Review text must be a message." });
+    }
+    const reviewComment = String(comment || "").trim();
+    if (comment && !reviewComment) {
+      return res.status(400).json({ success: false, message: "Write a review or leave this field blank." });
+    }
+    if (reviewComment.length > 1200) {
+      return res.status(400).json({ success: false, message: "Keep your review to 1,200 characters or fewer." });
+    }
+    if (reviewComment && (
+      /[\uFE00-\uFE0F\u{E0100}-\u{E01EF}\u20E3]|\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(reviewComment) ||
+      !/^[\p{L}\p{Nd}][\p{L}\p{M}\p{Nd}]*(?: [\p{L}\p{Nd}][\p{L}\p{M}\p{Nd}]*)*$/u.test(reviewComment)
+    )) {
+      return res.status(400).json({ success: false, message: "Use letters, numbers, and single spaces only." });
     }
 
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id });
+    const booking = await Booking.findOneAndUpdate(
+      { _id: req.params.id, renter: req.user._id, status: "completed", reviewRating: null },
+      { $set: { reviewRating: numericRating, reviewComment, reviewCreatedAt: new Date() } },
+      { new: true, runValidators: true }
+    );
     if (!booking) {
-      return res.status(404).json({ success: false, message: "Booking not found." });
-    }
-    if (booking.status !== "completed") {
-      return res.status(400).json({ success: false, message: "Only completed bookings can be reviewed." });
+      const current = await Booking.findOne({ _id: req.params.id, renter: req.user._id });
+      if (!current) return res.status(404).json({ success: false, message: "Booking not found." });
+      if (current.status !== "completed") {
+        return res.status(400).json({ success: false, message: "Only completed bookings can be reviewed." });
+      }
+      return res.status(409).json({ success: false, message: "You already reviewed this rental." });
     }
 
-    booking.reviewRating = numericRating;
-    booking.reviewComment = String(comment || "").trim();
-    booking.reviewCreatedAt = new Date();
-    await booking.save();
-
-    await createNotification({
-      user: booking.owner,
-      type: "system",
-      title: "New vehicle review",
-      message: "A renter left a review on a completed booking.",
-      data: { bookingId: booking._id, rating: booking.reviewRating },
+    eventBus.emit(NOTIFICATION_EVENTS.REVIEW_CREATED, {
+      booking,
+      actor: req.user,
+      rating: booking.reviewRating,
     });
 
     const populated = await Booking.findById(booking._id).populate(bookingPopulate);

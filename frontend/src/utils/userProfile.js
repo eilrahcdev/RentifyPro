@@ -86,11 +86,6 @@ export const normalizeUserProfile = (source = {}, fallback = {}) => {
     role: pickText("role") || "user",
     isVerified: pickBool("isVerified", false),
     kycStatus: pickText("kycStatus"),
-    walletAddress: hasOwn(src, "walletAddress")
-      ? src.walletAddress || null
-      : canUseFallback
-        ? fb.walletAddress || null
-        : null,
     avatar: pickText("avatar"),
   };
 };
@@ -117,7 +112,6 @@ export const persistUserProfile = (profile) => {
       typeof normalized.isVerified === "boolean"
         ? normalized.isVerified
         : currentUser.isVerified || false,
-    walletAddress: normalized.walletAddress || currentUser.walletAddress || null,
     avatar: normalized.avatar || currentUser.avatar || "",
   });
 

@@ -9,6 +9,7 @@ const preKycFaceSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    sessionId: { type: String, required: true, index: true },
     role: {
       type: String,
       enum: ["user", "owner"],

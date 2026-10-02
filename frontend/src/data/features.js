@@ -6,8 +6,8 @@ export const FEATURES = [
   },
   {
     icon: "shield",
-    title: "Secure Blockchain Transactions",
-    description: "All bookings are recorded on an immutable blockchain, ensuring transparency and trust.",
+    title: "Secure Payments",
+    description: "Protected checkout and verified payment records help keep every booking safe and reliable.",
   },
   {
     icon: "radio",

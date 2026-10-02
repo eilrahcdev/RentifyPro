@@ -1,39 +1,80 @@
+import PreKycReviewNotice from "./PreKycReviewNotice";
+import { documentStatusLabel as formatDocumentStatus } from "../utils/workflowStatus";
 // User registration
-// Step 1: personal details
-// Step 2: ID and selfie check
-// Step 3: review and submit
+// Guided registration: account, personal details, location, identity, and review.
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   fileToBase64,
   stripDataUrlPrefix,
   getMimeFromDataUrl,
-  startCamera,
-  stopCamera,
-  captureFramesFromStream,
+  validateDocumentImageFile,
 } from "../utils/cameraKyc";
 
 import {
   preRegisterIdFace,
-  preSelfieChallenge,
   preSelfieVerify,
+  getPreKycSessionToken,
 } from "../utils/kycApi";
 
 import {
-  Mail, Phone, User, Loader, Upload, CheckCircle2,
-  ArrowLeft, ArrowRight, ShieldCheck, Car, Check, Calendar, MapPin, ChevronDown,
+  Mail, Phone, User, Loader, Upload, CircleCheck,
+  ArrowLeft, ArrowRight, ShieldCheck, CarFront, Check, Calendar, MapPin,
 } from "lucide-react";
 
 import FormInput from "./FormInput";
 import PasswordInput from "./PasswordInput";
 import AuthShell from "./AuthShell";
-import { RELATIONSHIP_OPTIONS, VALIDATION_RULES } from "../data/registerValidation";
+import LegalPolicyModal from "./LegalPolicyModal";
+import RegistrationDraftNotice from "./RegistrationDraftNotice";
+import RegistrationProgress from "./RegistrationProgress";
+import HelpLink from "./HelpLink";
+import SelfieCapture from "./SelfieCapture";
+import useRegistrationDraft from "../hooks/useRegistrationDraft";
+import useRegistrationEmailCheck from "../hooks/useRegistrationEmailCheck";
+import { getMinBirthDate, getMaxBirthDate, RELATIONSHIP_OPTIONS, VALIDATION_RULES } from "../data/registerValidation";
+import { ID_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 import API from "../utils/api";
 
-const TOTAL_STEPS = 3;
-const STEP_LABELS = ["Personal Details", "Face Verification", "Review"];
+const STEP_LABELS = ["Account", "About you", "Location & safety", "Identity", "Review"];
+const TOTAL_STEPS = STEP_LABELS.length;
 const ACTION_COOLDOWN_MS = 2000;
+const RATE_LIMIT_FALLBACK_SECONDS = 5 * 60;
+const REGISTER_RATE_LIMIT_STORAGE_KEY = "rentifypro.registerRateLimitUntil";
 const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
+const normalizePhMobileInput = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (!digits.startsWith("9")) return "";
+  return digits.slice(0, 10);
+};
+
+const formatCountdown = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+};
+
+const getRemainingRateLimitSeconds = (untilMs) => {
+  const safeUntilMs = Number(untilMs) || 0;
+  if (safeUntilMs <= 0) return 0;
+  return Math.max(0, Math.ceil((safeUntilMs - Date.now()) / 1000));
+};
+
+const readStoredRateLimitUntil = () => {
+  if (typeof window === "undefined") return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(REGISTER_RATE_LIMIT_STORAGE_KEY) || 0);
+    if (!Number.isFinite(stored) || stored <= Date.now()) {
+      window.localStorage.removeItem(REGISTER_RATE_LIMIT_STORAGE_KEY);
+      return 0;
+    }
+    return stored;
+  } catch {
+    return 0;
+  }
+};
 
 // Turn service errors into user-friendly text
 function friendlyError(msg) {
@@ -55,20 +96,31 @@ function friendlyError(msg) {
   return "Something went wrong. Please try again.";
 }
 
-export default function RegisterPage({
+export default function RegisterPage(props) {
+  const [attempt, setAttempt] = useState({ key: 0, reason: "" });
+  const resetDraft = useCallback((reason) => setAttempt((previous) => ({ key: previous.key + 1, reason })), []);
+  return <RegisterForm key={attempt.key} {...props} onResetDraft={resetDraft} draftResetReason={attempt.reason} />;
+}
+
+function RegisterForm({
   onNavigateToHome,
   onNavigateToSignIn,
   onNavigateToRegisterOTP,
   onNavigateToOwnerRegister,
+  onResetDraft,
+  draftResetReason,
 }) {
   // Form fields
-  const [form, setForm] = useState({
+  const [isLoading, setIsLoading] = useState(false);
+  const draft = useRegistrationDraft("user", {
     firstName: "", lastName: "", email: "", phone: "",
     dateOfBirth: "", gender: "",
     region: "", province: "", city: "", barangay: "",
     emergencyContactName: "", emergencyContactPhone: "", emergencyContactRelationship: "",
     password: "", confirmPassword: "", agree: false,
-  });
+  }, { busy: isLoading, onReset: onResetDraft, resetReason: draftResetReason });
+  const { form, setForm } = draft;
+  const { check: checkEmail, cancel: cancelEmailCheck, isChecking: isCheckingEmail } = useRegistrationEmailCheck();
 
   const [accountType, setAccountType] = useState("user");
   const [regions, setRegions] = useState([]);
@@ -79,30 +131,95 @@ export default function RegisterPage({
 
   // KYC data
   const [kyc, setKyc] = useState({
+    idType: "",
     idCardFile: null,
     idRegistered: false,
-    challengeId: "",
+    idReadyForSelfie: false,
     selfieVerified: false,
     selfieDataUrl: "",
     selfieBase64Clean: "",
   });
 
-  const [kycUi, setKycUi] = useState({ showCamera: false, statusText: "" });
-
-  // Camera state
-  const videoRef = useRef(null);
-  const [cameraStream, setCameraStream] = useState(null);
-  const [devices, setDevices] = useState([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState("");
-  const [camError, setCamError] = useState("");
-  const [camInfo, setCamInfo] = useState("");
+  const [kycUi, setKycUi] = useState({ statusText: "" });
+  const [documentReviewStatus, setDocumentReviewStatus] = useState("not_uploaded");
+  const idPreviewUrl = useMemo(
+    () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
+    [kyc.idCardFile]
+  );
+  const identityStage = !kyc.idRegistered
+    ? "id"
+    : ["reupload_required", "rejected"].includes(documentReviewStatus)
+      ? "id_blocked"
+    : !kyc.idReadyForSelfie
+      ? "id_checking"
+      : !kyc.selfieBase64Clean
+        ? "camera"
+        : !kyc.selfieVerified
+          ? "selfie"
+          : "complete";
+  const handleIdStatus = useCallback((status, document) => {
+    setDocumentReviewStatus(status);
+    const ready = document?.identityReadyForSelfie === true;
+    setKyc((previous) => {
+      if (previous.idReadyForSelfie === ready) return previous;
+      return {
+        ...previous,
+        idReadyForSelfie: ready,
+        ...(!ready ? { selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" } : {}),
+      };
+    });
+    if (ready) {
+      setKycUi((previous) => ({ ...previous, statusText: "ID details matched. You can now take your selfie." }));
+    } else if (!["queued", "processing", "retry_wait"].includes(status)) {
+      setKycUi((previous) => ({ ...previous, statusText: "" }));
+    }
+  }, []);
+  const isDocumentApproved = documentReviewStatus === "verified";
 
   // Page state
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [stepErrors, setStepErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = useState(() => readStoredRateLimitUntil());
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(() =>
+    getRemainingRateLimitSeconds(readStoredRateLimitUntil())
+  );
   const [successMessage, setSuccessMessage] = useState("");
+  const [formError, setFormError] = useState("");
+  const [legalModalType, setLegalModalType] = useState("");
+  const isRateLimited = rateLimitSeconds > 0;
+  const isFormLocked = isLoading || isRateLimited;
+
+  const clearRateLimit = useCallback(() => {
+    setRateLimitUntil(0);
+    setRateLimitSeconds(0);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(REGISTER_RATE_LIMIT_STORAGE_KEY);
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, []);
+
+  const activateRateLimit = useCallback((seconds, retryAfterAt = "") => {
+    const fallbackSeconds = Math.max(1, Math.floor(Number(seconds) || RATE_LIMIT_FALLBACK_SECONDS));
+    const parsedRetryAfterAt = Date.parse(String(retryAfterAt || "").trim());
+    const untilMs =
+      Number.isFinite(parsedRetryAfterAt) && parsedRetryAfterAt > Date.now()
+        ? parsedRetryAfterAt
+        : Date.now() + fallbackSeconds * 1000;
+
+    setRateLimitUntil(untilMs);
+    setRateLimitSeconds(getRemainingRateLimitSeconds(untilMs));
+
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(REGISTER_RATE_LIMIT_STORAGE_KEY, String(untilMs));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, []);
 
   // Input refs
   const firstNameRef = useRef(null);
@@ -120,11 +237,13 @@ export default function RegisterPage({
   const emergencyRelationshipRef = useRef(null);
   const passwordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
+  const idTypeRef = useRef(null);
   const idInputRef = useRef(null);
 
   // Small cooldown to avoid double clicks
   const lastActionRef = useRef(0);
   const canAct = () => {
+    if (isFormLocked) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
@@ -188,8 +307,6 @@ export default function RegisterPage({
         if (!active) return;
 
         setProvinces(provinceList);
-        setCities([]);
-        setBarangays([]);
 
         if (provinceList.length === 0) {
           const cityResponse = await fetch(
@@ -236,7 +353,6 @@ export default function RegisterPage({
         const data = await response.json();
         if (!active) return;
         setCities(Array.isArray(data) ? data : []);
-        setBarangays([]);
       } catch {
         if (!active) return;
         setCities([]);
@@ -282,20 +398,122 @@ export default function RegisterPage({
     };
   }, [form.city]);
 
+  useEffect(() => {
+    if (rateLimitUntil <= 0) {
+      setRateLimitSeconds(0);
+      return undefined;
+    }
+
+    const syncCountdown = () => {
+      const remaining = getRemainingRateLimitSeconds(rateLimitUntil);
+      setRateLimitSeconds(remaining);
+      if (remaining <= 0) {
+        clearRateLimit();
+      }
+    };
+
+    syncCountdown();
+    const timer = setInterval(syncCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitUntil, clearRateLimit]);
+
   // Input handlers
 
+  const validateStep1Field = useCallback(
+    (field, sourceForm = form) => {
+      switch (field) {
+        case "firstName":
+          return VALIDATION_RULES.firstName(sourceForm.firstName);
+        case "lastName":
+          return VALIDATION_RULES.lastName(sourceForm.lastName);
+        case "email":
+          return VALIDATION_RULES.email(sourceForm.email);
+        case "phone":
+          return VALIDATION_RULES.phone(sourceForm.phone);
+        case "dateOfBirth":
+          return VALIDATION_RULES.dateOfBirth(sourceForm.dateOfBirth);
+        case "gender":
+          return VALIDATION_RULES.gender(sourceForm.gender);
+        case "region":
+          return VALIDATION_RULES.region(sourceForm.region);
+        case "province":
+          return provinces.length > 0 ? VALIDATION_RULES.province(sourceForm.province) : "";
+        case "city":
+          return VALIDATION_RULES.city(sourceForm.city);
+        case "barangay":
+          return VALIDATION_RULES.barangay(sourceForm.barangay);
+        case "emergencyContactName":
+          return VALIDATION_RULES.emergencyContactName(sourceForm.emergencyContactName);
+        case "emergencyContactPhone":
+          return VALIDATION_RULES.emergencyContactPhone(sourceForm.emergencyContactPhone);
+        case "emergencyContactRelationship":
+          return VALIDATION_RULES.emergencyContactRelationship(sourceForm.emergencyContactRelationship);
+        case "password":
+          return VALIDATION_RULES.password(sourceForm.password);
+        case "confirmPassword":
+          if (VALIDATION_RULES.password(sourceForm.password)) return "";
+          return VALIDATION_RULES.confirmPassword(sourceForm.password, sourceForm.confirmPassword);
+        case "agree":
+          return VALIDATION_RULES.agree(sourceForm.agree);
+        default:
+          return "";
+      }
+    },
+    [form, provinces.length]
+  );
+
   const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
+    if (field === "email") cancelEmailCheck();
+    const nextForm = { ...form, [field]: value };
+    setForm(nextForm);
+    setFormError("");
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    setErrors((prev) => ({
+      ...prev,
+      [field]: "",
+      ...(field === "password" ? { confirmPassword: "" } : {}),
+    }));
+    if (["firstName", "lastName", "email", "dateOfBirth", "gender"].includes(field)) {
+      setKyc((prev) => ({
+        ...prev,
+        idRegistered: false,
+        idReadyForSelfie: false,
+        selfieVerified: false,
+        selfieDataUrl: "",
+        selfieBase64Clean: "",
+      }));
+      setStepErrors((prev) => ({ ...prev, idRegistered: "", selfieVerified: "" }));
+      setKycUi((prev) => ({ ...prev, statusText: "" }));
+    }
+  };
+
+  const handleFieldBlur = (field) => {
+    if (!touched[field]) return;
+    const nextForm = { ...form };
+    setErrors((prev) => {
+      const nextErrors = { ...prev, [field]: validateStep1Field(field, nextForm) };
+      if (field === "password" && (touched.confirmPassword || nextForm.confirmPassword)) {
+        nextErrors.confirmPassword = validateStep1Field("confirmPassword", nextForm);
+      }
+      return nextErrors;
+    });
   };
 
   const handleRegionChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       region: value,
       province: "",
       city: "",
       barangay: "",
+    };
+    setForm(nextForm);
+    setTouched((prev) => ({
+      ...prev,
+      region: true,
+      province: false,
+      city: false,
+      barangay: false,
     }));
     setErrors((prev) => ({
       ...prev,
@@ -307,11 +525,18 @@ export default function RegisterPage({
   };
 
   const handleProvinceChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       province: value,
       city: "",
       barangay: "",
+    };
+    setForm(nextForm);
+    setTouched((prev) => ({
+      ...prev,
+      province: true,
+      city: false,
+      barangay: false,
     }));
     setErrors((prev) => ({
       ...prev,
@@ -322,10 +547,16 @@ export default function RegisterPage({
   };
 
   const handleCityChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       city: value,
       barangay: "",
+    };
+    setForm(nextForm);
+    setTouched((prev) => ({
+      ...prev,
+      city: true,
+      barangay: false,
     }));
     setErrors((prev) => ({
       ...prev,
@@ -335,10 +566,9 @@ export default function RegisterPage({
   };
 
   const handleBarangayChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      barangay: value,
-    }));
+    const nextForm = { ...form, barangay: value };
+    setForm(nextForm);
+    setTouched((prev) => ({ ...prev, barangay: true }));
     setErrors((prev) => ({
       ...prev,
       barangay: "",
@@ -346,7 +576,7 @@ export default function RegisterPage({
   };
 
   const handleAccountSelect = (type) => {
-    if (type === "renter") {
+    if (type === "owner") {
       if (typeof onNavigateToOwnerRegister === "function") onNavigateToOwnerRegister();
       return;
     }
@@ -357,159 +587,108 @@ export default function RegisterPage({
 
   const resetKyc = useCallback(() => {
     setKyc({
-      idCardFile: null, idRegistered: false, challengeId: "",
+      idType: "",
+      idCardFile: null, idRegistered: false, idReadyForSelfie: false,
       selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "",
     });
     setKycUi((p) => ({ ...p, statusText: "" }));
+    setDocumentReviewStatus("not_uploaded");
     setStepErrors({});
-    setCamError(""); setCamInfo("");
   }, []);
 
-  // Camera controls
+  useEffect(() => () => {
+    if (idPreviewUrl) URL.revokeObjectURL(idPreviewUrl);
+  }, [idPreviewUrl]);
 
-  const closeCamera = useCallback(() => {
-    try { stopCamera(videoRef.current || cameraStream); } catch {}
-    setCameraStream(null);
-    setKycUi((p) => ({ ...p, showCamera: false }));
-    setCamError(""); setCamInfo("");
-  }, [cameraStream]);
-
-  useEffect(() => {
-    return () => { try { stopCamera(cameraStream); } catch {} };
-  }, [cameraStream]);
-
-  const openCamera = async () => {
-    if (!canAct()) return;
-    setCamError(""); setCamInfo("");
-    setKycUi((p) => ({ ...p, showCamera: true, statusText: "Initializing camera..." }));
-    try {
-      const all = await navigator.mediaDevices.enumerateDevices();
-      const cams = all.filter((d) => d.kind === "videoinput");
-      setDevices(cams);
-      let deviceId = selectedDeviceId;
-      if (!deviceId || !cams.find((c) => c.deviceId === deviceId)) {
-        deviceId = cams[0]?.deviceId || "";
-        setSelectedDeviceId(deviceId);
-      }
-      const constraints = {
-        audio: false,
-        video: deviceId
-          ? { deviceId: { exact: deviceId }, facingMode: "user" }
-          : { facingMode: "user" },
-      };
-      const stream = await startCamera(videoRef.current, constraints);
-      setCameraStream(stream);
-      const track = stream.getVideoTracks()[0];
-      const settings = track?.getSettings?.() || {};
-      const label = cams.find((c) => c.deviceId === deviceId)?.label || "Camera";
-      setCamInfo(`✅ ${label} | ${settings.width || "?"}x${settings.height || "?"}`);
-      setKycUi((p) => ({ ...p, statusText: "✅ Camera ready. Capture your selfie." }));
-    } catch (e) {
-      const name = e?.name || "";
-      let msg = "Something went wrong with the camera. Please try again.";
-      if (name === "NotAllowedError") msg = "Camera permission was denied. Please allow camera access in your browser settings.";
-      if (name === "NotReadableError") msg = "Your camera is being used by another app. Please close it and try again.";
-      if (name === "NotFoundError") msg = "No camera was found on your device.";
-      setCamError(msg);
-      closeCamera();
-    }
+  const fieldRefs = {
+    firstName: firstNameRef,
+    lastName: lastNameRef,
+    email: emailRef,
+    phone: phoneRef,
+    dateOfBirth: dobRef,
+    gender: genderRef,
+    region: regionRef,
+    province: provinceRef,
+    city: cityRef,
+    barangay: barangayRef,
+    emergencyContactName: emergencyNameRef,
+    emergencyContactPhone: emergencyPhoneRef,
+    emergencyContactRelationship: emergencyRelationshipRef,
+    password: passwordRef,
+    confirmPassword: confirmPasswordRef,
   };
 
-  const switchCamera = async (deviceId) => {
-    setSelectedDeviceId(deviceId);
-    setCamError(""); setCamInfo("");
-    try {
-      stopCamera(videoRef.current || cameraStream);
-      setCameraStream(null);
-      const stream = await startCamera(videoRef.current, {
-        audio: false,
-        video: { deviceId: { exact: deviceId }, facingMode: "user" },
-      });
-      setCameraStream(stream);
-      const track = stream.getVideoTracks()[0];
-      const settings = track?.getSettings?.() || {};
-      const label = devices.find((d) => d.deviceId === deviceId)?.label || "Camera";
-      setCamInfo(`✅ ${label} | ${settings.width || "?"}x${settings.height || "?"}`);
-    } catch {
-      setCamError("Failed to switch camera. Please try again.");
-    }
-  };
-
-  useEffect(() => {
-    if (step !== 2 && kycUi.showCamera) closeCamera();
-  }, [step, kycUi.showCamera, closeCamera]);
-
-  // Step 1 validation
-
-  const validateStep1 = () => {
-    const newErrors = {};
-    newErrors.firstName = VALIDATION_RULES.firstName(form.firstName);
-    newErrors.lastName = VALIDATION_RULES.lastName(form.lastName);
-    newErrors.email = VALIDATION_RULES.email(form.email);
-    newErrors.phone = VALIDATION_RULES.phone(form.phone);
-    newErrors.dateOfBirth = VALIDATION_RULES.dateOfBirth(form.dateOfBirth);
-    newErrors.gender = VALIDATION_RULES.gender(form.gender);
-    newErrors.region = VALIDATION_RULES.region(form.region);
-    newErrors.province = provinces.length > 0 ? VALIDATION_RULES.province(form.province) : "";
-    newErrors.city = VALIDATION_RULES.city(form.city);
-    newErrors.barangay = VALIDATION_RULES.barangay(form.barangay);
-    newErrors.emergencyContactName = VALIDATION_RULES.emergencyContactName(form.emergencyContactName);
-    newErrors.emergencyContactPhone = VALIDATION_RULES.emergencyContactPhone(form.emergencyContactPhone);
-    newErrors.emergencyContactRelationship = VALIDATION_RULES.emergencyContactRelationship(
-      form.emergencyContactRelationship
-    );
-    newErrors.password = VALIDATION_RULES.password(form.password);
-    newErrors.confirmPassword = VALIDATION_RULES.confirmPassword(form.password, form.confirmPassword);
-    newErrors.agree = VALIDATION_RULES.agree(form.agree);
-
-    const fieldOrder = [
-      ["firstName", firstNameRef],
-      ["lastName", lastNameRef],
-      ["email", emailRef],
-      ["phone", phoneRef],
-      ["dateOfBirth", dobRef],
-      ["gender", genderRef],
-      ["region", regionRef],
-      ["province", provinceRef],
-      ["city", cityRef],
-      ["barangay", barangayRef],
-      ["emergencyContactName", emergencyNameRef],
-      ["emergencyContactPhone", emergencyPhoneRef],
-      ["emergencyContactRelationship", emergencyRelationshipRef],
-      ["password", passwordRef],
-      ["confirmPassword", confirmPasswordRef],
-    ];
-
-    const firstInvalidField = fieldOrder.find(([field]) => newErrors[field]);
-    setErrors(newErrors);
-
+  const validateFields = (fields) => {
+    const nextErrors = {};
+    fields.forEach((field) => {
+      nextErrors[field] = validateStep1Field(field, form);
+    });
+    setTouched((previous) => ({
+      ...previous,
+      ...Object.fromEntries(fields.map((field) => [field, true])),
+    }));
+    setErrors((previous) => ({ ...previous, ...nextErrors }));
+    const firstInvalidField = fields.find((field) => nextErrors[field]);
     if (firstInvalidField) {
-      firstInvalidField[1]?.current?.focus?.();
+      fieldRefs[firstInvalidField]?.current?.focus?.();
       return false;
     }
-
-    if (newErrors.agree) return false;
     return true;
   };
 
-  // Step 2 validation
+  const validateAccountStep = () => validateFields(["email", "phone", "password", "confirmPassword"]);
+  const validateAboutStep = () => validateFields(["firstName", "lastName", "dateOfBirth", "gender"]);
+  const validateLocationStep = () => validateFields([
+    "region",
+    "province",
+    "city",
+    "barangay",
+    "emergencyContactName",
+    "emergencyContactPhone",
+    "emergencyContactRelationship",
+  ]);
+  const validateReviewStep = () => validateFields(["agree"]);
 
-  const validateStep2 = () => {
+  const validateIdentityStep = () => {
     const nextErrors = {};
+    if (!kyc.idType) nextErrors.idType = "Please select your ID type.";
     if (!kyc.idCardFile) nextErrors.idCardFile = "Please upload your full ID card.";
-    if (!kyc.idRegistered) nextErrors.idRegistered = "Please register your ID first.";
-    if (!kyc.selfieVerified) nextErrors.selfieVerified = "Please verify your selfie matches the ID.";
+    if (!kyc.idRegistered) nextErrors.idRegistered = "Please upload your ID first.";
+    else if (!kyc.idReadyForSelfie) nextErrors.idRegistered = "Wait for your ID details to match before taking your selfie.";
+    else if (!kyc.selfieVerified) nextErrors.selfieVerified = "Please verify your selfie matches the ID.";
     setStepErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   // Step navigation
 
-  const goNext = () => {
+  const goNext = async () => {
     if (!canAct()) return;
     setSuccessMessage("");
-    if (step === 1) { if (!validateStep1()) return; setStep(2); return; }
-    if (step === 2) { if (!validateStep2()) return; setStep(3); return; }
+    if (step === 1) {
+      if (!validateAccountStep()) return;
+      setFormError("");
+      setIsLoading(true);
+      try {
+        const result = await checkEmail(form.email);
+        if (!result) return;
+        if (result.available) {
+          setStep(2);
+        } else if (result.fieldError) {
+          setErrors((previous) => ({ ...previous, email: result.message }));
+          setTimeout(() => emailRef.current?.focus(), 0);
+        } else {
+          setFormError(result.message);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    if (step === 2 && !validateAboutStep()) return;
+    if (step === 3 && !validateLocationStep()) return;
+    if (step === 4 && !validateIdentityStep()) return;
+    setStep((current) => Math.min(TOTAL_STEPS, current + 1));
   };
 
   const goBack = () => {
@@ -525,28 +704,43 @@ export default function RegisterPage({
 
   const registerId = async () => {
     if (!canAct()) return;
+    if (!kyc.idType) {
+      setStepErrors((p) => ({ ...p, idType: "Select your ID type first." }));
+      idTypeRef.current?.focus?.();
+      return;
+    }
     if (!kyc.idCardFile) {
       setStepErrors((p) => ({ ...p, idCardFile: "Upload your ID image first." }));
       return;
     }
     setIsLoading(true);
-    setKycUi((p) => ({ ...p, statusText: "Registering ID face..." }));
+    setKycUi((p) => ({ ...p, statusText: "Uploading ID securely..." }));
     try {
+      await validateDocumentImageFile(kyc.idCardFile);
       const dataUrl = await fileToBase64(kyc.idCardFile);
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
-      const result = await preRegisterIdFace(form.email, fullName, "user", clean, mime);
+      const result = await preRegisterIdFace(form.email, fullName, "user", clean, mime, {
+        idType: kyc.idType,
+        userProfile: {
+          full_name: fullName,
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+          date_of_birth: form.dateOfBirth,
+        },
+      });
       if (!result.success) throw new Error(result.message || "We couldn't register your ID. Please try a clearer photo.");
       setKyc((prev) => ({
         ...prev,
         idRegistered: true,
-        challengeId: "",
+        idReadyForSelfie: false,
         selfieVerified: false,
         selfieDataUrl: "",
         selfieBase64Clean: "",
       }));
-      setStepErrors((p) => ({ ...p, idRegistered: "" }));
-      setKycUi((p) => ({ ...p, statusText: "✅ ID registered. Open camera to capture your selfie." }));
+      setDocumentReviewStatus("queued");
+      setStepErrors((p) => ({ ...p, idType: "", idRegistered: "" }));
+      setKycUi((p) => ({ ...p, statusText: "ID uploaded. We are checking that its personal details match your registration." }));
     } catch (e) {
       const msg = friendlyError(e.message);
       setStepErrors((p) => ({ ...p, idRegistered: msg }));
@@ -556,62 +750,46 @@ export default function RegisterPage({
     }
   };
 
-  // KYC step 2: capture selfie
+  // KYC step 2: the shared capture component owns the camera lifecycle.
 
-  const captureSelfie = async () => {
-    if (!canAct()) return;
-    if (!cameraStream) {
-      setStepErrors((p) => ({ ...p, selfieVerified: "Open camera first." }));
-      return;
-    }
-    setIsLoading(true);
-    setKycUi((p) => ({ ...p, statusText: "Capturing selfie..." }));
-    try {
-      const frames = await captureFramesFromStream(cameraStream, { count: 3, intervalMs: 220 });
-      if (!frames.length) throw new Error("Failed to capture selfie.");
-      const cleanFrames = frames.map(stripDataUrlPrefix);
-      const lastDataUrl = frames[frames.length - 1];
-      const lastClean = cleanFrames[cleanFrames.length - 1];
+  const handleSelfieCapture = ({ dataUrl, base64 }) => {
+    setKyc((previous) => ({
+      ...previous,
+      selfieVerified: false,
+      selfieDataUrl: dataUrl,
+      selfieBase64Clean: base64,
+    }));
+    setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
+    setKycUi((previous) => ({ ...previous, statusText: "" }));
+  };
 
-      setKyc((prev) => ({ ...prev, selfieDataUrl: lastDataUrl, selfieBase64Clean: lastClean }));
-
-      setKycUi((p) => ({ ...p, statusText: "Checking selfie motion... please blink or move slightly." }));
-      const result = await preSelfieChallenge(form.email, cleanFrames);
-
-      if (!result.passed) {
-        throw new Error(result.message || "Selfie check failed. Please try again.");
-      }
-
-      setKyc((prev) => ({ ...prev, challengeId: result.challenge_id }));
-      setStepErrors((p) => ({ ...p, selfieVerified: "" }));
-      setKycUi((p) => ({ ...p, statusText: "✅ Selfie captured. Click Verify to match with your ID." }));
-    } catch (e) {
-      setKyc((prev) => ({ ...prev, selfieDataUrl: "", selfieBase64Clean: "", challengeId: "" }));
-      const msg = friendlyError(e.message);
-      setStepErrors((p) => ({ ...p, selfieVerified: msg }));
-      setKycUi((p) => ({ ...p, statusText: "" }));
-    } finally {
-      setIsLoading(false);
-    }
+  const retakeSelfie = () => {
+    setKyc((previous) => ({
+      ...previous,
+      selfieVerified: false,
+      selfieDataUrl: "",
+      selfieBase64Clean: "",
+    }));
+    setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
+    setKycUi((previous) => ({ ...previous, statusText: "" }));
   };
 
   // KYC step 3: match selfie with ID
 
   const verifySelfie = async () => {
     if (!canAct()) return;
-    if (!kyc.challengeId || !kyc.selfieBase64Clean) {
+    if (!kyc.selfieBase64Clean) {
       setStepErrors((p) => ({ ...p, selfieVerified: "Capture a selfie first." }));
       return;
     }
     setIsLoading(true);
     setKycUi((p) => ({ ...p, statusText: "Verifying face match..." }));
     try {
-      const result = await preSelfieVerify(form.email, kyc.challengeId, kyc.selfieBase64Clean, "user");
+      const result = await preSelfieVerify(form.email, kyc.selfieBase64Clean, "user");
       if (!result.verified) throw new Error(result.message || "Face does not match ID.");
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((p) => ({ ...p, selfieVerified: "" }));
-      setKycUi((p) => ({ ...p, statusText: "✅ Face verified successfully!" }));
-      closeCamera();
+      setKycUi((p) => ({ ...p, statusText: "" }));
     } catch (e) {
       setKyc((prev) => ({ ...prev, selfieVerified: false }));
       const msg = friendlyError(e.message);
@@ -631,11 +809,22 @@ export default function RegisterPage({
       if (typeof onNavigateToOwnerRegister === "function") onNavigateToOwnerRegister();
       return;
     }
-    if (!validateStep1()) { setStep(1); return; }
-    if (!validateStep2()) { setStep(2); return; }
+    if (!validateAccountStep()) { setStep(1); return; }
+    if (!validateAboutStep()) { setStep(2); return; }
+    if (!validateLocationStep()) { setStep(3); return; }
+    if (!validateIdentityStep()) { setStep(4); return; }
+    if (!validateReviewStep()) return;
+    if (!isDocumentApproved) {
+      setFormError(["reupload_required", "rejected"].includes(documentReviewStatus)
+        ? "Your government ID needs a new upload. Return to Identity, follow the correction shown under Document review, and try again."
+        : "Your government ID is still being checked. Refresh the document status and submit after it is approved.");
+      return;
+    }
     setIsLoading(true);
     setSuccessMessage("");
+    setFormError("");
     try {
+      const preKycToken = await getPreKycSessionToken(form.email, "user");
       const response = await API.register({
         name: fullName,
         email: form.email,
@@ -652,13 +841,58 @@ export default function RegisterPage({
         emergencyContactRelationship: form.emergencyContactRelationship,
         password: form.password,
         role: "user",
+        preKycToken,
       });
+      const registeredEmail = String(response?.user?.email || form.email || "").trim().toLowerCase();
+      draft.complete();
       setSuccessMessage(response?.message || "Registration successful! Redirecting to OTP verification...");
-      await API.sendOTP(form.email).catch(() => {});
-      setTimeout(() => { onNavigateToRegisterOTP(form.email, form.phone, fullName); }, 1500);
+      clearRateLimit();
+      await API.sendOTP(registeredEmail).catch(() => {});
+      setTimeout(() => { onNavigateToRegisterOTP(registeredEmail, form.phone, fullName); }, 1500);
     } catch (error) {
       const raw = error?.message || "";
       const lower = raw.toLowerCase();
+      const retryAfterSeconds = Number(error?.retryAfterSeconds || error?.details?.retryAfterSeconds || 0);
+      const retryAfterAt = error?.retryAfterAt || error?.details?.retryAfterAt || "";
+      const isRateLimitError = Number(error?.status) === 429 || lower.includes("too many");
+      if (isRateLimitError) {
+        const waitSeconds = retryAfterSeconds > 0 ? retryAfterSeconds : RATE_LIMIT_FALLBACK_SECONDS;
+        activateRateLimit(waitSeconds, retryAfterAt);
+        setErrors({});
+        setStepErrors({});
+        setFormError("");
+        return;
+      }
+      const serverErrors = error?.details?.errors;
+      if (serverErrors && typeof serverErrors === "object") {
+        const fieldErrors = { ...serverErrors };
+        if (fieldErrors.name) {
+          fieldErrors.firstName = fieldErrors.name;
+          delete fieldErrors.name;
+        }
+        setErrors(fieldErrors);
+        setStepErrors({});
+        setFormError("");
+        setStep(1);
+        const fieldRefs = {
+          firstName: firstNameRef,
+          email: emailRef,
+          phone: phoneRef,
+          dateOfBirth: dobRef,
+          gender: genderRef,
+          region: regionRef,
+          province: provinceRef,
+          city: cityRef,
+          barangay: barangayRef,
+          emergencyContactName: emergencyNameRef,
+          emergencyContactPhone: emergencyPhoneRef,
+          emergencyContactRelationship: emergencyRelationshipRef,
+          password: passwordRef,
+        };
+        const firstServerField = Object.keys(fieldErrors).find((field) => fieldErrors[field]);
+        setTimeout(() => fieldRefs[firstServerField]?.current?.focus?.(), 0);
+        return;
+      }
       const phoneConflict = lower.includes("phone") && lower.includes("already");
       const msg = raw.includes("already")
         ? phoneConflict
@@ -672,14 +906,30 @@ export default function RegisterPage({
 
       if (phoneConflict) {
         setErrors({ phone: msg });
+        setFormError("");
         setStep(1);
         setTimeout(() => phoneRef.current?.focus(), 0);
         return;
       }
 
-      setErrors({ email: msg });
-      setStep(1);
-      setTimeout(() => emailRef.current?.focus(), 0);
+      if (lower.includes("email") && (lower.includes("already") || lower.includes("invalid"))) {
+        setErrors({ email: msg });
+        setFormError("");
+        setStep(1);
+        setTimeout(() => emailRef.current?.focus(), 0);
+        return;
+      }
+
+      if (lower.includes("password")) {
+        setErrors({ password: msg });
+        setFormError("");
+        setStep(1);
+        setTimeout(() => passwordRef.current?.focus(), 0);
+        return;
+      }
+
+      setErrors({});
+      setFormError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -687,7 +937,7 @@ export default function RegisterPage({
 
   // File upload card
 
-  const FileCard = ({ title, description, file, onPick, onRemove, accept, inputRef, icon: Icon, error }) => (
+  const FileCard = ({ title, description, file, previewUrl, onPick, onRemove, accept, inputRef, icon: Icon, error }) => (
     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -696,6 +946,9 @@ export default function RegisterPage({
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900">{title}</p>
           <p className="text-sm text-gray-600 mt-1">{description}</p>
+          {previewUrl && (
+            <img src={previewUrl} alt="Selected government ID preview" className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input ref={inputRef} type="file" accept={accept} className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
@@ -732,6 +985,7 @@ export default function RegisterPage({
     required = false,
     inputRef,
     placeholder = "Select an option",
+    onBlur,
   }) => (
     <div className="space-y-2">
       <label className="block text-sm font-semibold text-slate-700">
@@ -742,27 +996,21 @@ export default function RegisterPage({
           ref={inputRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           disabled={disabled}
-          className={`w-full appearance-none rounded-xl border bg-white px-4 py-3 pr-12 text-[15px] text-slate-900 shadow-sm transition-all duration-200 focus:outline-none ${
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 focus:outline-none ${
             error
               ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
               : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
           } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
         >
-          <option value="">{placeholder}</option>
+          <option value="" disabled hidden>{placeholder}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-        <div
-          className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${
-            error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-[#017FE6]"
-          }`}
-        >
-          <ChevronDown size={16} />
-        </div>
       </div>
       {error && <p className="text-sm font-medium text-red-500">{error}</p>}
     </div>
@@ -773,100 +1021,117 @@ export default function RegisterPage({
   return (
     <AuthShell
       onNavigateToHome={onNavigateToHome}
+      disableNavigation={isRateLimited}
       badge="Guided account onboarding"
       panelTitle="Create your RentifyPro account."
-      panelDescription="Finish setup in guided steps with secure identity checks and instant booking access."
+      panelDescription="Complete your details, identity check, and email confirmation in focused steps."
       highlights={[
-        "Clear 3-step onboarding with progress tracking",
+        "Clear 5-step onboarding with progress tracking",
         "Secure face verification flow",
         "Ready for bookings after successful verification",
       ]}
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div className="rp-surface rp-glass rounded-[28px] border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         {/* header */}
         <div className="mb-6 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
-          <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
+          <h2 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
             Fast, secure onboarding in {TOTAL_STEPS} guided steps.
           </p>
         </div>
 
-        {/* step indicator */}
-        <div className="mb-7 flex items-center justify-center gap-2">
-                {[1, 2, 3].map((s) => (
-                  <React.Fragment key={s}>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                        step > s ? "bg-[#017FE6] text-white" : step === s ? "bg-[#017FE6] text-white ring-4 ring-blue-100" : "bg-gray-100 text-gray-400"
-                      }`}>{step > s ? <Check size={15} strokeWidth={3} /> : s}</div>
-                      <span className="text-[10px] font-medium text-gray-400 hidden sm:block">
-                        {STEP_LABELS[s - 1]}
-                      </span>
-                    </div>
-                    {s < 3 && <div className={`h-1 w-10 sm:w-14 rounded-full transition-all self-start mt-[18px] ${step > s ? "bg-[#017FE6]" : "bg-gray-100"}`} />}
-                  </React.Fragment>
-                ))}
-        </div>
+        <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
+        {step === 4 && <HelpLink guide="verify-identity" className="mt-3">Need help with your ID or selfie?</HelpLink>}
+
+        <RegistrationDraftNotice draft={draft} busy={isLoading} />
 
         {/* success message */}
         {successMessage && (
           <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
-              <CheckCircle2 size={18} />
+              <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
             </div>
             <p className="text-sm font-medium text-emerald-700">{successMessage}</p>
           </div>
         )}
 
-        <form onSubmit={handleFinalRegister} className="space-y-4" noValidate>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (step < TOTAL_STEPS) void goNext();
+          else void handleFinalRegister(event);
+        }} className="space-y-4" noValidate>
+          {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
+          {formError && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+            >
+              {formError}
+            </div>
+          )}
+
+          <fieldset disabled={isFormLocked} className="space-y-4">
                 {/* step 1 */}
-                {step === 1 && (
+                {[1, 2, 3].includes(step) && (
                   <>
+                    {step === 1 && (
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                       <p className="font-semibold text-gray-900 mb-1">Register as</p>
                       <p className="text-sm text-gray-500 mb-3">Choose what type of account you want to create.</p>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <button type="button" onClick={() => handleAccountSelect("user")}
                           className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${accountType === "user" ? "border-[#017FE6] bg-blue-50" : "border-gray-200 hover:border-[#017FE6]"}`}>
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 text-xs ${accountType === "user" ? "border-[#017FE6] bg-[#017FE6] text-white" : "border-gray-300"}`}>
-                            {accountType === "user" && "✓"}
+                            {accountType === "user" && <Check size={16} strokeWidth={2} aria-hidden="true" />}
                           </div>
                           <User size={18} className="text-gray-600" />
-                          <div className="text-left"><p className="font-semibold text-gray-800 text-sm">User</p><p className="text-xs text-gray-500">Rent vehicles</p></div>
+                          <div className="min-w-0 text-left"><p className="font-semibold text-gray-800 text-sm">Renter</p><p className="text-xs text-gray-500">Rent vehicles</p></div>
                         </button>
-                        <button type="button" onClick={() => handleAccountSelect("renter")}
+                        <button type="button" onClick={() => handleAccountSelect("owner")}
                           className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-[#017FE6] transition">
                           <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0" />
-                          <Car size={18} className="text-gray-600" />
-                          <div className="text-left"><p className="font-semibold text-gray-800 text-sm">Owner</p><p className="text-xs text-gray-500">List vehicles</p></div>
+                          <CarFront size={18} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                          <div className="min-w-0 text-left"><p className="font-semibold text-gray-800 text-sm">Vehicle Owner</p><p className="text-xs text-gray-500">List vehicles after verification</p></div>
                         </button>
                       </div>
                     </div>
+                    )}
 
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                      <p className="font-semibold text-gray-900 mb-1">Step 1 — Personal Details</p>
-                      <p className="text-sm text-gray-500">Enter your information to create your account.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Step {step} — {STEP_LABELS[step - 1]}</p>
+                      <p className="text-sm text-gray-500">
+                        {step === 1 && "Set up the contact details and password for your account."}
+                        {step === 2 && "Enter the personal details shown on your government ID."}
+                        {step === 3 && "Add your location and a trusted emergency contact."}
+                      </p>
                     </div>
 
+                    {step === 2 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="First Name" value={form.firstName} onChange={(e) => handleChange("firstName", e.target.value)} error={errors.firstName} disabled={isLoading} placeholder="John" required icon={User} onlyLetters inputRef={firstNameRef} maxLength={50} />
-                      <FormInput label="Last Name" value={form.lastName} onChange={(e) => handleChange("lastName", e.target.value)} error={errors.lastName} disabled={isLoading} placeholder="Doe" required icon={User} onlyLetters inputRef={lastNameRef} maxLength={50} />
+                      <FormInput label="First Name" value={form.firstName} onChange={(e) => handleChange("firstName", e.target.value)} onBlur={() => handleFieldBlur("firstName")} error={errors.firstName} disabled={isLoading} placeholder="John" required icon={User} onlyLetters inputRef={firstNameRef} maxLength={50} />
+                      <FormInput label="Last Name" value={form.lastName} onChange={(e) => handleChange("lastName", e.target.value)} onBlur={() => handleFieldBlur("lastName")} error={errors.lastName} disabled={isLoading} placeholder="Doe" required icon={User} onlyLetters inputRef={lastNameRef} maxLength={50} />
                     </div>
+                    )}
+                    {step === 1 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="Enter Email" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} error={errors.email} disabled={isLoading} placeholder="Enter Email" required icon={Mail} inputRef={emailRef} showEmailHint maxLength={254} />
-                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} error={errors.phone} disabled={isLoading} placeholder="Enter Phone Number" required icon={Phone} onlyNumbers inputRef={phoneRef} maxLength={11} />
+                      <FormInput label="Enter Email" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())} onBlur={() => handleFieldBlur("email")} error={errors.email} disabled={isLoading} placeholder="Enter Email" required icon={Mail} inputRef={emailRef} showEmailHint maxLength={254} />
+                      <FormInput label="Phone Number" type="tel" value={form.phone} onChange={(e) => handleChange("phone", normalizePhMobileInput(e.target.value))} onBlur={() => handleFieldBlur("phone")} error={errors.phone} disabled={isLoading} placeholder="9XXXXXXXXX" required icon={Phone} onlyNumbers inputRef={phoneRef} maxLength={10} prefixText="+63" />
                     </div>
+                    )}
+                    {step === 2 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormInput label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(e) => handleChange("dateOfBirth", e.target.value)} error={errors.dateOfBirth} disabled={isLoading} required icon={Calendar} inputRef={dobRef} />
+                      <FormInput label="Date of Birth" type="date" min={getMinBirthDate()} max={getMaxBirthDate()} value={form.dateOfBirth} onChange={(e) => handleChange("dateOfBirth", e.target.value)} onBlur={() => handleFieldBlur("dateOfBirth")} error={errors.dateOfBirth} disabled={isLoading} required icon={Calendar} inputRef={dobRef} />
                       <SelectField label="Gender" value={form.gender} onChange={(value) => handleChange("gender", value)} options={[
                         { value: "Male", label: "Male" },
                         { value: "Female", label: "Female" },
                         { value: "Prefer not to say", label: "Prefer not to say" },
-                      ]} error={errors.gender} disabled={isLoading} required inputRef={genderRef} />
+                      ]} onBlur={() => handleFieldBlur("gender")} error={errors.gender} disabled={isLoading} required inputRef={genderRef} />
                     </div>
+                    )}
+                    {step === 3 && (
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white space-y-4">
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -885,6 +1150,7 @@ export default function RegisterPage({
                           onChange={handleRegionChange}
                           options={regions.map((region) => ({ value: region.code, label: region.name }))}
                           error={errors.region}
+                          onBlur={() => handleFieldBlur("region")}
                           disabled={isLoading}
                           required
                           inputRef={regionRef}
@@ -895,6 +1161,7 @@ export default function RegisterPage({
                           onChange={handleProvinceChange}
                           options={provinces.map((province) => ({ value: province.code, label: province.name }))}
                           error={errors.province}
+                          onBlur={() => handleFieldBlur("province")}
                           disabled={isLoading || !form.region || provinces.length === 0}
                           required={provinces.length > 0}
                           inputRef={provinceRef}
@@ -909,6 +1176,7 @@ export default function RegisterPage({
                           onChange={handleCityChange}
                           options={cities.map((city) => ({ value: city.code, label: city.name }))}
                           error={errors.city}
+                          onBlur={() => handleFieldBlur("city")}
                           disabled={isLoading || !form.region || (provinces.length > 0 && !form.province)}
                           required
                           inputRef={cityRef}
@@ -919,6 +1187,7 @@ export default function RegisterPage({
                           onChange={handleBarangayChange}
                           options={barangays.map((barangay) => ({ value: barangay.code, label: barangay.name }))}
                           error={errors.barangay}
+                          onBlur={() => handleFieldBlur("barangay")}
                           disabled={isLoading || !form.city}
                           required
                           inputRef={barangayRef}
@@ -930,35 +1199,44 @@ export default function RegisterPage({
                       </div>
                       {addressLoadError && <p className="text-xs text-red-500">{addressLoadError}</p>}
                     </div>
+                    )}
+                    {step === 3 && (
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white space-y-4">
                       <div>
                         <p className="font-semibold text-gray-900">Emergency Contact</p>
                         <p className="text-sm text-gray-500 mt-1">Add someone we can reach if you need urgent support during a booking.</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <FormInput label="Contact Name" value={form.emergencyContactName} onChange={(e) => handleChange("emergencyContactName", e.target.value)} error={errors.emergencyContactName} disabled={isLoading} placeholder="Maria Dela Cruz" required icon={User} inputRef={emergencyNameRef} maxLength={100} />
-                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", e.target.value)} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="Enter Phone Number" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} maxLength={11} />
+                        <FormInput
+                          label="Contact Name"
+                          value={form.emergencyContactName}
+                          onChange={(e) => handleChange("emergencyContactName", e.target.value)}
+                          onBlur={() => handleFieldBlur("emergencyContactName")}
+                          error={errors.emergencyContactName}
+                          disabled={isLoading}
+                          placeholder="Maria Dela Cruz"
+                          required
+                          icon={User}
+                          onlyLetters
+                          inputRef={emergencyNameRef}
+                          maxLength={50}
+                        />
+                        <FormInput label="Phone Number" type="tel" value={form.emergencyContactPhone} onChange={(e) => handleChange("emergencyContactPhone", normalizePhMobileInput(e.target.value))} onBlur={() => handleFieldBlur("emergencyContactPhone")} error={errors.emergencyContactPhone} disabled={isLoading} placeholder="9XXXXXXXXX" required icon={Phone} onlyNumbers inputRef={emergencyPhoneRef} maxLength={10} prefixText="+63" />
                       </div>
-                      <SelectField label="Relationship" value={form.emergencyContactRelationship} onChange={(value) => handleChange("emergencyContactRelationship", value)} options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option, label: option }))} error={errors.emergencyContactRelationship} disabled={isLoading} required inputRef={emergencyRelationshipRef} />
+                      <SelectField label="Relationship" value={form.emergencyContactRelationship} onChange={(value) => handleChange("emergencyContactRelationship", value)} onBlur={() => handleFieldBlur("emergencyContactRelationship")} options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option, label: option }))} error={errors.emergencyContactRelationship} disabled={isLoading} required inputRef={emergencyRelationshipRef} />
                     </div>
+                    )}
+                    {step === 1 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <PasswordInput label="Create Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} placeholder="Create Password" required showStrength inputRef={passwordRef} maxLength={128} />
-                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} placeholder="Confirm Password" required showStrength={false} inputRef={confirmPasswordRef} maxLength={128} />
+                      <PasswordInput label="Create Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} onBlur={() => handleFieldBlur("password")} error={errors.password} disabled={isLoading} placeholder="Create Password" required showStrength inputRef={passwordRef} maxLength={128} />
+                      <PasswordInput label="Confirm Password" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} onBlur={() => handleFieldBlur("confirmPassword")} error={errors.confirmPassword} disabled={isLoading} placeholder="Confirm Password" required showStrength={false} inputRef={confirmPasswordRef} maxLength={128} />
                     </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={form.agree} onChange={(e) => handleChange("agree", e.target.checked)} disabled={isLoading} className="w-5 h-5 accent-[#017FE6] cursor-pointer flex-shrink-0" />
-                        <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                          I agree to the <span className="text-[#017FE6] font-semibold hover:underline cursor-pointer">Terms & Conditions</span> and <span className="text-[#017FE6] font-semibold hover:underline cursor-pointer">Privacy Policy</span>
-                        </span>
-                      </label>
-                      {errors.agree && <p className="text-red-500 text-sm font-medium">{errors.agree}</p>}
-                    </div>
+                    )}
                   </>
                 )}
 
                 {/* step 2 */}
-                {step === 2 && (
+                {step === 4 && (
                   <>
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                       <div className="flex items-start gap-3">
@@ -966,7 +1244,7 @@ export default function RegisterPage({
                           <ShieldCheck size={20} className="text-[#017FE6]" />
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900">Step 2 — Identity Verification</p>
+                          <p className="font-semibold text-gray-900">Step 4 — Identity verification</p>
                           <p className="text-sm text-gray-500 mt-1">
                             Upload your <span className="font-semibold text-gray-700">full ID card</span>, then capture a live selfie to verify your identity.
                           </p>
@@ -974,104 +1252,100 @@ export default function RegisterPage({
                       </div>
                     </div>
 
+                    {identityStage === "id" && <>
+                    <SelectField
+                      label="ID Type"
+                      value={kyc.idType}
+                      onChange={(value) => {
+                        setKyc((prev) => ({
+                          ...prev,
+                          idType: value,
+                          idRegistered: false,
+                          idReadyForSelfie: false,
+                          selfieVerified: false,
+                          selfieDataUrl: "",
+                          selfieBase64Clean: "",
+                        }));
+                        setStepErrors((prev) => ({
+                          ...prev,
+                          idType: "",
+                          idRegistered: "",
+                          selfieVerified: "",
+                        }));
+                        setKycUi((prev) => ({ ...prev, statusText: "" }));
+                      }}
+                      options={ID_DOCUMENT_TYPES.map((entry) => ({ value: entry, label: entry }))}
+                      error={stepErrors.idType}
+                      disabled={isLoading}
+                      required
+                      inputRef={idTypeRef}
+                      placeholder="Select the ID type you uploaded"
+                    />
+
                       <FileCard
                         title="Government ID (Front — full card)"
                         description="Upload a clear photo of a Philippine government ID showing the entire card with readable text and no cropped edges."
                       file={kyc.idCardFile}
-                      onPick={(f) => {
-                        setKyc((prev) => ({ ...prev, idCardFile: f, idRegistered: false, challengeId: "", selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                      previewUrl={idPreviewUrl}
+                      onPick={async (f) => {
+                        try {
+                          await validateDocumentImageFile(f);
+                        } catch (validationError) {
+                          setStepErrors((prev) => ({ ...prev, idCardFile: validationError.message || "Please choose a valid ID image." }));
+                          if (idInputRef.current) idInputRef.current.value = "";
+                          return;
+                        }
+                        setKyc((prev) => ({ ...prev, idCardFile: f, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
                         setKycUi((p) => ({ ...p, statusText: "" }));
                         setStepErrors({});
-                        setCamError(""); setCamInfo(""); closeCamera();
                       }}
-                      onRemove={() => { resetKyc(); closeCamera(); }}
-                      accept="image/*" inputRef={idInputRef} icon={Upload}
+                      onRemove={resetKyc}
+                      accept="image/jpeg,image/png" inputRef={idInputRef} icon={Upload}
                       error={stepErrors.idCardFile}
                     />
+                    <button type="button" disabled={isLoading || !kyc.idType || !kyc.idCardFile} onClick={registerId}
+                      className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
+                      {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</> : "Upload and check ID"}
+                    </button>
+                    </>}
 
-                    <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                      <p className="font-semibold text-gray-900 mb-3">Verification Steps</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button type="button" disabled={isLoading || !kyc.idCardFile} onClick={registerId}
-                          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${
-                            kyc.idRegistered ? "bg-green-500 text-white cursor-default" : "bg-gray-900 text-white hover:opacity-95"
-                          } disabled:opacity-50`}>
-                          {isLoading && !kyc.idRegistered
-                            ? <><Loader size={15} className="animate-spin" /> Processing...</>
-                            : kyc.idRegistered ? "✓ ID Registered" : "1. Register ID"}
-                        </button>
-
-                        <button type="button" disabled={isLoading || !kyc.idRegistered} onClick={kycUi.showCamera ? closeCamera : openCamera}
-                          className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95 disabled:opacity-50 transition">
-                          {kycUi.showCamera ? "Close Camera" : "2. Open Camera"}
-                        </button>
-
-                        <button type="button" disabled={isLoading || !cameraStream || !kyc.idRegistered} onClick={captureSelfie}
-                          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${
-                            kyc.selfieBase64Clean ? "bg-blue-500 text-white" : "bg-gray-700 text-white hover:opacity-95"
-                          } disabled:opacity-50`}>
-                          {isLoading && !kyc.selfieBase64Clean
-                            ? <><Loader size={15} className="animate-spin" /> Capturing...</>
-                            : kyc.selfieBase64Clean ? "✓ Retake Selfie" : "3. Capture Selfie"}
-                        </button>
-
-                        <button type="button" disabled={isLoading || !kyc.selfieBase64Clean || !kyc.challengeId || kyc.selfieVerified} onClick={verifySelfie}
-                          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${
-                            kyc.selfieVerified ? "bg-green-500 text-white cursor-default" : "bg-green-600 text-white hover:opacity-95"
-                          } disabled:opacity-50`}>
-                          {isLoading && !kyc.selfieVerified
-                            ? <><Loader size={15} className="animate-spin" /> Verifying...</>
-                            : kyc.selfieVerified ? "✓ Face Verified!" : "4. Verify Face Match"}
-                        </button>
-                      </div>
-
-                      {kycUi.statusText && (
-                        <p className={`text-sm font-medium mt-3 ${kyc.selfieVerified ? "text-green-600" : "text-gray-600"}`}>
-                          {kycUi.statusText}
-                        </p>
-                      )}
-                      {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium mt-2">{stepErrors.idRegistered}</p>}
-                      {stepErrors.selfieVerified && <p className="text-red-500 text-sm font-medium mt-1">{stepErrors.selfieVerified}</p>}
-                    </div>
-
-                    {kycUi.showCamera && (
-                      <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50 space-y-3">
-                        <video ref={videoRef} autoPlay playsInline muted
-                          className="w-full rounded-xl bg-black aspect-video object-cover"
-                          style={{ transform: "scaleX(-1)" }} />
-                        {devices.length > 0 && (
-                          <div>
-                            <label className="text-xs text-gray-600 font-medium block mb-1">Camera device</label>
-                            <select value={selectedDeviceId} onChange={(e) => switchCamera(e.target.value)}
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-white text-sm">
-                              {devices.map((d, idx) => (
-                                <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${idx + 1}`}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        {camError && <p className="text-sm text-red-600 p-2 bg-red-50 rounded-lg">{camError}</p>}
-                        {camInfo && <p className="text-xs text-gray-600 p-2 bg-gray-100 rounded-lg break-words">{camInfo}</p>}
-                        <button type="button" disabled={isLoading} onClick={closeCamera}
-                          className="w-full px-4 py-2 rounded-xl font-semibold border border-gray-200 text-gray-900 hover:bg-white transition disabled:opacity-50">
-                          Close Camera
-                        </button>
-                        {kyc.selfieDataUrl && (
-                          <div>
-                            <p className="text-xs font-semibold text-gray-700 mb-2">Captured Selfie Preview</p>
-                            <img src={kyc.selfieDataUrl} alt="Captured selfie" className="w-full rounded-xl border border-gray-200" style={{ transform: "scaleX(-1)" }} />
-                          </div>
-                        )}
+                    {identityStage === "id_checking" && (
+                      <div role="status" aria-live="polite" className="rounded-2xl bg-blue-50 p-4 text-blue-950">
+                        <div className="flex items-center gap-3 font-semibold">
+                          <Loader size={20} className="shrink-0 animate-spin text-blue-700" aria-hidden="true" />
+                          Checking your ID details
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-blue-900">We are comparing the name and birth date on your ID with your registration. The selfie step will unlock automatically after they match.</p>
                       </div>
                     )}
+
+                    {identityStage === "id_blocked" && (
+                      <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
+                    )}
+
+                    {(["camera", "selfie", "complete"].includes(identityStage)) && (
+                      <SelfieCapture
+                        previewUrl={kyc.selfieDataUrl}
+                        matched={identityStage === "complete"}
+                        matchedDescription="Your selfie matched your ID photo. Your government ID may still require document review."
+                        disabled={isLoading}
+                        submitting={isLoading && identityStage === "selfie"}
+                        error={stepErrors.selfieVerified}
+                        onCapture={handleSelfieCapture}
+                        onRetake={retakeSelfie}
+                        onSubmit={verifySelfie}
+                      />
+                    )}
+                    {kycUi.statusText && <p role="status" className="text-sm font-medium text-slate-600">{kycUi.statusText}</p>}
+                    {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium">{stepErrors.idRegistered}</p>}
                   </>
                 )}
 
-                {/* step 3 */}
-                {step === 3 && (
+                {/* step 5 */}
+                {step === 5 && (
                   <>
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                      <p className="font-semibold text-gray-900">Step 3 — Review & Submit</p>
+                      <p className="font-semibold text-gray-900">Step 5 — Review & submit</p>
                       <p className="text-sm text-gray-500 mt-1">Confirm your details before creating your account.</p>
                     </div>
                     <div className="rounded-2xl border border-gray-200 p-5 bg-gray-50 space-y-3">
@@ -1079,8 +1353,10 @@ export default function RegisterPage({
                         { label: "Full Name", value: fullName || "—" },
                         { label: "Email", value: form.email || "—" },
                         { label: "Phone", value: form.phone || "—" },
+                        { label: "ID Type", value: kyc.idType || "—" },
                         { label: "Account Type", value: "User (Renter)" },
-                        { label: "KYC Verified", value: kyc.selfieVerified ? "✅ Verified" : "⚠️ Not Verified", highlight: kyc.selfieVerified },
+                        { label: "Face Match", value: kyc.selfieVerified ? "Verified" : "Not Verified", highlight: kyc.selfieVerified },
+                        { label: "Document Review", value: formatDocumentStatus(documentReviewStatus), highlight: documentReviewStatus === "verified" },
                       ].map(({ label, value, highlight }, i, arr) => (
                         <React.Fragment key={label}>
                           <div className="flex items-center justify-between">
@@ -1091,24 +1367,67 @@ export default function RegisterPage({
                         </React.Fragment>
                       ))}
                     </div>
+                    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <input type="checkbox" checked={form.agree} onChange={(e) => handleChange("agree", e.target.checked)} onBlur={() => handleFieldBlur("agree")} disabled={isLoading} className="mt-0.5 h-5 w-5 flex-shrink-0 cursor-pointer accent-[#017FE6]" />
+                        <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                          I agree to the{" "}
+                          <button type="button" onClick={() => setLegalModalType("terms")} className="font-semibold text-[#017FE6] hover:underline">Terms and Conditions</button>{" "}
+                          and{" "}
+                          <button type="button" onClick={() => setLegalModalType("privacy")} className="font-semibold text-[#017FE6] hover:underline">Privacy Policy</button>.
+                        </span>
+                      </label>
+                      {errors.agree && <p className="text-red-500 text-sm font-medium">{errors.agree}</p>}
+                    </div>
                   </>
+                )}
+
+                {(step === 4 || step === 5) && (
+                  <PreKycReviewNotice
+                    email={form.email}
+                    enabled={kyc.idRegistered}
+                    onIdStatus={handleIdStatus}
+                    onCorrectDetails={() => setStep(2)}
+                    onResubmit={() => {
+                      resetKyc();
+                      setStep(4);
+                    }}
+                  />
                 )}
 
                 {/* navigation */}
                 <div className="flex items-center gap-3 pt-1">
-                  <button type="button" onClick={goBack} disabled={step === 1 || isLoading}
+                  <button type="button" onClick={goBack} disabled={step === 1 || isFormLocked}
                     className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
                     <ArrowLeft size={18} /> Back
                   </button>
                   {step < TOTAL_STEPS ? (
-                    <button type="button" onClick={goNext} disabled={isLoading}
+                    <button type="button" onClick={goNext} disabled={isFormLocked}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                      Next <ArrowRight size={18} />
+                      {isRateLimited ? (
+                        `Try again in ${formatCountdown(rateLimitSeconds)}`
+                      ) : isCheckingEmail ? (
+                        <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</>
+                      ) : (
+                        <>
+                          Next <ArrowRight size={18} />
+                        </>
+                      )}
                     </button>
                   ) : (
-                    <button type="submit" disabled={isLoading}
+                    <button type="submit" disabled={isFormLocked || !isDocumentApproved}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                      {isLoading ? <><Loader size={18} className="animate-spin" /> Creating...</> : "Create Account"}
+                      {isLoading ? (
+                        <>
+                          <Loader size={18} className="animate-spin" /> Creating...
+                        </>
+                      ) : isRateLimited ? (
+                        `Try again in ${formatCountdown(rateLimitSeconds)}`
+                      ) : !isDocumentApproved ? (
+                        "Waiting for ID approval"
+                      ) : (
+                        "Create Account"
+                      )}
                     </button>
                   )}
                 </div>
@@ -1116,15 +1435,27 @@ export default function RegisterPage({
                 {step === 1 && (
                   <p className="text-center text-gray-500 text-sm mt-1">
                     Already have an account?{" "}
-                    <button type="button" onClick={onNavigateToSignIn} disabled={isLoading}
+                    <button type="button" onClick={onNavigateToSignIn} disabled={isFormLocked}
                       className="text-[#017FE6] font-semibold hover:underline transition-colors disabled:opacity-50">
                       Sign In
                     </button>
                   </p>
                 )}
+          </fieldset>
+          {isRateLimited && (
+            <p className="text-center text-xs font-semibold text-amber-600">
+              Too many attempts. You can register again in {formatCountdown(rateLimitSeconds)}.
+            </p>
+          )}
         </form>
       </div>
+      <LegalPolicyModal
+        isOpen={Boolean(legalModalType)}
+        documentType={legalModalType === "privacy" ? "privacy" : "terms"}
+        onClose={() => setLegalModalType("")}
+        onSwitchToTerms={() => setLegalModalType("terms")}
+        onSwitchToPrivacy={() => setLegalModalType("privacy")}
+      />
     </AuthShell>
   );
 }
-

@@ -20,6 +20,7 @@ export const splitName = (name = "") => {
 export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
   const src = source && typeof source === "object" ? source : {};
   const fb = fallback && typeof fallback === "object" ? fallback : {};
+  const hasSourceAvatar = Object.prototype.hasOwnProperty.call(src, "avatar");
 
   const srcName = toText(src.name);
   const fbName = toText(fb.name);
@@ -42,7 +43,7 @@ export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
     lastName,
     name: fullName,
     email: toText(src.email) || toText(fb.email),
-    avatar: toText(src.avatar) || toText(fb.avatar),
+    avatar: hasSourceAvatar ? toText(src.avatar) : toText(fb.avatar),
     phone: toText(src.phone) || toText(fb.phone),
     address: toText(src.address) || toText(fb.address),
     region: toText(src.region) || toText(fb.region),
@@ -53,7 +54,7 @@ export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
     businessName: toText(src.businessName) || toText(fb.businessName),
     permitNumber: toText(src.permitNumber) || toText(fb.permitNumber),
     licenseNumber: toText(src.licenseNumber) || toText(fb.licenseNumber),
-    walletAddress: toText(src.walletAddress) || toText(fb.walletAddress),
+    kycStatus: toText(src.kycStatus) || toText(fb.kycStatus) || "not_started",
   };
 };
 
@@ -70,6 +71,7 @@ export const getOwnerProfileFromStorage = () => {
 export const persistOwnerProfile = (profile) => {
   const currentUser = getStoredUser();
   const normalized = normalizeOwnerProfile(profile, currentUser);
+  const hasProfileAvatar = Object.prototype.hasOwnProperty.call(profile || {}, "avatar");
 
   setSessionOwnerProfile(normalized);
 
@@ -77,9 +79,9 @@ export const persistOwnerProfile = (profile) => {
     ...currentUser,
     name: normalized.name || currentUser.name,
     email: normalized.email || currentUser.email,
-    avatar: normalized.avatar || currentUser.avatar || "",
-    walletAddress: normalized.walletAddress || currentUser.walletAddress || null,
+    avatar: hasProfileAvatar ? normalized.avatar : normalized.avatar || currentUser.avatar || "",
     role: currentUser.role || "owner",
+    kycStatus: normalized.kycStatus || currentUser.kycStatus || "not_started",
   };
   setSessionUser(mergedUser);
 

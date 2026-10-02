@@ -1,9 +1,16 @@
 import bcrypt from "bcryptjs";
 import Otp from "../models/Otp.js";
 import User from "../models/User.js";
+import KycVerification from "../models/KycVerification.js";
 import sendEmail from "../utils/sendEmail.js";
-import { getMissingPreKycDocs, clearPreKycDocs } from "../utils/preKycDocs.js";
+import {
+  getMissingPreKycDocs,
+  getPendingPreKycDocs,
+  clearPreKycDocs,
+} from "../utils/preKycDocs.js";
 import { isPreKycFaceVerified, clearPreKycFace } from "../utils/preKycFace.js";
+import { isValidPhilippineMobile, normalizePhilippineMobile } from "../utils/phone.js";
+import { verifyPreKycSession } from "../utils/preKycSession.js";
 
 const OTP_TTL_MINUTES = 5;
 const RESEND_COOLDOWN_SECONDS = 45;
@@ -16,7 +23,7 @@ const ALLOWED_EMAIL_DOMAINS = new Set([
 const ALLOWED_OWNER_TYPES = new Set(["individual", "business"]);
 const MAX_NAME_LENGTH = 50;
 const MAX_EMAIL_LENGTH = 254;
-const MAX_PHONE_LENGTH = 11;
+const MAX_PHONE_LENGTH = 10;
 const MAX_ADDRESS_LENGTH = 255;
 const MAX_REGION_LENGTH = 50;
 const MAX_BUSINESS_NAME = 120;
@@ -24,7 +31,7 @@ const MAX_PERMIT_NUMBER = 50;
 const MAX_LICENSE_NUMBER = 50;
 
 const normalizeEmail = (email = "") => email.toLowerCase().trim();
-const normalizePhone = (phone = "") => String(phone || "").trim();
+const normalizePhone = (phone = "") => normalizePhilippineMobile(phone);
 
 const buildDuplicateKeyMessage = (error) => {
   const duplicateField = Object.keys(error?.keyPattern || error?.keyValue || {})[0];
@@ -52,9 +59,16 @@ export const requestOwnerOtp = async (req, res) => {
       ownerType,
       licenseNumber,
       permitNumber,
+      preKycToken,
     } = req.body;
 
     const email = normalizeEmail(businessEmail);
+    let preKycSession;
+    try {
+      preKycSession = verifyPreKycSession(preKycToken, { email, role: "owner" });
+    } catch (error) {
+      return res.status(Number(error?.status) || 401).json({ message: error.message });
+    }
 
     if (!email || !password || !firstName || !lastName || !phone) {
       return res.status(400).json({ message: "Missing required fields." });
@@ -71,8 +85,10 @@ export const requestOwnerOtp = async (req, res) => {
     if (normalizedPhone.length > MAX_PHONE_LENGTH) {
       return res.status(400).json({ message: `Phone number is too long (max ${MAX_PHONE_LENGTH} digits).` });
     }
-    if (!/^[0-9]{11}$/.test(normalizedPhone)) {
-      return res.status(400).json({ message: "Phone number must be exactly 11 digits." });
+    if (!isValidPhilippineMobile(normalizedPhone)) {
+      return res
+        .status(400)
+        .json({ message: "Phone number must be exactly 10 digits and start with 9." });
     }
     if (address && address.length > MAX_ADDRESS_LENGTH) {
       return res.status(400).json({ message: `Address is too long (max ${MAX_ADDRESS_LENGTH} characters).` });
@@ -125,7 +141,23 @@ export const requestOwnerOtp = async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 8 characters." });
     }
 
-    const missingDocs = await getMissingPreKycDocs(email, ["id", "supporting"]);
+    const pendingDocs = await getPendingPreKycDocs(
+      email,
+      ["id", "supporting"],
+      preKycSession.sessionId
+    );
+    if (pendingDocs.length) {
+      return res.status(409).json({
+        message: "Your document is awaiting manual review. Please try registration again after it is approved.",
+        reviewRequired: true,
+        pendingDocuments: pendingDocs,
+      });
+    }
+    const missingDocs = await getMissingPreKycDocs(
+      email,
+      ["id", "supporting"],
+      preKycSession.sessionId
+    );
     if (missingDocs.length) {
       const needsId = missingDocs.includes("id");
       const needsSupporting = missingDocs.includes("supporting");
@@ -138,7 +170,7 @@ export const requestOwnerOtp = async (req, res) => {
       return res.status(400).json({ message });
     }
 
-    const faceVerified = await isPreKycFaceVerified(email);
+    const faceVerified = await isPreKycFaceVerified(email, preKycSession.sessionId);
     if (!faceVerified) {
       return res.status(400).json({
         message: "Please verify your selfie matches your ID before registering.",
@@ -178,6 +210,7 @@ export const requestOwnerOtp = async (req, res) => {
       // Save the hashed password in the OTP record
       passwordHash: await bcrypt.hash(password, 10),
       role: "owner",
+      preKycSessionId: preKycSession.sessionId,
     };
 
     // Keep one OTP record per email and purpose
@@ -195,7 +228,7 @@ export const requestOwnerOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendEmail(email, otp);
+    await sendEmail(email, otp, "owner_register");
 
     return res.status(200).json({
       message: "OTP sent to email.",
@@ -236,7 +269,7 @@ export const resendOwnerOtp = async (req, res) => {
     otpDoc.lastSentAt = new Date();
     await otpDoc.save();
 
-    await sendEmail(email, otp);
+    await sendEmail(email, otp, "owner_register");
 
     return res.status(200).json({
       message: "OTP resent.",
@@ -304,9 +337,11 @@ export const verifyOwnerOtp = async (req, res) => {
     }
 
     const owner = await User.create({
+      name: `${payload.firstName || ""} ${payload.lastName || ""}`.trim(),
       email,
       password: payload.passwordHash, // Already hashed
       role: "owner",
+      kycStatus: "approved",
       firstName: payload.firstName,
       lastName: payload.lastName,
       phone: normalizedPhone || undefined,
@@ -321,8 +356,23 @@ export const verifyOwnerOtp = async (req, res) => {
       province: payload.province,
       city: payload.city,
       barangay: payload.barangay,
-      isEmailVerified: true,
+      isVerified: true,
     });
+
+    try {
+      await KycVerification.findOneAndUpdate(
+        { user: owner._id },
+        {
+          user: owner._id,
+          status: "approved",
+          verifiedAt: new Date(),
+          remarks: "Identity approved during signed pre-registration KYC.",
+        },
+        { upsert: true, new: true }
+      );
+    } catch (kycCaseError) {
+      console.error("Failed to create owner KYC case:", kycCaseError.message);
+    }
 
     // Clean up the OTP record
     await Otp.deleteOne({ _id: otpDoc._id });

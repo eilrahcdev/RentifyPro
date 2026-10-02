@@ -1,0 +1,101 @@
+.rp-vehicle-cover {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  aspect-ratio: 16 / 10;
+  min-height: 11.5rem;
+  overflow: hidden;
+  border-radius: var(--rp-radius-card);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.96) 42%, rgba(226, 232, 240, 0.94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 10px 25px rgba(15, 23, 42, 0.06);
+}
+
+.rp-vehicle-cover__backdrop {
+  position: absolute;
+  inset: -12%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(26px) saturate(0.82);
+  opacity: 0.24;
+  transform: scale(1.08);
+}
+
+.rp-vehicle-cover__wash {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.14) 35%, rgba(226, 232, 240, 0.24) 100%),
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.74), transparent 58%);
+}
+
+.rp-vehicle-cover__floor {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 8%;
+  height: 18%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.18) 0%, rgba(15, 23, 42, 0.08) 34%, transparent 72%);
+  filter: blur(12px);
+  opacity: 0.55;
+}
+
+.rp-vehicle-cover__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+}
+
+.rp-vehicle-cover__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 18px 24px rgba(15, 23, 42, 0.18));
+}
+
+.rp-vehicle-cover--photo .rp-vehicle-cover__content {
+  align-items: stretch;
+  padding: 0;
+}
+
+.rp-vehicle-cover--photo .rp-vehicle-cover__image {
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+}
+
+/* Reuse the listing treatment inside each page's existing image dimensions. */
+.rp-vehicle-cover--thumbnail,
+.rp-vehicle-cover--listing {
+  min-height: 0;
+  border: 0;
+  border-radius: var(--rp-radius-card);
+  background: linear-gradient(145deg, #edf6ff 0%, #dbeafe 100%);
+  box-shadow: none;
+}
+
+.rp-vehicle-cover--thumbnail { container-type: inline-size; height: 100%; aspect-ratio: auto; border-radius: inherit; }
+.rp-vehicle-cover--thumbnail .rp-vehicle-cover__content { padding: 5%; }
+.rp-vehicle-cover--thumbnail.rp-vehicle-cover--photo .rp-vehicle-cover__content { padding: 0; }
+
+/* Scale the effects with the thumbnail's 5% inset. The full-size reference
+   uses a 16px inset, 26px backdrop blur, 12px floor blur and 18px/24px shadow. */
+.rp-vehicle-cover--thumbnail .rp-vehicle-cover__backdrop { filter: blur(8.125cqw) saturate(0.82); }
+.rp-vehicle-cover--thumbnail .rp-vehicle-cover__floor { filter: blur(3.75cqw); }
+.rp-vehicle-cover--thumbnail.rp-vehicle-cover--cutout .rp-vehicle-cover__image {
+  filter: drop-shadow(0 5.625cqw 7.5cqw rgba(15, 23, 42, 0.18));
+}

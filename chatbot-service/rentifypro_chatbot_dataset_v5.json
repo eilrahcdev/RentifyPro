@@ -1,0 +1,363 @@
+{
+  "source": "RentifyPro chatbot dataset (multilingual intent index)",
+  "schema_version": "v5_intent_multilingual",
+  "styles": [
+    "en",
+    "fil",
+    "taglish"
+  ],
+  "items": [
+    {
+      "id": "chat_greeting",
+      "examples": [
+        "Hello or good day.",
+        "Hello o magandang araw.",
+        "Hi there",
+        "Good morning",
+        "Magandang araw",
+        "Hello po",
+        "Hi, pwede magtanong about booking?",
+        "Hello, available ba ang mga sasakyan today?"
+      ],
+      "responses": {
+        "en": "Hello! I am Rentify AI. I can help you with available vehicles, booking steps, rental requirements, payments, and recommendations. What would you like to know?",
+        "fil": "Hello! Ako si Rentify AI. Maaari kitang tulungan sa available na sasakyan, booking, requirements, bayad, at recommendations. Ano ang gusto mong malaman?",
+        "taglish": "Hello! Ako si Rentify AI. I can help you sa booking, requirements, payment, at available vehicles."
+      }
+    },
+    {
+      "id": "chat_wellbeing",
+      "examples": [
+        "How are you?",
+        "Kamusta ka?",
+        "How are you doing?",
+        "Kamusta ka na?",
+        "Okay ka ba?",
+        "How are you na?",
+        "Ayos ka ba today?"
+      ],
+      "responses": {
+        "en": "I'm doing well and ready to help you with bookings, vehicle availability, payments, or rental requirements.",
+        "fil": "Mabuti naman ako at handang tumulong sa booking, available na sasakyan, bayad, o rental requirements.",
+        "taglish": "Okay ako and ready akong tumulong sa booking, payment, at vehicle questions mo."
+      }
+    },
+    {
+      "id": "chat_identity",
+      "examples": [
+        "Who are you?",
+        "Sino ka?",
+        "Who are you exactly?",
+        "Sino ka at ano role mo?",
+        "Ikaw ba ang RentifyPro bot?",
+        "Who ka sa RentifyPro?"
+      ],
+      "responses": {
+        "en": "I am Rentify AI, your assistant for vehicle rentals, booking steps, payments, rental requirements, and vehicle recommendations.",
+        "fil": "Ako si Rentify AI, ang assistant mo para sa vehicle rentals, booking steps, bayad, rental requirements, at vehicle recommendations.",
+        "taglish": "Ako si Rentify AI, assistant mo for rentals, booking steps, payment, at recommendations."
+      }
+    },
+    {
+      "id": "chat_capabilities",
+      "examples": [
+        "What can you help me with?",
+        "Ano ang maitutulong mo?",
+        "What can you do?",
+        "Ano pwede mong itulong?",
+        "Paano mo ako matutulungan?",
+        "What services can you help with?",
+        "Ano kaya mong i-assist?"
+      ],
+      "responses": {
+        "en": "I can help you check vehicle availability, recommendations, booking steps, rental requirements, payment methods, insurance, deposits, and rental policies.",
+        "fil": "Maaari kitang tulungan sa pag-check ng available na sasakyan, recommendations, booking steps, rental requirements, paraan ng bayad, insurance, deposito, at rental policies.",
+        "taglish": "Matutulungan kita sa vehicle availability, booking process, payment methods, requirements, insurance, at recommendations."
+      }
+    },
+    {
+      "id": "chat_gratitude",
+      "examples": [
+        "Thank you.",
+        "Salamat.",
+        "Thanks",
+        "Thank you so much",
+        "Salamat",
+        "Maraming salamat",
+        "Thanks po",
+        "Salamat, appreciate it"
+      ],
+      "responses": {
+        "en": "You're welcome. If you need help with booking, vehicle availability, or rental requirements, just let me know.",
+        "fil": "Walang anuman. Kung kailangan mo pa ng tulong sa booking, available na sasakyan, o rental requirements, sabihin mo lang.",
+        "taglish": "You're welcome! Sabihin mo lang if may tanong ka pa about booking or rentals."
+      }
+    },
+    {
+      "id": "rental_rate",
+      "examples": [
+        "How much is the rental per day or hour?",
+        "Magkano ang renta bawat araw o oras?",
+        "What is your daily rate?",
+        "How much to rent per day?",
+        "Magkano renta per day?",
+        "Magkano bawat oras?",
+        "How much ang rent per day?",
+        "Rate for SUV today?"
+      ],
+      "responses": {
+        "en": "Rental rates depend on the vehicle you choose and the rental duration. Which vehicle are you interested in, and for how many hours or days?",
+        "fil": "Ang presyo ng renta ay nakadepende sa sasakyang pipiliin at sa tagal ng pagrenta. Anong sasakyan ang gusto mo at ilang oras o araw ito gagamitin?",
+        "taglish": "Depende ang rental rate sa vehicle at rental duration. Sabihin mo lang anong unit at ilang oras o araw."
+      }
+    },
+    {
+      "id": "insurance_included",
+      "examples": [
+        "Is insurance included?",
+        "Kasama ba ang insurance?",
+        "Is insurance included in the rental?",
+        "May insurance ba sa renta?",
+        "Kasama insurance?",
+        "May insurance included?",
+        "Included ba ang insurance coverage?"
+      ],
+      "responses": {
+        "en": "Yes, insurance is included in all vehicle rentals.",
+        "fil": "Oo, kasama ang insurance sa lahat ng nirentahang sasakyan.",
+        "taglish": "Yes, included ang insurance sa lahat ng vehicle rentals."
+      }
+    },
+    {
+      "id": "security_deposit",
+      "examples": [
+        "Is there a security deposit? How much?",
+        "May security deposit ba? Magkano?",
+        "Is there a deposit?",
+        "How much is the security deposit?",
+        "May deposito ba?",
+        "Magkano deposit?",
+        "How much ang security deposit?",
+        "Refundable ba ang deposit?"
+      ],
+      "responses": {
+        "en": "Yes, there is a refundable security deposit of PHP 1,000.",
+        "fil": "Oo, may PHP 1,000 na refundable na security deposit.",
+        "taglish": "Yes, may refundable security deposit na PHP 1,000."
+      }
+    },
+    {
+      "id": "payment_methods",
+      "examples": [
+        "What payment methods are accepted?",
+        "Anong mga paraan ng pagbabayad ang tinatanggap?",
+        "How can I pay?",
+        "Do you accept GCash?",
+        "Anong payment options ninyo?",
+        "Pwede bank transfer?",
+        "May GCash payment ba?",
+        "How much ang rent payment options?"
+      ],
+      "responses": {
+        "en": "We accept Cash, GCash, and Bank Transfer.",
+        "fil": "Tumatanggap kami ng Cash, GCash, at Bank Transfer.",
+        "taglish": "Pwede kang magbayad via Cash, GCash, at Bank Transfer."
+      }
+    },
+    {
+      "id": "rental_requirements",
+      "examples": [
+        "What are the requirements to rent a car?",
+        "Ano ang mga kinakailangan upang makapag-renta ng sasakyan?",
+        "What documents are needed to rent?",
+        "Ano requirements para makapag rent?",
+        "Kailangan ba ng driver's license?",
+        "What are your rental requirements?",
+        "Ano kailangan sa booking?",
+        "Requirements para sa car rental?"
+      ],
+      "responses": {
+        "en": "You must present at least one valid ID, preferably a Driver’s License.",
+        "fil": "Kinakailangan ang isang valid ID, mas mainam kung Driver’s License.",
+        "taglish": "Kailangan mo ng at least one valid ID, preferably Driver's License."
+      }
+    },
+    {
+      "id": "minimum_age",
+      "examples": [
+        "What is the minimum age to rent?",
+        "Ano ang minimum na edad upang makapag-renta?",
+        "How old do I need to be?",
+        "Minimum age for rental?",
+        "Ilang taon minimum para mag rent?",
+        "Pwede ba 17 years old?",
+        "Age requirement for booking?"
+      ],
+      "responses": {
+        "en": "The minimum age requirement is 18 years old.",
+        "fil": "Ang minimum na edad ay labing-walong (18) taong gulang.",
+        "taglish": "Minimum age requirement is 18 years old para makapag-rent."
+      }
+    },
+    {
+      "id": "id_or_proof_of_address",
+      "examples": [
+        "Do I need an ID or proof of address?",
+        "Kailangan ba ng ID o patunay ng tirahan?",
+        "Do I need proof of address?",
+        "Need ba ng ID?",
+        "Kailangan ba ng valid ID?",
+        "ID or address proof required?",
+        "Need ko ba mag submit ng ID at address?"
+      ],
+      "responses": {
+        "en": "Yes, a valid ID or proof of address is required for verification.",
+        "fil": "Oo, kinakailangan ang valid ID o patunay ng tirahan para sa beripikasyon.",
+        "taglish": "Yes, kailangan ng valid ID or proof of address for verification."
+      }
+    },
+    {
+      "id": "available_vehicles",
+      "examples": [
+        "What vehicles are available?",
+        "Anong mga sasakyan ang available?",
+        "What vehicles are available now?",
+        "Anong sasakyan ang available today?",
+        "Anong kotse ang available ngayon?",
+        "May available na kotse right now?",
+        "Anong available na kotse ngayon?",
+        "Available ba kayo na SUV or van?",
+        "May available na sedan?",
+        "What cars can I book right now?",
+        "Ano available vehicles ngayon?"
+      ],
+      "responses": {
+        "en": "We offer Sedan, Van, SUV, and Pickup Truck options.",
+        "fil": "Mayroon kaming Sedan, Van, SUV, at Pickup Truck.",
+        "taglish": "Available options natin are Sedan, Van, SUV, at Pickup Truck."
+      }
+    },
+    {
+      "id": "available_transmission",
+      "examples": [
+        "What transmission types are available?",
+        "Anong uri ng transmission ang available?",
+        "Do you have automatic cars?",
+        "Manual or automatic available?",
+        "May automatic ba?",
+        "Anong transmission available?",
+        "Pwede automatic transmission?",
+        "May manual option din ba?"
+      ],
+      "responses": {
+        "en": "We offer both Automatic and Manual transmission vehicles.",
+        "fil": "Mayroong Automatic at Manual na transmission.",
+        "taglish": "May Automatic at Manual transmission options tayo."
+      }
+    },
+    {
+      "id": "full_tank_return",
+      "examples": [
+        "Should I return the vehicle with a full tank?",
+        "Kailangan bang ibalik na full tank ang sasakyan?",
+        "Do I need to return it full tank?",
+        "Kailangan bang full tank pagbalik?",
+        "Should I refill before return?",
+        "Dapat ba puno ang gasolina sa balik?",
+        "Full tank required ba?"
+      ],
+      "responses": {
+        "en": "Yes, the vehicle must be returned with a full tank of fuel.",
+        "fil": "Oo, kinakailangang ibalik ang sasakyan na may full tank ng gasolina.",
+        "taglish": "Yes, kailangan ibalik ang sasakyan na full tank."
+      }
+    },
+    {
+      "id": "passenger_capacity",
+      "examples": [
+        "How many passengers can the vehicles accommodate?",
+        "Ilang pasahero ang kayang isakay?",
+        "How many passengers can it carry?",
+        "Ilang tao kasya sa sasakyan?",
+        "Capacity ng van ninyo?",
+        "Good for 7 passengers ba?",
+        "How many pax ang kaya?",
+        "Ilang seats available?"
+      ],
+      "responses": {
+        "en": "Our vehicles can accommodate between 2 to 15 passengers depending on the type.",
+        "fil": "Depende sa uri ng sasakyan, maaaring magsakay ng 2 hanggang 15 pasahero.",
+        "taglish": "Depende sa vehicle type, around 5 to 15 passengers ang capacity."
+      }
+    },
+    {
+      "id": "choose_specific_model",
+      "examples": [
+        "Can I choose a specific vehicle model?",
+        "Maaari bang pumili ng partikular na modelo?",
+        "Can I pick a specific model?",
+        "Pwede pumili ng exact unit?",
+        "Can I choose a specific car model?",
+        "May option ba to request a model?",
+        "Pwede specific model if available?"
+      ],
+      "responses": {
+        "en": "Yes, you may choose a specific model subject to availability.",
+        "fil": "Oo, maaaring pumili ng partikular na modelo depende sa availability.",
+        "taglish": "Yes, pwede kang pumili ng specific model depende sa availability."
+      }
+    },
+    {
+      "id": "how_to_book",
+      "examples": [
+        "How do I book?",
+        "Paano mag-book?",
+        "How do I book a vehicle?",
+        "Paano magbook ng sasakyan?",
+        "Ano booking process?",
+        "Steps para makapag booking?",
+        "How to book po?",
+        "Paano ang booking steps?"
+      ],
+      "responses": {
+        "en": "To book, you must first verify your account and submit your personal information and Driver’s License for verification.",
+        "fil": "Upang makapag-book, kailangan munang i-verify ang account at magsumite ng personal na impormasyon at Driver’s License para sa beripikasyon.",
+        "taglish": "To book, i-verify muna ang account mo, submit requirements, then confirm your booking."
+      }
+    },
+    {
+      "id": "same_day_rental",
+      "examples": [
+        "Is same-day rental allowed?",
+        "Pinapayagan ba ang same-day rental?",
+        "Can I rent today?",
+        "Is same day booking allowed?",
+        "Pwede ba mag rent ngayon?",
+        "Pwede same day rental?",
+        "Can I book for today agad?"
+      ],
+      "responses": {
+        "en": "Yes, same-day rentals are allowed subject to vehicle availability.",
+        "fil": "Oo, pinapayagan ang same-day rental kung may available na sasakyan.",
+        "taglish": "Yes, pwede ang same-day rental depende sa vehicle availability."
+      }
+    },
+    {
+      "id": "advance_booking_discount",
+      "examples": [
+        "Is there an advance booking discount?",
+        "May discount ba sa advance booking?",
+        "Do you give advance booking discounts?",
+        "May discount ba kapag maagang booking?",
+        "Discount for early booking?",
+        "May promo sa advance booking?",
+        "Pwede discount if I book early?"
+      ],
+      "responses": {
+        "en": "We currently do not offer discounts for advance bookings.",
+        "fil": "Sa kasalukuyan, wala kaming discount para sa advance booking.",
+        "taglish": "Sa ngayon, wala pang advance booking discount."
+      }
+    }
+  ]
+}

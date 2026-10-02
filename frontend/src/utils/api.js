@@ -1,5 +1,6 @@
 import { clearSessionOwnerProfile, clearSessionUser } from "./sessionStore";
-export const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE_URL } from "./runtimeConfig";
+export { API_BASE_URL } from "./runtimeConfig";
 
 function buildQueryString(params = {}) {
   const searchParams = new URLSearchParams();
@@ -11,6 +12,41 @@ function buildQueryString(params = {}) {
 
   const query = searchParams.toString();
   return query ? `?${query}` : "";
+}
+
+function normalizeChatContext(context = "") {
+  if (typeof context === "string") {
+    const bookingId = String(context || "").trim();
+    return bookingId ? { bookingId } : {};
+  }
+
+  if (!context || typeof context !== "object") return {};
+
+  const bookingId = String(context.bookingId || "").trim();
+  const vehicleId = String(context.vehicleId || "").trim();
+  return {
+    ...(bookingId ? { bookingId } : {}),
+    ...(vehicleId ? { vehicleId } : {}),
+  };
+}
+
+function normalizeReportMedia(payload = {}) {
+  return {
+    ...payload,
+    reports: Array.isArray(payload?.reports)
+      ? payload.reports.map((report) => ({
+          ...report,
+          evidence: Array.isArray(report?.evidence)
+            ? report.evidence.map((item) => ({
+                ...item,
+                url: item.url && !/^https?:\/\//i.test(item.url)
+                  ? `${String(API_BASE_URL || "/api").replace(/\/$/, "")}${String(item.url).replace(/^\/api/, "")}`
+                  : item.url,
+              }))
+            : [],
+        }))
+      : [],
+  };
 }
 
 async function request(endpoint, options = {}) {
@@ -27,33 +63,58 @@ async function request(endpoint, options = {}) {
     config.headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(url, config);
+  let response;
+  try {
+    response = await fetch(url, config);
+  } catch (cause) {
+    if (cause?.name === "AbortError") throw cause;
+    const error = new Error("Cannot connect to RentifyPro. Check your connection and try again.");
+    error.status = 0;
+    error.code = "NETWORK_ERROR";
+    throw error;
+  }
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const msg = data.message || data.errors?.email || `Request failed (${response.status})`;
+    const error = new Error(msg);
+    error.status = response.status;
 
-    if (
-      response.status === 401 ||
-      (response.status === 403 && /verify your email|verification is required/i.test(msg))
-    ) {
+    if (data && typeof data === "object") {
+      error.details = data;
+      const retryAfterSeconds = Number(data.retryAfterSeconds);
+      if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+        error.retryAfterSeconds = retryAfterSeconds;
+      }
+      if (data.retryAfterAt) {
+        error.retryAfterAt = data.retryAfterAt;
+      }
+    }
+
+    // A 403 means the current session is authenticated but is not allowed to
+    // perform this particular action (for example, KYC is still required).
+    // Only authentication failures should tear down the client session.
+    if (response.status === 401 || data.code === "EMAIL_VERIFICATION_REQUIRED") {
       localStorage.removeItem("token");
       sessionStorage.removeItem("token");
       clearSessionOwnerProfile();
       clearSessionUser();
     }
 
-    throw new Error(msg);
+    throw error;
   }
 
   return data;
 }
 
 const API = {
+  checkRegistrationEmail: (email, { signal } = {}) => request("/auth/check-registration-email", {
+    method: "POST", body: JSON.stringify({ email }), signal, cache: "no-store",
+  }),
   register: (body) => request("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   getLoginChallenge: () => request("/auth/login-challenge", { method: "GET" }),
   login: (body) => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-  getProfile: () => request("/auth/me"),
+  getProfile: ({ signal } = {}) => request("/auth/me", { signal }),
   updateProfile: (body) => request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }),
   changePassword: (body) =>
     request("/auth/change-password", { method: "PATCH", body: JSON.stringify(body) }),
@@ -65,10 +126,16 @@ const API = {
     request("/auth/upgrade-to-owner", { method: "POST", body: JSON.stringify(body) }),
 
   logout: async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      await request("/auth/logout", { method: "POST" });
-    } catch {
-      // Clear local data even if logout fails.
+      await request("/auth/logout", { method: "POST", signal: controller.signal });
+    } catch (error) {
+      // An expired session is already signed out. Other failures must be retried
+      // before reloading, or the remaining cookie could restore the same account.
+      if (error.status !== 401) throw error;
+    } finally {
+      clearTimeout(timeout);
     }
     localStorage.removeItem("token");
     sessionStorage.removeItem("token");
@@ -88,26 +155,42 @@ const API = {
   resetPassword: (body) => request("/auth/reset-password", { method: "POST", body: JSON.stringify(body) }),
 
   kycRegisterFace: (body) => request("/kyc/id-register", { method: "POST", body: JSON.stringify(body) }),
-  kycBlinkChallenge: (body) => request("/kyc/selfie/challenge", { method: "POST", body: JSON.stringify(body) }),
   kycVerifySelfie: (body) => request("/kyc/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
   kycGetStatus: () => request("/kyc/me"),
 
-  getPublicVehicles: (params = {}) => request(`/vehicles${buildQueryString(params)}`),
-  getPublicVehicleById: (id) => request(`/vehicles/${encodeURIComponent(id)}`),
+  getPublicVehicles: (params = {}) =>
+    request(`/vehicles${buildQueryString(params)}`, { cache: "no-store" }),
+  getVehicleLocations: (params = {}, signal) =>
+    request(`/vehicles/locations${buildQueryString(params)}`, { cache: "no-store", signal }),
+  getVehicleSearchSuggestions: (params = {}, signal) =>
+    request(`/vehicles/suggestions${buildQueryString(params)}`, { cache: "no-store", signal }),
+  getPublicVehicleById: (id) =>
+    request(`/vehicles/${encodeURIComponent(id)}`, { cache: "no-store" }),
   getOwnerVehicles: () => request("/owner/vehicles"),
+  getVehiclePhotos: () => request("/vehicle-photos", { cache: "no-store" }),
+  uploadVehiclePhoto: (body) => request("/vehicle-photos", { method: "POST", body }),
+  reviewVehiclePhoto: (id, body) => request(`/vehicle-photos/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   createOwnerVehicle: (formData) => request("/owner/vehicles", { method: "POST", body: formData }),
   updateOwnerVehicle: (id, formData) => request(`/owner/vehicles/${id}`, { method: "PUT", body: formData }),
   deleteOwnerVehicle: (id) => request(`/owner/vehicles/${id}`, { method: "DELETE" }),
-  setOwnerVehicleAvailability: (id, availabilityStatus) =>
+  setOwnerVehicleAvailability: (id, availabilityStatus, availabilityHoldReason) =>
     request(`/owner/vehicles/${id}/availability`, {
       method: "PATCH",
-      body: JSON.stringify({ availabilityStatus }),
+      body: JSON.stringify({ availabilityStatus, availabilityHoldReason }),
     }),
 
   createBooking: (body) => request("/bookings", { method: "POST", body: JSON.stringify(body) }),
-  getMyBookings: (status = "all") => request(`/bookings/me?status=${encodeURIComponent(status)}`),
+  getBookingEligibility: (options = {}) =>
+    request(`/bookings/eligibility${buildQueryString(options)}`, { cache: "no-store" }),
+  getMyBookings: (options = "all") => {
+    const params = typeof options === "string" ? { view: options } : options;
+    return request(`/bookings/me${buildQueryString(params)}`);
+  },
   getBookingById: (id) => request(`/bookings/${id}`),
-  getOwnerBookings: (status = "all") => request(`/owner/bookings?status=${encodeURIComponent(status)}`),
+  getOwnerBookings: (options = "all") => {
+    const params = typeof options === "string" ? { view: options } : options;
+    return request(`/owner/bookings${buildQueryString(params)}`);
+  },
   payBooking: (id, body = {}) =>
     request(`/bookings/${id}/pay`, { method: "POST", body: JSON.stringify(body || {}) }),
   setBookingBalancePaymentMethod: (id, body = {}) =>
@@ -125,8 +208,18 @@ const API = {
       method: "POST",
       body: JSON.stringify(checkoutId ? { checkoutId } : {}),
     }),
-  recordBookingOnBlockchain: (id) =>
-    request(`/bookings/${id}/blockchain-record`, {
+  requestBookingExtension: (id, body = {}) =>
+    request(`/bookings/${id}/extension-request`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+  proceedLateReturn: (id, body = {}) =>
+    request(`/bookings/${id}/late-return/proceed`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+  requestBookingReturn: (id) =>
+    request(`/bookings/${id}/return-request`, {
       method: "POST",
     }),
   cancelBooking: (id) => request(`/bookings/${id}/cancel`, { method: "PATCH" }),
@@ -137,10 +230,29 @@ const API = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
-  updateOwnerBookingPaymentStatus: (id, paymentStatus) =>
+  confirmOwnerVehicleReturn: (id) =>
+    request(`/owner/bookings/${id}/confirm-return`, {
+      method: "POST",
+    }),
+  reviewOwnerVehicleReturnRequest: (id, action, body = {}) =>
+    request(`/owner/bookings/${id}/return-request`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, ...body }),
+    }),
+  updateOwnerBookingPaymentStatus: (id, paymentStatus, details = {}) =>
     request(`/owner/bookings/${id}/payment-status`, {
       method: "PATCH",
-      body: JSON.stringify({ paymentStatus }),
+      body: JSON.stringify({ paymentStatus, paymentAmountPaid: details.paymentAmountPaid, expectedUpdatedAt: details.expectedUpdatedAt }),
+    }),
+  reviewOwnerBookingExtensionRequest: (id, action, body = {}) =>
+    request(`/owner/bookings/${id}/extension-request`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, ...body }),
+    }),
+  reviewOwnerBookingCancellationRequest: (id, action, body = {}) =>
+    request(`/owner/bookings/${id}/cancellation-request`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, ...body }),
     }),
   reviewOwnerWalkInPaymentRequest: (id, action, body = {}) =>
     request(`/owner/bookings/${id}/walk-in-request`, {
@@ -155,24 +267,74 @@ const API = {
 
   getOwnerReviews: () => request("/owner/reviews"),
   getOwnerEarnings: () => request("/owner/earnings"),
-  getOwnerAnalytics: () => request("/owner/analytics"),
+  getOwnerAnalytics: (params = {}) => request(`/owner/analytics${buildQueryString(params)}`),
+
+  getAdminTransactions: (params = {}) => request(`/admin/transactions${buildQueryString(params)}`),
+
+  createReport: (formData) => request("/reports", { method: "POST", body: formData }),
+  reportChatMessage: (messageId, category) =>
+    request(`/reports/messages/${encodeURIComponent(messageId)}`, {
+      method: "POST",
+      body: JSON.stringify({ category }),
+    }),
+  getMyReports: () => request("/reports/mine").then(normalizeReportMedia),
+  getReport: (id) => request(`/reports/${encodeURIComponent(id)}`),
+  appealReport: (id, statement) =>
+    request(`/reports/${encodeURIComponent(id)}/appeal`, {
+      method: "POST",
+      body: JSON.stringify({ statement }),
+    }),
+  addReportInformation: (id, formData) =>
+    request(`/reports/${encodeURIComponent(id)}/information`, { method: "POST", body: formData }),
 
   getConversations: () => request("/chat/conversations"),
+  getOwnerRenterThreads: () => request("/chat/owner/renters"),
+  openOwnerRenterThread: (renterId) =>
+    request(`/chat/owner/renters/${renterId}/open`, { method: "POST" }),
+  setOwnerRenterThreadPin: (renterId, pinned) =>
+    request(`/chat/owner/renters/${renterId}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned }),
+    }),
   chatWithBot: (body) => request("/chat", { method: "POST", body: JSON.stringify(body) }),
-  getMessagesWithUser: (userId, bookingId = "") =>
-    request(
-      `/chat/messages/${userId}${bookingId ? `?bookingId=${encodeURIComponent(bookingId)}` : ""}`
-    ),
+  getMessagesWithUser: (userId, context = "") =>
+    request(`/chat/messages/${userId}${buildQueryString(normalizeChatContext(context))}`),
   sendMessageToUser: (userId, body) =>
     request(`/chat/messages/${userId}`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  markMessagesAsRead: (userId) => request(`/chat/messages/${userId}/read`, { method: "PATCH" }),
+  editChatMessage: (messageId, body) =>
+    request(`/chat/messages/${messageId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteChatMessage: (messageId) =>
+    request(`/chat/messages/${messageId}`, {
+      method: "DELETE",
+    }),
+  deleteConversation: (userId, context = "") =>
+    request(`/chat/conversations/${userId}${buildQueryString(normalizeChatContext(context))}`, {
+      method: "DELETE",
+    }),
+  setConversationArchived: (userId, archived) =>
+    request(`/chat/conversations/${userId}/archive`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived }),
+    }),
+  markMessagesAsRead: (userId, context = "") =>
+    request(`/chat/messages/${userId}/read${buildQueryString(normalizeChatContext(context))}`, {
+      method: "PATCH",
+    }),
 
-  getNotifications: () => request("/notifications"),
+  getNotifications: (params = {}) => request(`/notifications${buildQueryString(params)}`),
+  getUnreadNotificationCount: () => request("/notifications/unread-count"),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }),
-  markAllNotificationsRead: () => request("/notifications/read-all", { method: "PATCH" }),
+  markAllNotificationsRead: (ids = []) => request("/notifications/read-all", { method: "PATCH", body: JSON.stringify(ids.length ? { ids } : {}) }),
+  deleteAllReadNotifications: () => request("/notifications/read-all", { method: "DELETE" }),
+  archiveNotification: (id) => request(`/notifications/${id}/archive`, { method: "PATCH" }),
+  restoreNotification: (id) => request(`/notifications/${id}/restore`, { method: "PATCH" }),
+  deleteNotification: (id) => request(`/notifications/${id}`, { method: "DELETE" }),
 };
 
 export default API;

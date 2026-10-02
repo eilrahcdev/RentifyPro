@@ -1,0 +1,263 @@
+.rp-type-carousel {
+  --rp-type-card-width: min(60%, 29rem);
+  --rp-type-card-height: clamp(24rem, calc(34vw + 3rem), 29rem);
+  --rp-type-duration: 460ms;
+  max-width: 70rem;
+  margin-inline: auto;
+}
+
+.rp-type-carousel__stage {
+  position: relative;
+}
+
+/* Only the decorative text is clipped; the deck keeps its full shadows. */
+.rp-type-carousel__backdrop {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--rp-type-card-height) / 2 + 2rem);
+  z-index: 0;
+  overflow: hidden;
+  transform: translateY(-50%);
+  pointer-events: none;
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+
+.rp-type-carousel__words {
+  display: flex;
+  width: max-content;
+  color: rgba(71, 85, 105, 0.14);
+  font-size: clamp(4.5rem, 11vw, 10rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 1.2;
+  white-space: nowrap;
+  animation: rp-type-words 72s linear infinite;
+}
+
+.rp-type-carousel__word-group { display: flex; flex: 0 0 auto; }
+.rp-type-carousel__word-dot { display: inline-block; padding-inline: 0.3em; }
+.rp-type-carousel__words[data-paused] { animation-play-state: paused; }
+
+@keyframes rp-type-words {
+  to { transform: translateX(-50%); }
+}
+
+.rp-type-carousel__cursor-hint {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  display: none;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: var(--rp-radius-control);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0.55rem 0.8rem;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.12);
+  color: var(--rp-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.rp-type-carousel__cursor-hint[hidden] { display: none; }
+.rp-type-carousel__cursor-hint[data-touch-drag="true"]:not([hidden]) { display: block; }
+
+@media (hover: hover) and (pointer: fine) {
+  .rp-type-carousel__cursor-hint:not([hidden]) { display: block; }
+}
+
+.rp-type-carousel__viewport {
+  position: relative;
+  height: calc(var(--rp-type-card-height) + 6rem);
+  overflow: visible;
+  isolation: isolate;
+  perspective: 1200px;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+}
+
+.rp-type-carousel__card {
+  --rp-type-x: 0%;
+  --rp-type-y: 0rem;
+  --rp-type-scale: 1;
+  --rp-type-tilt: 0deg;
+  position: absolute;
+  top: 2rem;
+  left: calc((100% - var(--rp-type-card-width)) / 2);
+  z-index: 3;
+  width: var(--rp-type-card-width);
+  height: var(--rp-type-card-height);
+  opacity: 1;
+  transform: translate3d(calc(var(--rp-type-x) + var(--rp-type-drag, 0px)), var(--rp-type-y), 0) rotateZ(calc(var(--rp-type-tilt) + var(--rp-type-drag-tilt, 0deg))) scale(var(--rp-type-scale));
+  transform-origin: 50% 65%;
+  transition: transform var(--rp-type-duration) cubic-bezier(0.22, 1, 0.36, 1), opacity var(--rp-type-duration) ease, visibility var(--rp-type-duration);
+}
+
+.rp-type-carousel__card[data-position="previous"],
+.rp-type-carousel__card[data-position="next"] {
+  --rp-type-y: 0.45rem;
+  --rp-type-scale: 0.94;
+  z-index: 2;
+}
+
+.rp-type-carousel__card[data-position="previous"] {
+  --rp-type-x: -12%;
+  --rp-type-tilt: -4deg;
+}
+
+.rp-type-carousel__card[data-position="next"] {
+  --rp-type-x: 12%;
+  --rp-type-tilt: 4deg;
+}
+
+/* The fourth card travels behind the center so wrapping works in either direction. */
+.rp-type-carousel__card[data-position="back"] {
+  --rp-type-y: 0.9rem;
+  --rp-type-scale: 0.88;
+  z-index: 1;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rp-type-carousel__card-button {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d9e4f3;
+  border-radius: var(--rp-radius-feature);
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.09);
+  color: var(--rp-ink);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.rp-type-carousel__viewport[data-dragging],
+.rp-type-carousel__viewport[data-dragging] .rp-type-carousel__card-button { cursor: grabbing; }
+.rp-type-carousel__viewport[data-dragging] .rp-type-carousel__card[data-position="active"] { transition: none; }
+
+.rp-type-carousel__card[data-position="active"] .rp-type-carousel__card-button {
+  border-color: rgba(11, 117, 231, 0.36);
+  box-shadow: 0 20px 38px -12px rgba(15, 45, 80, 0.3), 0 5px 12px rgba(11, 117, 231, 0.06);
+}
+
+.rp-type-carousel__media {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.rp-type-carousel__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transition: transform 250ms ease;
+}
+
+.rp-type-carousel__number {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 0.35rem 0.65rem;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.rp-type-carousel__details {
+  display: block;
+  flex: 0 0 auto;
+  padding: 1.35rem 1.5rem;
+}
+
+.rp-type-carousel__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.rp-type-carousel__title-row > svg {
+  flex-shrink: 0;
+  color: var(--rp-primary);
+}
+
+.rp-type-carousel__title {
+  font-family: var(--rp-font-family);
+  font-size: clamp(1.3rem, 2.5vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.rp-type-carousel__cta {
+  display: block;
+  margin-top: 0.8rem;
+  color: #0864c4;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.rp-type-carousel__description {
+  display: block;
+  margin-top: 0.55rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.rp-type-carousel__card-button:focus-visible {
+  outline: 3px solid var(--rp-primary);
+  outline-offset: 4px;
+}
+
+@media (hover: hover) {
+  .rp-type-carousel__card-button:hover { border-color: var(--rp-primary); }
+  .rp-type-carousel__card-button:hover .rp-type-carousel__media img { transform: scale(1.035); }
+}
+
+@media (max-width: 1023px) {
+  .rp-type-carousel { --rp-type-card-width: min(66%, 29rem); }
+}
+
+@media (max-width: 767px) {
+  .rp-type-carousel {
+    --rp-type-card-width: min(78%, 24rem);
+    --rp-type-card-height: 24rem;
+    margin-inline: -0.65rem;
+  }
+
+  .rp-type-carousel__details { padding: 1.1rem 1rem; }
+  .rp-type-carousel__title-row { gap: 0.4rem; }
+  .rp-type-carousel__title-row > svg { width: 19px; }
+  .rp-type-carousel__title { font-size: clamp(1.15rem, 4.5vw, 1.5rem); }
+  .rp-type-carousel__description { font-size: 0.75rem; }
+  .rp-type-carousel__cta { min-height: 2.25rem; margin-top: 0.5rem; font-size: 0.72rem; }
+  .rp-type-carousel__number { top: 0.75rem; left: 0.75rem; }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-type-carousel__words { animation: none; }
+  .rp-type-carousel__card { --rp-type-drag: 0px !important; --rp-type-drag-tilt: 0deg !important; }
+  .rp-type-carousel__card,
+  .rp-type-carousel__card-button,
+  .rp-type-carousel__media img { transition: none; }
+}

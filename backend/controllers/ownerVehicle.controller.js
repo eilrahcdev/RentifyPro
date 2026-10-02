@@ -1,28 +1,23 @@
-import fs from "fs";
-import path from "path";
 import Vehicle from "../models/Vehicle.js";
 import { hasActiveBookingForVehicle } from "../utils/vehicleAvailability.js";
+import { HOURLY_RATE_UNIT, getVehicleHourlyRate } from "../utils/pricing.js";
+import { getVehicleLateReturnPolicy } from "../utils/lateReturnPolicy.js";
+import {
+  cleanupUploadedVehicleFiles,
+  getUploadedVehicleImageReference,
+  MAX_VEHICLE_IMAGES,
+  normalizeVehicleImageReference,
+  removeLocalVehicleImages,
+} from "../utils/localMedia.js";
 
 const allowedAvailabilityStatuses = new Set(["available", "unavailable"]);
-const UPLOADS_SEGMENT = "/uploads/";
-
-const normalizePathForUrl = (value = "") => value.replace(/\\/g, "/");
+const allowedCoverDisplayModes = new Set(["auto", "photo", "cutout"]);
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
+const normalizeImagePath = normalizeVehicleImageReference;
 
-const normalizeImagePath = (value = "") => {
-  const raw = normalizePathForUrl(String(value || "").trim());
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-
-  const uploadsIndex = raw.toLowerCase().lastIndexOf(UPLOADS_SEGMENT);
-  if (uploadsIndex >= 0) return raw.slice(uploadsIndex + 1);
-
-  if (raw.toLowerCase().startsWith("uploads/")) return raw;
-  if (raw.startsWith("./")) return raw.slice(2);
-  if (raw.startsWith("/")) return raw.slice(1);
-  if (/^[a-z]:\//i.test(raw)) return "";
-
-  return raw;
+const normalizeCoverDisplayMode = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return allowedCoverDisplayModes.has(normalized) ? normalized : "auto";
 };
 
 const parseBoolean = (value, fallback = false) => {
@@ -45,20 +40,6 @@ const getImageUrl = (req, filePath) => {
   return `${baseUrl}/${normalizedPath}`;
 };
 
-const removeLocalImageIfExists = (imagePath = "") => {
-  if (!imagePath || /^https?:\/\//i.test(imagePath)) return;
-
-  const normalized = normalizeImagePath(imagePath);
-  if (!normalized) return;
-
-  const absolutePath = path.isAbsolute(normalized) ? normalized : path.resolve(normalized);
-  try {
-    if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
-  } catch {
-    // Ignore cleanup errors here.
-  }
-};
-
 const toNumeric = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -74,13 +55,53 @@ const buildSpecsFromBody = (body, previous = {}) => ({
 });
 
 const extractUploadedPaths = (files) =>
-  ensureArray(files).map((file) => normalizeImagePath(file.path)).filter(Boolean);
+  ensureArray(files).map((file) => getUploadedVehicleImageReference(file)).filter(Boolean);
 
 const buildImageSet = ({ uploadedPaths = [], linkedPaths = [], existingPaths = [] }) => {
   const merged = [...ensureArray(existingPaths), ...ensureArray(uploadedPaths), ...ensureArray(linkedPaths)]
     .map((value) => normalizeImagePath(value))
     .filter(Boolean);
-  return [...new Set(merged)];
+  return [...new Set(merged)].slice(0, MAX_VEHICLE_IMAGES);
+};
+
+const hasInvalidImageReferences = (values = []) =>
+  ensureArray(values).some((value) => String(value || "").trim() && !normalizeImagePath(value));
+
+const parseUploadIndex = (value) => {
+  if (value === undefined || value === null || value === "") return -1;
+  const numeric = Number.parseInt(String(value), 10);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : -1;
+};
+
+const resolveCoverImagePath = ({
+  requestedCoverPath = "",
+  requestedCoverUploadIndex,
+  uploadedPaths = [],
+  galleryImages = [],
+  fallbackCoverPath = "",
+}) => {
+  const normalizedGalleryImages = buildImageSet({ existingPaths: galleryImages });
+  if (!normalizedGalleryImages.length) return "";
+
+  const normalizedRequestedPath = normalizeImagePath(requestedCoverPath);
+  if (normalizedRequestedPath && normalizedGalleryImages.includes(normalizedRequestedPath)) {
+    return normalizedRequestedPath;
+  }
+
+  const uploadIndex = parseUploadIndex(requestedCoverUploadIndex);
+  if (uploadIndex >= 0 && uploadIndex < uploadedPaths.length) {
+    const uploadedCandidate = normalizeImagePath(uploadedPaths[uploadIndex]);
+    if (uploadedCandidate && normalizedGalleryImages.includes(uploadedCandidate)) {
+      return uploadedCandidate;
+    }
+  }
+
+  const normalizedFallback = normalizeImagePath(fallbackCoverPath);
+  if (normalizedFallback && normalizedGalleryImages.includes(normalizedFallback)) {
+    return normalizedFallback;
+  }
+
+  return normalizedGalleryImages[0] || "";
 };
 
 const normalizeReviewPayload = (review, index) => {
@@ -100,7 +121,12 @@ const normalizeReviewPayload = (review, index) => {
 const serializeVehicle = (req, vehicle) => {
   const imagePaths = ensureArray(vehicle.images).map((value) => normalizeImagePath(value)).filter(Boolean);
   const images = imagePaths.map((item) => getImageUrl(req, item));
-  const primaryImage = images[0] || getImageUrl(req, normalizeImagePath(vehicle.imageUrl)) || "";
+  const coverImagePath = resolveCoverImagePath({
+    requestedCoverPath: vehicle.imageUrl,
+    galleryImages: imagePaths,
+    fallbackCoverPath: imagePaths[0] || "",
+  });
+  const primaryImage = getImageUrl(req, coverImagePath) || images[0] || "";
   const normalizedReviews = ensureArray(vehicle.reviews).map((review, index) =>
     normalizeReviewPayload(review, index)
   );
@@ -110,20 +136,44 @@ const serializeVehicle = (req, vehicle) => {
     : 0;
   const normalizedReviewCount = Number(vehicle.reviewCount);
   const reviewCount = Number.isFinite(normalizedReviewCount) ? normalizedReviewCount : normalizedReviews.length;
+  const lateReturnPolicy = getVehicleLateReturnPolicy(vehicle);
 
   return {
     _id: vehicle._id,
     owner: vehicle.owner,
     name: vehicle.name,
     description: vehicle.description,
-    dailyRentalRate: vehicle.dailyRentalRate,
+    dailyRentalRate: getVehicleHourlyRate(vehicle, {
+      rateField: "dailyRentalRate",
+      unitField: "pricingUnit",
+    }),
+    hourlyRentalRate: getVehicleHourlyRate(vehicle, {
+      rateField: "dailyRentalRate",
+      unitField: "pricingUnit",
+    }),
+    pricingUnit: HOURLY_RATE_UNIT,
+    lateReturnFeeType: lateReturnPolicy.feeType,
+    lateReturnFeeValue: lateReturnPolicy.value,
+    lateReturnGraceMinutes: lateReturnPolicy.graceMinutes,
+    lateReturnPolicy,
     location: vehicle.location,
     availabilityStatus: vehicle.availabilityStatus,
+    availabilityHoldReason: vehicle.availabilityHoldReason || "none",
     images,
     imagePaths,
+    coverImageUrl: primaryImage,
+    coverImagePath,
     imageUrl: primaryImage,
+    coverDisplayMode: normalizeCoverDisplayMode(vehicle.coverDisplayMode),
     driverOptionEnabled: Boolean(vehicle.driverOptionEnabled),
-    driverDailyRate: vehicle.driverDailyRate || 0,
+    driverDailyRate: getVehicleHourlyRate(vehicle, {
+      rateField: "driverDailyRate",
+      unitField: "pricingUnit",
+    }),
+    driverHourlyRate: getVehicleHourlyRate(vehicle, {
+      rateField: "driverDailyRate",
+      unitField: "pricingUnit",
+    }),
     specs: vehicle.specs || {},
     rating: averageRating,
     averageRating,
@@ -147,7 +197,21 @@ export const createOwnerVehicle = async (req, res) => {
   try {
     const uploadedPaths = extractUploadedPaths(req.files);
     const linkedPaths = ensureArray(req.body.imageUrls);
+    if (hasInvalidImageReferences(linkedPaths)) {
+      await cleanupUploadedVehicleFiles(req.files);
+      return res.status(400).json({ success: false, message: "Vehicle image references must be HTTPS URLs or managed vehicle uploads." });
+    }
     const images = buildImageSet({ uploadedPaths, linkedPaths });
+    if (!images.length) {
+      await cleanupUploadedVehicleFiles(req.files);
+      return res.status(400).json({ success: false, message: "At least one vehicle image is required." });
+    }
+    const coverImagePath = resolveCoverImagePath({
+      requestedCoverPath: req.body.coverImagePath,
+      requestedCoverUploadIndex: req.body.coverUploadIndex,
+      uploadedPaths,
+      galleryImages: images,
+    });
     const specs = buildSpecsFromBody(req.body);
     const driverOptionEnabled = parseBoolean(req.body.driverOptionEnabled, false);
     const driverDailyRate = driverOptionEnabled ? toNumeric(req.body.driverDailyRate, 0) : 0;
@@ -157,10 +221,17 @@ export const createOwnerVehicle = async (req, res) => {
       name: req.body.name.trim(),
       description: req.body.description.trim(),
       dailyRentalRate: toNumeric(req.body.dailyRentalRate, 0),
+      pricingUnit: HOURLY_RATE_UNIT,
+      lateReturnFeeType: req.body.lateReturnFeeType,
+      lateReturnFeeValue: toNumeric(req.body.lateReturnFeeValue, 25),
+      lateReturnGraceMinutes: toNumeric(req.body.lateReturnGraceMinutes, 0),
       location: req.body.location.trim(),
       availabilityStatus: req.body.availabilityStatus,
+      availabilityHoldReason: req.body.availabilityStatus === "unavailable" ? "manual" : "none",
       images,
-      imageUrl: images[0] || "",
+      imageReviews: req.approvedPhotoMetadata || [],
+      imageUrl: coverImagePath || images[0] || "",
+      coverDisplayMode: normalizeCoverDisplayMode(req.body.coverDisplayMode),
       driverOptionEnabled,
       driverDailyRate,
       specs,
@@ -168,6 +239,7 @@ export const createOwnerVehicle = async (req, res) => {
 
     res.status(201).json({ success: true, vehicle: serializeVehicle(req, vehicle) });
   } catch {
+    await cleanupUploadedVehicleFiles(req.files);
     res.status(500).json({ success: false, message: "Failed to create vehicle." });
   }
 };
@@ -176,24 +248,52 @@ export const updateOwnerVehicle = async (req, res) => {
   try {
     const vehicle = await Vehicle.findOne({ _id: req.params.id, owner: req.user._id });
     if (!vehicle) {
+      await cleanupUploadedVehicleFiles(req.files);
       return res.status(404).json({ success: false, message: "Vehicle not found." });
     }
 
     if (req.body.name !== undefined) vehicle.name = req.body.name.trim();
     if (req.body.description !== undefined) vehicle.description = req.body.description.trim();
-    if (req.body.dailyRentalRate !== undefined) vehicle.dailyRentalRate = toNumeric(req.body.dailyRentalRate, 0);
+    if (req.body.dailyRentalRate !== undefined) {
+      vehicle.dailyRentalRate = toNumeric(req.body.dailyRentalRate, 0);
+      vehicle.pricingUnit = HOURLY_RATE_UNIT;
+    }
+    if (req.body.lateReturnFeeType !== undefined) {
+      vehicle.lateReturnFeeType = req.body.lateReturnFeeType;
+    }
+    if (req.body.lateReturnFeeValue !== undefined) {
+      vehicle.lateReturnFeeValue = toNumeric(req.body.lateReturnFeeValue, vehicle.lateReturnFeeValue ?? 25);
+    }
+    if (req.body.lateReturnGraceMinutes !== undefined) {
+      vehicle.lateReturnGraceMinutes = toNumeric(
+        req.body.lateReturnGraceMinutes,
+        vehicle.lateReturnGraceMinutes ?? 0
+      );
+    }
     if (req.body.location !== undefined) vehicle.location = req.body.location.trim();
+    if (req.body.coverDisplayMode !== undefined) {
+      vehicle.coverDisplayMode = normalizeCoverDisplayMode(req.body.coverDisplayMode);
+    }
     if (req.body.availabilityStatus && allowedAvailabilityStatuses.has(req.body.availabilityStatus)) {
+      const previousAvailabilityStatus = vehicle.availabilityStatus;
+      const previousHoldReason = vehicle.availabilityHoldReason || "none";
       if (
         req.body.availabilityStatus === "available" &&
         (await hasActiveBookingForVehicle(vehicle._id))
       ) {
+        await cleanupUploadedVehicleFiles(req.files);
         return res.status(409).json({
           success: false,
           message: "This vehicle has an active booking and cannot be marked available yet.",
         });
       }
       vehicle.availabilityStatus = req.body.availabilityStatus;
+      vehicle.availabilityHoldReason =
+        req.body.availabilityStatus === "available"
+          ? "none"
+          : previousAvailabilityStatus === "unavailable" && previousHoldReason === "inspection"
+            ? "inspection"
+            : "manual";
     }
 
     const previousSpecs = vehicle.specs || {};
@@ -206,32 +306,64 @@ export const updateOwnerVehicle = async (req, res) => {
       vehicle.driverDailyRate = vehicle.driverOptionEnabled ? toNumeric(req.body.driverDailyRate, vehicle.driverDailyRate || 0) : 0;
     }
 
+    let removedImages = [];
     const uploadedPaths = extractUploadedPaths(req.files);
     const linkedPaths = ensureArray(req.body.imageUrls);
-    const existingImages = ensureArray(req.body.existingImages);
+    const hasExistingImagesInput = req.body.existingImages !== undefined;
+    const hasRequestedCoverInput =
+      req.body.coverImagePath !== undefined || req.body.coverUploadIndex !== undefined;
+    const existingImages = hasExistingImagesInput ? ensureArray(req.body.existingImages) : ensureArray(vehicle.images);
 
-    if (uploadedPaths.length || linkedPaths.length || req.body.existingImages !== undefined) {
+    if (hasInvalidImageReferences([...linkedPaths, ...existingImages])) {
+      await cleanupUploadedVehicleFiles(req.files);
+      return res.status(400).json({ success: false, message: "Vehicle image references must be HTTPS URLs or managed vehicle uploads." });
+    }
+
+    if (
+      uploadedPaths.length ||
+      linkedPaths.length ||
+      hasExistingImagesInput ||
+      hasRequestedCoverInput
+    ) {
       const nextImages = buildImageSet({
         existingPaths: existingImages,
         uploadedPaths,
         linkedPaths,
       });
 
+      if (!nextImages.length) {
+        await cleanupUploadedVehicleFiles(req.files);
+        return res.status(400).json({
+          success: false,
+          message: "At least one image is required.",
+        });
+      }
+
       const previousImageMap = new Map(
         ensureArray(vehicle.images)
           .map((image) => [normalizeImagePath(image), image])
           .filter(([normalized]) => Boolean(normalized))
       );
-      const removedImages = [...previousImageMap.keys()].filter((image) => !nextImages.includes(image));
-      removedImages.forEach((image) => removeLocalImageIfExists(previousImageMap.get(image) || image));
+      removedImages = [...previousImageMap.keys()].filter((image) => !nextImages.includes(image));
 
       vehicle.images = nextImages;
-      vehicle.imageUrl = nextImages[0] || "";
+      vehicle.imageUrl = resolveCoverImagePath({
+        requestedCoverPath: req.body.coverImagePath,
+        requestedCoverUploadIndex: req.body.coverUploadIndex,
+        uploadedPaths,
+        galleryImages: nextImages,
+        fallbackCoverPath: vehicle.imageUrl,
+      });
     }
 
+    if (req.approvedPhotoMetadata) vehicle.imageReviews = req.approvedPhotoMetadata;
     await vehicle.save();
+    if (removedImages.length) {
+      await removeLocalVehicleImages(removedImages);
+    }
     res.json({ success: true, vehicle: serializeVehicle(req, vehicle) });
   } catch {
+    await cleanupUploadedVehicleFiles(req.files);
     res.status(500).json({ success: false, message: "Failed to update vehicle." });
   }
 };
@@ -243,8 +375,8 @@ export const deleteOwnerVehicle = async (req, res) => {
       return res.status(404).json({ success: false, message: "Vehicle not found." });
     }
 
-    ensureArray(vehicle.images).forEach(removeLocalImageIfExists);
     await vehicle.deleteOne();
+    await removeLocalVehicleImages(vehicle.images);
 
     res.json({ success: true, message: "Vehicle deleted." });
   } catch {
@@ -255,6 +387,7 @@ export const deleteOwnerVehicle = async (req, res) => {
 export const setOwnerVehicleAvailability = async (req, res) => {
   try {
     const { availabilityStatus } = req.body;
+    const requestedHoldReason = String(req.body?.availabilityHoldReason || "").trim().toLowerCase();
     const vehicle = await Vehicle.findOne({ _id: req.params.id, owner: req.user._id });
 
     if (!vehicle) {
@@ -269,6 +402,12 @@ export const setOwnerVehicleAvailability = async (req, res) => {
     }
 
     vehicle.availabilityStatus = availabilityStatus;
+    vehicle.availabilityHoldReason =
+      availabilityStatus === "available"
+        ? "none"
+        : requestedHoldReason === "inspection"
+          ? "inspection"
+          : "manual";
     await vehicle.save();
 
     res.json({ success: true, vehicle: serializeVehicle(req, vehicle) });

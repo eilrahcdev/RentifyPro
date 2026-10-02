@@ -1,32 +1,37 @@
 // KYC stepper after login
 // Uses the authenticated /api/kyc/* routes
 
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
+import { Check, CircleCheck, CircleX, IdCard } from "lucide-react";
 import API from "../utils/api";
+import { ID_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
+import { fileToBase64, validateDocumentImageFile } from "../utils/cameraKyc";
+import SelfieCapture from "../components/SelfieCapture";
 
 const STEPS = [
   { id: 1, label: "Upload ID" },
-  { id: 2, label: "Blink Check" },
-  { id: 3, label: "Take Selfie" },
-  { id: 4, label: "Result" },
+  { id: 2, label: "Take Selfie" },
+  { id: 3, label: "Result" },
 ];
 
-// Convert a file to base64
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function verificationErrorMessage(error) {
+  const message = String(error?.message || "").toLowerCase();
+  if (message.includes("face") && message.includes("match")) {
+    return "We couldn't match this selfie to your ID photo. Try again in even lighting and face the camera directly.";
+  }
+  if (message.includes("no face") || message.includes("face detection")) {
+    return "We couldn't find a clear face. Keep your full face visible and make sure only you are in the frame.";
+  }
+  if (message.includes("network") || message.includes("fetch") || message.includes("econn")) {
+    return "We couldn't connect to the verification service. Check your connection and try again.";
+  }
+  if (message.includes("timeout") || message.includes("timed out")) {
+    return "Verification took too long. Please try again with a new selfie.";
+  }
+  return "We couldn't complete verification right now. Please try again.";
 }
 
-// Capture a JPEG frame from a canvas
-function canvasToBase64(canvas) {
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
-
-export default function VerificationStepper() {
+export default function VerificationStepper({ onVerificationComplete }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,56 +39,42 @@ export default function VerificationStepper() {
   // ID state
   const [idPreview, setIdPreview] = useState(null);
   const [idBase64, setIdBase64] = useState("");
-
-  // Blink check state
-  const [challengeId, setChallengeId] = useState("");
-  const [blinkStatus, setBlinkStatus] = useState("idle"); // idle, recording, done
-  const [frameCount, setFrameCount] = useState(0);
-  const framesRef = useRef([]);
+  const [idType, setIdType] = useState("");
 
   // Selfie state
   const [selfieBase64, setSelfieBase64] = useState("");
   const [selfiePreview, setSelfiePreview] = useState(null);
   const [result, setResult] = useState(null);
 
-  // Camera refs
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const intervalRef = useRef(null);
-
-  // Start the camera
-  const openCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      setError("Camera access denied. Please allow camera and try again.");
-    }
-  };
-
-  // Stop the camera
-  const closeCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    clearInterval(intervalRef.current);
-  }, []);
-
   // Step 1: upload ID
   const handleIdUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setError("");
+    try {
+      await validateDocumentImageFile(file);
+    } catch (validationError) {
+      setError(validationError.message || "Please upload a clear ID image.");
+      e.target.value = "";
+      return;
+    }
     const b64 = await fileToBase64(file);
     setIdPreview(b64);
     setIdBase64(b64);
   };
 
   const submitId = async () => {
+    if (!idType) { setError("Select your ID type first."); return; }
     if (!idBase64) { setError("Upload your ID card first."); return; }
     setLoading(true);
     setError("");
     try {
-      const data = await API.kycRegisterFace({ id_image_base64: idBase64 });
+      const mimeMatch = idBase64.match(/^data:([^;,]+)[;,]/i);
+      const data = await API.kycRegisterFace({
+        id_image_base64: idBase64,
+        id_image_mime: mimeMatch?.[1] || "image/jpeg",
+        id_type: idType,
+      });
       if (!data.success) { setError(data.message); return; }
       setStep(2);
     } catch (err) {
@@ -93,93 +84,43 @@ export default function VerificationStepper() {
     }
   };
 
-  // Step 2: blink check
-  const startBlink = async () => {
+  // Step 2: the shared capture component owns the camera lifecycle.
+  const handleSelfieCapture = ({ dataUrl }) => {
+    setSelfieBase64(dataUrl);
+    setSelfiePreview(dataUrl);
     setError("");
-    setBlinkStatus("recording");
-    framesRef.current = [];
-    setFrameCount(0);
-    await openCamera();
-
-    // Capture a frame every 100ms for about 2 seconds
-    intervalRef.current = setInterval(() => {
-      const video = videoRef.current;
-      if (!video) return;
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 320;
-      canvas.height = video.videoHeight || 240;
-      canvas.getContext("2d").drawImage(video, 0, 0);
-      framesRef.current.push(canvasToBase64(canvas));
-      setFrameCount(framesRef.current.length);
-
-      if (framesRef.current.length >= 20) {
-        clearInterval(intervalRef.current);
-        closeCamera();
-        setBlinkStatus("done");
-      }
-    }, 100);
   };
 
-  const submitBlink = async () => {
-    if (framesRef.current.length < 5) { setError("Not enough frames. Try again."); return; }
-    setLoading(true);
+  const retakeSelfie = () => {
+    setSelfieBase64("");
+    setSelfiePreview(null);
     setError("");
-    try {
-      const data = await API.kycBlinkChallenge({ frames_base64: framesRef.current });
-      if (!data.passed) { setError(data.message); setBlinkStatus("idle"); return; }
-      setChallengeId(data.challenge_id);
-      setStep(3);
-    } catch (err) {
-      setError(err.message || "Blink challenge failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 3: selfie
-  const takeSelfie = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    const b64 = canvasToBase64(canvas);
-    setSelfieBase64(b64);
-    setSelfiePreview(b64);
-    closeCamera();
   };
 
   const submitSelfie = async () => {
     if (!selfieBase64) { setError("Take your selfie first."); return; }
-    if (!challengeId) { setError("Challenge ID missing. Restart KYC."); return; }
     setLoading(true);
     setError("");
     try {
       const data = await API.kycVerifySelfie({
-        challenge_id: challengeId,
         selfie_image_base64: selfieBase64,
       });
       setResult(data);
-      setStep(4);
+      setStep(3);
+      if (data?.verified) {
+        await onVerificationComplete?.(data);
+      }
     } catch (err) {
-      setError(err.message || "Verification failed.");
+      setError(verificationErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
-  // Reset the whole flow
-  const restart = () => {
-    setStep(1);
-    setIdBase64("");
-    setIdPreview(null);
-    setSelfieBase64("");
-    setSelfiePreview(null);
+  const retrySelfie = () => {
+    retakeSelfie();
     setResult(null);
-    setBlinkStatus("idle");
-    setChallengeId("");
-    setError("");
+    setStep(2);
   };
 
   return (
@@ -197,7 +138,7 @@ export default function VerificationStepper() {
                   : "bg-gray-100 text-gray-400"
               }`}
             >
-              {step > s.id ? "✓" : s.id}
+              {step > s.id ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : s.id}
             </div>
             <span
               className={`text-xs hidden sm:block ${
@@ -218,7 +159,7 @@ export default function VerificationStepper() {
       </div>
 
       {/* error */}
-      {error && (
+      {error && step !== 2 && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm">
           {error}
         </div>
@@ -231,116 +172,76 @@ export default function VerificationStepper() {
           <p className="text-gray-500 text-sm mb-4">
             Clear photo of the front of your government ID.
           </p>
+          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="kyc-id-type">
+            ID type
+          </label>
+          <select
+            id="kyc-id-type"
+            value={idType}
+            onChange={(event) => setIdType(event.target.value)}
+            className="w-full mb-4 rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:border-[#017FE6] focus:outline-none"
+          >
+            <option value="">Select the uploaded ID type</option>
+            {ID_DOCUMENT_TYPES.map((entry) => (
+              <option key={entry} value={entry}>{entry}</option>
+            ))}
+          </select>
           <label className="block w-full border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center cursor-pointer hover:border-[#017FE6] transition">
             {idPreview ? (
               <img src={idPreview} alt="ID" className="max-h-48 mx-auto rounded-xl object-contain" />
             ) : (
               <div className="text-gray-400">
-                <p className="text-3xl mb-2">🪪</p>
+                <IdCard size={36} className="mx-auto mb-2" aria-hidden="true" />
                 <p className="text-sm">Click to upload</p>
-                <p className="text-xs text-gray-400">JPG, PNG — max 10MB</p>
+                <p className="text-xs text-gray-400">JPG, PNG — max 4MB</p>
               </div>
             )}
-            <input type="file" accept="image/*" className="hidden" onChange={handleIdUpload} />
+            <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleIdUpload} />
           </label>
           <button
             onClick={submitId}
-            disabled={!idBase64 || loading}
+            disabled={!idType || !idBase64 || loading}
             className="mt-4 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95 transition disabled:opacity-50"
           >
-            {loading ? "Registering..." : "Register ID & Continue"}
+            {loading ? "Uploading securely..." : "Upload ID & Continue"}
           </button>
         </div>
       )}
 
       {/* step 2 */}
       {step === 2 && (
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Liveness Check</h2>
-          <p className="text-gray-500 text-sm mb-4">
-            Blink naturally once or twice when recording starts.
-          </p>
-          <div className="bg-black rounded-2xl overflow-hidden aspect-video mb-4">
-            <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-          </div>
-
-          {blinkStatus === "idle" && (
-            <button onClick={startBlink} className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95">
-              Start Blink Recording
-            </button>
-          )}
-          {blinkStatus === "recording" && (
-            <div className="text-center">
-              <p className="text-[#017FE6] font-bold animate-pulse mb-1">Recording...</p>
-              <p className="text-gray-500 text-sm">Blink naturally. Frame {frameCount}/20</p>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                <div className="bg-[#017FE6] h-2 rounded-full transition-all" style={{ width: `${(frameCount / 20) * 100}%` }} />
-              </div>
-            </div>
-          )}
-          {blinkStatus === "done" && (
-            <button onClick={submitBlink} disabled={loading} className="w-full py-3 rounded-xl font-semibold text-white bg-green-600 hover:opacity-95 disabled:opacity-50">
-              {loading ? "Analyzing..." : "Submit Blink & Continue"}
-            </button>
-          )}
-        </div>
+        <SelfieCapture
+          previewUrl={selfiePreview || ""}
+          disabled={loading}
+          submitting={loading}
+          error={error}
+          onCapture={handleSelfieCapture}
+          onRetake={retakeSelfie}
+          onSubmit={submitSelfie}
+        />
       )}
 
       {/* step 3 */}
-      {step === 3 && (
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Take Your Selfie</h2>
-          <p className="text-gray-500 text-sm mb-4">Look at the camera with good lighting.</p>
-          <div className="bg-black rounded-2xl overflow-hidden aspect-video mb-4">
-            {selfiePreview ? (
-              <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
-            ) : (
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-            )}
-          </div>
-          <div className="flex gap-3">
-            {!selfiePreview && (
-              <button onClick={openCamera} className="flex-1 py-3 rounded-xl font-semibold border border-gray-200 text-gray-900 hover:bg-gray-50">
-                Open Camera
-              </button>
-            )}
-            <button
-              onClick={selfiePreview ? () => { setSelfiePreview(null); setSelfieBase64(""); openCamera(); } : takeSelfie}
-              className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95"
-            >
-              {selfiePreview ? "Retake" : "Capture"}
-            </button>
-          </div>
-          {selfiePreview && (
-            <button onClick={submitSelfie} disabled={loading} className="mt-3 w-full py-3 rounded-xl font-semibold text-white bg-green-600 hover:opacity-95 disabled:opacity-50">
-              {loading ? "Verifying..." : "Verify My Identity"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* step 4 */}
-      {step === 4 && result && (
+      {step === 3 && result && (
         <div className="text-center py-4">
           <div className={`text-5xl mb-4 ${result.verified ? "text-green-500" : "text-red-500"}`}>
-            {result.verified ? "✅" : "❌"}
+            {result.verified ? <CircleCheck size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" /> : <CircleX size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" />}
           </div>
           <h2 className={`text-2xl font-bold mb-2 ${result.verified ? "text-green-700" : "text-red-700"}`}>
-            {result.verified ? "Identity Verified!" : "Verification Failed"}
+            {result.verified ? result.kycStatus === "approved" ? "Identity verified" : "Selfie matched" : "Selfie needs another try"}
           </h2>
-          <p className="text-gray-500 text-sm mb-4">{result.message}</p>
-
-          {result.verified && (
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-left mb-4 space-y-1">
-              <p className="text-sm text-green-700"><strong>Name:</strong> {result.full_name}</p>
-              <p className="text-sm text-green-700"><strong>Role:</strong> {result.role}</p>
-              <p className="text-sm text-green-700"><strong>Confidence:</strong> {result.confidence}%</p>
-            </div>
-          )}
+          <p className="mb-4 text-sm leading-6 text-gray-600">
+            {result.verified
+              ? result.kycStatus === "approved"
+                ? "Your selfie matched your ID photo and your identity verification is complete."
+                : "Your selfie matched your ID photo. Your document is still being reviewed."
+              : result.message || "We couldn't verify this selfie. Keep your face visible and try again."}
+          </p>
+          {result.verified && result.kycStatus !== "approved" && <p role="status" className="mb-4 text-sm leading-6 text-amber-800">Use Refresh status in your account settings to check document approval before booking.</p>}
 
           {!result.verified && (
-            <button onClick={restart} className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95">
-              Restart KYC
+            <button onClick={retrySelfie} className="rp-btn-primary w-full px-4 py-3">
+              Try another selfie
             </button>
           )}
         </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import ModalPortal from "./ModalPortal";
 
 export default function InfoModal({
   isOpen,
@@ -10,8 +11,9 @@ export default function InfoModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6">
-      <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" onClick={onClose} />
+    <ModalPortal>
+    <div className="rp-modal-layer">
+      <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close information dialog" />
 
       <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
@@ -28,5 +30,6 @@ export default function InfoModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

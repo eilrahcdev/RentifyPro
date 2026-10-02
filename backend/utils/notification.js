@@ -1,16 +1,7 @@
-import Notification from "../models/Notification.js";
-import { emitToUser } from "../socket/index.js";
+import NotificationService from "../services/notification.service.js";
 
-export const createNotification = async ({ user, type, title, message, data = {} }) => {
-  const notification = await Notification.create({
-    user,
-    type,
-    title,
-    message,
-    data,
-  });
+export const createNotification = (payload) => NotificationService.send(payload);
 
-  emitToUser(String(user), "notification:new", notification);
-  return notification;
-};
+export const createNotifications = (items = []) => NotificationService.sendMany(items);
 
+export default NotificationService;

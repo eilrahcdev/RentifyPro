@@ -9,21 +9,52 @@ dotenv.config();
 console.log("=".repeat(50));
 console.log("Email Credential Test");
 console.log("=".repeat(50));
-console.log(`EMAIL_USER: ${process.env.EMAIL_USER}`);
-console.log(`EMAIL_PASS: ${process.env.EMAIL_PASS ? "***set***" : "MISSING!"}`);
-console.log(`EMAIL_PASS length: ${(process.env.EMAIL_PASS || "").length}`);
-console.log(`EMAIL_PASS (raw): "${process.env.EMAIL_PASS}"`);
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+const smtpHost = process.env.SMTP_HOST || "";
+const smtpService = process.env.SMTP_SERVICE || "gmail";
+const smtpPortRaw = process.env.SMTP_PORT || "";
+const smtpSecureRaw = process.env.SMTP_SECURE || "";
+const testRecipient = process.env.TEST_EMAIL_TO || smtpUser;
+const smtpPort = Number.parseInt(smtpPortRaw, 10);
+const smtpSecure =
+  String(smtpSecureRaw).trim() === ""
+    ? Number.isFinite(smtpPort) && smtpPort === 465
+    : String(smtpSecureRaw).trim().toLowerCase() === "true";
+
+console.log(`SMTP_USER: ${smtpUser}`);
+console.log(`SMTP_PASS: ${smtpPass ? "***set***" : "MISSING!"}`);
+console.log(`SMTP_PASS length: ${(smtpPass || "").length}`);
+console.log(`SMTP_HOST: ${smtpHost || "(using service)"}`);
+console.log(`SMTP_SERVICE: ${smtpService}`);
+console.log(`SMTP_PORT: ${Number.isFinite(smtpPort) ? smtpPort : "(default)"}`);
+console.log(`SMTP_SECURE: ${smtpSecure}`);
+console.log(`TEST_EMAIL_TO: ${testRecipient}`);
 console.log("=".repeat(50));
 
 async function test() {
   try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
+    if (!smtpUser || !smtpPass) {
+      throw new Error("Missing SMTP credentials. Set SMTP_USER/SMTP_PASS or EMAIL_USER/EMAIL_PASS.");
+    }
+
+    const baseConfig = {
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: smtpUser,
+        pass: smtpPass,
       },
-    });
+    };
+    const transporter = smtpHost
+      ? nodemailer.createTransport({
+          host: smtpHost,
+          port: Number.isFinite(smtpPort) ? smtpPort : smtpSecure ? 465 : 587,
+          secure: smtpSecure,
+          ...baseConfig,
+        })
+      : nodemailer.createTransport({
+          service: smtpService,
+          ...baseConfig,
+        });
 
     // Check the connection first
     console.log("\nVerifying connection...");
@@ -33,8 +64,8 @@ async function test() {
     // Then send a test email
     console.log("Sending test email...");
     const info = await transporter.sendMail({
-      from: `"RentifyPro Test" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,
+      from: `"RentifyPro Test" <${process.env.EMAIL_FROM || smtpUser}>`,
+      to: testRecipient,
       subject: "RentifyPro Test Email",
       text: "If you see this, email sending works!",
     });

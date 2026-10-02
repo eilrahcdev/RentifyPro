@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Users, Wrench, ShieldCheck } from "lucide-react";
+import React, { useState } from "react";
+import { Users, Wrench, ShieldCheck, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 
   const AboutPage = ({
@@ -13,6 +13,9 @@ import Navbar from "../components/Navbar";
     onNavigateToNotifications,
     onNavigateToBookingHistory,
     onNavigateToAccountSettings,
+    onNavigateToReports,
+    onNavigateToPrivacyPolicy,
+    onNavigateToTermsAndConditions,
     isLoggedIn,
     user,
     onLogout,
@@ -20,22 +23,13 @@ import Navbar from "../components/Navbar";
 
   const [showAI, setShowAI] = useState(false);
   const [userMessage, setUserMessage] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([
+    { sender: "ai", text: "Hi! This is Rentify AI. How can I assist you today?" },
+  ]);
   const [isTyping, setIsTyping] = useState(false);
 
-  useEffect(() => {
-    if (!showAI) return;
-
-    setMessages([
-      {
-        sender: "ai",
-        text: "Hi! 👋 This is RentifyPro AI. How can I assist you today?"
-      }
-    ]);
-  }, [showAI]);
-
   return (
-    <div className="min-h-screen bg-white">
+    <div className="rp-renter-page min-h-screen bg-white">
       <Navbar
         activePage="about"
         isLoggedIn={isLoggedIn}
@@ -51,13 +45,14 @@ import Navbar from "../components/Navbar";
         onNavigateToSignIn={onNavigateToSignIn}
         onNavigateToRegister={onNavigateToRegister}
         onNavigateToAccountSettings={onNavigateToAccountSettings}
+        onNavigateToReports={onNavigateToReports}
         onShowAI={() => setShowAI(true)}
         onLogout={onLogout}
       />
 
 
                   {/* content */}
-            <div className="pt-28 pb-20 px-6 bg-white">
+            <div className="rp-about-page-content pt-24 pb-16 px-4 bg-white sm:pt-28 sm:pb-20 sm:px-6">
               {/* header */}
               <div className="text-center mb-12">
                 <h1 className="text-3xl font-bold text-gray-900">
@@ -69,7 +64,7 @@ import Navbar from "../components/Navbar";
               </div>
 
               {/* story */}
-              <div className="max-w-4xl mx-auto bg-white border rounded-xl shadow-sm p-8 mb-14">
+              <div className="max-w-4xl mx-auto bg-white border rounded-xl shadow-sm p-5 mb-12 sm:p-8 sm:mb-14">
                 <h2 className="text-xl font-semibold mb-4">
                   Our <span className="text-[#017FE6]">Story</span>
                 </h2>
@@ -81,14 +76,14 @@ import Navbar from "../components/Navbar";
                 </p>
 
                 <p className="text-gray-600 mb-4">
-                  Today, we’ve grown to serve thousands of customers with a diverse fleet of
+                  Today, we've grown to serve thousands of customers with a diverse fleet of
                   cars and motorcycles. Our commitment to quality service and customer
                   satisfaction remains at the heart of everything we do.
                 </p>
 
                 <p className="text-gray-600">
                   We believe that everyone deserves access to reliable transportation,
-                  whether it’s for a business trip, a family vacation, or an adventure on
+                  whether it's for a business trip, a family vacation, or an adventure on
                   two wheels.
                 </p>
               </div>
@@ -228,7 +223,7 @@ import Navbar from "../components/Navbar";
               <h4 className="font-bold mb-4">Contacts</h4>
               <ul className="space-y-2 text-blue-100">
                 <li>+63 912 324 5678</li>
-                <li>message@rentifypro.com</li>
+                <li>rentifypro.official@gmail.com</li>
                 <li>Dagupan, Pangasinan,</li>
                 <li>Philippines</li>
               </ul>
@@ -236,20 +231,20 @@ import Navbar from "../components/Navbar";
           </div>
 
           <div className="border-t border-blue-500 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-blue-100">© 2026 RentifyPro. All rights reserved</p>
+            <p className="text-blue-100">Copyright 2026 RentifyPro. All rights reserved.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
-              <a href="#" className="text-blue-100 hover:text-white">Privacy Policy</a>
-              <a href="#" className="text-blue-100 hover:text-white">Terms and Condition</a>
+              <button onClick={onNavigateToPrivacyPolicy} className="text-blue-100 hover:text-white">Privacy Policy</button>
+              <button onClick={onNavigateToTermsAndConditions} className="text-blue-100 hover:text-white">Terms and Conditions</button>
             </div>
           </div>
         </div>
       </footer>
 
         {showAI && (
-    <div className="
-      fixed bottom-4 right-4
-      w-[95vw] sm:w-[400px]
-      h-[70vh] sm:h-[450px]
+    <div className="rp-legacy-ai-chat
+      fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))]
+      w-[calc(100vw-2rem)] sm:w-[400px]
+      h-[70dvh] sm:h-[450px]
       bg-white rounded-2xl shadow-2xl
       z-50 overflow-hidden
       flex flex-col
@@ -258,10 +253,20 @@ import Navbar from "../components/Navbar";
     {/* header */}
     <div className="bg-[#017FE6] text-white px-4 py-3 flex justify-between items-center">
       <div>
-        <h3 className="font-semibold text-sm">RentifyPro AI</h3>
-        <p className="text-xs opacity-80">Online • Ready to help</p>
+        <h3 className="font-semibold text-sm">Rentify AI</h3>
+        <p className="flex items-center gap-1.5 text-xs opacity-90">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-white/25" />
+          Online
+        </p>
       </div>
-      <button onClick={() => setShowAI(false)}>✕</button>
+      <button
+        type="button"
+        onClick={() => setShowAI(false)}
+        className="rp-icon-button"
+        aria-label="Close Rentify AI"
+      >
+        <X aria-hidden="true" />
+      </button>
     </div>
 
     {/* chat body */}
@@ -276,7 +281,7 @@ import Navbar from "../components/Navbar";
           }`}
         >
           {msg.sender === "ai" && (
-            <img src="/robot-ai.png" className="w-8 h-8 rounded-full" />
+            <img src="/rentify-ai-logo-bubble-optimized.png" alt="Rentify AI" className="h-8 w-8 object-contain" />
           )}
 
           <div
@@ -299,7 +304,7 @@ import Navbar from "../components/Navbar";
 
       {isTyping && (
         <div className="flex items-center gap-2">
-          <img src="/robot-ai.png" className="w-8 h-8 rounded-full" />
+          <img src="/rentify-ai-logo-bubble-optimized.png" alt="Rentify AI" className="h-8 w-8 object-contain" />
           <div className="bg-white px-4 py-2 rounded-2xl shadow text-sm text-gray-500 flex gap-1">
             <span className="animate-bounce">.</span>
             <span className="animate-bounce delay-150">.</span>
@@ -329,14 +334,14 @@ import Navbar from "../components/Navbar";
           setTimeout(() => {
             setMessages((prev) => [
               ...prev,
-              { sender: "ai", text: "Got it! 😊 Let me help you with that." }
+              { sender: "ai", text: "Got it! Let me help you with that." }
             ]);
             setIsTyping(false);
           }, 1200);
         }}
         className="bg-[#017FE6] text-white w-9 h-9 rounded-full"
       >
-        ➤
+        &gt;
       </button>
     </div>
   </div>

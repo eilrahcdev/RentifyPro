@@ -1,0 +1,21 @@
+.rp-auto-resize-textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  resize: none;
+  overflow-y: hidden;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) and (max-height: 700px) {
+  .rp-auto-resize-textarea {
+    --rp-textarea-max-rows: 3;
+  }
+}
+
+@media (pointer: coarse) {
+  textarea.rp-auto-resize-textarea {
+    font-size: 1rem;
+  }
+}

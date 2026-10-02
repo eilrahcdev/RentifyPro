@@ -1,0 +1,190 @@
+.rp-booking-details {
+  margin-top: 1rem;
+  border-block: 1px solid #f1f5f9;
+  padding-top: 1rem;
+}
+.rp-booking-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.rp-booking-info {
+  min-width: 0;
+  border-radius: var(--rp-radius-control, 12px);
+  background: #f8fafc;
+  padding: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.rp-booking-info dt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  color: #475569;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.rp-booking-info dt svg { flex-shrink: 0; margin-top: 0.125rem; color: #017fe6; }
+.rp-booking-info dd {
+  margin-top: 0.375rem;
+  color: #1e293b;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.rp-booking-disclosure summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  margin-block: 0.25rem;
+  padding-inline: 0.25rem;
+  color: #075eb9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.rp-booking-disclosure summary::-webkit-details-marker { display: none; }
+.rp-booking-disclosure[open] summary svg { transform: rotate(180deg); }
+.rp-booking-disclosure[open] .rp-booking-detail-grid { padding-bottom: 1rem; }
+.rp-booking-disclosure summary:focus-visible,
+.rp-booking-action-rail:focus-visible,
+.rp-booking-action-rail > button:focus-visible { outline: 2px solid #075eb9; outline-offset: 2px; }
+.rp-booking-vehicle-title { font-size: 1.125rem; line-height: 1.4; overflow-wrap: anywhere; }
+.rp-booking-action-rail {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 0.25rem;
+}
+.rp-booking-action-rail > button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+.rp-booking-actions button { min-height: 2.75rem; }
+.rp-booking-contact { flex-wrap: wrap; }
+.rp-booking-contact > span { flex-basis: 100%; }
+.rp-vehicle-details-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.rp-vehicle-details-layout > * { min-width: 0; }
+.rp-vehicle-booking { scroll-margin-top: 6rem; }
+.rp-detail-summary-row,
+.rp-payment-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem 1rem;
+  overflow-wrap: anywhere;
+}
+.rp-payment-line > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-detail-summary-label--muted { color: #64748b; }
+.rp-detail-summary-value { font-variant-numeric: tabular-nums; }
+.rp-detail-meta { flex-wrap: nowrap; align-items: flex-start; }
+.rp-payment-dialog { max-height: calc(100dvh - 2rem); }
+.rp-booking-dialog { max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain; }
+.rp-payment-dialog label:has(input[type="radio"]) { min-height: 2.75rem; }
+.rp-payment-dialog input[type="radio"] { flex-shrink: 0; margin-top: 0.25rem; }
+.rp-payment-dialog footer { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.rp-report-dialog form { padding-bottom: env(safe-area-inset-bottom); }
+.rp-report-dialog form > :last-child { flex-wrap: wrap; }
+.rp-reports-page { min-width: 0; overflow-wrap: anywhere; }
+.rp-reports-page > div > header { flex-wrap: wrap; }
+.rp-site-navbar {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+}
+@media (min-width: 640px) {
+  .rp-site-navbar { padding-inline: max(1.25rem, env(safe-area-inset-left)) max(1.25rem, env(safe-area-inset-right)); }
+}
+@media (min-width: 400px) {
+  .rp-detail-date-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) {
+  .rp-booking-detail-grid { gap: 0.75rem; }
+  .rp-booking-vehicle-title { font-size: 1.25rem; }
+  .rp-booking-contact > span { flex-basis: auto; }
+}
+@media (min-width: 1024px) {
+  .rp-vehicle-details-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-areas: "gallery booking" "information booking" "information reviews";
+    gap: 1.5rem;
+  }
+  .rp-detail-gallery { grid-area: gallery; }
+  .rp-vehicle-booking { grid-area: booking; }
+  .rp-detail-information { grid-area: information; }
+  .rp-detail-reviews { grid-area: reviews; }
+  .rp-detail-booking-link { display: none; }
+}
+@media (min-width: 1280px) {
+  .rp-booking-detail-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1023px), (hover: none) {
+  :is(.rp-renter-page, .rp-owner-workspace, .rp-auth-page, .rp-reports-page, .rp-ai-chat-dialog, .rp-modal-layer, dialog)
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+  :is(.rp-renter-page, .rp-owner-workspace, .rp-auth-page, .rp-reports-page, .rp-ai-chat-dialog, .rp-modal-layer, dialog) button {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+  :is(.rp-renter-page, .rp-owner-workspace, .rp-auth-page, .rp-modal-layer, dialog) .rp-icon-button { min-width: 2.75rem; }
+  .rp-owner-page-header__actions { flex-wrap: wrap; }
+  :is(.rp-renter-page, .rp-owner-workspace) .rp-chat-search { height: auto; min-height: 2.75rem; padding-block: 0; }
+  .rp-site-navbar__menu-trigger { min-width: 2.75rem; min-height: 2.75rem; }
+  .rp-ai-chat-dialog button[aria-label="Send message"] { min-width: 2.75rem; }
+}
+@media (max-width: 767px) {
+  .rp-owner-workspace > div > main { padding: 1rem; }
+  .rp-renter-page :is(.rp-page-shell, .rp-renter-main) {
+    padding-left: max(var(--rp-mobile-gutter, 1rem), env(safe-area-inset-left));
+    padding-right: max(var(--rp-mobile-gutter, 1rem), env(safe-area-inset-right));
+  }
+  .rp-owner-topbar { height: 4rem; }
+  .rp-page-header,
+  .rp-owner-page-header { padding: 1rem; }
+  .rp-page-header h1 { font-size: clamp(1.5rem, 5vw, 1.875rem); line-height: 1.2; }
+  .rp-renter-main > .rp-surface,
+  .rp-vehicle-details-layout .rp-surface { padding: 1rem; }
+  .rp-booking-card { overflow-wrap: anywhere; }
+  .rp-booking-card > div:first-child > div:first-child { gap: 0.75rem; }
+  .rp-booking-thumbnail { width: 4.5rem; height: 4.5rem; }
+  .rp-booking-contact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .rp-booking-contact > span { grid-column: 1 / -1; }
+  .rp-booking-contact > button { justify-content: center; padding-inline: 0.5rem; }
+  .rp-booking-actions > button { flex: 1 1 auto; justify-content: center; }
+  .rp-booking-actions > p { width: 100%; }
+  .rp-account-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; padding: 0.5rem; }
+  .rp-account-navigation > button { gap: 0.5rem; padding: 0.75rem 0.5rem; text-align: left; line-height: 1.4; }
+  .rp-account-navigation > button svg { flex-shrink: 0; }
+  .rp-account-content { min-width: 0; }
+  .rp-payment-dialog footer { flex-direction: row; }
+  .rp-payment-dialog footer > :last-child { flex: 1; }
+}
+@media (max-height: 600px) {
+  .rp-payment-dialog { max-height: calc(100dvh - 1rem); }
+  .rp-payment-dialog > header { padding-block: 0.5rem; padding-inline: 1rem; }
+  .rp-payment-dialog > header > div { gap: 0.5rem; }
+  .rp-payment-dialog > header h2 { font-size: 1rem; }
+  .rp-payment-dialog > header h2 + p { display: none; }
+  .rp-payment-dialog > footer { padding-block: 0.5rem; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+}

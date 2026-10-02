@@ -2,6 +2,7 @@
 import express from "express";
 import {
   registerUser,
+  checkRegistrationEmail,
   loginUser,
   logoutUser,
   sendOTP,
@@ -19,17 +20,23 @@ import {
   upgradeToOwner,
 } from "../controllers/auth.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
-import { validateRegister, validateLogin } from "../middleware/validate.middleware.js";
+import { validateRegister, validateLogin, validateRegistrationEmail } from "../middleware/validate.middleware.js";
 import {
   loginChallengeLimiter,
   loginLimiter,
   registerLimiter,
+  registrationEmailLimiter,
   otpLimiter,
 } from "../middleware/security.middleware.js";
 
 const router = express.Router();
 
 // Public routes
+router.post("/check-registration-email", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  next();
+}, registrationEmailLimiter, validateRegistrationEmail, checkRegistrationEmail);
   router.post("/register", registerLimiter, validateRegister, registerUser);
   router.get("/login-challenge", loginChallengeLimiter, getLoginChallenge);
   router.post("/login", loginLimiter, validateLogin, loginUser);

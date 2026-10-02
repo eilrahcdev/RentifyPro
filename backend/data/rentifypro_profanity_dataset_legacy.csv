@@ -1,0 +1,1270 @@
+﻿word,language,category,severity,variants,action
+putang ina,Filipino/Tagalog,profanity,high,PUTANG INA | Putang Ina | p u t a n g i n a | p utangina | p*******a | put4ng1n4 | put4ngin4 | put@ng in@ | put@ng1n@ | putang 1na | putang ina | putang-ina,block_and_flag
+p u t a n g i n a,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+p utangina,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+p*******a,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+put4ng1n4,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+put4ngin4,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+put@ng in@,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+put@ng1n@,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+putang 1na,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+putang-ina,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+putang1na,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+putang_ina,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+putangina,Filipino/Tagalog,profanity,high,putang ina,block_and_flag
+put@ngin@,Filipino/Tagalog,profanity,high,putangina,block_and_flag
+puta,Filipino/Tagalog,profanity,high,PUTA | Puta | p u t a | p uta | p**a | put4 | put@ | puta,block_and_flag
+p u t a,Filipino/Tagalog,profanity,high,puta,block_and_flag
+p uta,Filipino/Tagalog,profanity,high,puta,block_and_flag
+p**a,Filipino/Tagalog,profanity,high,puta,block_and_flag
+put4,Filipino/Tagalog,profanity,high,puta,block_and_flag
+put@,Filipino/Tagalog,profanity,high,puta,block_and_flag
+pota,Filipino/Tagalog,profanity,high,POTA | Pota | p o t a | p ota | p**a | p0t@ | p0ta | pot4 | pot@ | pota,block_and_flag
+p o t a,Filipino/Tagalog,profanity,high,pota,block_and_flag
+p ota,Filipino/Tagalog,profanity,high,pota,block_and_flag
+p0t@,Filipino/Tagalog,profanity,high,pota,block_and_flag
+p0ta,Filipino/Tagalog,profanity,high,pota,block_and_flag
+pot4,Filipino/Tagalog,profanity,high,pota,block_and_flag
+pot@,Filipino/Tagalog,profanity,high,pota,block_and_flag
+tanga,Filipino/Tagalog,insult,medium,TANGA | Tanga | t a n g a | t anga | t***a | t4ng4 | t@ng@ | tanga,warn_and_log
+t a n g a,Filipino/Tagalog,insult,medium,tanga,warn_and_log
+t anga,Filipino/Tagalog,insult,medium,tanga,warn_and_log
+t***a,Filipino/Tagalog,insult,medium,tanga,warn_and_log
+t4ng4,Filipino/Tagalog,insult,medium,tanga,warn_and_log
+t@ng@,Filipino/Tagalog,insult,medium,tanga,warn_and_log
+bobo,Filipino/Tagalog,insult,medium,BOBO | Bobo | b o b o | b obo | b**o | b0b0 | bobo,warn_and_log
+b o b o,Filipino/Tagalog,insult,medium,bobo,warn_and_log
+b obo,Filipino/Tagalog,insult,medium,bobo,warn_and_log
+b**o,Filipino/Tagalog,insult,medium,bobo,warn_and_log
+b0b0,Filipino/Tagalog,insult,medium,bobo,warn_and_log
+gago,Filipino/Tagalog,insult,high,GAGO | Gago | g a g o | g ago | g**o | g4go | g@g0 | g@go | gag0 | gago,block_and_flag
+g a g o,Filipino/Tagalog,insult,high,gago,block_and_flag
+g ago,Filipino/Tagalog,insult,high,gago,block_and_flag
+g**o,Filipino/Tagalog,insult,high,gago,block_and_flag
+g4go,Filipino/Tagalog,insult,high,gago,block_and_flag
+g@g0,Filipino/Tagalog,insult,high,gago,block_and_flag
+g@go,Filipino/Tagalog,insult,high,gago,block_and_flag
+gag0,Filipino/Tagalog,insult,high,gago,block_and_flag
+tarantado,Filipino/Tagalog,insult,high,TARANTADO | Tarantado | t a r a n t a d o | t arantado | t*******o | t4r4nt4do | t@r@nt@d0 | t@r@nt@do | tarantad0 | tarantado,block_and_flag
+t a r a n t a d o,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+t arantado,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+t*******o,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+t4r4nt4do,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+t@r@nt@d0,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+t@r@nt@do,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+tarantad0,Filipino/Tagalog,insult,high,tarantado,block_and_flag
+ulol,Filipino/Tagalog,insult,high,ULOL | Ulol | u l o l | u lol | u**l | ul0l | ulol,block_and_flag
+u l o l,Filipino/Tagalog,insult,high,ulol,block_and_flag
+u lol,Filipino/Tagalog,insult,high,ulol,block_and_flag
+u**l,Filipino/Tagalog,insult,high,ulol,block_and_flag
+ul0l,Filipino/Tagalog,insult,high,ulol,block_and_flag
+leche,Filipino/Tagalog,profanity,medium,LECHE | Leche | l e c h e | l eche | l***e | l3ch3 | leche,warn_and_log
+l e c h e,Filipino/Tagalog,profanity,medium,leche,warn_and_log
+l eche,Filipino/Tagalog,profanity,medium,leche,warn_and_log
+l***e,Filipino/Tagalog,profanity,medium,leche,warn_and_log
+l3ch3,Filipino/Tagalog,profanity,medium,leche,warn_and_log
+bwisit,Filipino/Tagalog,profanity,medium,BWISIT | Bwisit | b w i s i t | b wisit | b****t | bw1s1t | bwi$it | bwi5it | bwisit,warn_and_log
+b w i s i t,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+b wisit,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+b****t,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+bw1s1t,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+bwi$it,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+bwi5it,Filipino/Tagalog,profanity,medium,bwisit,warn_and_log
+walang hiya,Filipino/Tagalog,insult,medium,WALANG HIYA | Walang Hiya | w a l a n g h i y a | w alanghiya | w********a | w4l4ngh1y4 | w4l4nghiy4 | w@l@ng hiy@ | w@l@ngh1y@ | walang h1ya | walang hiya | walang-hiya,warn_and_log
+w a l a n g h i y a,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w alanghiya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w********a,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w4l4ngh1y4,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w4l4nghiy4,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w@l@ng hiy@,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+w@l@ngh1y@,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+walang h1ya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+walang-hiya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+walang_hiya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+walangh1ya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+walanghiya,Filipino/Tagalog,insult,medium,walang hiya,warn_and_log
+sira ulo,Filipino/Tagalog,insult,medium,$ira ulo | 5iraulo | SIRA ULO | Sira Ulo | s i r a u l o | s iraulo | s*****o | s1r4ulo | s1r@ul0 | s1ra ul0 | s1ra ulo | s1raulo,warn_and_log
+$ira ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+5iraulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s i r a u l o,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s iraulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s*****o,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s1r4ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s1r@ul0,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s1ra ul0,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s1ra ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+s1raulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+sir4ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+sir@ ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+sira ul0,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+sira-ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+sira_ulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+siraul0,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+siraulo,Filipino/Tagalog,insult,medium,sira ulo,warn_and_log
+hayop,Filipino/Tagalog,insult,medium,HAYOP | Hayop | h a y o p | h ayop | h***p | h4yop | h@y0p | h@yop | hay0p | hayop,warn_and_log
+h a y o p,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+h ayop,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+h***p,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+h4yop,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+h@y0p,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+h@yop,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+hay0p,Filipino/Tagalog,insult,medium,hayop,warn_and_log
+pakyu,Filipino/Tagalog,profanity,high,PAKYU | Pakyu | p a k y u | p akyu | p***u | p4kyu | p@kyu | pakyu,block_and_flag
+p a k y u,Filipino/Tagalog,profanity,high,pakyu,block_and_flag
+p akyu,Filipino/Tagalog,profanity,high,pakyu,block_and_flag
+p***u,Filipino/Tagalog,profanity,high,pakyu,block_and_flag
+p4kyu,Filipino/Tagalog,profanity,high,pakyu,block_and_flag
+p@kyu,Filipino/Tagalog,profanity,high,pakyu,block_and_flag
+fuck,English,profanity,high,FUCK | Fuck | f u c k | f uck | f**k | fuck,block_and_flag
+f u c k,English,profanity,high,fuck,block_and_flag
+f uck,English,profanity,high,fuck,block_and_flag
+f**k,English,profanity,high,fuck,block_and_flag
+fucking,English,profanity,high,FUCKING | Fucking | f u c k i n g | f ucking | f*****g | fuck1ng | fucking,block_and_flag
+f u c k i n g,English,profanity,high,fucking,block_and_flag
+f ucking,English,profanity,high,fucking,block_and_flag
+f*****g,English,profanity,high,fucking,block_and_flag
+fuck1ng,English,profanity,high,fucking,block_and_flag
+shit,English,profanity,high,$hit | 5hit | SHIT | Shit | s h i t | s hit | s**t | sh1t | shit,block_and_flag
+$hit,English,profanity,high,shit,block_and_flag
+5hit,English,profanity,high,shit,block_and_flag
+s h i t,English,profanity,high,shit,block_and_flag
+s hit,English,profanity,high,shit,block_and_flag
+s**t,English,profanity,high,shit,block_and_flag
+sh1t,English,profanity,high,shit,block_and_flag
+bullshit,English,profanity,high,BULLSHIT | Bullshit | b u l l s h i t | b ullshit | b******t | bull$hit | bull5hit | bullsh1t | bullshit,block_and_flag
+b u l l s h i t,English,profanity,high,bullshit,block_and_flag
+b ullshit,English,profanity,high,bullshit,block_and_flag
+b******t,English,profanity,high,bullshit,block_and_flag
+bull$hit,English,profanity,high,bullshit,block_and_flag
+bull5hit,English,profanity,high,bullshit,block_and_flag
+bullsh1t,English,profanity,high,bullshit,block_and_flag
+bitch,English,insult,high,BITCH | Bitch | b i t c h | b itch | b***h | b1tch | bitch,block_and_flag
+b i t c h,English,insult,high,bitch,block_and_flag
+b itch,English,insult,high,bitch,block_and_flag
+b***h,English,insult,high,bitch,block_and_flag
+b1tch,English,insult,high,bitch,block_and_flag
+asshole,English,insult,high,4sshol3 | 4sshole | @ssh0le | @sshol3 | @sshole | ASSHOLE | Asshole | a s s h o l e | a sshole | a$$hole | a*****e | a55hole,block_and_flag
+4sshol3,English,insult,high,asshole,block_and_flag
+4sshole,English,insult,high,asshole,block_and_flag
+@ssh0le,English,insult,high,asshole,block_and_flag
+@sshol3,English,insult,high,asshole,block_and_flag
+@sshole,English,insult,high,asshole,block_and_flag
+a s s h o l e,English,insult,high,asshole,block_and_flag
+a sshole,English,insult,high,asshole,block_and_flag
+a$$hole,English,insult,high,asshole,block_and_flag
+a*****e,English,insult,high,asshole,block_and_flag
+a55hole,English,insult,high,asshole,block_and_flag
+assh0le,English,insult,high,asshole,block_and_flag
+asshol3,English,insult,high,asshole,block_and_flag
+bastard,English,insult,medium,BASTARD | Bastard | b a s t a r d | b astard | b*****d | b4st4rd | b@st@rd | ba$tard | ba5tard | bastard,warn_and_log
+b a s t a r d,English,insult,medium,bastard,warn_and_log
+b astard,English,insult,medium,bastard,warn_and_log
+b*****d,English,insult,medium,bastard,warn_and_log
+b4st4rd,English,insult,medium,bastard,warn_and_log
+b@st@rd,English,insult,medium,bastard,warn_and_log
+ba$tard,English,insult,medium,bastard,warn_and_log
+ba5tard,English,insult,medium,bastard,warn_and_log
+damn,English,profanity,medium,DAMN | Damn | d a m n | d amn | d**n | d4mn | d@mn | damn,warn_and_log
+d a m n,English,profanity,medium,damn,warn_and_log
+d amn,English,profanity,medium,damn,warn_and_log
+d**n,English,profanity,medium,damn,warn_and_log
+d4mn,English,profanity,medium,damn,warn_and_log
+d@mn,English,profanity,medium,damn,warn_and_log
+dick,English,sexual,high,DICK | Dick | d i c k | d ick | d**k | d1ck | dick,block_and_flag
+d i c k,English,sexual,high,dick,block_and_flag
+d ick,English,sexual,high,dick,block_and_flag
+d**k,English,sexual,high,dick,block_and_flag
+d1ck,English,sexual,high,dick,block_and_flag
+piss off,English,profanity,medium,PISS OFF | Piss Off | p i s s o f f | p issoff | p*****f | p1ss 0ff | p1ss off | p1ss0ff | p1ssoff | pi$$ off | pi55off | piss 0ff,warn_and_log
+p i s s o f f,English,profanity,medium,piss off,warn_and_log
+p issoff,English,profanity,medium,piss off,warn_and_log
+p*****f,English,profanity,medium,piss off,warn_and_log
+p1ss 0ff,English,profanity,medium,piss off,warn_and_log
+p1ss off,English,profanity,medium,piss off,warn_and_log
+p1ss0ff,English,profanity,medium,piss off,warn_and_log
+p1ssoff,English,profanity,medium,piss off,warn_and_log
+pi$$ off,English,profanity,medium,piss off,warn_and_log
+pi55off,English,profanity,medium,piss off,warn_and_log
+piss 0ff,English,profanity,medium,piss off,warn_and_log
+piss-off,English,profanity,medium,piss off,warn_and_log
+piss0ff,English,profanity,medium,piss off,warn_and_log
+piss_off,English,profanity,medium,piss off,warn_and_log
+pissoff,English,profanity,medium,piss off,warn_and_log
+son of a bitch,English,insult,high,$on of a bitch | 5onofabitch | SON OF A BITCH | Son Of A Bitch | s o n o f a b i t c h | s onofabitch | s*********h | s0n 0f a b1tch | s0n 0f a bitch | s0n0f@b1tch | s0n0fabitch | son of @ bitch,block_and_flag
+$on of a bitch,English,insult,high,son of a bitch,block_and_flag
+5onofabitch,English,insult,high,son of a bitch,block_and_flag
+s o n o f a b i t c h,English,insult,high,son of a bitch,block_and_flag
+s onofabitch,English,insult,high,son of a bitch,block_and_flag
+s*********h,English,insult,high,son of a bitch,block_and_flag
+s0n 0f a b1tch,English,insult,high,son of a bitch,block_and_flag
+s0n 0f a bitch,English,insult,high,son of a bitch,block_and_flag
+s0n0f@b1tch,English,insult,high,son of a bitch,block_and_flag
+s0n0fabitch,English,insult,high,son of a bitch,block_and_flag
+son of @ bitch,English,insult,high,son of a bitch,block_and_flag
+son of a b1tch,English,insult,high,son of a bitch,block_and_flag
+son-of-a-bitch,English,insult,high,son of a bitch,block_and_flag
+son_of_a_bitch,English,insult,high,son of a bitch,block_and_flag
+sonof4b1tch,English,insult,high,son of a bitch,block_and_flag
+sonof4bitch,English,insult,high,son of a bitch,block_and_flag
+sonofab1tch,English,insult,high,son of a bitch,block_and_flag
+sonofabitch,English,insult,high,son of a bitch,block_and_flag
+shut up,English,insult,low,$hut up | 5hutup | SHUT UP | Shut Up | s h u t u p | s hutup | s****p | shut up | shut-up | shut_up | shutup,allow_with_warning
+$hut up,English,insult,low,shut up,allow_with_warning
+5hutup,English,insult,low,shut up,allow_with_warning
+s h u t u p,English,insult,low,shut up,allow_with_warning
+s hutup,English,insult,low,shut up,allow_with_warning
+s****p,English,insult,low,shut up,allow_with_warning
+shut-up,English,insult,low,shut up,allow_with_warning
+shut_up,English,insult,low,shut up,allow_with_warning
+shutup,English,insult,low,shut up,allow_with_warning
+idiot,English,insult,low,1d10t | 1d1ot | IDIOT | Idiot | i d i o t | i diot | i***t | idi0t | idiot,allow_with_warning
+1d10t,English,insult,low,idiot,allow_with_warning
+1d1ot,English,insult,low,idiot,allow_with_warning
+i d i o t,English,insult,low,idiot,allow_with_warning
+i diot,English,insult,low,idiot,allow_with_warning
+i***t,English,insult,low,idiot,allow_with_warning
+idi0t,English,insult,low,idiot,allow_with_warning
+stupid,English,insult,low,$tupid | 5tupid | STUPID | Stupid | s t u p i d | s tupid | s****d | stup1d | stupid,allow_with_warning
+$tupid,English,insult,low,stupid,allow_with_warning
+5tupid,English,insult,low,stupid,allow_with_warning
+s t u p i d,English,insult,low,stupid,allow_with_warning
+s tupid,English,insult,low,stupid,allow_with_warning
+s****d,English,insult,low,stupid,allow_with_warning
+stup1d,English,insult,low,stupid,allow_with_warning
+moron,English,insult,medium,MORON | Moron | m o r o n | m oron | m***n | m0r0n | moron,warn_and_log
+m o r o n,English,insult,medium,moron,warn_and_log
+m oron,English,insult,medium,moron,warn_and_log
+m***n,English,insult,medium,moron,warn_and_log
+m0r0n,English,insult,medium,moron,warn_and_log
+jerk,English,insult,low,JERK | Jerk | j e r k | j erk | j**k | j3rk | jerk,allow_with_warning
+j e r k,English,insult,low,jerk,allow_with_warning
+j erk,English,insult,low,jerk,allow_with_warning
+j**k,English,insult,low,jerk,allow_with_warning
+j3rk,English,insult,low,jerk,allow_with_warning
+jackass,English,insult,medium,JACKASS | Jackass | j a c k a s s | j ackass | j*****s | j4ck4ss | j@ck@ss | jacka$$ | jacka55 | jackass,warn_and_log
+j a c k a s s,English,insult,medium,jackass,warn_and_log
+j ackass,English,insult,medium,jackass,warn_and_log
+j*****s,English,insult,medium,jackass,warn_and_log
+j4ck4ss,English,insult,medium,jackass,warn_and_log
+j@ck@ss,English,insult,medium,jackass,warn_and_log
+jacka$$,English,insult,medium,jackass,warn_and_log
+jacka55,English,insult,medium,jackass,warn_and_log
+ass,English,profanity,medium,4ss | @ss | ASS | Ass | a$$ | a55 | ass,warn_and_log
+4ss,English,profanity,medium,ass,warn_and_log
+@ss,English,profanity,medium,ass,warn_and_log
+a$$,English,profanity,medium,ass,warn_and_log
+a55,English,profanity,medium,ass,warn_and_log
+motherfucker,English,profanity,high,MOTHERFUCKER | Motherfucker | m o t h e r f u c k e r | m otherfucker | m**********r | m0therfucker | moth3rfuck3r | motherfucker,block_and_flag
+m o t h e r f u c k e r,English,profanity,high,motherfucker,block_and_flag
+m otherfucker,English,profanity,high,motherfucker,block_and_flag
+m**********r,English,profanity,high,motherfucker,block_and_flag
+m0therfucker,English,profanity,high,motherfucker,block_and_flag
+moth3rfuck3r,English,profanity,high,motherfucker,block_and_flag
+mother fucker,English,profanity,high,MOTHER FUCKER | Mother Fucker | m o t h e r f u c k e r | m otherfucker | m**********r | m0ther fucker | m0therfucker | moth3r fuck3r | moth3rfuck3r | mother fucker | mother-fucker | mother_fucker,block_and_flag
+m0ther fucker,English,profanity,high,mother fucker,block_and_flag
+moth3r fuck3r,English,profanity,high,mother fucker,block_and_flag
+mother-fucker,English,profanity,high,mother fucker,block_and_flag
+mother_fucker,English,profanity,high,mother fucker,block_and_flag
+wtf,English,profanity,medium,WTF | Wtf | wtf,warn_and_log
+stfu,English,insult,medium,$tfu | 5tfu | STFU | Stfu | s t f u | s tfu | s**u | stfu,warn_and_log
+$tfu,English,insult,medium,stfu,warn_and_log
+5tfu,English,insult,medium,stfu,warn_and_log
+s t f u,English,insult,medium,stfu,warn_and_log
+s tfu,English,insult,medium,stfu,warn_and_log
+s**u,English,insult,medium,stfu,warn_and_log
+pisti,Cebuano,profanity,medium,PISTI | Pisti | p i s t i | p isti | p***i | p1st1 | pi$ti | pi5ti | pisti,warn_and_log
+p i s t i,Cebuano,profanity,medium,pisti,warn_and_log
+p isti,Cebuano,profanity,medium,pisti,warn_and_log
+p***i,Cebuano,profanity,medium,pisti,warn_and_log
+p1st1,Cebuano,profanity,medium,pisti,warn_and_log
+pi$ti,Cebuano,profanity,medium,pisti,warn_and_log
+pi5ti,Cebuano,profanity,medium,pisti,warn_and_log
+yawa,Cebuano,profanity,high,YAWA | Yawa | y a w a | y awa | y**a | y4w4 | y@w@ | yawa,block_and_flag
+y a w a,Cebuano,profanity,high,yawa,block_and_flag
+y awa,Cebuano,profanity,high,yawa,block_and_flag
+y**a,Cebuano,profanity,high,yawa,block_and_flag
+y4w4,Cebuano,profanity,high,yawa,block_and_flag
+y@w@,Cebuano,profanity,high,yawa,block_and_flag
+buang,Cebuano,insult,high,BUANG | Buang | b u a n g | b uang | b***g | bu4ng | bu@ng | buang,block_and_flag
+b u a n g,Cebuano,insult,high,buang,block_and_flag
+b uang,Cebuano,insult,high,buang,block_and_flag
+b***g,Cebuano,insult,high,buang,block_and_flag
+bu4ng,Cebuano,insult,high,buang,block_and_flag
+bu@ng,Cebuano,insult,high,buang,block_and_flag
+bogo,Cebuano,insult,medium,BOGO | Bogo | b o g o | b ogo | b**o | b0g0 | bogo,warn_and_log
+b o g o,Cebuano,insult,medium,bogo,warn_and_log
+b ogo,Cebuano,insult,medium,bogo,warn_and_log
+b**o,Cebuano,insult,medium,bogo,warn_and_log
+b0g0,Cebuano,insult,medium,bogo,warn_and_log
+amaw,Cebuano,insult,medium,4m4w | @m@w | AMAW | Amaw | a m a w | a maw | a**w | amaw,warn_and_log
+4m4w,Cebuano,insult,medium,amaw,warn_and_log
+@m@w,Cebuano,insult,medium,amaw,warn_and_log
+a m a w,Cebuano,insult,medium,amaw,warn_and_log
+a maw,Cebuano,insult,medium,amaw,warn_and_log
+a**w,Cebuano,insult,medium,amaw,warn_and_log
+bilat,Cebuano,sexual,high,BILAT | Bilat | b i l a t | b ilat | b***t | b1l4t | b1l@t | b1lat | bil4t | bil@t | bilat,block_and_flag
+b i l a t,Cebuano,sexual,high,bilat,block_and_flag
+b ilat,Cebuano,sexual,high,bilat,block_and_flag
+b***t,Cebuano,sexual,high,bilat,block_and_flag
+b1l4t,Cebuano,sexual,high,bilat,block_and_flag
+b1l@t,Cebuano,sexual,high,bilat,block_and_flag
+b1lat,Cebuano,sexual,high,bilat,block_and_flag
+bil4t,Cebuano,sexual,high,bilat,block_and_flag
+bil@t,Cebuano,sexual,high,bilat,block_and_flag
+animal,Cebuano,insult,medium,4n1m4l | 4nim4l | @n1m@l | @nim@l | ANIMAL | Animal | a n i m a l | a nimal | a****l | an1mal | animal,warn_and_log
+4n1m4l,Cebuano,insult,medium,animal,warn_and_log
+4nim4l,Cebuano,insult,medium,animal,warn_and_log
+@n1m@l,Cebuano,insult,medium,animal,warn_and_log
+@nim@l,Cebuano,insult,medium,animal,warn_and_log
+a n i m a l,Cebuano,insult,medium,animal,warn_and_log
+a nimal,Cebuano,insult,medium,animal,warn_and_log
+a****l,Cebuano,insult,medium,animal,warn_and_log
+an1mal,Cebuano,insult,medium,animal,warn_and_log
+giatay,Cebuano,profanity,medium,GIATAY | Giatay | g i a t a y | g iatay | g****y | g14t4y | g1@t@y | g1atay | gi4t4y | gi@t@y | giatay,warn_and_log
+g i a t a y,Cebuano,profanity,medium,giatay,warn_and_log
+g iatay,Cebuano,profanity,medium,giatay,warn_and_log
+g****y,Cebuano,profanity,medium,giatay,warn_and_log
+g14t4y,Cebuano,profanity,medium,giatay,warn_and_log
+g1@t@y,Cebuano,profanity,medium,giatay,warn_and_log
+g1atay,Cebuano,profanity,medium,giatay,warn_and_log
+gi4t4y,Cebuano,profanity,medium,giatay,warn_and_log
+gi@t@y,Cebuano,profanity,medium,giatay,warn_and_log
+p*tang ina,Cebuano/Filipino,profanity,high,P*TANG INA | P*Tang Ina | p * t a n g i n a | p *tangina | p*******a | p*t4ng1n4 | p*t4ngin4 | p*t@ng in@ | p*t@ng1n@ | p*tang 1na | p*tang ina | p*tang-ina,block_and_flag
+p * t a n g i n a,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p *tangina,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*******a,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*t4ng1n4,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*t4ngin4,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*t@ng in@,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*t@ng1n@,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*tang 1na,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*tang-ina,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*tang1na,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*tang_ina,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+p*tangina,Cebuano/Filipino,profanity,high,p*tang ina,block_and_flag
+ukinam,Ilocano,profanity,high,UKINAM | Ukinam | u k i n a m | u kinam | u****m | uk1n4m | uk1n@m | uk1nam | ukin4m | ukin@m | ukinam,block_and_flag
+u k i n a m,Ilocano,profanity,high,ukinam,block_and_flag
+u kinam,Ilocano,profanity,high,ukinam,block_and_flag
+u****m,Ilocano,profanity,high,ukinam,block_and_flag
+uk1n4m,Ilocano,profanity,high,ukinam,block_and_flag
+uk1n@m,Ilocano,profanity,high,ukinam,block_and_flag
+uk1nam,Ilocano,profanity,high,ukinam,block_and_flag
+ukin4m,Ilocano,profanity,high,ukinam,block_and_flag
+ukin@m,Ilocano,profanity,high,ukinam,block_and_flag
+ulol,Ilocano,insult,high,ULOL | Ulol | u l o l | u lol | u**l | ul0l | ulol,block_and_flag
+u l o l,Ilocano,insult,high,ulol,block_and_flag
+u lol,Ilocano,insult,high,ulol,block_and_flag
+u**l,Ilocano,insult,high,ulol,block_and_flag
+ul0l,Ilocano,insult,high,ulol,block_and_flag
+natangken,Ilocano,insult,medium,NATANGKEN | Natangken | n a t a n g k e n | n atangken | n*******n | n4t4ngk3n | n4t4ngken | n@t@ngk3n | n@t@ngken | natangk3n | natangken,warn_and_log
+n a t a n g k e n,Ilocano,insult,medium,natangken,warn_and_log
+n atangken,Ilocano,insult,medium,natangken,warn_and_log
+n*******n,Ilocano,insult,medium,natangken,warn_and_log
+n4t4ngk3n,Ilocano,insult,medium,natangken,warn_and_log
+n4t4ngken,Ilocano,insult,medium,natangken,warn_and_log
+n@t@ngk3n,Ilocano,insult,medium,natangken,warn_and_log
+n@t@ngken,Ilocano,insult,medium,natangken,warn_and_log
+natangk3n,Ilocano,insult,medium,natangken,warn_and_log
+yawa,Hiligaynon,profanity,high,YAWA | Yawa | y a w a | y awa | y**a | y4w4 | y@w@ | yawa,block_and_flag
+y a w a,Hiligaynon,profanity,high,yawa,block_and_flag
+y awa,Hiligaynon,profanity,high,yawa,block_and_flag
+y**a,Hiligaynon,profanity,high,yawa,block_and_flag
+y4w4,Hiligaynon,profanity,high,yawa,block_and_flag
+y@w@,Hiligaynon,profanity,high,yawa,block_and_flag
+buang,Hiligaynon,insult,high,BUANG | Buang | b u a n g | b uang | b***g | bu4ng | bu@ng | buang,block_and_flag
+b u a n g,Hiligaynon,insult,high,buang,block_and_flag
+b uang,Hiligaynon,insult,high,buang,block_and_flag
+b***g,Hiligaynon,insult,high,buang,block_and_flag
+bu4ng,Hiligaynon,insult,high,buang,block_and_flag
+bu@ng,Hiligaynon,insult,high,buang,block_and_flag
+gago,Hiligaynon,insult,high,GAGO | Gago | g a g o | g ago | g**o | g4go | g@g0 | g@go | gag0 | gago,block_and_flag
+g a g o,Hiligaynon,insult,high,gago,block_and_flag
+g ago,Hiligaynon,insult,high,gago,block_and_flag
+g**o,Hiligaynon,insult,high,gago,block_and_flag
+g4go,Hiligaynon,insult,high,gago,block_and_flag
+g@g0,Hiligaynon,insult,high,gago,block_and_flag
+g@go,Hiligaynon,insult,high,gago,block_and_flag
+gag0,Hiligaynon,insult,high,gago,block_and_flag
+yawa,Waray,profanity,high,YAWA | Yawa | y a w a | y awa | y**a | y4w4 | y@w@ | yawa,block_and_flag
+y a w a,Waray,profanity,high,yawa,block_and_flag
+y awa,Waray,profanity,high,yawa,block_and_flag
+y**a,Waray,profanity,high,yawa,block_and_flag
+y4w4,Waray,profanity,high,yawa,block_and_flag
+y@w@,Waray,profanity,high,yawa,block_and_flag
+buang,Waray,insult,high,BUANG | Buang | b u a n g | b uang | b***g | bu4ng | bu@ng | buang,block_and_flag
+b u a n g,Waray,insult,high,buang,block_and_flag
+b uang,Waray,insult,high,buang,block_and_flag
+b***g,Waray,insult,high,buang,block_and_flag
+bu4ng,Waray,insult,high,buang,block_and_flag
+bu@ng,Waray,insult,high,buang,block_and_flag
+manyak,Kapampangan,sexual,high,MANYAK | Manyak | m a n y a k | m anyak | m****k | m4ny4k | m@ny@k | manyak,block_and_flag
+m a n y a k,Kapampangan,sexual,high,manyak,block_and_flag
+m anyak,Kapampangan,sexual,high,manyak,block_and_flag
+m****k,Kapampangan,sexual,high,manyak,block_and_flag
+m4ny4k,Kapampangan,sexual,high,manyak,block_and_flag
+m@ny@k,Kapampangan,sexual,high,manyak,block_and_flag
+gago,Pangasinan,insult,high,GAGO | Gago | g a g o | g ago | g**o | g4go | g@g0 | g@go | gag0 | gago,block_and_flag
+g a g o,Pangasinan,insult,high,gago,block_and_flag
+g ago,Pangasinan,insult,high,gago,block_and_flag
+g**o,Pangasinan,insult,high,gago,block_and_flag
+g4go,Pangasinan,insult,high,gago,block_and_flag
+g@g0,Pangasinan,insult,high,gago,block_and_flag
+g@go,Pangasinan,insult,high,gago,block_and_flag
+gag0,Pangasinan,insult,high,gago,block_and_flag
+puta,Spanish,profanity,high,PUTA | Puta | p u t a | p uta | p**a | put4 | put@ | puta,block_and_flag
+p u t a,Spanish,profanity,high,puta,block_and_flag
+p uta,Spanish,profanity,high,puta,block_and_flag
+p**a,Spanish,profanity,high,puta,block_and_flag
+put4,Spanish,profanity,high,puta,block_and_flag
+put@,Spanish,profanity,high,puta,block_and_flag
+puto,Spanish,insult,high,PUTO | Puto | p u t o | p uto | p**o | put0 | puto,block_and_flag
+p u t o,Spanish,insult,high,puto,block_and_flag
+p uto,Spanish,insult,high,puto,block_and_flag
+p**o,Spanish,insult,high,puto,block_and_flag
+put0,Spanish,insult,high,puto,block_and_flag
+mierda,Spanish,profanity,high,MIERDA | Mierda | m i e r d a | m ierda | m****a | m13rd4 | m1erd@ | m1erda | mi3rd@ | mi3rda | mierd4 | mierd@,block_and_flag
+m i e r d a,Spanish,profanity,high,mierda,block_and_flag
+m ierda,Spanish,profanity,high,mierda,block_and_flag
+m****a,Spanish,profanity,high,mierda,block_and_flag
+m13rd4,Spanish,profanity,high,mierda,block_and_flag
+m1erd@,Spanish,profanity,high,mierda,block_and_flag
+m1erda,Spanish,profanity,high,mierda,block_and_flag
+mi3rd@,Spanish,profanity,high,mierda,block_and_flag
+mi3rda,Spanish,profanity,high,mierda,block_and_flag
+mierd4,Spanish,profanity,high,mierda,block_and_flag
+mierd@,Spanish,profanity,high,mierda,block_and_flag
+joder,Spanish,profanity,high,JODER | Joder | j o d e r | j oder | j***r | j0der | jod3r | joder,block_and_flag
+j o d e r,Spanish,profanity,high,joder,block_and_flag
+j oder,Spanish,profanity,high,joder,block_and_flag
+j***r,Spanish,profanity,high,joder,block_and_flag
+j0der,Spanish,profanity,high,joder,block_and_flag
+jod3r,Spanish,profanity,high,joder,block_and_flag
+cabron,Spanish,insult,high,CABRON | Cabron | c a b r o n | c abron | c****n | c4bron | c@br0n | c@bron | cabr0n | cabron,block_and_flag
+c a b r o n,Spanish,insult,high,cabron,block_and_flag
+c abron,Spanish,insult,high,cabron,block_and_flag
+c****n,Spanish,insult,high,cabron,block_and_flag
+c4bron,Spanish,insult,high,cabron,block_and_flag
+c@br0n,Spanish,insult,high,cabron,block_and_flag
+c@bron,Spanish,insult,high,cabron,block_and_flag
+cabr0n,Spanish,insult,high,cabron,block_and_flag
+pendejo,Spanish,insult,high,PENDEJO | Pendejo | p e n d e j o | p endejo | p*****o | p3nd3jo | pendej0 | pendejo,block_and_flag
+p e n d e j o,Spanish,insult,high,pendejo,block_and_flag
+p endejo,Spanish,insult,high,pendejo,block_and_flag
+p*****o,Spanish,insult,high,pendejo,block_and_flag
+p3nd3jo,Spanish,insult,high,pendejo,block_and_flag
+pendej0,Spanish,insult,high,pendejo,block_and_flag
+merde,French,profanity,high,MERDE | Merde | m e r d e | m erde | m***e | m3rd3 | merde,block_and_flag
+m e r d e,French,profanity,high,merde,block_and_flag
+m erde,French,profanity,high,merde,block_and_flag
+m***e,French,profanity,high,merde,block_and_flag
+m3rd3,French,profanity,high,merde,block_and_flag
+putain,French,profanity,high,PUTAIN | Putain | p u t a i n | p utain | p****n | put41n | put4in | put@1n | put@in | puta1n | putain,block_and_flag
+p u t a i n,French,profanity,high,putain,block_and_flag
+p utain,French,profanity,high,putain,block_and_flag
+p****n,French,profanity,high,putain,block_and_flag
+put41n,French,profanity,high,putain,block_and_flag
+put4in,French,profanity,high,putain,block_and_flag
+put@1n,French,profanity,high,putain,block_and_flag
+put@in,French,profanity,high,putain,block_and_flag
+puta1n,French,profanity,high,putain,block_and_flag
+connard,French,insult,high,CONNARD | Connard | c o n n a r d | c onnard | c*****d | c0nn@rd | c0nnard | conn4rd | conn@rd | connard,block_and_flag
+c o n n a r d,French,insult,high,connard,block_and_flag
+c onnard,French,insult,high,connard,block_and_flag
+c*****d,French,insult,high,connard,block_and_flag
+c0nn@rd,French,insult,high,connard,block_and_flag
+c0nnard,French,insult,high,connard,block_and_flag
+conn4rd,French,insult,high,connard,block_and_flag
+conn@rd,French,insult,high,connard,block_and_flag
+con,French,insult,medium,CON | Con | c0n | con,warn_and_log
+c0n,French,insult,medium,con,warn_and_log
+scheisse,German,profanity,high,$chei$$e | 5chei55e | SCHEISSE | Scheisse | s c h e i s s e | s cheisse | s******e | sch31ss3 | sch3iss3 | sche1sse | scheisse,block_and_flag
+$chei$$e,German,profanity,high,scheisse,block_and_flag
+5chei55e,German,profanity,high,scheisse,block_and_flag
+s c h e i s s e,German,profanity,high,scheisse,block_and_flag
+s cheisse,German,profanity,high,scheisse,block_and_flag
+s******e,German,profanity,high,scheisse,block_and_flag
+sch31ss3,German,profanity,high,scheisse,block_and_flag
+sch3iss3,German,profanity,high,scheisse,block_and_flag
+sche1sse,German,profanity,high,scheisse,block_and_flag
+fick,German,profanity,high,FICK | Fick | f i c k | f ick | f**k | f1ck | fick,block_and_flag
+f i c k,German,profanity,high,fick,block_and_flag
+f ick,German,profanity,high,fick,block_and_flag
+f**k,German,profanity,high,fick,block_and_flag
+f1ck,German,profanity,high,fick,block_and_flag
+arschloch,German,insult,high,4rschloch | @rschl0ch | @rschloch | ARSCHLOCH | Arschloch | a r s c h l o c h | a rschloch | a*******h | ar$chloch | ar5chloch | arschl0ch | arschloch,block_and_flag
+4rschloch,German,insult,high,arschloch,block_and_flag
+@rschl0ch,German,insult,high,arschloch,block_and_flag
+@rschloch,German,insult,high,arschloch,block_and_flag
+a r s c h l o c h,German,insult,high,arschloch,block_and_flag
+a rschloch,German,insult,high,arschloch,block_and_flag
+a*******h,German,insult,high,arschloch,block_and_flag
+ar$chloch,German,insult,high,arschloch,block_and_flag
+ar5chloch,German,insult,high,arschloch,block_and_flag
+arschl0ch,German,insult,high,arschloch,block_and_flag
+idiot,German,insult,medium,1d10t | 1d1ot | IDIOT | Idiot | i d i o t | i diot | i***t | idi0t | idiot,warn_and_log
+1d10t,German,insult,medium,idiot,warn_and_log
+1d1ot,German,insult,medium,idiot,warn_and_log
+i d i o t,German,insult,medium,idiot,warn_and_log
+i diot,German,insult,medium,idiot,warn_and_log
+i***t,German,insult,medium,idiot,warn_and_log
+idi0t,German,insult,medium,idiot,warn_and_log
+cazzo,Italian,profanity,high,CAZZO | Cazzo | c a z z o | c azzo | c***o | c4zzo | c@zz0 | c@zzo | cazz0 | cazzo,block_and_flag
+c a z z o,Italian,profanity,high,cazzo,block_and_flag
+c azzo,Italian,profanity,high,cazzo,block_and_flag
+c***o,Italian,profanity,high,cazzo,block_and_flag
+c4zzo,Italian,profanity,high,cazzo,block_and_flag
+c@zz0,Italian,profanity,high,cazzo,block_and_flag
+c@zzo,Italian,profanity,high,cazzo,block_and_flag
+cazz0,Italian,profanity,high,cazzo,block_and_flag
+merda,Italian,profanity,high,MERDA | Merda | m e r d a | m erda | m***a | m3rd4 | m3rd@ | m3rda | merd4 | merd@ | merda,block_and_flag
+m e r d a,Italian,profanity,high,merda,block_and_flag
+m erda,Italian,profanity,high,merda,block_and_flag
+m***a,Italian,profanity,high,merda,block_and_flag
+m3rd4,Italian,profanity,high,merda,block_and_flag
+m3rd@,Italian,profanity,high,merda,block_and_flag
+m3rda,Italian,profanity,high,merda,block_and_flag
+merd4,Italian,profanity,high,merda,block_and_flag
+merd@,Italian,profanity,high,merda,block_and_flag
+stronzo,Italian,insult,high,$tronzo | 5tronzo | STRONZO | Stronzo | s t r o n z o | s tronzo | s*****o | str0nz0 | stronzo,block_and_flag
+$tronzo,Italian,insult,high,stronzo,block_and_flag
+5tronzo,Italian,insult,high,stronzo,block_and_flag
+s t r o n z o,Italian,insult,high,stronzo,block_and_flag
+s tronzo,Italian,insult,high,stronzo,block_and_flag
+s*****o,Italian,insult,high,stronzo,block_and_flag
+str0nz0,Italian,insult,high,stronzo,block_and_flag
+puttana,Italian,profanity,high,PUTTANA | Puttana | p u t t a n a | p uttana | p*****a | putt4n4 | putt@n@ | puttana,block_and_flag
+p u t t a n a,Italian,profanity,high,puttana,block_and_flag
+p uttana,Italian,profanity,high,puttana,block_and_flag
+p*****a,Italian,profanity,high,puttana,block_and_flag
+putt4n4,Italian,profanity,high,puttana,block_and_flag
+putt@n@,Italian,profanity,high,puttana,block_and_flag
+merda,Portuguese,profanity,high,MERDA | Merda | m e r d a | m erda | m***a | m3rd4 | m3rd@ | m3rda | merd4 | merd@ | merda,block_and_flag
+m e r d a,Portuguese,profanity,high,merda,block_and_flag
+m erda,Portuguese,profanity,high,merda,block_and_flag
+m***a,Portuguese,profanity,high,merda,block_and_flag
+m3rd4,Portuguese,profanity,high,merda,block_and_flag
+m3rd@,Portuguese,profanity,high,merda,block_and_flag
+m3rda,Portuguese,profanity,high,merda,block_and_flag
+merd4,Portuguese,profanity,high,merda,block_and_flag
+merd@,Portuguese,profanity,high,merda,block_and_flag
+porra,Portuguese,profanity,high,PORRA | Porra | p o r r a | p orra | p***a | p0rr@ | p0rra | porr4 | porr@ | porra,block_and_flag
+p o r r a,Portuguese,profanity,high,porra,block_and_flag
+p orra,Portuguese,profanity,high,porra,block_and_flag
+p***a,Portuguese,profanity,high,porra,block_and_flag
+p0rr@,Portuguese,profanity,high,porra,block_and_flag
+p0rra,Portuguese,profanity,high,porra,block_and_flag
+porr4,Portuguese,profanity,high,porra,block_and_flag
+porr@,Portuguese,profanity,high,porra,block_and_flag
+puta,Portuguese,profanity,high,PUTA | Puta | p u t a | p uta | p**a | put4 | put@ | puta,block_and_flag
+p u t a,Portuguese,profanity,high,puta,block_and_flag
+p uta,Portuguese,profanity,high,puta,block_and_flag
+p**a,Portuguese,profanity,high,puta,block_and_flag
+put4,Portuguese,profanity,high,puta,block_and_flag
+put@,Portuguese,profanity,high,puta,block_and_flag
+caralho,Portuguese,profanity,high,CARALHO | Caralho | c a r a l h o | c aralho | c*****o | c4r4lho | c@r@lh0 | c@r@lho | caralh0 | caralho,block_and_flag
+c a r a l h o,Portuguese,profanity,high,caralho,block_and_flag
+c aralho,Portuguese,profanity,high,caralho,block_and_flag
+c*****o,Portuguese,profanity,high,caralho,block_and_flag
+c4r4lho,Portuguese,profanity,high,caralho,block_and_flag
+c@r@lh0,Portuguese,profanity,high,caralho,block_and_flag
+c@r@lho,Portuguese,profanity,high,caralho,block_and_flag
+caralh0,Portuguese,profanity,high,caralho,block_and_flag
+blyat,Russian,profanity,high,BLYAT | Blyat | b l y a t | b lyat | b***t | bly4t | bly@t | blyat,block_and_flag
+b l y a t,Russian,profanity,high,blyat,block_and_flag
+b lyat,Russian,profanity,high,blyat,block_and_flag
+b***t,Russian,profanity,high,blyat,block_and_flag
+bly4t,Russian,profanity,high,blyat,block_and_flag
+bly@t,Russian,profanity,high,blyat,block_and_flag
+suka,Russian,insult,high,$uka | 5uka | SUKA | Suka | s u k a | s uka | s**a | suk4 | suk@ | suka,block_and_flag
+$uka,Russian,insult,high,suka,block_and_flag
+5uka,Russian,insult,high,suka,block_and_flag
+s u k a,Russian,insult,high,suka,block_and_flag
+s uka,Russian,insult,high,suka,block_and_flag
+s**a,Russian,insult,high,suka,block_and_flag
+suk4,Russian,insult,high,suka,block_and_flag
+suk@,Russian,insult,high,suka,block_and_flag
+pidor,Russian,insult,high,PIDOR | Pidor | p i d o r | p idor | p***r | p1d0r | p1dor | pid0r | pidor,block_and_flag
+p i d o r,Russian,insult,high,pidor,block_and_flag
+p idor,Russian,insult,high,pidor,block_and_flag
+p***r,Russian,insult,high,pidor,block_and_flag
+p1d0r,Russian,insult,high,pidor,block_and_flag
+p1dor,Russian,insult,high,pidor,block_and_flag
+pid0r,Russian,insult,high,pidor,block_and_flag
+govno,Russian,profanity,high,GOVNO | Govno | g o v n o | g ovno | g***o | g0vn0 | govno,block_and_flag
+g o v n o,Russian,profanity,high,govno,block_and_flag
+g ovno,Russian,profanity,high,govno,block_and_flag
+g***o,Russian,profanity,high,govno,block_and_flag
+g0vn0,Russian,profanity,high,govno,block_and_flag
+khara,Arabic,profanity,high,KHARA | Khara | k h a r a | k hara | k***a | kh4r4 | kh@r@ | khara,block_and_flag
+k h a r a,Arabic,profanity,high,khara,block_and_flag
+k hara,Arabic,profanity,high,khara,block_and_flag
+k***a,Arabic,profanity,high,khara,block_and_flag
+kh4r4,Arabic,profanity,high,khara,block_and_flag
+kh@r@,Arabic,profanity,high,khara,block_and_flag
+sharmouta,Arabic,sexual,high,$harmouta | 5harmouta | SHARMOUTA | Sharmouta | s h a r m o u t a | s harmouta | s*******a | sh4rmout4 | sh@rm0ut@ | sh@rmout@ | sharm0uta | sharmouta,block_and_flag
+$harmouta,Arabic,sexual,high,sharmouta,block_and_flag
+5harmouta,Arabic,sexual,high,sharmouta,block_and_flag
+s h a r m o u t a,Arabic,sexual,high,sharmouta,block_and_flag
+s harmouta,Arabic,sexual,high,sharmouta,block_and_flag
+s*******a,Arabic,sexual,high,sharmouta,block_and_flag
+sh4rmout4,Arabic,sexual,high,sharmouta,block_and_flag
+sh@rm0ut@,Arabic,sexual,high,sharmouta,block_and_flag
+sh@rmout@,Arabic,sexual,high,sharmouta,block_and_flag
+sharm0uta,Arabic,sexual,high,sharmouta,block_and_flag
+kalb,Arabic,insult,medium,KALB | Kalb | k a l b | k alb | k**b | k4lb | k@lb | kalb,warn_and_log
+k a l b,Arabic,insult,medium,kalb,warn_and_log
+k alb,Arabic,insult,medium,kalb,warn_and_log
+k**b,Arabic,insult,medium,kalb,warn_and_log
+k4lb,Arabic,insult,medium,kalb,warn_and_log
+k@lb,Arabic,insult,medium,kalb,warn_and_log
+chutiya,Hindi,insult,high,CHUTIYA | Chutiya | c h u t i y a | c hutiya | c*****a | chut1y4 | chut1y@ | chut1ya | chutiy4 | chutiy@ | chutiya,block_and_flag
+c h u t i y a,Hindi,insult,high,chutiya,block_and_flag
+c hutiya,Hindi,insult,high,chutiya,block_and_flag
+c*****a,Hindi,insult,high,chutiya,block_and_flag
+chut1y4,Hindi,insult,high,chutiya,block_and_flag
+chut1y@,Hindi,insult,high,chutiya,block_and_flag
+chut1ya,Hindi,insult,high,chutiya,block_and_flag
+chutiy4,Hindi,insult,high,chutiya,block_and_flag
+chutiy@,Hindi,insult,high,chutiya,block_and_flag
+madarchod,Hindi,profanity,high,MADARCHOD | Madarchod | m a d a r c h o d | m adarchod | m*******d | m4d4rchod | m@d@rch0d | m@d@rchod | madarch0d | madarchod,block_and_flag
+m a d a r c h o d,Hindi,profanity,high,madarchod,block_and_flag
+m adarchod,Hindi,profanity,high,madarchod,block_and_flag
+m*******d,Hindi,profanity,high,madarchod,block_and_flag
+m4d4rchod,Hindi,profanity,high,madarchod,block_and_flag
+m@d@rch0d,Hindi,profanity,high,madarchod,block_and_flag
+m@d@rchod,Hindi,profanity,high,madarchod,block_and_flag
+madarch0d,Hindi,profanity,high,madarchod,block_and_flag
+behenchod,Hindi,profanity,high,BEHENCHOD | Behenchod | b e h e n c h o d | b ehenchod | b*******d | b3h3nchod | behench0d | behenchod,block_and_flag
+b e h e n c h o d,Hindi,profanity,high,behenchod,block_and_flag
+b ehenchod,Hindi,profanity,high,behenchod,block_and_flag
+b*******d,Hindi,profanity,high,behenchod,block_and_flag
+b3h3nchod,Hindi,profanity,high,behenchod,block_and_flag
+behench0d,Hindi,profanity,high,behenchod,block_and_flag
+gaandu,Hindi,sexual,high,GAANDU | Gaandu | g a a n d u | g aandu | g****u | g44ndu | g@@ndu | gaandu,block_and_flag
+g a a n d u,Hindi,sexual,high,gaandu,block_and_flag
+g aandu,Hindi,sexual,high,gaandu,block_and_flag
+g****u,Hindi,sexual,high,gaandu,block_and_flag
+g44ndu,Hindi,sexual,high,gaandu,block_and_flag
+g@@ndu,Hindi,sexual,high,gaandu,block_and_flag
+harami,Hindi,insult,high,HARAMI | Harami | h a r a m i | h arami | h****i | h4r4m1 | h4r4mi | h@r@m1 | h@r@mi | haram1 | harami,block_and_flag
+h a r a m i,Hindi,insult,high,harami,block_and_flag
+h arami,Hindi,insult,high,harami,block_and_flag
+h****i,Hindi,insult,high,harami,block_and_flag
+h4r4m1,Hindi,insult,high,harami,block_and_flag
+h4r4mi,Hindi,insult,high,harami,block_and_flag
+h@r@m1,Hindi,insult,high,harami,block_and_flag
+h@r@mi,Hindi,insult,high,harami,block_and_flag
+haram1,Hindi,insult,high,harami,block_and_flag
+anjing,Indonesian,insult,medium,4nj1ng | 4njing | @nj1ng | @njing | ANJING | Anjing | a n j i n g | a njing | a****g | anj1ng | anjing,warn_and_log
+4nj1ng,Indonesian,insult,medium,anjing,warn_and_log
+4njing,Indonesian,insult,medium,anjing,warn_and_log
+@nj1ng,Indonesian,insult,medium,anjing,warn_and_log
+@njing,Indonesian,insult,medium,anjing,warn_and_log
+a n j i n g,Indonesian,insult,medium,anjing,warn_and_log
+a njing,Indonesian,insult,medium,anjing,warn_and_log
+a****g,Indonesian,insult,medium,anjing,warn_and_log
+anj1ng,Indonesian,insult,medium,anjing,warn_and_log
+bangsat,Indonesian,insult,high,BANGSAT | Bangsat | b a n g s a t | b angsat | b*****t | b4ngs4t | b@ngs@t | bang$at | bang5at | bangsat,block_and_flag
+b a n g s a t,Indonesian,insult,high,bangsat,block_and_flag
+b angsat,Indonesian,insult,high,bangsat,block_and_flag
+b*****t,Indonesian,insult,high,bangsat,block_and_flag
+b4ngs4t,Indonesian,insult,high,bangsat,block_and_flag
+b@ngs@t,Indonesian,insult,high,bangsat,block_and_flag
+bang$at,Indonesian,insult,high,bangsat,block_and_flag
+bang5at,Indonesian,insult,high,bangsat,block_and_flag
+bajingan,Indonesian,insult,high,BAJINGAN | Bajingan | b a j i n g a n | b ajingan | b******n | b4j1ng4n | b4jing4n | b@j1ng@n | b@jing@n | baj1ngan | bajingan,block_and_flag
+b a j i n g a n,Indonesian,insult,high,bajingan,block_and_flag
+b ajingan,Indonesian,insult,high,bajingan,block_and_flag
+b******n,Indonesian,insult,high,bajingan,block_and_flag
+b4j1ng4n,Indonesian,insult,high,bajingan,block_and_flag
+b4jing4n,Indonesian,insult,high,bajingan,block_and_flag
+b@j1ng@n,Indonesian,insult,high,bajingan,block_and_flag
+b@jing@n,Indonesian,insult,high,bajingan,block_and_flag
+baj1ngan,Indonesian,insult,high,bajingan,block_and_flag
+kontol,Indonesian,sexual,high,KONTOL | Kontol | k o n t o l | k ontol | k****l | k0nt0l | kontol,block_and_flag
+k o n t o l,Indonesian,sexual,high,kontol,block_and_flag
+k ontol,Indonesian,sexual,high,kontol,block_and_flag
+k****l,Indonesian,sexual,high,kontol,block_and_flag
+k0nt0l,Indonesian,sexual,high,kontol,block_and_flag
+memek,Indonesian,sexual,high,MEMEK | Memek | m e m e k | m emek | m***k | m3m3k | memek,block_and_flag
+m e m e k,Indonesian,sexual,high,memek,block_and_flag
+m emek,Indonesian,sexual,high,memek,block_and_flag
+m***k,Indonesian,sexual,high,memek,block_and_flag
+m3m3k,Indonesian,sexual,high,memek,block_and_flag
+sial,Malay,profanity,medium,$ial | 5ial | SIAL | Sial | s i a l | s ial | s**l | s14l | s1@l | s1al | si4l | si@l,warn_and_log
+$ial,Malay,profanity,medium,sial,warn_and_log
+5ial,Malay,profanity,medium,sial,warn_and_log
+s i a l,Malay,profanity,medium,sial,warn_and_log
+s ial,Malay,profanity,medium,sial,warn_and_log
+s**l,Malay,profanity,medium,sial,warn_and_log
+s14l,Malay,profanity,medium,sial,warn_and_log
+s1@l,Malay,profanity,medium,sial,warn_and_log
+s1al,Malay,profanity,medium,sial,warn_and_log
+si4l,Malay,profanity,medium,sial,warn_and_log
+si@l,Malay,profanity,medium,sial,warn_and_log
+bodoh,Malay,insult,medium,BODOH | Bodoh | b o d o h | b odoh | b***h | b0d0h | bodoh,warn_and_log
+b o d o h,Malay,insult,medium,bodoh,warn_and_log
+b odoh,Malay,insult,medium,bodoh,warn_and_log
+b***h,Malay,insult,medium,bodoh,warn_and_log
+b0d0h,Malay,insult,medium,bodoh,warn_and_log
+bangang,Malay,insult,medium,BANGANG | Bangang | b a n g a n g | b angang | b*****g | b4ng4ng | b@ng@ng | bangang,warn_and_log
+b a n g a n g,Malay,insult,medium,bangang,warn_and_log
+b angang,Malay,insult,medium,bangang,warn_and_log
+b*****g,Malay,insult,medium,bangang,warn_and_log
+b4ng4ng,Malay,insult,medium,bangang,warn_and_log
+b@ng@ng,Malay,insult,medium,bangang,warn_and_log
+babi,Malay,insult,medium,BABI | Babi | b a b i | b abi | b**i | b4b1 | b4bi | b@b1 | b@bi | bab1 | babi,warn_and_log
+b a b i,Malay,insult,medium,babi,warn_and_log
+b abi,Malay,insult,medium,babi,warn_and_log
+b**i,Malay,insult,medium,babi,warn_and_log
+b4b1,Malay,insult,medium,babi,warn_and_log
+b4bi,Malay,insult,medium,babi,warn_and_log
+b@b1,Malay,insult,medium,babi,warn_and_log
+b@bi,Malay,insult,medium,babi,warn_and_log
+bab1,Malay,insult,medium,babi,warn_and_log
+baka,Japanese,insult,medium,BAKA | Baka | b a k a | b aka | b**a | b4k4 | b@k@ | baka,warn_and_log
+b a k a,Japanese,insult,medium,baka,warn_and_log
+b aka,Japanese,insult,medium,baka,warn_and_log
+b**a,Japanese,insult,medium,baka,warn_and_log
+b4k4,Japanese,insult,medium,baka,warn_and_log
+b@k@,Japanese,insult,medium,baka,warn_and_log
+kuso,Japanese,profanity,medium,KUSO | Kuso | k u s o | k uso | k**o | ku$o | ku5o | kus0 | kuso,warn_and_log
+k u s o,Japanese,profanity,medium,kuso,warn_and_log
+k uso,Japanese,profanity,medium,kuso,warn_and_log
+k**o,Japanese,profanity,medium,kuso,warn_and_log
+ku$o,Japanese,profanity,medium,kuso,warn_and_log
+ku5o,Japanese,profanity,medium,kuso,warn_and_log
+kus0,Japanese,profanity,medium,kuso,warn_and_log
+chikusho,Japanese,profanity,medium,CHIKUSHO | Chikusho | c h i k u s h o | c hikusho | c******o | ch1kush0 | ch1kusho | chiku$ho | chiku5ho | chikush0 | chikusho,warn_and_log
+c h i k u s h o,Japanese,profanity,medium,chikusho,warn_and_log
+c hikusho,Japanese,profanity,medium,chikusho,warn_and_log
+c******o,Japanese,profanity,medium,chikusho,warn_and_log
+ch1kush0,Japanese,profanity,medium,chikusho,warn_and_log
+ch1kusho,Japanese,profanity,medium,chikusho,warn_and_log
+chiku$ho,Japanese,profanity,medium,chikusho,warn_and_log
+chiku5ho,Japanese,profanity,medium,chikusho,warn_and_log
+chikush0,Japanese,profanity,medium,chikusho,warn_and_log
+temee,Japanese,insult,medium,TEMEE | Temee | t e m e e | t emee | t***e | t3m33 | temee,warn_and_log
+t e m e e,Japanese,insult,medium,temee,warn_and_log
+t emee,Japanese,insult,medium,temee,warn_and_log
+t***e,Japanese,insult,medium,temee,warn_and_log
+t3m33,Japanese,insult,medium,temee,warn_and_log
+ssibal,Korean,profanity,high,$$ibal | 55ibal | SSIBAL | Ssibal | s s i b a l | s sibal | s****l | ss1b4l | ss1b@l | ss1bal | ssib4l | ssib@l,block_and_flag
+$$ibal,Korean,profanity,high,ssibal,block_and_flag
+55ibal,Korean,profanity,high,ssibal,block_and_flag
+s s i b a l,Korean,profanity,high,ssibal,block_and_flag
+s sibal,Korean,profanity,high,ssibal,block_and_flag
+s****l,Korean,profanity,high,ssibal,block_and_flag
+ss1b4l,Korean,profanity,high,ssibal,block_and_flag
+ss1b@l,Korean,profanity,high,ssibal,block_and_flag
+ss1bal,Korean,profanity,high,ssibal,block_and_flag
+ssib4l,Korean,profanity,high,ssibal,block_and_flag
+ssib@l,Korean,profanity,high,ssibal,block_and_flag
+gaesaekki,Korean,insult,high,GAESAEKKI | Gaesaekki | g a e s a e k k i | g aesaekki | g*******i | g43s43kk1 | g4es4ekki | g@3s@3kki | g@es@ekk1 | g@es@ekki | ga3sa3kki | gae$aekki,block_and_flag
+g a e s a e k k i,Korean,insult,high,gaesaekki,block_and_flag
+g aesaekki,Korean,insult,high,gaesaekki,block_and_flag
+g*******i,Korean,insult,high,gaesaekki,block_and_flag
+g43s43kk1,Korean,insult,high,gaesaekki,block_and_flag
+g4es4ekki,Korean,insult,high,gaesaekki,block_and_flag
+g@3s@3kki,Korean,insult,high,gaesaekki,block_and_flag
+g@es@ekk1,Korean,insult,high,gaesaekki,block_and_flag
+g@es@ekki,Korean,insult,high,gaesaekki,block_and_flag
+ga3sa3kki,Korean,insult,high,gaesaekki,block_and_flag
+gae$aekki,Korean,insult,high,gaesaekki,block_and_flag
+gae5aekki,Korean,insult,high,gaesaekki,block_and_flag
+gaesaekk1,Korean,insult,high,gaesaekki,block_and_flag
+byeongsin,Korean,insult,high,BYEONGSIN | Byeongsin | b y e o n g s i n | b yeongsin | b*******n | by3ongs1n | by3ongsin | bye0ngs1n | bye0ngsin | byeong$in | byeong5in | byeongs1n,block_and_flag
+b y e o n g s i n,Korean,insult,high,byeongsin,block_and_flag
+b yeongsin,Korean,insult,high,byeongsin,block_and_flag
+b*******n,Korean,insult,high,byeongsin,block_and_flag
+by3ongs1n,Korean,insult,high,byeongsin,block_and_flag
+by3ongsin,Korean,insult,high,byeongsin,block_and_flag
+bye0ngs1n,Korean,insult,high,byeongsin,block_and_flag
+bye0ngsin,Korean,insult,high,byeongsin,block_and_flag
+byeong$in,Korean,insult,high,byeongsin,block_and_flag
+byeong5in,Korean,insult,high,byeongsin,block_and_flag
+byeongs1n,Korean,insult,high,byeongsin,block_and_flag
+michin,Korean,insult,medium,MICHIN | Michin | m i c h i n | m ichin | m****n | m1ch1n | michin,warn_and_log
+m i c h i n,Korean,insult,medium,michin,warn_and_log
+m ichin,Korean,insult,medium,michin,warn_and_log
+m****n,Korean,insult,medium,michin,warn_and_log
+m1ch1n,Korean,insult,medium,michin,warn_and_log
+cao,Chinese,profanity,high,CAO | Cao | c4o | c@0 | c@o | ca0 | cao,block_and_flag
+c4o,Chinese,profanity,high,cao,block_and_flag
+c@0,Chinese,profanity,high,cao,block_and_flag
+c@o,Chinese,profanity,high,cao,block_and_flag
+ca0,Chinese,profanity,high,cao,block_and_flag
+shabi,Chinese,insult,high,$habi | 5habi | SHABI | Shabi | s h a b i | s habi | s***i | sh4b1 | sh4bi | sh@b1 | sh@bi | shab1,block_and_flag
+$habi,Chinese,insult,high,shabi,block_and_flag
+5habi,Chinese,insult,high,shabi,block_and_flag
+s h a b i,Chinese,insult,high,shabi,block_and_flag
+s habi,Chinese,insult,high,shabi,block_and_flag
+s***i,Chinese,insult,high,shabi,block_and_flag
+sh4b1,Chinese,insult,high,shabi,block_and_flag
+sh4bi,Chinese,insult,high,shabi,block_and_flag
+sh@b1,Chinese,insult,high,shabi,block_and_flag
+sh@bi,Chinese,insult,high,shabi,block_and_flag
+shab1,Chinese,insult,high,shabi,block_and_flag
+hun dan,Chinese,insult,medium,HUN DAN | Hun Dan | h u n d a n | h undan | h****n | hun d@n | hun dan | hun-dan | hun_dan | hund4n | hund@n | hundan,warn_and_log
+h u n d a n,Chinese,insult,medium,hun dan,warn_and_log
+h undan,Chinese,insult,medium,hun dan,warn_and_log
+h****n,Chinese,insult,medium,hun dan,warn_and_log
+hun d@n,Chinese,insult,medium,hun dan,warn_and_log
+hun-dan,Chinese,insult,medium,hun dan,warn_and_log
+hun_dan,Chinese,insult,medium,hun dan,warn_and_log
+hund4n,Chinese,insult,medium,hun dan,warn_and_log
+hund@n,Chinese,insult,medium,hun dan,warn_and_log
+hundan,Chinese,insult,medium,hun dan,warn_and_log
+ni ma,Chinese,profanity,high,NI MA | Ni Ma | n i m a | n ima | n**a | n1 ma | n1m4 | n1m@ | n1ma | ni m@ | ni ma | ni-ma,block_and_flag
+n i m a,Chinese,profanity,high,ni ma,block_and_flag
+n ima,Chinese,profanity,high,ni ma,block_and_flag
+n**a,Chinese,profanity,high,ni ma,block_and_flag
+n1 ma,Chinese,profanity,high,ni ma,block_and_flag
+n1m4,Chinese,profanity,high,ni ma,block_and_flag
+n1m@,Chinese,profanity,high,ni ma,block_and_flag
+n1ma,Chinese,profanity,high,ni ma,block_and_flag
+ni m@,Chinese,profanity,high,ni ma,block_and_flag
+ni-ma,Chinese,profanity,high,ni ma,block_and_flag
+ni_ma,Chinese,profanity,high,ni ma,block_and_flag
+nim4,Chinese,profanity,high,ni ma,block_and_flag
+nima,Chinese,profanity,high,ni ma,block_and_flag
+sat,Thai,insult,medium,$at | 5at | SAT | Sat | s4t | s@t | sat,warn_and_log
+$at,Thai,insult,medium,sat,warn_and_log
+5at,Thai,insult,medium,sat,warn_and_log
+s4t,Thai,insult,medium,sat,warn_and_log
+s@t,Thai,insult,medium,sat,warn_and_log
+hia,Thai,insult,high,HIA | Hia | h14 | h1@ | h1a | hi4 | hi@ | hia,block_and_flag
+h14,Thai,insult,high,hia,block_and_flag
+h1@,Thai,insult,high,hia,block_and_flag
+h1a,Thai,insult,high,hia,block_and_flag
+hi4,Thai,insult,high,hia,block_and_flag
+hi@,Thai,insult,high,hia,block_and_flag
+dit me,Vietnamese,profanity,high,DIT ME | Dit Me | d i t m e | d itme | d***e | d1t me | d1tm3 | d1tme | dit m3 | dit me | dit-me | dit_me,block_and_flag
+d i t m e,Vietnamese,profanity,high,dit me,block_and_flag
+d itme,Vietnamese,profanity,high,dit me,block_and_flag
+d***e,Vietnamese,profanity,high,dit me,block_and_flag
+d1t me,Vietnamese,profanity,high,dit me,block_and_flag
+d1tm3,Vietnamese,profanity,high,dit me,block_and_flag
+d1tme,Vietnamese,profanity,high,dit me,block_and_flag
+dit m3,Vietnamese,profanity,high,dit me,block_and_flag
+dit-me,Vietnamese,profanity,high,dit me,block_and_flag
+dit_me,Vietnamese,profanity,high,dit me,block_and_flag
+ditm3,Vietnamese,profanity,high,dit me,block_and_flag
+ditme,Vietnamese,profanity,high,dit me,block_and_flag
+du ma,Vietnamese,profanity,high,DU MA | Du Ma | d u m a | d uma | d**a | du m@ | du ma | du-ma | du_ma | dum4 | dum@ | duma,block_and_flag
+d u m a,Vietnamese,profanity,high,du ma,block_and_flag
+d uma,Vietnamese,profanity,high,du ma,block_and_flag
+d**a,Vietnamese,profanity,high,du ma,block_and_flag
+du m@,Vietnamese,profanity,high,du ma,block_and_flag
+du-ma,Vietnamese,profanity,high,du ma,block_and_flag
+du_ma,Vietnamese,profanity,high,du ma,block_and_flag
+dum4,Vietnamese,profanity,high,du ma,block_and_flag
+dum@,Vietnamese,profanity,high,du ma,block_and_flag
+duma,Vietnamese,profanity,high,du ma,block_and_flag
+ngu,Vietnamese,insult,medium,NGU | Ngu | ngu,warn_and_log
+sik,Turkish,profanity,high,$ik | 5ik | SIK | Sik | s1k | sik,block_and_flag
+$ik,Turkish,profanity,high,sik,block_and_flag
+5ik,Turkish,profanity,high,sik,block_and_flag
+s1k,Turkish,profanity,high,sik,block_and_flag
+siktir,Turkish,profanity,high,$iktir | 5iktir | SIKTIR | Siktir | s i k t i r | s iktir | s****r | s1kt1r | siktir,block_and_flag
+$iktir,Turkish,profanity,high,siktir,block_and_flag
+5iktir,Turkish,profanity,high,siktir,block_and_flag
+s i k t i r,Turkish,profanity,high,siktir,block_and_flag
+s iktir,Turkish,profanity,high,siktir,block_and_flag
+s****r,Turkish,profanity,high,siktir,block_and_flag
+s1kt1r,Turkish,profanity,high,siktir,block_and_flag
+salak,Turkish,insult,medium,$alak | 5alak | SALAK | Salak | s a l a k | s alak | s***k | s4l4k | s@l@k | salak,warn_and_log
+$alak,Turkish,insult,medium,salak,warn_and_log
+5alak,Turkish,insult,medium,salak,warn_and_log
+s a l a k,Turkish,insult,medium,salak,warn_and_log
+s alak,Turkish,insult,medium,salak,warn_and_log
+s***k,Turkish,insult,medium,salak,warn_and_log
+s4l4k,Turkish,insult,medium,salak,warn_and_log
+s@l@k,Turkish,insult,medium,salak,warn_and_log
+orospu,Turkish,sexual,high,0r0spu | OROSPU | Orospu | o r o s p u | o rospu | o****u | oro$pu | oro5pu | orospu,block_and_flag
+0r0spu,Turkish,sexual,high,orospu,block_and_flag
+o r o s p u,Turkish,sexual,high,orospu,block_and_flag
+o rospu,Turkish,sexual,high,orospu,block_and_flag
+o****u,Turkish,sexual,high,orospu,block_and_flag
+oro$pu,Turkish,sexual,high,orospu,block_and_flag
+oro5pu,Turkish,sexual,high,orospu,block_and_flag
+I will kill you,English,threat,critical,1 w1ll k1ll y0u | 1 w1ll k1ll you | 1w1llk1lly0u | 1w1llk1llyou | I WILL KILL YOU | I Will Kill You | i w i l l k i l l y o u | i will kill y0u | i will kill you | i willkillyou | i**********u | i-will-kill-you,block_and_flag
+kill yourself,English,self_harm_encouragement,critical,KILL YOURSELF | Kill Yourself | k i l l y o u r s e l f | k illyourself | k**********f | k1ll y0urself | k1ll yourself | k1lly0urself | k1llyours3lf | k1llyourself | kill y0urself | kill your$elf,block_and_flag
+go die,English,self_harm_encouragement,critical,GO DIE | Go Die | g o d i e | g odie | g***e | g0 d1e | g0 die | g0d1e | g0die | go d1e | go di3 | go die,block_and_flag
+I will hurt you,English,threat,high,1 w1ll hurt y0u | 1 w1ll hurt you | 1w1llhurty0u | 1w1llhurtyou | I WILL HURT YOU | I Will Hurt You | i w i l l h u r t y o u | i will hurt y0u | i will hurt you | i willhurtyou | i**********u | i-will-hurt-you,block_and_flag
+mamatay ka,Filipino/Tagalog,self_harm_encouragement,critical,MAMATAY KA | Mamatay Ka | m a m a t a y k a | m amatayka | m*******a | m4m4t4yk4 | m@m@t@y k@ | m@m@t@yk@ | mamatay ka | mamatay-ka | mamatay_ka | mamatayka,block_and_flag
+papatayin kita,Filipino/Tagalog,threat,critical,PAPATAYIN KITA | Papatayin Kita | p a p a t a y i n k i t a | p apatayinkita | p***********a | p4p4t4y1nk1t4 | p4p4t4yinkit4 | p@p@t@y1nk1t@ | p@p@t@yin kit@ | papatay1n k1ta | papatay1nk1ta | papatayin kita,block_and_flag
+mamatay kayo,Filipino/Tagalog,self_harm_encouragement,critical,MAMATAY KAYO | Mamatay Kayo | m a m a t a y k a y o | m amataykayo | m*********o | m4m4t4yk4yo | m@m@t@y k@yo | m@m@t@yk@y0 | mamatay kay0 | mamatay kayo | mamatay-kayo | mamatay_kayo,block_and_flag
+patayin kita,Filipino/Tagalog,threat,critical,PATAYIN KITA | Patayin Kita | p a t a y i n k i t a | p atayinkita | p*********a | p4t4y1nk1t4 | p4t4yinkit4 | p@t@y1nk1t@ | p@t@yin kit@ | patay1n k1ta | patay1nk1ta | patayin kita,block_and_flag
+NIGGER,English,racial_slur,critical,nigger,block_and_flag
+n i g g e r,English,racial_slur,critical,nigger,block_and_flag
+n****r,English,racial_slur,critical,nigger,block_and_flag
+n1gg3r,English,racial_slur,critical,nigger,block_and_flag
+NIGGA,English,racial_slur,critical,nigga,block_and_flag
+n i g g a,English,racial_slur,critical,nigga,block_and_flag
+n***a,English,racial_slur,critical,nigga,block_and_flag
+n1gg4,English,racial_slur,critical,nigga,block_and_flag
+n1gg@,English,racial_slur,critical,nigga,block_and_flag
+COON,English,racial_slur,critical,coon,block_and_flag
+c o o n,English,racial_slur,critical,coon,block_and_flag
+c**n,English,racial_slur,critical,coon,block_and_flag
+c00n,English,racial_slur,critical,coon,block_and_flag
+5pic,English,ethnic_slur,critical,spic,block_and_flag
+SPIC,English,ethnic_slur,critical,spic,block_and_flag
+s p i c,English,ethnic_slur,critical,spic,block_and_flag
+s**c,English,ethnic_slur,critical,spic,block_and_flag
+sp1c,English,ethnic_slur,critical,spic,block_and_flag
+WETBACK,English,ethnic_slur,critical,wetback,block_and_flag
+w e t b a c k,English,ethnic_slur,critical,wetback,block_and_flag
+w*****k,English,ethnic_slur,critical,wetback,block_and_flag
+w3tb4ck,English,ethnic_slur,critical,wetback,block_and_flag
+w3tb@ck,English,ethnic_slur,critical,wetback,block_and_flag
+BEANER,English,ethnic_slur,critical,beaner,block_and_flag
+b e a n e r,English,ethnic_slur,critical,beaner,block_and_flag
+b****r,English,ethnic_slur,critical,beaner,block_and_flag
+b34n3r,English,ethnic_slur,critical,beaner,block_and_flag
+b3@n3r,English,ethnic_slur,critical,beaner,block_and_flag
+CHINK,English,racial_slur,critical,chink,block_and_flag
+c h i n k,English,racial_slur,critical,chink,block_and_flag
+c***k,English,racial_slur,critical,chink,block_and_flag
+ch1nk,English,racial_slur,critical,chink,block_and_flag
+GOOK,English,ethnic_slur,critical,gook,block_and_flag
+g o o k,English,ethnic_slur,critical,gook,block_and_flag
+g**k,English,ethnic_slur,critical,gook,block_and_flag
+g00k,English,ethnic_slur,critical,gook,block_and_flag
+JAP,English,ethnic_slur,critical,jap,block_and_flag
+j4p,English,ethnic_slur,critical,jap,block_and_flag
+j@p,English,ethnic_slur,critical,jap,block_and_flag
+KIKE,English,religious_ethnic_slur,critical,kike,block_and_flag
+k i k e,English,religious_ethnic_slur,critical,kike,block_and_flag
+k**e,English,religious_ethnic_slur,critical,kike,block_and_flag
+k1k3,English,religious_ethnic_slur,critical,kike,block_and_flag
+PAKI,English,ethnic_slur,critical,paki,block_and_flag
+p a k i,English,ethnic_slur,critical,paki,block_and_flag
+p**i,English,ethnic_slur,critical,paki,block_and_flag
+p4k1,English,ethnic_slur,critical,paki,block_and_flag
+p@k1,English,ethnic_slur,critical,paki,block_and_flag
+RAGHEAD,English,religious_ethnic_slur,critical,raghead,block_and_flag
+r a g h e a d,English,religious_ethnic_slur,critical,raghead,block_and_flag
+r*****d,English,religious_ethnic_slur,critical,raghead,block_and_flag
+r4gh34d,English,religious_ethnic_slur,critical,raghead,block_and_flag
+r@gh3@d,English,religious_ethnic_slur,critical,raghead,block_and_flag
+REDSKIN,English,racial_ethnic_slur,high,redskin,block_and_flag
+r e d s k i n,English,racial_ethnic_slur,high,redskin,block_and_flag
+r*****n,English,racial_ethnic_slur,high,redskin,block_and_flag
+r3dsk1n,English,racial_ethnic_slur,high,redskin,block_and_flag
+red5kin,English,racial_ethnic_slur,high,redskin,block_and_flag
+CRACKER,English,racial_slur,critical,cracker,block_and_flag
+c r a c k e r,English,racial_slur,critical,cracker,block_and_flag
+c*****r,English,racial_slur,critical,cracker,block_and_flag
+cr4ck3r,English,racial_slur,critical,cracker,block_and_flag
+cr@ck3r,English,racial_slur,critical,cracker,block_and_flag
+HONKY,English,racial_slur,critical,honky,block_and_flag
+h o n k y,English,racial_slur,critical,honky,block_and_flag
+h***y,English,racial_slur,critical,honky,block_and_flag
+h0nky,English,racial_slur,critical,honky,block_and_flag
+GYPSY,English,ethnic_slur,critical,gypsy,block_and_flag
+g y p s y,English,ethnic_slur,critical,gypsy,block_and_flag
+g***y,English,ethnic_slur,critical,gypsy,block_and_flag
+gyp5y,English,ethnic_slur,critical,gypsy,block_and_flag
+CHOLO,English,ethnic_slur,critical,cholo,block_and_flag
+c h o l o,English,ethnic_slur,critical,cholo,block_and_flag
+c***o,English,ethnic_slur,critical,cholo,block_and_flag
+ch0l0,English,ethnic_slur,critical,cholo,block_and_flag
+NEGRO,English,racial_term,high,negro,block_and_flag
+n e g r o,English,racial_term,high,negro,block_and_flag
+n***o,English,racial_term,high,negro,block_and_flag
+n3gr0,English,racial_term,high,negro,block_and_flag
+n3gro,English,racial_term,high,negro,block_and_flag
+negr0,English,racial_term,high,negro,block_and_flag
+5andnigger,English,racial_slur,critical,sand nigger,block_and_flag
+SAND NIGGER,English,racial_slur,critical,sand nigger,block_and_flag
+s a n d n i g g e r,English,racial_slur,critical,sand nigger,block_and_flag
+s********r,English,racial_slur,critical,sand nigger,block_and_flag
+s4ndn1gg3r,English,racial_slur,critical,sand nigger,block_and_flag
+s@nd n1gg3r,English,racial_slur,critical,sand nigger,block_and_flag
+sand-nigger,English,racial_slur,critical,sand nigger,block_and_flag
+sand_nigger,English,racial_slur,critical,sand nigger,block_and_flag
+sandnigger,English,racial_slur,critical,sand nigger,block_and_flag
+TOWELHEAD,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+t o w e l h e a d,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+t*******d,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+t0w3lh3@d,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+t0welhead,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+tow3lh34d,English,religious_ethnic_slur,critical,towelhead,block_and_flag
+1nd10,Spanish,ethnic_slur,critical,indio,block_and_flag
+1nd1o,Spanish,ethnic_slur,critical,indio,block_and_flag
+INDIO,Spanish,ethnic_slur,critical,indio,block_and_flag
+i n d i o,Spanish,ethnic_slur,critical,indio,block_and_flag
+i***o,Spanish,ethnic_slur,critical,indio,block_and_flag
+indi0,Spanish,ethnic_slur,critical,indio,block_and_flag
+5udaca,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+SUDACA,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+s u d a c a,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+s****a,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+sud4c4,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+sud@c@,Spanish,ethnic_slur,critical,sudaca,block_and_flag
+MORO,Spanish,religious_ethnic_slur,critical,moro,block_and_flag
+m o r o,Spanish,religious_ethnic_slur,critical,moro,block_and_flag
+m**o,Spanish,religious_ethnic_slur,critical,moro,block_and_flag
+m0r0,Spanish,religious_ethnic_slur,critical,moro,block_and_flag
+NEGRO DE MIERDA,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+n e g r o d e m i e r d a,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+n***********a,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+n3gr0 d3 m13rd@,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+n3grod3m13rd4,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+negr0demierda,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+negro-de-mierda,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+negro_de_mierda,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+negrodemierda,Spanish,racial_slur,critical,negro de mierda,block_and_flag
+5alearabe,French,ethnic_slur,critical,sale arabe,block_and_flag
+SALE ARABE,French,ethnic_slur,critical,sale arabe,block_and_flag
+s a l e a r a b e,French,ethnic_slur,critical,sale arabe,block_and_flag
+s*******e,French,ethnic_slur,critical,sale arabe,block_and_flag
+s4l34r4b3,French,ethnic_slur,critical,sale arabe,block_and_flag
+s@l3 @r@b3,French,ethnic_slur,critical,sale arabe,block_and_flag
+sale-arabe,French,ethnic_slur,critical,sale arabe,block_and_flag
+sale_arabe,French,ethnic_slur,critical,sale arabe,block_and_flag
+salearabe,French,ethnic_slur,critical,sale arabe,block_and_flag
+5alenègre,French,racial_slur,critical,sale nègre,block_and_flag
+SALE NÈGRE,French,racial_slur,critical,sale nègre,block_and_flag
+s a l e n è g r e,French,racial_slur,critical,sale nègre,block_and_flag
+s4l3nègr3,French,racial_slur,critical,sale nègre,block_and_flag
+s@l3 nègr3,French,racial_slur,critical,sale nègre,block_and_flag
+sale-nègre,French,racial_slur,critical,sale nègre,block_and_flag
+sale_nègre,French,racial_slur,critical,sale nègre,block_and_flag
+salenègre,French,racial_slur,critical,sale nègre,block_and_flag
+BOUGNOULE,French,ethnic_slur,critical,bougnoule,block_and_flag
+b o u g n o u l e,French,ethnic_slur,critical,bougnoule,block_and_flag
+b*******e,French,ethnic_slur,critical,bougnoule,block_and_flag
+b0ugn0ul3,French,ethnic_slur,critical,bougnoule,block_and_flag
+b0ugn0ule,French,ethnic_slur,critical,bougnoule,block_and_flag
+bougnoul3,French,ethnic_slur,critical,bougnoule,block_and_flag
+KANAKE,German,ethnic_slur,critical,kanake,block_and_flag
+k a n a k e,German,ethnic_slur,critical,kanake,block_and_flag
+k****e,German,ethnic_slur,critical,kanake,block_and_flag
+k4n4k3,German,ethnic_slur,critical,kanake,block_and_flag
+k@n@k3,German,ethnic_slur,critical,kanake,block_and_flag
+NEGER,German,racial_term,high,neger,block_and_flag
+n e g e r,German,racial_term,high,neger,block_and_flag
+n***r,German,racial_term,high,neger,block_and_flag
+n3g3r,German,racial_term,high,neger,block_and_flag
+JUDENSCHWEIN,German,religious_ethnic_slur,critical,judenschwein,block_and_flag
+j u d e n s c h w e i n,German,religious_ethnic_slur,critical,judenschwein,block_and_flag
+j**********n,German,religious_ethnic_slur,critical,judenschwein,block_and_flag
+jud3nschw31n,German,religious_ethnic_slur,critical,judenschwein,block_and_flag
+juden5chwein,German,religious_ethnic_slur,critical,judenschwein,block_and_flag
+TERRONE,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+t e r r o n e,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+t*****e,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+t3rr0n3,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+t3rron3,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+terr0ne,Italian,regional_ethnic_slur,high,terrone,block_and_flag
+NEGRO,Italian,racial_term,high,negro,block_and_flag
+n e g r o,Italian,racial_term,high,negro,block_and_flag
+n***o,Italian,racial_term,high,negro,block_and_flag
+n3gr0,Italian,racial_term,high,negro,block_and_flag
+n3gro,Italian,racial_term,high,negro,block_and_flag
+negr0,Italian,racial_term,high,negro,block_and_flag
+ZINGARO,Italian,ethnic_slur,critical,zingaro,block_and_flag
+z i n g a r o,Italian,ethnic_slur,critical,zingaro,block_and_flag
+z*****o,Italian,ethnic_slur,critical,zingaro,block_and_flag
+z1ng4ro,Italian,ethnic_slur,critical,zingaro,block_and_flag
+z1ng@r0,Italian,ethnic_slur,critical,zingaro,block_and_flag
+zingar0,Italian,ethnic_slur,critical,zingaro,block_and_flag
+MACACO,Portuguese,racial_slur,critical,macaco,block_and_flag
+m a c a c o,Portuguese,racial_slur,critical,macaco,block_and_flag
+m****o,Portuguese,racial_slur,critical,macaco,block_and_flag
+m4c4co,Portuguese,racial_slur,critical,macaco,block_and_flag
+m@c@c0,Portuguese,racial_slur,critical,macaco,block_and_flag
+macac0,Portuguese,racial_slur,critical,macaco,block_and_flag
+CRIOULO,Portuguese,racial_term,high,crioulo,block_and_flag
+c r i o u l o,Portuguese,racial_term,high,crioulo,block_and_flag
+cr10ul0,Portuguese,racial_term,high,crioulo,block_and_flag
+cr1oulo,Portuguese,racial_term,high,crioulo,block_and_flag
+cri0ul0,Portuguese,racial_term,high,crioulo,block_and_flag
+CHERNOZHOPY,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+c h e r n o z h o p y,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+c*********y,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+ch3rn0zh0py,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+ch3rnozhopy,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+chern0zh0py,Russian,racial_ethnic_slur,high,chernozhopy,block_and_flag
+KHACH,Russian,ethnic_slur,critical,khach,block_and_flag
+k h a c h,Russian,ethnic_slur,critical,khach,block_and_flag
+k***h,Russian,ethnic_slur,critical,khach,block_and_flag
+kh4ch,Russian,ethnic_slur,critical,khach,block_and_flag
+kh@ch,Russian,ethnic_slur,critical,khach,block_and_flag
+CHURKA,Russian,ethnic_slur,critical,churka,block_and_flag
+c h u r k a,Russian,ethnic_slur,critical,churka,block_and_flag
+c****a,Russian,ethnic_slur,critical,churka,block_and_flag
+churk4,Russian,ethnic_slur,critical,churka,block_and_flag
+churk@,Russian,ethnic_slur,critical,churka,block_and_flag
+GAIJIN,Japanese,nationality_term,high,gaijin,block_and_flag
+g a i j i n,Japanese,nationality_term,high,gaijin,block_and_flag
+g****n,Japanese,nationality_term,high,gaijin,block_and_flag
+g41j1n,Japanese,nationality_term,high,gaijin,block_and_flag
+g@1j1n,Japanese,nationality_term,high,gaijin,block_and_flag
+支那人,Japanese,ethnic_slur,critical,支那人,block_and_flag
+WAE-NOM,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+w a e - n o m,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+w*****m,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+w43-nom,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+w@3-n0m,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+wae-n0m,Korean,ethnic_nationality_slur,high,wae-nom,block_and_flag
+JUNGGUK-NOM,Korean,nationality_slur,high,jungguk-nom,block_and_flag
+j u n g g u k - n o m,Korean,nationality_slur,high,jungguk-nom,block_and_flag
+j*********m,Korean,nationality_slur,high,jungguk-nom,block_and_flag
+jungguk-n0m,Korean,nationality_slur,high,jungguk-nom,block_and_flag
+鬼子,Chinese,nationality_slur,high,鬼子,block_and_flag
+日 本 鬼 子,Chinese,nationality_slur,high,日本鬼子,block_and_flag
+日**子,Chinese,nationality_slur,high,日本鬼子,block_and_flag
+日本鬼子,Chinese,nationality_slur,high,日本鬼子,block_and_flag
+MADRASI,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+m a d r a s i,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+m*****i,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+m4dr4s1,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+m@dr@s1,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+madra5i,Hindi,regional_ethnic_slur,high,madrasi,block_and_flag
+KALLU,Hindi,racial_slur,critical,kallu,block_and_flag
+k a l l u,Hindi,racial_slur,critical,kallu,block_and_flag
+k***u,Hindi,racial_slur,critical,kallu,block_and_flag
+k4llu,Hindi,racial_slur,critical,kallu,block_and_flag
+k@llu,Hindi,racial_slur,critical,kallu,block_and_flag
+MLECHHA,Hindi,ethnic_slur,critical,mlechha,block_and_flag
+m l e c h h a,Hindi,ethnic_slur,critical,mlechha,block_and_flag
+m*****a,Hindi,ethnic_slur,critical,mlechha,block_and_flag
+ml3chh4,Hindi,ethnic_slur,critical,mlechha,block_and_flag
+ml3chh@,Hindi,ethnic_slur,critical,mlechha,block_and_flag
+CINA,Indonesian/Malay,ethnic_slur,critical,cina,block_and_flag
+c i n a,Indonesian/Malay,ethnic_slur,critical,cina,block_and_flag
+c**a,Indonesian/Malay,ethnic_slur,critical,cina,block_and_flag
+c1n4,Indonesian/Malay,ethnic_slur,critical,cina,block_and_flag
+c1n@,Indonesian/Malay,ethnic_slur,critical,cina,block_and_flag
+KELING,Indonesian/Malay,ethnic_slur,critical,keling,block_and_flag
+k e l i n g,Indonesian/Malay,ethnic_slur,critical,keling,block_and_flag
+k****g,Indonesian/Malay,ethnic_slur,critical,keling,block_and_flag
+k3l1ng,Indonesian/Malay,ethnic_slur,critical,keling,block_and_flag
+PRIBUMI BODOH,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+p r i b u m i b o d o h,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+p**********h,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pr1bum1 b0d0h,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pr1bum1bodoh,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pribumi-bodoh,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pribumi_bodoh,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pribumib0d0h,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+pribumibodoh,Indonesian,ethnic_insult,high,pribumi bodoh,block_and_flag
+1nts1k,Filipino/Tagalog,ethnic_term,high,intsik,block_and_flag
+INTSIK,Filipino/Tagalog,ethnic_term,high,intsik,block_and_flag
+i n t s i k,Filipino/Tagalog,ethnic_term,high,intsik,block_and_flag
+i****k,Filipino/Tagalog,ethnic_term,high,intsik,block_and_flag
+int5ik,Filipino/Tagalog,ethnic_term,high,intsik,block_and_flag
+1nst1k,Filipino/Tagalog,ethnic_term,high,instik,block_and_flag
+INSTIK,Filipino/Tagalog,ethnic_term,high,instik,block_and_flag
+i n s t i k,Filipino/Tagalog,ethnic_term,high,instik,block_and_flag
+in5tik,Filipino/Tagalog,ethnic_term,high,instik,block_and_flag
+BUMBAY,Filipino/Tagalog,ethnic_term,high,bumbay,block_and_flag
+b u m b a y,Filipino/Tagalog,ethnic_term,high,bumbay,block_and_flag
+b****y,Filipino/Tagalog,ethnic_term,high,bumbay,block_and_flag
+bumb4y,Filipino/Tagalog,ethnic_term,high,bumbay,block_and_flag
+bumb@y,Filipino/Tagalog,ethnic_term,high,bumbay,block_and_flag
+TSEKWA,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+t s e k w a,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+t****a,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+t5ekwa,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+ts3kw4,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+ts3kw@,Filipino/Tagalog,ethnic_insult,high,tsekwa,block_and_flag
+TSEKUA,Filipino/Tagalog,ethnic_insult,high,tsekua,block_and_flag
+t s e k u a,Filipino/Tagalog,ethnic_insult,high,tsekua,block_and_flag
+t5ekua,Filipino/Tagalog,ethnic_insult,high,tsekua,block_and_flag
+ts3ku4,Filipino/Tagalog,ethnic_insult,high,tsekua,block_and_flag
+ts3ku@,Filipino/Tagalog,ethnic_insult,high,tsekua,block_and_flag
+NEGRITO,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+n e g r i t o,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+n*****o,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+n3gr1t0,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+n3gr1to,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+negrit0,Filipino/Tagalog,racial_term,high,negrito,block_and_flag
+1nd10,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+1nd1o,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+INDIO,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+i n d i o,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+i***o,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+indi0,Filipino/Tagalog,historical_ethnic_slur,high,indio,block_and_flag
+MORO,Filipino/Tagalog,historical_ethnic_term,high,moro,block_and_flag
+m o r o,Filipino/Tagalog,historical_ethnic_term,high,moro,block_and_flag
+m**o,Filipino/Tagalog,historical_ethnic_term,high,moro,block_and_flag
+m0r0,Filipino/Tagalog,historical_ethnic_term,high,moro,block_and_flag
+1g0r0t,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+1gorot,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+IGOROT,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+i g o r o t,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+i****t,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+ig0r0t,Filipino/Tagalog,ethnic_term,high,igorot,block_and_flag
+LUMAD,Filipino/Tagalog,ethnic_term,high,lumad,block_and_flag
+l u m a d,Filipino/Tagalog,ethnic_term,high,lumad,block_and_flag
+l***d,Filipino/Tagalog,ethnic_term,high,lumad,block_and_flag
+lum4d,Filipino/Tagalog,ethnic_term,high,lumad,block_and_flag
+lum@d,Filipino/Tagalog,ethnic_term,high,lumad,block_and_flag
+GO BACK TO YOUR COUNTRY,English,xenophobic_insult,critical,go back to your country,block_and_flag
+g o b a c k t o y o u r c o u n t r y,English,xenophobic_insult,critical,go back to your country,block_and_flag
+g*****************y,English,xenophobic_insult,critical,go back to your country,block_and_flag
+g0 b@ck t0 y0ur c0untry,English,xenophobic_insult,critical,go back to your country,block_and_flag
+g0backt0y0urc0untry,English,xenophobic_insult,critical,go back to your country,block_and_flag
+go-back-to-your-country,English,xenophobic_insult,critical,go back to your country,block_and_flag
+go_back_to_your_country,English,xenophobic_insult,critical,go back to your country,block_and_flag
+gob4cktoyourcountry,English,xenophobic_insult,critical,go back to your country,block_and_flag
+gobacktoyourcountry,English,xenophobic_insult,critical,go back to your country,block_and_flag
+YOU PEOPLE ARE INFERIOR,English,hate_targeting,critical,you people are inferior,block_and_flag
+y o u p e o p l e a r e i n f e r i o r,English,hate_targeting,critical,you people are inferior,block_and_flag
+y******************r,English,hate_targeting,critical,you people are inferior,block_and_flag
+y0u p30pl3 @r3 1nf3r10r,English,hate_targeting,critical,you people are inferior,block_and_flag
+y0upe0pleareinferi0r,English,hate_targeting,critical,you people are inferior,block_and_flag
+you-people-are-inferior,English,hate_targeting,critical,you people are inferior,block_and_flag
+you_people_are_inferior,English,hate_targeting,critical,you people are inferior,block_and_flag
+youp3opl34r31nf3r1or,English,hate_targeting,critical,you people are inferior,block_and_flag
+youpeopleareinferior,English,hate_targeting,critical,you people are inferior,block_and_flag
+YOUR RACE IS INFERIOR,English,hate_targeting,critical,your race is inferior,block_and_flag
+y o u r r a c e i s i n f e r i o r,English,hate_targeting,critical,your race is inferior,block_and_flag
+y****************r,English,hate_targeting,critical,your race is inferior,block_and_flag
+y0ur r@c3 1s 1nf3r10r,English,hate_targeting,critical,your race is inferior,block_and_flag
+y0urracei5inferi0r,English,hate_targeting,critical,your race is inferior,block_and_flag
+your-race-is-inferior,English,hate_targeting,critical,your race is inferior,block_and_flag
+your_race_is_inferior,English,hate_targeting,critical,your race is inferior,block_and_flag
+yourr4c31s1nf3r1or,English,hate_targeting,critical,your race is inferior,block_and_flag
+yourraceisinferior,English,hate_targeting,critical,your race is inferior,block_and_flag
+PEOPLE OF YOUR RACE ARE ANIMALS,English,hate_targeting,critical,people of your race are animals,block_and_flag
+p e o p l e o f y o u r r a c e a r e a n i m a l s,English,hate_targeting,critical,people of your race are animals,block_and_flag
+p************************s,English,hate_targeting,critical,people of your race are animals,block_and_flag
+p30pl3 0f y0ur r@c3 @r3 @n1m@ls,English,hate_targeting,critical,people of your race are animals,block_and_flag
+p3opl3ofyourr4c34r34n1m4ls,English,hate_targeting,critical,people of your race are animals,block_and_flag
+pe0ple0fy0urraceareanimal5,English,hate_targeting,critical,people of your race are animals,block_and_flag
+people-of-your-race-are-animals,English,hate_targeting,critical,people of your race are animals,block_and_flag
+people_of_your_race_are_animals,English,hate_targeting,critical,people of your race are animals,block_and_flag
+peopleofyourraceareanimals,English,hate_targeting,critical,people of your race are animals,block_and_flag
+1 h@t3 y0ur r@c3,English,hate_targeting,critical,I hate your race,block_and_flag
+1h4t3yourr4c3,English,hate_targeting,critical,I hate your race,block_and_flag
+I HATE YOUR RACE,English,hate_targeting,critical,I hate your race,block_and_flag
+i h a t e y o u r r a c e,English,hate_targeting,critical,I hate your race,block_and_flag
+i***********e,English,hate_targeting,critical,I hate your race,block_and_flag
+i-hate-your-race,English,hate_targeting,critical,I hate your race,block_and_flag
+i_hate_your_race,English,hate_targeting,critical,I hate your race,block_and_flag
+ihatey0urrace,English,hate_targeting,critical,I hate your race,block_and_flag
+ihateyourrace,English,hate_targeting,critical,I hate your race,block_and_flag
+MGA LAHI NINYO AY BASURA,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+m g a l a h i n i n y o a y b a s u r a,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+m******************a,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mg4l4h1n1nyo4yb4sur4,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mg@ l@h1 n1ny0 @y b@sur@,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mga-lahi-ninyo-ay-basura,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mga_lahi_ninyo_ay_basura,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mgalahininy0ayba5ura,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+mgalahininyoaybasura,Filipino/Tagalog,hate_targeting,critical,mga lahi ninyo ay basura,block_and_flag
+BUMALIK KA SA BANSA MO,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+b u m a l i k k a s a b a n s a m o,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+b****************o,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bum4l1kk4s4b4ns4mo,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bum@l1k k@ s@ b@ns@ m0,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bumalik-ka-sa-bansa-mo,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bumalik_ka_sa_bansa_mo,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bumalikka5aban5am0,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag
+bumalikkasabansamo,Filipino/Tagalog,xenophobic_insult,critical,bumalik ka sa bansa mo,block_and_flag

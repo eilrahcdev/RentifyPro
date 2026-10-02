@@ -1,0 +1,24 @@
+.rp-owner-vehicles {
+  container-type: inline-size;
+  --rp-vehicle-card-desktop-width: 350px;
+}
+.rp-owner-vehicle-grid {
+  display: grid;
+  grid-template-columns: minmax(0, var(--rp-vehicle-card-desktop-width));
+  justify-content: center;
+  gap: var(--rp-vehicle-card-gap);
+  max-width: calc(4 * var(--rp-vehicle-card-desktop-width) + 3 * var(--rp-vehicle-card-gap));
+  margin-inline: auto;
+  padding-bottom: 1.5rem;
+}
+
+/* Two cards may shrink slightly beside the sidebar; wider rows use 350px. */
+@container (min-width: 680px) {
+  .rp-owner-vehicle-grid { grid-template-columns: repeat(2, minmax(0, var(--rp-vehicle-card-desktop-width))); }
+}
+@container (min-width: 1090px) {
+  .rp-owner-vehicle-grid { grid-template-columns: repeat(3, minmax(0, var(--rp-vehicle-card-desktop-width))); }
+}
+@container (min-width: 1460px) {
+  .rp-owner-vehicle-grid { grid-template-columns: repeat(4, minmax(0, var(--rp-vehicle-card-desktop-width))); }
+}

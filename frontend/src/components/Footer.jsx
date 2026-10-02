@@ -1,6 +1,13 @@
 import React from "react";
 
-export default function Footer({ onScrollToTop, onNavigateToVehicles, onNavigateToBookingHistory, onNavigateToAbout }) {
+export default function Footer({
+  onScrollToTop,
+  onNavigateToVehicles,
+  onNavigateToBookingHistory,
+  onNavigateToAbout,
+  onNavigateToPrivacyPolicy,
+  onNavigateToTermsAndConditions,
+}) {
   return (
     <footer className="bg-[#017FE6] text-white py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -13,20 +20,48 @@ export default function Footer({ onScrollToTop, onNavigateToVehicles, onNavigate
           <div>
             <h4 className="font-bold mb-4">Quick Links</h4>
             <ul className="space-y-3">
-              <li><button onClick={onScrollToTop} className="text-blue-100 hover:text-white transition-colors duration-300">Home</button></li>
-              <li><button onClick={onNavigateToVehicles} className="text-blue-100 hover:text-white transition-colors duration-300">Vehicles</button></li>
-              <li><button onClick={onNavigateToBookingHistory} className="text-blue-100 hover:text-white transition-colors duration-300">Bookings</button></li>
-              <li><button onClick={onNavigateToAbout} className="text-blue-100 hover:text-white transition-colors duration-300">About Us</button></li>
+              <li>
+                <button
+                  onClick={onScrollToTop}
+                  className="text-blue-100 hover:text-white transition-colors duration-300"
+                >
+                  Home
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={onNavigateToVehicles}
+                  className="text-blue-100 hover:text-white transition-colors duration-300"
+                >
+                  Vehicles
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={onNavigateToBookingHistory}
+                  className="text-blue-100 hover:text-white transition-colors duration-300"
+                >
+                  Bookings
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={onNavigateToAbout}
+                  className="text-blue-100 hover:text-white transition-colors duration-300"
+                >
+                  About Us
+                </button>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-bold mb-4">Vehicle Categories</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Cars</a></li>
-              <li><a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Motorcycles</a></li>
-              <li><a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Vans</a></li>
-              <li><a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Trucks</a></li>
+              <li className="text-blue-100">Cars</li>
+              <li className="text-blue-100">Motorcycles</li>
+              <li className="text-blue-100">Vans</li>
+              <li className="text-blue-100">Trucks</li>
             </ul>
           </div>
 
@@ -41,10 +76,20 @@ export default function Footer({ onScrollToTop, onNavigateToVehicles, onNavigate
         </div>
 
         <div className="border-t border-blue-500 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-blue-100">© 2026 RentifyPro. All rights reserved</p>
+          <p className="text-blue-100">Copyright 2026 RentifyPro. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
-            <a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Privacy Policy</a>
-            <a href="#" className="text-blue-100 hover:text-white transition-colors duration-300">Terms and Condition</a>
+            <button
+              onClick={onNavigateToPrivacyPolicy}
+              className="text-blue-100 hover:text-white transition-colors duration-300"
+            >
+              Privacy Policy
+            </button>
+            <button
+              onClick={onNavigateToTermsAndConditions}
+              className="text-blue-100 hover:text-white transition-colors duration-300"
+            >
+              Terms and Conditions
+            </button>
           </div>
         </div>
       </div>

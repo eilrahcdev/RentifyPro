@@ -8,7 +8,7 @@
       "english": {
         "question": "Hello or good day.",
         "answers": [
-          "Hello! I am RentifyPro AI. I can help you with available vehicles, booking steps, rental requirements, payments, and recommendations. What would you like to know?",
+          "Hello! I am Rentify AI. I can help you with available vehicles, booking steps, rental requirements, payments, and recommendations. What would you like to know?",
           "Hi! Welcome to RentifyPro. You can ask me about vehicle availability, booking, payment methods, rental requirements, or recommendations.",
           "Good day! I am here to help with bookings, vehicle options, rental policies, and payment questions. How can I assist you today?"
         ]
@@ -16,7 +16,7 @@
       "filipino": {
         "question": "Hello o magandang araw.",
         "answers": [
-          "Hello! Ako si RentifyPro AI. Maaari kitang tulungan sa available na sasakyan, booking, requirements, bayad, at recommendations. Ano ang gusto mong malaman?",
+          "Hello! Ako si Rentify AI. Maaari kitang tulungan sa available na sasakyan, booking, requirements, bayad, at recommendations. Ano ang gusto mong malaman?",
           "Hi! Maligayang pagdating sa RentifyPro. Maaari kang magtanong tungkol sa available na sasakyan, booking, paraan ng bayad, requirements, o recommendations.",
           "Magandang araw! Nandito ako para tumulong sa booking, pagpili ng sasakyan, rental policies, at mga tanong tungkol sa bayad. Paano kita matutulungan?"
         ]
@@ -46,17 +46,17 @@
       "english": {
         "question": "Who are you?",
         "answers": [
-          "I am RentifyPro AI, your assistant for vehicle rentals, booking steps, payments, rental requirements, and vehicle recommendations.",
-          "I'm the RentifyPro AI assistant. I can help you find available vehicles and answer booking-related questions.",
-          "I am RentifyPro AI. You can ask me about vehicle availability, booking, payments, and rental policies."
+          "I am Rentify AI, your assistant for vehicle rentals, booking steps, payments, rental requirements, and vehicle recommendations.",
+          "I'm the Rentify AI assistant. I can help you find available vehicles and answer booking-related questions.",
+          "I am Rentify AI. You can ask me about vehicle availability, booking, payments, and rental policies."
         ]
       },
       "filipino": {
         "question": "Sino ka?",
         "answers": [
-          "Ako si RentifyPro AI, ang assistant mo para sa vehicle rentals, booking steps, bayad, rental requirements, at vehicle recommendations.",
-          "Ako ang RentifyPro AI assistant. Maaari kitang tulungan sa paghahanap ng available na sasakyan at pagsagot sa mga tanong tungkol sa booking.",
-          "Ako si RentifyPro AI. Maaari kang magtanong tungkol sa availability ng sasakyan, booking, bayad, at rental policies."
+          "Ako si Rentify AI, ang assistant mo para sa vehicle rentals, booking steps, bayad, rental requirements, at vehicle recommendations.",
+          "Ako ang Rentify AI assistant. Maaari kitang tulungan sa paghahanap ng available na sasakyan at pagsagot sa mga tanong tungkol sa booking.",
+          "Ako si Rentify AI. Maaari kang magtanong tungkol sa availability ng sasakyan, booking, bayad, at rental policies."
         ]
       }
     },

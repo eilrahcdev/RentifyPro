@@ -1,16 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useImperativeHandle, useRef, useState } from "react";
 
 const normalizeNameInput = (value = "") => {
   let nextValue = String(value);
   nextValue = nextValue.replace(/[^A-Za-z ]/g, "");
   nextValue = nextValue.replace(/\s+/g, " ");
   if (nextValue.startsWith(" ")) nextValue = nextValue.slice(1);
-  const firstSpace = nextValue.indexOf(" ");
-  if (firstSpace !== -1) {
-    const before = nextValue.slice(0, firstSpace);
-    const after = nextValue.slice(firstSpace + 1).replace(/ /g, "");
-    nextValue = `${before} ${after}`;
-  }
   return nextValue;
 };
 
@@ -30,32 +24,37 @@ export default function FormInput({
   inputMode,
   pattern,
   maxLength,
+  min,
+  max,
   inputRef,
   iconPosition = "right",
+  prefixText = "",
+  onBlur,
+  onFocus,
 }) {
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
-  const [savedEmails, setSavedEmails] = useState([]);
+  const [savedEmails] = useState(() => {
+    try {
+      const stored = localStorage.getItem("savedEmails");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const localInputRef = useRef(null);
   const isDateInput = type === "date";
 
-  useEffect(() => {
-    const stored = localStorage.getItem("savedEmails");
-    if (stored) {
-      try {
-        setSavedEmails(JSON.parse(stored));
-      } catch {
-        setSavedEmails([]);
-      }
-    }
-  }, []);
+  useImperativeHandle(inputRef, () => localInputRef.current);
 
   const handleEmailFocus = () => {
+    if (typeof onFocus === "function") onFocus();
     if (showEmailHint && type === "email") {
       setShowEmailSuggestions(true);
     }
   };
 
   const handleEmailBlur = () => {
+    if (typeof onBlur === "function") onBlur();
     setTimeout(() => setShowEmailSuggestions(false), 200);
   };
 
@@ -75,18 +74,31 @@ export default function FormInput({
       newValue = newValue.replace(/[^0-9]/g, "");
     }
 
+    if (type === "email") {
+      newValue = newValue.replace(/\s/g, "");
+    }
+
     onChange({ target: { value: newValue } });
   };
 
-  const setInputRefs = (node) => {
-    localInputRef.current = node;
-    if (typeof inputRef === "function") {
-      inputRef(node);
-      return;
+  const handleKeyDown = (e) => {
+    if (type === "email" && e.key === " ") {
+      e.preventDefault();
     }
-    if (inputRef && typeof inputRef === "object") {
-      inputRef.current = node;
-    }
+  };
+
+  const handlePaste = (e) => {
+    if (type !== "email") return;
+    const pastedText = String(e.clipboardData?.getData("text") || "");
+    if (!/\s/.test(pastedText)) return;
+    e.preventDefault();
+    const sanitizedText = pastedText.replace(/\s/g, "");
+    const input = e.currentTarget;
+    const currentValue = String(input?.value || "");
+    const start = Number.isInteger(input?.selectionStart) ? input.selectionStart : currentValue.length;
+    const end = Number.isInteger(input?.selectionEnd) ? input.selectionEnd : currentValue.length;
+    const nextValue = currentValue.slice(0, start) + sanitizedText + currentValue.slice(end);
+    onChange({ target: { value: nextValue } });
   };
 
   const handleIconClick = () => {
@@ -103,6 +115,7 @@ export default function FormInput({
 
   const hasLeftIcon = Boolean(Icon) && !isDateInput && iconPosition === "left";
   const hasRightIcon = Boolean(Icon) && (isDateInput || iconPosition !== "left");
+  const hasPrefix = Boolean(prefixText);
 
   return (
     <div className="space-y-2">
@@ -142,10 +155,12 @@ export default function FormInput({
         )}
 
         <input
-          ref={setInputRefs}
+          ref={localInputRef}
           type={type}
           value={value}
           onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={handleEmailFocus}
           onBlur={handleEmailBlur}
           disabled={disabled}
@@ -154,11 +169,16 @@ export default function FormInput({
           inputMode={inputMode}
           pattern={pattern}
           maxLength={maxLength}
+          min={min}
+          max={max}
           autoComplete={type === "email" ? "email" : "off"}
+          aria-invalid={Boolean(error)}
           className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
             hasRightIcon ? "pr-12" : ""
           } ${
             hasLeftIcon ? "pl-12" : ""
+          } ${
+            hasPrefix ? "pl-16" : ""
           } ${
             isDateInput
               ? "appearance-none [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none"
@@ -169,6 +189,12 @@ export default function FormInput({
               : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
           } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
         />
+
+        {hasPrefix && (
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+            {prefixText}
+          </span>
+        )}
 
         {showEmailSuggestions &&
           showEmailHint &&

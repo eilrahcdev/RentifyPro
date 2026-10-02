@@ -1,9 +1,13 @@
 // Auth input validation
 import mongoose from "mongoose";
+import { normalizeListingText, validateListingFields } from "../utils/vehicleListingValidation.js";
+import { normalizePhilippineMobile } from "../utils/phone.js";
+import { cleanupUploadedVehicleFiles } from "../utils/localMedia.js";
 
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-const PHONE_REGEX = /^[0-9]{11}$/;
+const PHONE_REGEX = /^9[0-9]{9}$/;
+const NAME_REGEX = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
 const ALLOWED_EMAIL_DOMAINS = new Set([
   "gmail.com",
   "yahoo.com",
@@ -14,12 +18,14 @@ const ALLOWED_GENDERS = new Set(["Male", "Female", "Prefer not to say"]);
 const ALLOWED_RELATIONSHIPS = new Set(["Parent", "Sibling", "Spouse", "Partner", "Relative", "Friend", "Guardian", "Other"]);
 const ALLOWED_OWNER_TYPES = new Set(["individual", "business"]);
 const MIN_RENTER_AGE = 18;
+const MAX_RENTER_AGE = 100;
 const MAX_EMAIL_LENGTH = 254;
-const MAX_PHONE_LENGTH = 11;
+const MAX_PHONE_LENGTH = 10;
 const MAX_BUSINESS_NAME = 120;
 const MAX_LICENSE_NUMBER = 50;
 const MAX_PERMIT_NUMBER = 50;
 const MAX_ADDRESS_LENGTH = 255;
+const MAX_EMERGENCY_CONTACT_NAME_LENGTH = 50;
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const parseDateOfBirth = (value) => {
@@ -43,10 +49,7 @@ const parseDateOfBirth = (value) => {
     return null;
   }
 
-  const parsed = new Date(clean);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setHours(0, 0, 0, 0);
-  return parsed;
+  return null;
 };
 
 const getAgeFromDate = (birthDate, today) => {
@@ -57,12 +60,32 @@ const getAgeFromDate = (birthDate, today) => {
   return age;
 };
 
+const registrationEmailError = (email) => {
+  if (!email || typeof email !== "string") return "Email is required.";
+  if (/\s/.test(email.trim())) return "Email must not contain spaces.";
+  if (EMOJI_REGEX.test(email)) return "Email must not contain emoji.";
+  if (email.trim().length > MAX_EMAIL_LENGTH) return `Email is too long (max ${MAX_EMAIL_LENGTH} characters).`;
+  if (!EMAIL_REGEX.test(email.trim())) return "Enter a valid email address.";
+  if (!ALLOWED_EMAIL_DOMAINS.has(email.trim().split("@")[1].toLowerCase())) {
+    return "Please use a valid email address from a supported provider.";
+  }
+  return "";
+};
+
+export const validateRegistrationEmail = (req, res, next) => {
+  const message = registrationEmailError(req.body?.email);
+  if (message) return res.status(400).json({ success: false, message, errors: { email: message } });
+  req.body.email = req.body.email.trim().toLowerCase();
+  next();
+};
+
 // Validate register input
 export const validateRegister = (req, res, next) => {
   const { name, email, password } = req.body;
   const errors = {};
   const requestedRole = req.body.role === "owner" ? "owner" : "user";
-  const phone = toText(req.body.phone);
+  const rawPhone = toText(req.body.phone);
+  const phone = normalizePhilippineMobile(rawPhone);
   const dateOfBirth = toText(req.body.dateOfBirth);
   const gender = toText(req.body.gender);
   const address = toText(req.body.address);
@@ -71,7 +94,8 @@ export const validateRegister = (req, res, next) => {
   const city = toText(req.body.city);
   const barangay = toText(req.body.barangay);
   const emergencyContactName = toText(req.body.emergencyContactName);
-  const emergencyContactPhone = toText(req.body.emergencyContactPhone);
+  const rawEmergencyContactPhone = toText(req.body.emergencyContactPhone);
+  const emergencyContactPhone = normalizePhilippineMobile(rawEmergencyContactPhone);
   const emergencyContactRelationship = toText(req.body.emergencyContactRelationship);
   const ownerType = toText(req.body.ownerType);
   const businessName = toText(req.body.businessName);
@@ -84,19 +108,8 @@ export const validateRegister = (req, res, next) => {
   else if (name.trim().length > 100) errors.name = "Name is too long (max 100 characters).";
 
   // Email rules
-  if (!email || typeof email !== "string") errors.email = "Email is required.";
-  else if (/\s/.test(email.trim())) errors.email = "Email must not contain spaces.";
-  else if (EMOJI_REGEX.test(email)) errors.email = "Email must not contain emoji.";
-  else if (email.trim().length > MAX_EMAIL_LENGTH)
-    errors.email = `Email is too long (max ${MAX_EMAIL_LENGTH} characters).`;
-  else if (!EMAIL_REGEX.test(email.trim())) errors.email = "Enter a valid email address.";
-
-  if (!errors.email) {
-    const emailDomain = String(email || "").trim().split("@")[1]?.toLowerCase() || "";
-    if (!ALLOWED_EMAIL_DOMAINS.has(emailDomain)) {
-      errors.email = "Please use a valid email address from a supported provider.";
-    }
-  }
+  const emailError = registrationEmailError(email);
+  if (emailError) errors.email = emailError;
 
   // Password rules
   if (!password) errors.password = "Password is required.";
@@ -110,10 +123,11 @@ export const validateRegister = (req, res, next) => {
   else if (!/[!@#$%^&*()_+\-=[\]{}|;':",.<>?/`~]/.test(password))
     errors.password = "Password needs a special character.";
 
-  if (phone) {
+  if (rawPhone) {
     if (phone.length > MAX_PHONE_LENGTH)
       errors.phone = `Phone number is too long (max ${MAX_PHONE_LENGTH} digits).`;
-    else if (!PHONE_REGEX.test(phone)) errors.phone = "Phone number must be exactly 11 digits.";
+    else if (!PHONE_REGEX.test(phone))
+      errors.phone = "Phone number must be exactly 10 digits and start with 9.";
   }
 
   if (requestedRole === "user" && !dateOfBirth) {
@@ -134,6 +148,9 @@ export const validateRegister = (req, res, next) => {
         if (age < MIN_RENTER_AGE) {
           errors.dateOfBirth = "Looks like you're under 18. RentifyPro accounts are for ages 18+.";
         }
+        if (age > MAX_RENTER_AGE) {
+          errors.dateOfBirth = "Registration is available for ages 18 to 100.";
+        }
       }
     }
   }
@@ -152,13 +169,17 @@ export const validateRegister = (req, res, next) => {
   if (emergencyContactName) {
     if (EMOJI_REGEX.test(emergencyContactName)) {
       errors.emergencyContactName = "Emergency contact name must not contain emoji.";
-    } else if (emergencyContactName.length > 100) {
-      errors.emergencyContactName = "Emergency contact name is too long (max 100 characters).";
+    } else if (!NAME_REGEX.test(emergencyContactName)) {
+      errors.emergencyContactName =
+        "Emergency contact name can only contain letters and single spaces between names.";
+    } else if (emergencyContactName.length > MAX_EMERGENCY_CONTACT_NAME_LENGTH) {
+      errors.emergencyContactName = `Emergency contact name is too long (max ${MAX_EMERGENCY_CONTACT_NAME_LENGTH} characters).`;
     }
   }
 
-  if (emergencyContactPhone && !PHONE_REGEX.test(emergencyContactPhone)) {
-    errors.emergencyContactPhone = "Emergency contact phone must be exactly 11 digits.";
+  if (rawEmergencyContactPhone && !PHONE_REGEX.test(emergencyContactPhone)) {
+    errors.emergencyContactPhone =
+      "Emergency contact phone must be exactly 10 digits and start with 9.";
   }
 
   if (
@@ -225,6 +246,9 @@ export const validateLogin = (req, res, next) => {
   if (!email || !email.trim()) errors.email = "Email is required.";
   else if (/\s/.test(email.trim())) errors.email = "Email must not contain spaces.";
   else if (EMOJI_REGEX.test(email)) errors.email = "Email must not contain emoji.";
+  else if (email.trim().length > MAX_EMAIL_LENGTH)
+    errors.email = `Email is too long (max ${MAX_EMAIL_LENGTH} characters).`;
+  else if (!EMAIL_REGEX.test(email.trim())) errors.email = "Enter a valid email address.";
 
   if (!password) errors.password = "Password is required.";
   else if (/\s/.test(password)) errors.password = "Password must not contain spaces.";
@@ -253,7 +277,12 @@ export const validateObjectIdParam = (paramName = "id") => (req, _res, next) => 
 };
 
 const AVAILABILITY_STATUSES = new Set(["available", "unavailable"]);
-const BOOKING_STATUSES = new Set(["pending", "confirmed", "completed", "cancelled", "rejected"]);
+const COVER_DISPLAY_MODES = new Set(["auto", "photo", "cutout"]);
+const LATE_RETURN_FEE_TYPES = new Set(["percentage", "fixed_hourly"]);
+const MAX_LATE_RETURN_PERCENTAGE = 100;
+const MAX_LATE_RETURN_FIXED_HOURLY = 100000;
+const MAX_LATE_RETURN_GRACE_MINUTES = 1440;
+const BOOKING_STATUSES = new Set(["pending", "confirmed", "extended", "completed", "cancelled", "rejected"]);
 const PAYMENT_STATUSES = new Set(["unpaid", "partial", "paid", "refunded"]);
 
 const parseBoolean = (value, fallback = false) => {
@@ -286,6 +315,11 @@ const parseStringArray = (value) => {
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
 const sanitizeVehicleBody = (req, { isUpdate = false } = {}) => {
+  for (const field of ["name", "description", "location", "specSubType", "specPlateNumber"]) {
+    if (typeof req.body[field] === "string") req.body[field] = normalizeListingText(req.body[field], field === "description");
+  }
+  if (typeof req.body.specPlateNumber === "string") req.body.specPlateNumber = req.body.specPlateNumber.toUpperCase();
+  req.body.approvedImageIds = parseStringArray(req.body.approvedImageIds);
   if (typeof req.body.name === "string") req.body.name = req.body.name.trim();
   if (typeof req.body.description === "string") req.body.description = req.body.description.trim();
   if (typeof req.body.location === "string") req.body.location = req.body.location.trim();
@@ -307,6 +341,37 @@ const sanitizeVehicleBody = (req, { isUpdate = false } = {}) => {
     req.body.existingImages = [];
   }
 
+  if (hasOwn(req.body, "coverImagePath")) {
+    req.body.coverImagePath = toText(req.body.coverImagePath);
+  } else if (!isUpdate) {
+    req.body.coverImagePath = "";
+  }
+
+  if (hasOwn(req.body, "coverUploadIndex")) {
+    req.body.coverUploadIndex = toText(req.body.coverUploadIndex);
+  } else if (!isUpdate) {
+    req.body.coverUploadIndex = "";
+  }
+
+  if (hasOwn(req.body, "coverDisplayMode")) {
+    req.body.coverDisplayMode = toText(req.body.coverDisplayMode).toLowerCase();
+  } else if (!isUpdate) {
+    req.body.coverDisplayMode = "auto";
+  }
+
+  if (hasOwn(req.body, "lateReturnFeeType")) {
+    req.body.lateReturnFeeType = toText(req.body.lateReturnFeeType).toLowerCase();
+  } else if (!isUpdate) {
+    req.body.lateReturnFeeType = "percentage";
+  }
+
+  if (!isUpdate && !hasOwn(req.body, "lateReturnFeeValue")) {
+    req.body.lateReturnFeeValue = 25;
+  }
+  if (!isUpdate && !hasOwn(req.body, "lateReturnGraceMinutes")) {
+    req.body.lateReturnGraceMinutes = 0;
+  }
+
   if (req.body.driverOptionEnabled !== undefined) {
     req.body.driverOptionEnabled = parseBoolean(req.body.driverOptionEnabled, false);
   } else if (!isUpdate) {
@@ -317,9 +382,47 @@ const sanitizeVehicleBody = (req, { isUpdate = false } = {}) => {
   return req.body;
 };
 
-export const validateVehicleCreate = (req, res, next) => {
+const validateLateReturnPolicy = (body, errors, { required = false } = {}) => {
+  const hasType = body.lateReturnFeeType !== undefined;
+  const hasValue = body.lateReturnFeeValue !== undefined;
+  const hasGrace = body.lateReturnGraceMinutes !== undefined;
+  if (!required && !hasType && !hasValue && !hasGrace) return;
+
+  if (!LATE_RETURN_FEE_TYPES.has(body.lateReturnFeeType)) {
+    errors.lateReturnFeeType = "Late-return fee type must be percentage or fixed hourly.";
+  }
+
+  const feeValue = Number(body.lateReturnFeeValue);
+  const maxValue =
+    body.lateReturnFeeType === "fixed_hourly"
+      ? MAX_LATE_RETURN_FIXED_HOURLY
+      : MAX_LATE_RETURN_PERCENTAGE;
+  if (!Number.isFinite(feeValue) || feeValue < 0 || feeValue > maxValue) {
+    errors.lateReturnFeeValue =
+      body.lateReturnFeeType === "fixed_hourly"
+        ? "Fixed late-return fee must be between 0 and 100,000 per hour."
+        : "Late-return percentage must be between 0 and 100.";
+  } else {
+    body.lateReturnFeeValue = feeValue;
+  }
+
+  const graceMinutes = Number(body.lateReturnGraceMinutes);
+  if (
+    !Number.isFinite(graceMinutes) ||
+    !Number.isInteger(graceMinutes) ||
+    graceMinutes < 0 ||
+    graceMinutes > MAX_LATE_RETURN_GRACE_MINUTES
+  ) {
+    errors.lateReturnGraceMinutes = "Late-return grace period must be a whole number from 0 to 1,440 minutes.";
+  } else {
+    body.lateReturnGraceMinutes = graceMinutes;
+  }
+};
+
+export const validateVehicleCreate = async (req, res, next) => {
   const body = sanitizeVehicleBody(req);
   const errors = {};
+  const listingErrors = validateListingFields(body);
 
   if (!body.name) errors.name = "Vehicle name is required.";
   if (!body.description) errors.description = "Description is required.";
@@ -327,15 +430,19 @@ export const validateVehicleCreate = (req, res, next) => {
 
   const rate = Number(body.dailyRentalRate);
   if (body.dailyRentalRate === undefined || body.dailyRentalRate === null || body.dailyRentalRate === "") {
-    errors.dailyRentalRate = "Daily rental rate is required.";
+    errors.dailyRentalRate = "Hourly rental rate is required.";
   } else if (!Number.isFinite(rate) || rate < 0) {
-    errors.dailyRentalRate = "Daily rental rate must be a valid non-negative number.";
+    errors.dailyRentalRate = "Hourly rental rate must be a valid non-negative number.";
   } else {
     body.dailyRentalRate = rate;
   }
 
   if (!AVAILABILITY_STATUSES.has(body.availabilityStatus)) {
     errors.availabilityStatus = "Availability status must be 'available' or 'unavailable'.";
+  }
+
+  if (!COVER_DISPLAY_MODES.has(body.coverDisplayMode)) {
+    errors.coverDisplayMode = "Cover display mode must be 'auto', 'photo', or 'cutout'.";
   }
 
   const seats = Number(body.specSeats);
@@ -348,7 +455,7 @@ export const validateVehicleCreate = (req, res, next) => {
   const driverDailyRate = Number(body.driverDailyRate || 0);
   if (body.driverOptionEnabled) {
     if (!Number.isFinite(driverDailyRate) || driverDailyRate < 0) {
-      errors.driverDailyRate = "Driver daily rate must be zero or greater.";
+      errors.driverDailyRate = "Driver hourly rate must be zero or greater.";
     } else {
       body.driverDailyRate = driverDailyRate;
     }
@@ -356,22 +463,36 @@ export const validateVehicleCreate = (req, res, next) => {
     body.driverDailyRate = 0;
   }
 
-  const uploadedImages = Array.isArray(req.files) ? req.files.length : 0;
+  validateLateReturnPolicy(body, errors, { required: true });
+
+  const uploadedImages = (Array.isArray(req.files) ? req.files.length : 0) + body.approvedImageIds.length;
   const linkedImages = body.imageUrls.length;
   if (uploadedImages + linkedImages === 0) {
     errors.images = "At least one image is required.";
   }
 
+  if (body.coverUploadIndex) {
+    const coverUploadIndex = Number.parseInt(body.coverUploadIndex, 10);
+    if (!/^\d+$/.test(String(body.coverUploadIndex)) || !Number.isSafeInteger(coverUploadIndex) || coverUploadIndex < 0) {
+      errors.coverUploadIndex = "Cover image selection is invalid.";
+    } else {
+      body.coverUploadIndex = coverUploadIndex;
+    }
+  }
+
+  Object.assign(errors, listingErrors);
   if (Object.keys(errors).length) {
+    await cleanupUploadedVehicleFiles(req.files);
     return res.status(400).json({ success: false, message: "Validation failed.", errors });
   }
 
   next();
 };
 
-export const validateVehicleUpdate = (req, res, next) => {
+export const validateVehicleUpdate = async (req, res, next) => {
   const body = sanitizeVehicleBody(req, { isUpdate: true });
   const errors = {};
+  const listingErrors = validateListingFields(body, { partial: true });
 
   if (body.name !== undefined && !body.name) errors.name = "Vehicle name cannot be empty.";
   if (body.description !== undefined && !body.description) errors.description = "Description cannot be empty.";
@@ -380,7 +501,7 @@ export const validateVehicleUpdate = (req, res, next) => {
   if (body.dailyRentalRate !== undefined) {
     const rate = Number(body.dailyRentalRate);
     if (!Number.isFinite(rate) || rate < 0) {
-      errors.dailyRentalRate = "Daily rental rate must be a valid non-negative number.";
+      errors.dailyRentalRate = "Hourly rental rate must be a valid non-negative number.";
     } else {
       body.dailyRentalRate = rate;
     }
@@ -391,6 +512,14 @@ export const validateVehicleUpdate = (req, res, next) => {
     !AVAILABILITY_STATUSES.has(body.availabilityStatus)
   ) {
     errors.availabilityStatus = "Availability status must be 'available' or 'unavailable'.";
+  }
+
+
+  if (
+    body.coverDisplayMode !== undefined &&
+    !COVER_DISPLAY_MODES.has(body.coverDisplayMode)
+  ) {
+    errors.coverDisplayMode = "Cover display mode must be 'auto', 'photo', or 'cutout'.";
   }
 
   if (body.specSeats !== undefined && body.specSeats !== "") {
@@ -409,13 +538,26 @@ export const validateVehicleUpdate = (req, res, next) => {
   if (body.driverDailyRate !== undefined) {
     const driverDailyRate = Number(body.driverDailyRate);
     if (!Number.isFinite(driverDailyRate) || driverDailyRate < 0) {
-      errors.driverDailyRate = "Driver daily rate must be zero or greater.";
+      errors.driverDailyRate = "Driver hourly rate must be zero or greater.";
     } else {
       body.driverDailyRate = driverDailyRate;
     }
   }
 
+  validateLateReturnPolicy(body, errors);
+  Object.assign(errors, listingErrors);
+
+  if (body.coverUploadIndex) {
+    const coverUploadIndex = Number.parseInt(body.coverUploadIndex, 10);
+    if (!/^\d+$/.test(String(body.coverUploadIndex)) || !Number.isSafeInteger(coverUploadIndex) || coverUploadIndex < 0) {
+      errors.coverUploadIndex = "Cover image selection is invalid.";
+    } else {
+      body.coverUploadIndex = coverUploadIndex;
+    }
+  }
+
   if (Object.keys(errors).length) {
+    await cleanupUploadedVehicleFiles(req.files);
     return res.status(400).json({ success: false, message: "Validation failed.", errors });
   }
 
@@ -447,13 +589,24 @@ export const validatePaymentStatusUpdate = (req, res, next) => {
 };
 
 export const validateVehicleAvailability = (req, res, next) => {
-  const { availabilityStatus } = req.body;
+  const { availabilityStatus, availabilityHoldReason } = req.body;
 
   if (!AVAILABILITY_STATUSES.has(availabilityStatus)) {
     return res.status(400).json({
       success: false,
       message: "Validation failed.",
       errors: { availabilityStatus: "Availability status must be 'available' or 'unavailable'." },
+    });
+  }
+
+  if (
+    availabilityHoldReason !== undefined &&
+    !["none", "manual", "inspection"].includes(String(availabilityHoldReason).trim().toLowerCase())
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed.",
+      errors: { availabilityHoldReason: "Invalid vehicle availability reason." },
     });
   }
 

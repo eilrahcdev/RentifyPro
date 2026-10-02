@@ -58,8 +58,29 @@ const vehicleSchema = new mongoose.Schema(
     },
     dailyRentalRate: {
       type: Number,
-      required: [true, "Daily rental rate is required."],
-      min: [0, "Daily rental rate must be zero or greater."],
+      required: [true, "Hourly rental rate is required."],
+      min: [0, "Hourly rental rate must be zero or greater."],
+    },
+    pricingUnit: {
+      type: String,
+      enum: ["hourly", "daily"],
+      default: "hourly",
+    },
+    lateReturnFeeType: {
+      type: String,
+      enum: ["percentage", "fixed_hourly"],
+      default: "percentage",
+    },
+    lateReturnFeeValue: {
+      type: Number,
+      min: [0, "Late-return fee value must be zero or greater."],
+      default: 25,
+    },
+    lateReturnGraceMinutes: {
+      type: Number,
+      min: [0, "Late-return grace period must be zero or greater."],
+      max: [1440, "Late-return grace period cannot exceed 1,440 minutes."],
+      default: 0,
     },
     location: {
       type: String,
@@ -73,14 +94,35 @@ const vehicleSchema = new mongoose.Schema(
       default: "available",
       index: true,
     },
+    availabilityHoldReason: {
+      type: String,
+      enum: ["none", "manual", "inspection"],
+      default: "none",
+    },
     images: {
       type: [String],
       default: [],
+      validate: {
+        validator: (images) =>
+          Array.isArray(images) &&
+          images.length <= 8 &&
+          images.every((image) => typeof image === "string" && image.length > 0 && image.length <= 2048),
+        message: "Vehicles require between one and eight valid image references.",
+      },
     },
     imageUrl: {
       type: String,
       trim: true,
       default: "",
+    },
+    imageReviews: {
+      type: [{ path: String, exterior: Boolean, vehicleType: String, sourceId: mongoose.Schema.Types.ObjectId }],
+      default: [],
+    },
+    coverDisplayMode: {
+      type: String,
+      enum: ["auto", "photo", "cutout"],
+      default: "auto",
     },
     driverOptionEnabled: {
       type: Boolean,
@@ -88,7 +130,7 @@ const vehicleSchema = new mongoose.Schema(
     },
     driverDailyRate: {
       type: Number,
-      min: [0, "Driver daily rate must be zero or greater."],
+      min: [0, "Driver hourly rate must be zero or greater."],
       default: 0,
     },
     specs: {

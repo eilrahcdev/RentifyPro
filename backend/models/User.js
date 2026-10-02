@@ -1,6 +1,7 @@
 // User model for regular users and owners
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { normalizePhilippineMobile } from "../utils/phone.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -31,22 +32,39 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isDisabled: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    disabledAt: { type: Date },
+    disabledUntil: { type: Date, default: null, index: true },
+    disabledBy: { type: String, trim: true, default: "" },
+    disabledReason: { type: String, trim: true, default: "" },
+    disabledSourceReport: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Report",
+      default: null,
+    },
+    moderationRestrictions: {
+      bookingUntil: { type: Date, default: null },
+      listingUntil: { type: Date, default: null },
+      chatUntil: { type: Date, default: null },
+    },
+    isArchived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date },
+    archivedBy: { type: String, trim: true, default: "" },
+    archiveReason: { type: String, trim: true, default: "" },
+    sessionVersion: { type: Number, default: 0 },
+    passwordResetTokenHash: { type: String, default: null, select: false },
+    // Serialize booking creation and schedule extensions across API instances.
+    bookingMutationToken: { type: String, default: null, select: false },
+    bookingMutationUntil: { type: Date, default: null, select: false },
+    kycStatusUpdatedAt: { type: Date },
     kycStatus: {
       type: String,
       enum: ["not_started", "id_uploaded", "challenge_passed", "approved", "rejected"],
       default: "not_started",
-    },
-    walletAddress: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      unique: true,
-      sparse: true,
-      index: true,
-      set: (value) => {
-        const normalized = String(value || "").trim().toLowerCase();
-        return normalized || undefined;
-      },
     },
     avatar: {
       type: String,
@@ -65,7 +83,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       set: (value) => {
-        const normalized = String(value || "").trim();
+        const normalized = normalizePhilippineMobile(value);
         return normalized || undefined;
       },
     },
@@ -81,7 +99,14 @@ const userSchema = new mongoose.Schema(
     city: { type: String },
     barangay: { type: String },
     emergencyContactName: { type: String },
-    emergencyContactPhone: { type: String },
+    emergencyContactPhone: {
+      type: String,
+      trim: true,
+      set: (value) => {
+        const normalized = normalizePhilippineMobile(value);
+        return normalized || undefined;
+      },
+    },
     emergencyContactRelationship: { type: String },
   },
   { timestamps: true }

@@ -1,7 +1,7 @@
 import axios from "axios";
 import { spawn } from "child_process";
 import path from "path";
-import { copyFileSync, existsSync, statSync } from "fs";
+import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
@@ -22,8 +22,7 @@ const repoRoot = path.resolve(__dirname, "../..");
 const chatbotServiceDir = path.resolve(repoRoot, "chatbot-service");
 const chatbotServiceEntry = path.join(chatbotServiceDir, "app.py");
 const bundledVenvPython = path.join(chatbotServiceDir, "venv", "Scripts", "python.exe");
-const chatbotDatasetDefaultPath = path.join(chatbotServiceDir, "rentifypro_chatbot_dataset.json");
-const chatbotDatasetCompatPath = path.join(chatbotServiceDir, "rentifypro_chatbot_dataset_v4.json");
+const chatbotDatasetPath = path.join(chatbotServiceDir, "rentifypro_chatbot_dataset_v6.json");
 
 let chatbotServiceProcess = null;
 let bootPromise = null;
@@ -84,23 +83,6 @@ const healthCheck = async () => {
   } catch {
     return false;
   }
-};
-
-const ensureChatbotDatasetAlias = () => {
-  if (!existsSync(chatbotDatasetDefaultPath)) {
-    return;
-  }
-
-  const shouldSync =
-    !existsSync(chatbotDatasetCompatPath) ||
-    statSync(chatbotDatasetCompatPath).mtimeMs < statSync(chatbotDatasetDefaultPath).mtimeMs;
-
-  if (!shouldSync) {
-    return;
-  }
-
-  copyFileSync(chatbotDatasetDefaultPath, chatbotDatasetCompatPath);
-  auditLog.info("CHATBOT", "Synced chatbot dataset compatibility file");
 };
 
 const getPythonCandidates = () => {
@@ -172,7 +154,9 @@ const startChatbotService = async () => {
     throw new Error(`Chatbot service entry not found: ${chatbotServiceEntry}`);
   }
 
-  ensureChatbotDatasetAlias();
+  if (!existsSync(chatbotDatasetPath)) {
+    throw new Error(`Required chatbot dataset v6 is missing: ${chatbotDatasetPath}`);
+  }
 
   const candidates = getPythonCandidates();
   const failures = [];

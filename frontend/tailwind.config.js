@@ -5,7 +5,12 @@ export default {
     "./src/**/*.{js,jsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ["Manrope", "Segoe UI", "sans-serif"],
+      },
+      fontWeight: { black: "800" },
+    },
   },
   plugins: [],
 }

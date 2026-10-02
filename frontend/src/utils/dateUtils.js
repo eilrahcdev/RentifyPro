@@ -14,6 +14,11 @@ export const formatTimeInput = (value = new Date()) => {
 
 export const getTodayDate = () => formatDateInput(new Date());
 
+export const getMaxBookingDate = (today = new Date()) => {
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 7, 0).getDate();
+  return formatDateInput(new Date(today.getFullYear(), today.getMonth() + 6, Math.min(today.getDate(), lastDay)));
+};
+
 export const getTomorrowDate = () => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -51,9 +56,46 @@ export const getMinReturnTime = (pickupDate, pickupTime, minutes = 60) => {
   return minReturn ? formatTimeInput(minReturn) : "";
 };
 export const getDateTime = (date, time) => {
-  if (!date || !time) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}(?::\d{2})?$/.test(time)) return null;
   const value = new Date(`${date}T${time}`);
-  return Number.isNaN(value.getTime()) ? null : value;
+  if (Number.isNaN(value.getTime())) return null;
+  // Date parsing can roll February 30 into March or 24:00 into tomorrow.
+  if (formatDateInput(value) !== date || formatTimeInput(value) !== time.slice(0, 5)) return null;
+  return value;
+};
+
+export const getDurationMinutesBetween = (start, end) => {
+  if (start === null || start === undefined || end === null || end === undefined) return 0;
+  const startDate = start instanceof Date ? start : new Date(start);
+  const endDate = end instanceof Date ? end : new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0;
+  const diffMs = endDate.getTime() - startDate.getTime();
+  if (!Number.isFinite(diffMs) || diffMs <= 0) return 0;
+  return Math.round(diffMs / (1000 * 60));
+};
+
+export const getBookingDurationMinutes = (pickupDate, pickupTime, returnDate, returnTime) => {
+  const pickup = getDateTime(pickupDate, pickupTime);
+  const dropoff = getDateTime(returnDate, returnTime);
+  if (!pickup || !dropoff) return 0;
+  return getDurationMinutesBetween(pickup, dropoff);
+};
+
+export const getDurationHoursFromMinutes = (minutes) => {
+  const numeric = Number(minutes || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.round((numeric / 60) * 10000) / 10000;
+};
+
+export const formatDurationMinutes = (minutes) => {
+  const totalMinutes = Number(minutes || 0);
+  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return "0m";
+  const safeMinutes = Math.round(totalMinutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+  if (hours <= 0) return `${remainingMinutes}m`;
+  if (remainingMinutes <= 0) return `${hours}h`;
+  return `${hours}h ${remainingMinutes}m`;
 };
 
 export const sanitizeBookingRange = (bookingData = {}) => {
@@ -85,7 +127,6 @@ export const sanitizeBookingRange = (bookingData = {}) => {
 
     if (returnDate < minReturnDate) returnDate = minReturnDate;
     if (returnDate === minReturnDate && returnTime < minReturnTime) returnTime = minReturnTime;
-    if (returnDate > minReturnDate && returnTime < minReturnTime) returnTime = minReturnTime;
 
     const returnDateTime = getDateTime(returnDate, returnTime);
     if (!returnDateTime || returnDateTime < minReturnDateTime) {

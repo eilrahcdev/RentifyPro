@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  Bot,
-  Car,
+  CarFront,
   ShieldCheck,
   User,
   Lock,
@@ -11,8 +10,11 @@ import {
   Camera,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import HelpLink from "../components/HelpLink";
 import ChatWidget from "../components/ChatWidget";
+import InfoModal from "../components/InfoModal";
 import API from "../utils/api";
+import { reconnectSocket } from "../utils/socket";
 import VerificationStepper from "../verification/VerificationStepper";
 import {
   getStoredUser,
@@ -20,21 +22,49 @@ import {
   normalizeUserProfile,
   persistUserProfile,
 } from "../utils/userProfile";
-import { fileToBase64, stripDataUrlPrefix, getMimeFromDataUrl } from "../utils/cameraKyc";
-import { preVerifySupportingDocument } from "../utils/kycApi";
+import {
+  fileToBase64,
+  stripDataUrlPrefix,
+  getMimeFromDataUrl,
+  validateSupportingDocumentFile,
+} from "../utils/cameraKyc";
+import { validateAvatarImageFile } from "../utils/fileValidation";
+import { getPreKycSessionToken, preVerifySupportingDocument } from "../utils/kycApi";
 import { RELATIONSHIP_OPTIONS } from "../data/registerValidation";
+import { BIR_SUPPORTING_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 
 const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
+const BIR_SUPPORTING_TYPES = new Set(BIR_SUPPORTING_DOCUMENT_TYPES);
+const fetchPsgcOptions = async (path, signal) => {
+  const response = await fetch(`${PSGC_BASE_URL}${path}`, { signal });
+  if (!response.ok) throw new Error(`PSGC request failed with status ${response.status}.`);
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+};
 const GENDER_OPTIONS = ["Male", "Female", "Prefer not to say"];
 const KYC_STATUS_LABELS = {
   not_started: "Not started",
   id_uploaded: "ID uploaded",
-  challenge_passed: "Selfie verified",
+  challenge_passed: "Document review pending",
   approved: "Approved",
   rejected: "Rejected",
 };
 const MIN_RENTER_AGE = 18;
-const PHONE_REGEX = /^[0-9]{11}$/;
+const PHONE_REGEX = /^9[0-9]{9}$/;
+const EMERGENCY_CONTACT_NAME_REGEX = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
+const normalizePhMobileInput = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (!digits.startsWith("9")) return "";
+  return digits.slice(0, 10);
+};
+const normalizeEmergencyContactNameInput = (value = "") => {
+  let nextValue = String(value || "");
+  nextValue = nextValue.replace(/[^A-Za-z ]/g, "");
+  nextValue = nextValue.replace(/\s+/g, " ");
+  if (nextValue.startsWith(" ")) nextValue = nextValue.slice(1);
+  return nextValue.slice(0, 50);
+};
 const DEFAULT_PROFILE = {
   _id: "",
   firstName: "",
@@ -56,7 +86,6 @@ const DEFAULT_PROFILE = {
   emergencyContactRelationship: "",
   role: "user",
   isVerified: false,
-  walletAddress: null,
 };
 
 const parseDateInput = (value) => {
@@ -96,20 +125,62 @@ const InputField = React.memo(function InputField({
   onChange,
   disabled,
   max,
+  maxLength,
+  prefixText = "",
 }) {
+  const isPasswordField = type === "password";
+  const sanitizePasswordValue = (rawValue = "") => String(rawValue).replace(/\s/g, "");
+
+  const handleInputChange = (event) => {
+    if (!isPasswordField || typeof onChange !== "function") {
+      if (typeof onChange === "function") onChange(event);
+      return;
+    }
+    const sanitizedValue = sanitizePasswordValue(event?.target?.value || "");
+    onChange({ target: { value: sanitizedValue } });
+  };
+
+  const handleInputKeyDown = (event) => {
+    if (isPasswordField && event.key === " ") event.preventDefault();
+  };
+
+  const handleInputPaste = (event) => {
+    if (!isPasswordField || typeof onChange !== "function") return;
+    const pastedText = String(event.clipboardData?.getData("text") || "");
+    if (!/\s/.test(pastedText)) return;
+    event.preventDefault();
+    const sanitizedText = sanitizePasswordValue(pastedText);
+    const input = event.currentTarget;
+    const currentValue = String(input?.value || "");
+    const start = Number.isInteger(input?.selectionStart) ? input.selectionStart : currentValue.length;
+    const end = Number.isInteger(input?.selectionEnd) ? input.selectionEnd : currentValue.length;
+    const nextValue = currentValue.slice(0, start) + sanitizedText + currentValue.slice(end);
+    onChange({ target: { value: nextValue } });
+  };
+
   return (
     <div>
       <label className="text-xs text-gray-500">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        max={max}
-        className={`w-full mt-1 border rounded-lg px-3 py-2 text-sm ${
-          disabled ? "bg-gray-100" : "bg-white"
-        }`}
-      />
+      <div className="relative">
+        {prefixText ? (
+          <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm font-medium text-gray-500">
+            {prefixText}
+          </span>
+        ) : null}
+        <input
+          type={type}
+          value={value}
+          onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
+          onPaste={handleInputPaste}
+          disabled={disabled}
+          max={max}
+          maxLength={maxLength}
+          className={`relative z-0 w-full mt-1 border rounded-lg px-3 py-2 text-sm ${
+            disabled ? "bg-gray-100" : "bg-white"
+          } ${prefixText ? "pl-14" : ""}`}
+        />
+      </div>
     </div>
   );
 });
@@ -171,7 +242,7 @@ const SelectField = React.memo(function SelectField({
       >
         <option value="">{placeholder}</option>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} disabled={option.disabled} hidden={option.hidden}>
             {option.label}
           </option>
         ))}
@@ -214,7 +285,7 @@ const buildProfilePayload = (sectionKey, profile, lists) => {
   }
 
   if (sectionKey === "emergency") {
-    payload.emergencyContactName = profile.emergencyContactName || "";
+    payload.emergencyContactName = String(profile.emergencyContactName || "").trim();
     payload.emergencyContactPhone = profile.emergencyContactPhone || "";
     payload.emergencyContactRelationship = profile.emergencyContactRelationship || "";
   }
@@ -232,13 +303,17 @@ const AccountSettings = ({
   onNavigateToChat,
   onNavigateToNotifications,
   onNavigateToAccountSettings,
-  onNavigateToVehicleOwnerProceed,
+  onNavigateToReports,
   isLoggedIn,
   user,
   onLogout,
 }) => {
   const [showAI, setShowAI] = useState(false);
-  const [activeTab, setActiveTab] = useState("Profile Settings");
+  const [activeTab, setActiveTab] = useState(() =>
+    isLoggedIn && user?.role !== "admin" && user?.kycStatus !== "approved"
+      ? "Verification"
+      : "Profile Settings"
+  );
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(
     getUserProfileFromStorage().avatar || null
@@ -250,10 +325,11 @@ const AccountSettings = ({
   }));
   const [draftProfile, setDraftProfile] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [, setLoadingProfile] = useState(false);
   const [savingSection, setSavingSection] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [showPhotoConfirmation, setShowPhotoConfirmation] = useState(false);
   const [isAddressEdited, setIsAddressEdited] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -277,6 +353,9 @@ const AccountSettings = ({
   const [verificationMessage, setVerificationMessage] = useState("");
   const [verificationError, setVerificationError] = useState("");
   const [kycStatus, setKycStatus] = useState("");
+  const [kycRemarks, setKycRemarks] = useState("");
+  const [kycError, setKycError] = useState("");
+  const [kycLoading, setKycLoading] = useState(false);
   const [showKycStepper, setShowKycStepper] = useState(false);
   const [loginActivity, setLoginActivity] = useState([]);
   const [loginActivityLoading, setLoginActivityLoading] = useState(false);
@@ -285,6 +364,9 @@ const AccountSettings = ({
   const [ownerUpgradeMessage, setOwnerUpgradeMessage] = useState("");
   const [ownerUpgradeError, setOwnerUpgradeError] = useState("");
   const [supportingDocFile, setSupportingDocFile] = useState(null);
+  const [supportingDocType, setSupportingDocType] = useState("");
+  const [supportingTin, setSupportingTin] = useState("");
+  const [supportingBranchCode, setSupportingBranchCode] = useState("");
   const [supportingDocStatus, setSupportingDocStatus] = useState("");
   const [supportingDocLoading, setSupportingDocLoading] = useState(false);
   const [ownerForm, setOwnerForm] = useState({
@@ -298,6 +380,9 @@ const AccountSettings = ({
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
+  const [barangaysLoading, setBarangaysLoading] = useState(false);
+  const [barangayLoadError, setBarangayLoadError] = useState("");
+  const [barangayReloadKey, setBarangayReloadKey] = useState(0);
 
   const current = draftProfile || profile;
   const activeUserIdentity = String(user?._id || user?.email || "").trim().toLowerCase();
@@ -334,10 +419,13 @@ const AccountSettings = ({
     return () => {
       mounted = false;
     };
-  }, [activeUserIdentity]);
+  }, [activeUserIdentity, user]);
 
   const syncAvatarAcrossApp = async (avatarValue = "") => {
     const normalizedAvatar = String(avatarValue || "").trim();
+    setStatusMessage("");
+    setStatusError("");
+
     const persisted = persistUserProfile({
       ...getStoredUser(),
       ...profile,
@@ -354,63 +442,61 @@ const AccountSettings = ({
       setProfile((prev) => ({ ...prev, ...synced }));
       setProfilePhoto(synced.avatar || null);
       window.dispatchEvent(new Event("user-profile-updated"));
-      setStatusMessage("Profile photo updated.");
-      setStatusError("");
+      if (normalizedAvatar) {
+        setShowPhotoConfirmation(true);
+      } else {
+        setStatusMessage("Profile photo removed.");
+      }
     } catch (error) {
       setStatusError(error.message || "Profile photo saved locally. Cloud sync failed.");
     }
   };
 
   useEffect(() => {
-    let active = true;
-    fetch(`${PSGC_BASE_URL}/regions/`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (active) setRegions(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (active) setRegions([]);
+    const controller = new AbortController();
+
+    fetchPsgcOptions("/regions/", controller.signal)
+      .then(setRegions)
+      .catch((error) => {
+        if (error.name !== "AbortError") setRegions([]);
       });
 
     return () => {
-      active = false;
+      controller.abort();
     };
   }, []);
 
   useEffect(() => {
+    setProvinces([]);
+    setCities([]);
+    setBarangays([]);
+    setBarangaysLoading(false);
+    setBarangayLoadError("");
+
     if (!current.region) {
-      setProvinces([]);
-      setCities([]);
-      setBarangays([]);
       return;
     }
 
-    let active = true;
+    const controller = new AbortController();
 
     const loadProvincesOrCities = async () => {
       try {
-        const provinceResponse = await fetch(`${PSGC_BASE_URL}/regions/${current.region}/provinces/`);
-        if (!provinceResponse.ok) throw new Error("Failed to load provinces.");
-        const provinceData = await provinceResponse.json();
-        const provinceList = Array.isArray(provinceData) ? provinceData : [];
-        if (!active) return;
+        const provinceList = await fetchPsgcOptions(
+          `/regions/${current.region}/provinces/`,
+          controller.signal
+        );
 
         setProvinces(provinceList);
-        setBarangays([]);
 
         if (provinceList.length === 0) {
-          const cityResponse = await fetch(
-            `${PSGC_BASE_URL}/regions/${current.region}/cities-municipalities/`
+          const cityList = await fetchPsgcOptions(
+            `/regions/${current.region}/cities-municipalities/`,
+            controller.signal
           );
-          if (!cityResponse.ok) throw new Error("Failed to load cities.");
-          const cityData = await cityResponse.json();
-          if (!active) return;
-          setCities(Array.isArray(cityData) ? cityData : []);
-        } else if (!current.province) {
-          setCities([]);
+          setCities(cityList);
         }
-      } catch {
-        if (!active) return;
+      } catch (error) {
+        if (error.name === "AbortError") return;
         setProvinces([]);
         setCities([]);
         setBarangays([]);
@@ -419,9 +505,9 @@ const AccountSettings = ({
 
     loadProvincesOrCities();
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, [current.region, current.province]);
+  }, [current.region]);
 
   useEffect(() => {
     if (!current.region || provinces.length === 0 || !current.province) {
@@ -432,45 +518,69 @@ const AccountSettings = ({
       return;
     }
 
-    let active = true;
-    fetch(`${PSGC_BASE_URL}/provinces/${current.province}/cities-municipalities/`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (!active) return;
-        setCities(Array.isArray(data) ? data : []);
-        setBarangays([]);
-      })
-      .catch(() => {
-        if (!active) return;
+    setCities([]);
+    setBarangays([]);
+    setBarangaysLoading(false);
+    setBarangayLoadError("");
+
+    const controller = new AbortController();
+    fetchPsgcOptions(
+      `/provinces/${current.province}/cities-municipalities/`,
+      controller.signal
+    )
+      .then(setCities)
+      .catch((error) => {
+        if (error.name === "AbortError") return;
         setCities([]);
         setBarangays([]);
-      });
+      })
 
     return () => {
-      active = false;
+      controller.abort();
     };
   }, [current.province, current.region, provinces.length]);
 
   useEffect(() => {
     if (!current.city) {
       setBarangays([]);
+      setBarangaysLoading(false);
+      setBarangayLoadError("");
       return;
     }
 
+    if (cities.length === 0) return;
+
+    const controller = new AbortController();
     let active = true;
-    fetch(`${PSGC_BASE_URL}/cities-municipalities/${current.city}/barangays/`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (active) setBarangays(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (active) setBarangays([]);
-      });
+
+    const loadBarangays = async () => {
+      setBarangays([]);
+      setBarangaysLoading(true);
+      setBarangayLoadError("");
+
+      try {
+        const barangayList = await fetchPsgcOptions(
+          `/cities-municipalities/${current.city}/barangays/`,
+          controller.signal
+        );
+        if (!active) return;
+        setBarangays(barangayList);
+      } catch (error) {
+        if (!active || error.name === "AbortError") return;
+        setBarangays([]);
+        setBarangayLoadError("Could not load barangays. Please try again.");
+      } finally {
+        if (active) setBarangaysLoading(false);
+      }
+    };
+
+    loadBarangays();
 
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [current.city]);
+  }, [barangayReloadKey, cities.length, current.city]);
 
   useEffect(() => {
     if (activeTab === "Notifications Settings") {
@@ -505,10 +615,10 @@ const AccountSettings = ({
   ]);
 
   useEffect(() => {
-    if (supportingDocFile) {
+    if (supportingDocFile || supportingDocType) {
       setSupportingDocStatus("");
     }
-  }, [supportingDocFile]);
+  }, [supportingDocFile, supportingDocType]);
 
   useEffect(() => {
     if (editingSection !== "location" || isAddressEdited || !draftProfile) return;
@@ -529,6 +639,14 @@ const AccountSettings = ({
   const handlePhotoUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    try {
+      validateAvatarImageFile(file);
+    } catch (validationError) {
+      setStatusError(validationError.message || "Please choose a valid profile photo.");
+      event.target.value = "";
+      return;
+    }
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -559,6 +677,7 @@ const AccountSettings = ({
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
       });
+      reconnectSocket();
       setPasswordMessage(response.message || "Password updated.");
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
     } catch (error) {
@@ -634,11 +753,29 @@ const AccountSettings = ({
   };
 
   const loadKycStatus = async () => {
+    setKycLoading(true);
+    setKycError("");
     try {
       const response = await API.kycGetStatus();
-      setKycStatus(response?.status || "not_started");
-    } catch {
-      setKycStatus("not_started");
+      const nextStatus = response?.status || "not_started";
+      setKycStatus(nextStatus);
+      setKycRemarks(response?.remarks || "");
+
+      if (nextStatus === "approved") {
+        try {
+          const profileResponse = await API.getProfile();
+          if (profileResponse?.user) {
+            const normalized = persistUserProfile(profileResponse.user);
+            setProfile((previous) => ({ ...previous, ...normalized }));
+          }
+        } catch {
+          // Keep the authoritative KYC status visible even if profile refresh fails.
+        }
+      }
+    } catch (error) {
+      setKycError(error.message || "Could not refresh verification. Try Refresh Status again.");
+    } finally {
+      setKycLoading(false);
     }
   };
 
@@ -656,6 +793,10 @@ const AccountSettings = ({
   };
 
   const verifySupportingDoc = async () => {
+    if (!supportingDocType) {
+      setSupportingDocStatus("Please select your supporting document type first.");
+      return;
+    }
     if (!supportingDocFile) {
       setSupportingDocStatus("Please upload your supporting document first.");
       return;
@@ -664,14 +805,42 @@ const AccountSettings = ({
       setSupportingDocStatus("We could not find your email. Please refresh and try again.");
       return;
     }
+    if (BIR_SUPPORTING_TYPES.has(supportingDocType)) {
+      if (!String(ownerForm.businessName || "").trim()) {
+        setSupportingDocStatus("Enter the business name shown on your BIR document.");
+        return;
+      }
+      if (!/^\d{9}$/.test(supportingTin) || !/^\d{3,5}$/.test(supportingBranchCode)) {
+        setSupportingDocStatus("Enter the 9-digit TIN and the branch code shown on your BIR document.");
+        return;
+      }
+    }
     setSupportingDocLoading(true);
     setSupportingDocStatus("");
     try {
+      await validateSupportingDocumentFile(supportingDocFile);
       const dataUrl = await fileToBase64(supportingDocFile);
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
-      const response = await preVerifySupportingDocument(profile.email, clean, mime, "owner");
-      setSupportingDocStatus(response.message || "Supporting document verified.");
+      const response = await preVerifySupportingDocument(profile.email, clean, mime, "owner", {
+        documentType: supportingDocType,
+        userProfile: {
+          full_name: profile.name,
+          first_name: String(profile.firstName || "").trim(),
+          last_name: String(profile.lastName || "").trim(),
+          email: profile.email,
+          owner_type: ownerForm.ownerType || profile.ownerType,
+          business_name: ownerForm.businessName || profile.businessName,
+          permit_number: ownerForm.permitNumber || profile.permitNumber,
+          tax_identification_number: BIR_SUPPORTING_TYPES.has(supportingDocType) ? supportingTin : "",
+          branch_code: BIR_SUPPORTING_TYPES.has(supportingDocType) ? supportingBranchCode : "",
+          address: profile.address,
+        },
+      });
+      setSupportingDocStatus(
+        response.message ||
+          "Supporting document queued for automated screening and Super Admin review."
+      );
     } catch (error) {
       setSupportingDocStatus(error.message || "Supporting document verification failed.");
     } finally {
@@ -684,11 +853,13 @@ const AccountSettings = ({
     setOwnerUpgradeError("");
     setOwnerUpgradeMessage("");
     try {
+      const preKycToken = await getPreKycSessionToken(profile.email, "owner");
       const response = await API.upgradeToOwner({
         ownerType: ownerForm.ownerType || "",
         businessName: ownerForm.businessName || "",
         licenseNumber: ownerForm.licenseNumber || "",
         permitNumber: ownerForm.permitNumber || "",
+        preKycToken,
       });
       const updated = persistUserProfile(
         response.user || {
@@ -732,7 +903,7 @@ const AccountSettings = ({
     if (sectionKey === "contact") {
       const phone = String(draftProfile.phone || "").trim();
       if (!PHONE_REGEX.test(phone)) {
-        setStatusError("Please enter a valid 11-digit phone number.");
+        setStatusError("Please enter a valid 10-digit phone number that starts with 9.");
         setStatusMessage("");
         return;
       }
@@ -765,6 +936,27 @@ const AccountSettings = ({
           setStatusMessage("");
           return;
         }
+      }
+    }
+
+    if (sectionKey === "emergency") {
+      const emergencyContactName = String(draftProfile.emergencyContactName || "").trim();
+      if (!emergencyContactName) {
+        setStatusError("Emergency contact name is required.");
+        setStatusMessage("");
+        return;
+      }
+      if (!EMERGENCY_CONTACT_NAME_REGEX.test(emergencyContactName)) {
+        setStatusError(
+          "Emergency contact name can only contain letters and single spaces between names."
+        );
+        setStatusMessage("");
+        return;
+      }
+      if (emergencyContactName.length > 50) {
+        setStatusError("Emergency contact name is too long (max 50 characters).");
+        setStatusMessage("");
+        return;
       }
     }
 
@@ -819,7 +1011,7 @@ const AccountSettings = ({
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="rp-renter-page min-h-screen">
       <Navbar
         activePage=""
         isLoggedIn={isLoggedIn}
@@ -833,20 +1025,23 @@ const AccountSettings = ({
         onNavigateToChat={onNavigateToChat}
         onNavigateToNotifications={onNavigateToNotifications}
         onNavigateToAccountSettings={onNavigateToAccountSettings}
+        onNavigateToReports={onNavigateToReports}
+        isAIOpen={showAI}
+        onShowAI={() => setShowAI(true)}
         onLogout={onLogout}
       />
 
-      <div className="pt-24 bg-gray-50 min-h-screen">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-6">
+      <div className="min-h-screen bg-transparent pt-24">
+        <div className="rp-page-shell mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:flex-row">
           <aside className="w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
-            <div className="bg-white rounded-xl shadow p-5 space-y-1">
+            <div className="rp-account-navigation rp-minimal-card space-y-1 p-5">
               {[
                 { label: "Profile Settings", icon: User },
                 { label: "Change Password", icon: Lock },
                 { label: "Notifications Settings", icon: BellRing },
                 { label: "Verification", icon: ShieldCheck },
                 { label: "Login Activity", icon: Shield },
-                { label: "Become a Vehicle Owner", icon: Car },
+                { label: "Become a Vehicle Owner", icon: CarFront },
               ].map(({ label, icon: Icon }) => (
                 <button
                   key={label}
@@ -865,8 +1060,8 @@ const AccountSettings = ({
 
           </aside>
 
-          <main className="flex-1 space-y-8 pb-12">
-            <div className="pb-6 mb-6 border-b">
+          <main className="rp-account-content min-w-0 flex-1 space-y-8 pb-12">
+            <div className="rp-page-header mb-6">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
               <p className="text-base text-gray-500 max-w-xl">
                 Manage your personal information and account preferences
@@ -875,11 +1070,6 @@ const AccountSettings = ({
 
             {activeTab === "Profile Settings" && (
               <>
-                {loadingProfile && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
-                    Loading your latest profile details...
-                  </div>
-                )}
                 {statusMessage && (
                   <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-700">
                     {statusMessage}
@@ -891,8 +1081,12 @@ const AccountSettings = ({
                   </div>
                 )}
 
-                <div className="bg-white rounded-xl shadow p-6 flex items-center gap-4">
-                  <div className="relative">
+                <div
+                  className={`rp-settings-card relative flex items-center gap-4 overflow-visible p-6 ${
+                    showPhotoMenu ? "z-[60]" : "z-10"
+                  }`}
+                >
+                  <div className="relative z-10">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-full overflow-hidden bg-[#017FE6] flex items-center justify-center">
                         {profilePhoto ? (
@@ -916,12 +1110,12 @@ const AccountSettings = ({
                       </button>
 
                       {showPhotoMenu && (
-                        <div className="absolute top-full left-0 mt-2 mr-1 w-40 bg-white rounded-lg shadow-lg border z-50 origin-top-right">
+                        <div className="absolute top-full left-0 z-[70] mt-2 mr-1 w-40 origin-top-right rounded-lg border bg-white shadow-lg">
                           <label className="block px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer">
                             Upload Photo
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/jpeg,image/png,image/webp"
                               onChange={(event) => {
                                 handlePhotoUpload(event);
                                 setShowPhotoMenu(false);
@@ -1013,11 +1207,10 @@ const AccountSettings = ({
                       onChange={(event) =>
                         updateDraftField(
                           "phone",
-                          String(event.target.value || "")
-                            .replace(/\D/g, "")
-                            .slice(0, 11)
+                          normalizePhMobileInput(event.target.value)
                         )
                       }
+                      prefixText="+63"
                     />
                   </>
                 ),
@@ -1121,7 +1314,11 @@ const AccountSettings = ({
                           ? draftProfile?.barangay ?? profile.barangay
                           : profile.barangay
                       }
-                      disabled={editingSection !== "location" || !current.city}
+                      disabled={
+                        editingSection !== "location" ||
+                        !current.city ||
+                        barangaysLoading
+                      }
                       options={barangays.map((barangay) => ({
                         label: barangay.name,
                         value: barangay.code,
@@ -1134,7 +1331,28 @@ const AccountSettings = ({
                           address: "",
                         }));
                       }}
+                      placeholder={
+                        !current.city
+                          ? "Select a city / municipality first"
+                          : barangaysLoading
+                            ? "Loading barangays..."
+                            : barangayLoadError
+                              ? "Barangays unavailable"
+                              : "Select barangay"
+                      }
                     />
+                    {editingSection === "location" && barangayLoadError && current.city && (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <span>{barangayLoadError}</span>
+                        <button
+                          type="button"
+                          onClick={() => setBarangayReloadKey((value) => value + 1)}
+                          className="shrink-0 font-semibold text-amber-900 underline underline-offset-2"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                   </>
                 ),
               },
@@ -1152,8 +1370,12 @@ const AccountSettings = ({
                       }
                       disabled={editingSection !== "emergency"}
                       onChange={(event) =>
-                        updateDraftField("emergencyContactName", event.target.value)
+                        updateDraftField(
+                          "emergencyContactName",
+                          normalizeEmergencyContactNameInput(event.target.value)
+                        )
                       }
+                      maxLength={50}
                     />
                     <InputField
                       label="Phone Number"
@@ -1164,8 +1386,9 @@ const AccountSettings = ({
                       }
                       disabled={editingSection !== "emergency"}
                       onChange={(event) =>
-                        updateDraftField("emergencyContactPhone", event.target.value)
+                        updateDraftField("emergencyContactPhone", normalizePhMobileInput(event.target.value))
                       }
+                      prefixText="+63"
                     />
                     <SelectField
                       label="Relationship"
@@ -1179,7 +1402,11 @@ const AccountSettings = ({
                       options={RELATIONSHIP_OPTIONS.map((option) => ({
                         label: option,
                         value: option,
-                      }))}
+                      })).concat(
+                        profile.emergencyContactRelationship === "Other"
+                          ? [{ label: "Other", value: "Other", disabled: true, hidden: true }]
+                          : []
+                      )}
                       onChange={(event) =>
                         updateDraftField("emergencyContactRelationship", event.target.value)
                       }
@@ -1188,7 +1415,7 @@ const AccountSettings = ({
                 ),
               },
             ].map((section) => (
-              <div key={section.key} className="bg-white rounded-xl shadow p-6">
+              <div key={section.key} className="rp-settings-card p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-semibold">{section.title}</h3>
 
@@ -1212,7 +1439,7 @@ const AccountSettings = ({
             )}
 
             {activeTab === "Change Password" && (
-              <div className="bg-white rounded-xl shadow p-6 space-y-4">
+              <div className="rp-settings-card space-y-4 p-6">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-lg">Change Password</h3>
                   <p className="text-sm text-gray-500">
@@ -1274,7 +1501,7 @@ const AccountSettings = ({
             )}
 
             {activeTab === "Notifications Settings" && (
-              <div className="bg-white rounded-xl shadow p-6 space-y-4">
+              <div className="rp-settings-card space-y-4 p-6">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-lg">Notification Settings</h3>
                   <p className="text-sm text-gray-500">
@@ -1396,7 +1623,7 @@ const AccountSettings = ({
 
             {activeTab === "Verification" && (
               <div className="space-y-6">
-                <div className="bg-white rounded-xl shadow p-6 space-y-4">
+                <div className="rp-settings-card space-y-4 p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-lg">Email Verification</h3>
@@ -1453,7 +1680,7 @@ const AccountSettings = ({
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow p-6 space-y-4">
+                <div className="rp-settings-card space-y-4 p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-lg">ID & Selfie Verification</h3>
@@ -1475,23 +1702,31 @@ const AccountSettings = ({
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => setShowKycStepper((prev) => !prev)}
-                      className="px-4 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-100"
-                    >
-                      {showKycStepper ? "Hide Verification Steps" : "Start Verification"}
-                    </button>
+                    {!['approved', 'challenge_passed'].includes(kycStatus) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowKycStepper((prev) => !prev)}
+                        className="px-4 py-2 rounded-lg bg-[#017FE6] text-sm font-semibold text-white hover:bg-[#0165B8]"
+                      >
+                        {showKycStepper ? "Hide verification" : kycStatus === "rejected" ? "Resubmit verification" : "Verify now"}
+                      </button>
+                    )}
                     <button
                       onClick={loadKycStatus}
+                      disabled={kycLoading}
                       className="px-4 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-100"
                     >
-                      Refresh Status
+                      {kycLoading ? "Checking..." : "Refresh Status"}
                     </button>
+                    <HelpLink guide="verify-identity">Need help verifying?</HelpLink>
                   </div>
 
+                  {kycError && <p role="alert" className="text-sm text-rose-700">{kycError}</p>}
+                  {kycRemarks && <p role="status" className="text-sm text-slate-600">{kycRemarks}</p>}
+                  {kycStatus === "challenge_passed" && <p className="text-sm text-amber-700">Your selfie passed. Document approval is still pending. Refresh your status after review.</p>}
                   {showKycStepper && (
                     <div className="pt-2">
-                      <VerificationStepper />
+                      <VerificationStepper onVerificationComplete={loadKycStatus} />
                     </div>
                   )}
                 </div>
@@ -1499,7 +1734,7 @@ const AccountSettings = ({
             )}
 
             {activeTab === "Login Activity" && (
-              <div className="bg-white rounded-xl shadow p-6 space-y-4">
+              <div className="rp-settings-card space-y-4 p-6">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-lg">Login Activity</h3>
                   <p className="text-sm text-gray-500">
@@ -1514,9 +1749,7 @@ const AccountSettings = ({
                 )}
 
                 {loginActivityLoading ? (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-blue-700">
-                    Loading login activity...
-                  </div>
+                  null
                 ) : loginActivity.length ? (
                   <div className="divide-y">
                     {loginActivity.map((entry) => {
@@ -1547,7 +1780,7 @@ const AccountSettings = ({
 
             {activeTab === "Become a Vehicle Owner" && (
               isOwner ? (
-                <div className="bg-white rounded-xl shadow p-6 space-y-2">
+                <div className="rp-settings-card space-y-2 p-6">
                   <h3 className="font-semibold text-lg">You are already a Vehicle Owner</h3>
                   <p className="text-sm text-gray-500">
                     Your account is already upgraded. You can list vehicles from your owner dashboard.
@@ -1555,7 +1788,7 @@ const AccountSettings = ({
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="bg-white rounded-xl shadow p-6 space-y-4">
+                  <div className="rp-settings-card space-y-4 p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-lg">Become a Vehicle Owner</h3>
@@ -1603,7 +1836,7 @@ const AccountSettings = ({
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow p-6 space-y-4">
+                <div className="rp-settings-card space-y-4 p-6">
                   <div className="space-y-1">
                     <h4 className="font-semibold text-lg">Supporting Document</h4>
                     <p className="text-sm text-gray-500">
@@ -1611,17 +1844,59 @@ const AccountSettings = ({
                     </p>
                   </div>
 
+                  <SelectField
+                    label="Document Type"
+                    value={supportingDocType}
+                    onChange={(event) => {
+                      setSupportingDocType(event.target.value);
+                      setSupportingTin("");
+                      setSupportingBranchCode("");
+                    }}
+                    options={SUPPORTING_DOCUMENT_TYPES.map((entry) => ({ label: entry, value: entry }))}
+                    placeholder="Select document type"
+                    disabled={supportingDocLoading}
+                  />
+
+                  {BIR_SUPPORTING_TYPES.has(supportingDocType) && (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <label className="space-y-1 text-sm font-semibold text-gray-700">
+                        <span>Business name on document</span>
+                        <input value={ownerForm.businessName} onChange={(event) => setOwnerForm((previous) => ({ ...previous, businessName: event.target.value }))} maxLength={120} className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
+                      </label>
+                      <label className="space-y-1 text-sm font-semibold text-gray-700">
+                        <span>Taxpayer Identification Number (TIN)</span>
+                        <input value={supportingTin} onChange={(event) => setSupportingTin(event.target.value.replace(/\D/g, "").slice(0, 9))} inputMode="numeric" autoComplete="off" placeholder="9 digits" className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
+                      </label>
+                      <label className="space-y-1 text-sm font-semibold text-gray-700">
+                        <span>Branch code</span>
+                        <input value={supportingBranchCode} onChange={(event) => setSupportingBranchCode(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" autoComplete="off" placeholder="As shown" className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
+                      </label>
+                    </div>
+                  )}
+
                   <input
                     type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(event) => setSupportingDocFile(event.target.files?.[0] || null)}
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0] || null;
+                      if (!file) return setSupportingDocFile(null);
+                      try {
+                        await validateSupportingDocumentFile(file);
+                        setSupportingDocFile(file);
+                        setSupportingDocStatus("");
+                      } catch (validationError) {
+                        setSupportingDocFile(null);
+                        setSupportingDocStatus(validationError.message || "Please choose a valid supporting document.");
+                        event.target.value = "";
+                      }
+                    }}
                     className="block w-full text-sm text-gray-600"
                   />
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={verifySupportingDoc}
-                      disabled={supportingDocLoading || !supportingDocFile}
+                      disabled={supportingDocLoading || !supportingDocType || !supportingDocFile}
                       className="px-4 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-100 disabled:opacity-60"
                     >
                       {supportingDocLoading ? "Verifying..." : "Verify Document"}
@@ -1641,7 +1916,7 @@ const AccountSettings = ({
                   )}
                 </div>
 
-                <div className="bg-white rounded-xl shadow p-6 space-y-4">
+                <div className="rp-settings-card space-y-4 p-6">
                   <div className="space-y-1">
                     <h4 className="font-semibold text-lg">Owner Details</h4>
                     <p className="text-sm text-gray-500">
@@ -1708,18 +1983,20 @@ const AccountSettings = ({
         </div>
       </div>
 
-      {!showAI && (
-        <button
-          onClick={() => setShowAI(true)}
-          aria-label="AI Assistant"
-          className="fixed bottom-6 right-6 z-[70] w-14 h-14 flex items-center justify-center rounded-full bg-[#017FE6] hover:bg-[#0165B8] text-white shadow-2xl transition-all duration-300 hover:scale-105"
-        >
-          <Bot size={24} />
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white" />
-        </button>
-      )}
+      <ChatWidget
+        isOpen={showAI}
+        onOpen={() => setShowAI(true)}
+        onClose={() => setShowAI(false)}
+        onViewAvailableVehicles={onNavigateToVehicles}
+      />
 
-      <ChatWidget isOpen={showAI} onClose={() => setShowAI(false)} />
+      <InfoModal
+        isOpen={showPhotoConfirmation}
+        title="Profile Photo Updated"
+        message="Your new profile photo has been uploaded successfully."
+        confirmLabel="Done"
+        onClose={() => setShowPhotoConfirmation(false)}
+      />
     </div>
   );
 };

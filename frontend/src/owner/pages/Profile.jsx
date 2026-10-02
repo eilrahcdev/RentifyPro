@@ -1,48 +1,59 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  BadgeCheck,
-  ShieldCheck,
-  User,
-  Building2,
-  Wallet,
-  Pencil,
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { BadgeCheck, Camera, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck } from "lucide-react";
+import InfoModal from "../../components/InfoModal";
 import API from "../../utils/api";
+import { validateAvatarImageFile } from "../../utils/fileValidation";
+import VerificationStepper from "../../verification/VerificationStepper";
 import {
   getOwnerProfileFromStorage,
   getStoredUser,
   normalizeOwnerProfile,
   persistOwnerProfile,
 } from "../utils/ownerProfile";
-import { connectMetaMaskWallet, getEthereumProvider } from "../../blockchain/metamask";
-import { shortAddress } from "../../blockchain/config";
+import OwnerPageHeader from "../components/OwnerPageHeader";
 
-const InputField = ({ label, value, onChange, disabled }) => (
+const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
+
+const normalizePhMobileInput = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (!digits.startsWith("9")) return "";
+  return digits.slice(0, 10);
+};
+
+const InputField = ({ label, value, onChange, disabled, prefixText = "" }) => (
   <div>
     <label className="text-xs text-gray-500">{label}</label>
-    <input
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      className={`w-full mt-1 border rounded-lg px-3 py-2 text-sm ${
-        disabled ? "bg-gray-100" : "bg-white"
-      }`}
-    />
+    <div className="relative">
+      {prefixText ? (
+        <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm font-medium text-gray-500">
+          {prefixText}
+        </span>
+      ) : null}
+      <input
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className={`relative z-0 mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
+          disabled ? "bg-gray-100" : "bg-white"
+        } ${prefixText ? "pl-14" : ""}`}
+      />
+    </div>
   </div>
 );
 
-const SelectField = ({ label, value, onChange, options, disabled }) => (
+const SelectField = ({ label, value, onChange, options, disabled, placeholder = "Select" }) => (
   <div>
     <label className="text-xs text-gray-500">{label}</label>
     <select
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className={`w-full mt-1 border rounded-lg px-3 py-2 text-sm ${
+      className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
         disabled ? "bg-gray-100" : "bg-white"
       }`}
     >
-      <option value="">Select</option>
+      <option value="">{placeholder}</option>
       {options.map((option) => (
         <option key={option.code} value={option.code}>
           {option.name}
@@ -68,35 +79,123 @@ const DEFAULT_PROFILE = {
   businessName: "",
   permitNumber: "",
   licenseNumber: "",
-  walletAddress: "",
+  kycStatus: "not_started",
 };
 
+const KYC_STATUS_DETAILS = {
+  not_started: {
+    label: "Verification not started",
+    tone: "slate",
+    idStatus: "Not submitted",
+    selfieStatus: "Not started",
+    access: "Locked until identity verification is approved.",
+  },
+  id_uploaded: {
+    label: "Continue verification",
+    tone: "amber",
+    idStatus: "Submitted",
+    selfieStatus: "Pending",
+    access: "Locked until identity verification is approved.",
+  },
+  challenge_passed: {
+    label: "Document review pending",
+    tone: "amber",
+    idStatus: "Awaiting approval",
+    selfieStatus: "Verified",
+    access: "Locked until your government ID is approved.",
+  },
+  approved: {
+    label: "Identity verified",
+    tone: "green",
+    idStatus: "Approved",
+    selfieStatus: "Verified",
+    access: "You can add and manage vehicle listings.",
+  },
+  rejected: {
+    label: "Verification needs attention",
+    tone: "red",
+    idStatus: "Needs resubmission",
+    selfieStatus: "Review required",
+    access: "Locked until a corrected identity document is approved.",
+  },
+};
+
+const KYC_TONE_CLASSES = {
+  slate: "border-slate-200 bg-slate-50 text-slate-700",
+  amber: "border-amber-200 bg-amber-50 text-amber-800",
+  green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  red: "border-red-200 bg-red-50 text-red-800",
+};
+
+const formatLastChecked = (value) => {
+  if (!value) return "Not checked yet";
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+};
+
+const buildAddressFromSelections = (profile, lists) => {
+  const regionName = lists.regions.find((item) => item.code === profile.region)?.name || "";
+  const provinceName = lists.provinces.find((item) => item.code === profile.province)?.name || "";
+  const cityName = lists.cities.find((item) => item.code === profile.city)?.name || "";
+  const barangayName = lists.barangays.find((item) => item.code === profile.barangay)?.name || "";
+  return [barangayName, cityName, provinceName, regionName].filter(Boolean).join(", ");
+};
+
+const SectionCard = ({ title, sectionKey, editingSection, savingSection, onToggle, children }) => (
+  <div className="rp-settings-card p-6">
+    <div className="mb-4 flex items-center justify-between">
+      <h3 className="font-semibold">{title}</h3>
+      <button
+        type="button"
+        onClick={() => onToggle(sectionKey)}
+        disabled={savingSection === sectionKey}
+        className="rounded-full border px-4 py-1 text-sm hover:bg-gray-100 disabled:opacity-60"
+      >
+        {savingSection === sectionKey
+          ? "Saving..."
+          : editingSection === sectionKey
+            ? "Save"
+            : "Edit"}
+      </button>
+    </div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</div>
+  </div>
+);
+
 export default function Profile() {
-  const [editing, setEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [editingSection, setEditingSection] = useState(null);
+  const [draftProfile, setDraftProfile] = useState(null);
+  const [savingSection, setSavingSection] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [statusError, setStatusError] = useState("");
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletError, setWalletError] = useState("");
-  const [walletEditing, setWalletEditing] = useState(false);
-  const [walletSaving, setWalletSaving] = useState(false);
-  const [walletSnapshot, setWalletSnapshot] = useState("");
-  const walletInputRef = useRef(null);
-
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+  const [showPhotoConfirmation, setShowPhotoConfirmation] = useState(false);
   const [profile, setProfile] = useState(() => {
     const stored = getOwnerProfileFromStorage();
     const user = getStoredUser();
-    return {
-      ...DEFAULT_PROFILE,
-      ...stored,
-      email: stored.email || user.email || "",
-    };
+    return { ...DEFAULT_PROFILE, ...stored, email: stored.email || user.email || "" };
   });
+  const [kycStatus, setKycStatus] = useState(() => String(getStoredUser().kycStatus || "not_started"));
+  const [kycRemarks, setKycRemarks] = useState("");
+  const [kycError, setKycError] = useState("");
+  const [kycLoading, setKycLoading] = useState(false);
+  const [kycLastChecked, setKycLastChecked] = useState(null);
+  const [showKycStepper, setShowKycStepper] = useState(false);
 
   const [regions, setRegions] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
+
+  const current = draftProfile || profile;
+  const displayName =
+    `${profile.firstName || ""} ${profile.lastName || ""}`.trim() || profile.name || "Owner";
+  const initials =
+    `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`.toUpperCase() || "O";
+  const verification = KYC_STATUS_DETAILS[kycStatus] || KYC_STATUS_DETAILS.not_started;
+  const canStartVerification = !["approved", "challenge_passed"].includes(kycStatus);
 
   useEffect(() => {
     let mounted = true;
@@ -104,458 +203,385 @@ export default function Profile() {
       try {
         const response = await API.getProfile();
         if (!mounted || !response?.user) return;
-
         const normalized = normalizeOwnerProfile(response.user, response.user);
         const persisted = persistOwnerProfile(normalized);
-
-        setProfile((prev) => ({
-          ...prev,
-          ...persisted,
-          email: persisted.email || prev.email,
-        }));
+        setProfile((prev) => ({ ...prev, ...persisted, email: persisted.email || prev.email }));
+        setKycStatus(persisted.kycStatus || "not_started");
         window.dispatchEvent(new Event("owner-profile-updated"));
       } catch {
         // Keep local profile data if the API sync fails.
       }
+
+      try {
+        const response = await API.kycGetStatus();
+        if (!mounted) return;
+        setKycStatus(String(response?.status || "not_started"));
+        setKycRemarks(String(response?.remarks || ""));
+        setKycLastChecked(new Date());
+      } catch {
+        // The saved account status remains visible if the detailed KYC check is unavailable.
+      }
     };
-
     syncFromApi();
-
     return () => {
       mounted = false;
     };
   }, []);
 
-  const saveProfile = async () => {
-    setStatusMessage("");
-    setStatusError("");
-    setIsSaving(true);
-
-    const payload = {
-      name: `${profile.firstName || ""} ${profile.lastName || ""}`.trim(),
-      phone: profile.phone,
-      ownerType: profile.ownerType,
-      businessName: profile.ownerType === "business" ? profile.businessName : "",
-      permitNumber: profile.ownerType === "business" ? profile.permitNumber : "",
-      licenseNumber: profile.licenseNumber,
-      address: profile.address,
-      region: profile.region,
-      province: profile.province,
-      city: profile.city,
-      barangay: profile.barangay,
-      walletAddress: profile.walletAddress || "",
-    };
-
-    try {
-      const response = await API.updateProfile(payload);
-      const normalized = normalizeOwnerProfile(response?.user || payload, {
-        ...getStoredUser(),
-        email: profile.email,
-      });
-      const persisted = persistOwnerProfile({
-        ...normalized,
-        email: normalized.email || profile.email,
-      });
-
-      setProfile((prev) => ({
-        ...prev,
-        ...persisted,
-        email: persisted.email || prev.email,
-      }));
-      setEditing(false);
-      setStatusMessage("Profile updated successfully.");
-      window.dispatchEvent(new Event("owner-profile-updated"));
-    } catch (error) {
-      // Keep the local update so edits are not lost.
-      const fallbackProfile = persistOwnerProfile({
-        ...profile,
-        name: payload.name || profile.name,
-      });
-      setProfile((prev) => ({ ...prev, ...fallbackProfile }));
-      setEditing(false);
-      setStatusError(error.message || "Could not update profile on server. Saved locally instead.");
-      window.dispatchEvent(new Event("owner-profile-updated"));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const connectWalletAddress = async () => {
-    setWalletError("");
-    setStatusError("");
-    setStatusMessage("");
-    setWalletLoading(true);
-
-    try {
-      const connection = await connectMetaMaskWallet();
-      const response = await API.updateProfile({ walletAddress: connection.address });
-
-      const normalized = normalizeOwnerProfile(response?.user || {}, {
-        ...profile,
-        walletAddress: connection.address,
-      });
-      const persisted = persistOwnerProfile({
-        ...profile,
-        ...normalized,
-        walletAddress: normalized.walletAddress || connection.address,
-      });
-
-      setProfile((prev) => ({
-        ...prev,
-        ...persisted,
-        walletAddress: persisted.walletAddress || connection.address,
-      }));
-
-      setStatusMessage(`Wallet connected: ${shortAddress(persisted.walletAddress || connection.address)}`);
-      setWalletEditing(false);
-      window.dispatchEvent(new Event("owner-profile-updated"));
-    } catch (error) {
-      setWalletError(error?.message || "Failed to connect wallet.");
-    } finally {
-      setWalletLoading(false);
-    }
-  };
-
-  const saveWalletAddress = async () => {
-    setWalletError("");
-    setStatusError("");
-    setStatusMessage("");
-    setWalletSaving(true);
-
-    try {
-      const response = await API.updateProfile({ walletAddress: profile.walletAddress || "" });
-      const normalized = normalizeOwnerProfile(response?.user || {}, {
-        ...profile,
-        walletAddress: profile.walletAddress || "",
-      });
-      const persisted = persistOwnerProfile({
-        ...profile,
-        ...normalized,
-        walletAddress: normalized.walletAddress || profile.walletAddress || "",
-      });
-
-      setProfile((prev) => ({
-        ...prev,
-        ...persisted,
-        walletAddress: persisted.walletAddress || profile.walletAddress || "",
-      }));
-      setWalletEditing(false);
-      setStatusMessage("Wallet address updated.");
-      window.dispatchEvent(new Event("owner-profile-updated"));
-    } catch (error) {
-      setStatusError(error?.message || "Could not update wallet address.");
-    } finally {
-      setWalletSaving(false);
-    }
-  };
-
   useEffect(() => {
-    fetch("https://psgc.gitlab.io/api/regions/")
+    fetch(`${PSGC_BASE_URL}/regions/`)
       .then((response) => response.json())
-      .then(setRegions)
-      .catch(() => {});
+      .then((data) => setRegions(Array.isArray(data) ? data : []))
+      .catch(() => setRegions([]));
   }, []);
 
   useEffect(() => {
-    if (!profile.region) {
+    if (!current.region) {
       setProvinces([]);
       return;
     }
-    fetch(`https://psgc.gitlab.io/api/regions/${profile.region}/provinces/`)
+    fetch(`${PSGC_BASE_URL}/regions/${current.region}/provinces/`)
       .then((response) => response.json())
-      .then(setProvinces)
-      .catch(() => {});
-  }, [profile.region]);
+      .then((data) => setProvinces(Array.isArray(data) ? data : []))
+      .catch(() => setProvinces([]));
+  }, [current.region]);
 
   useEffect(() => {
-    if (!profile.province) {
+    if (!current.province) {
       setCities([]);
       return;
     }
-    fetch(`https://psgc.gitlab.io/api/provinces/${profile.province}/cities-municipalities/`)
+    fetch(`${PSGC_BASE_URL}/provinces/${current.province}/cities-municipalities/`)
       .then((response) => response.json())
-      .then(setCities)
-      .catch(() => {});
-  }, [profile.province]);
+      .then((data) => setCities(Array.isArray(data) ? data : []))
+      .catch(() => setCities([]));
+  }, [current.province]);
 
   useEffect(() => {
-    if (!profile.city) {
+    if (!current.city) {
       setBarangays([]);
       return;
     }
-    fetch(`https://psgc.gitlab.io/api/cities-municipalities/${profile.city}/barangays/`)
+    fetch(`${PSGC_BASE_URL}/cities-municipalities/${current.city}/barangays/`)
       .then((response) => response.json())
-      .then(setBarangays)
-      .catch(() => {});
-  }, [profile.city]);
+      .then((data) => setBarangays(Array.isArray(data) ? data : []))
+      .catch(() => setBarangays([]));
+  }, [current.city]);
+
+  const updateDraftField = (field, value) => {
+    setDraftProfile((prev) => ({ ...(prev || profile), [field]: value }));
+  };
+
+  const openEdit = (sectionKey) => {
+    setStatusMessage("");
+    setStatusError("");
+    setDraftProfile({ ...profile });
+    setEditingSection(sectionKey);
+  };
+
+  const saveSection = async (sectionKey) => {
+    const source = draftProfile || profile;
+    const payload = {};
+
+    if (sectionKey === "personal") {
+      payload.name = `${source.firstName || ""} ${source.lastName || ""}`.trim();
+    }
+    if (sectionKey === "contact") payload.phone = source.phone || "";
+    if (sectionKey === "location") {
+      payload.address =
+        source.address ||
+        buildAddressFromSelections(source, { regions, provinces, cities, barangays });
+      payload.region = source.region || "";
+      payload.province = source.province || "";
+      payload.city = source.city || "";
+      payload.barangay = source.barangay || "";
+    }
+    if (sectionKey === "business") {
+      payload.businessName = source.businessName || "";
+      payload.permitNumber = source.permitNumber || "";
+      payload.licenseNumber = source.licenseNumber || "";
+    }
+
+    setStatusMessage("");
+    setStatusError("");
+    setSavingSection(sectionKey);
+
+    try {
+      const response = await API.updateProfile(payload);
+      const normalized = normalizeOwnerProfile(response?.user || { ...source, ...payload }, {
+        ...source,
+        ...payload,
+        email: profile.email,
+      });
+      const persisted = persistOwnerProfile(normalized);
+      setProfile((prev) => ({ ...prev, ...persisted, email: persisted.email || prev.email }));
+      setEditingSection(null);
+      setDraftProfile(null);
+      setStatusMessage("Profile updated successfully.");
+      window.dispatchEvent(new Event("owner-profile-updated"));
+    } catch (error) {
+      const fallbackProfile = persistOwnerProfile({
+        ...profile,
+        ...source,
+        ...payload,
+        name: payload.name || source.name || profile.name,
+      });
+      setProfile((prev) => ({ ...prev, ...fallbackProfile }));
+      setEditingSection(null);
+      setDraftProfile(null);
+      setStatusError(error.message || "Could not update profile on server. Saved locally instead.");
+      window.dispatchEvent(new Event("owner-profile-updated"));
+    } finally {
+      setSavingSection("");
+    }
+  };
+
+  const toggleEdit = async (sectionKey) => {
+    if (editingSection === sectionKey) {
+      await saveSection(sectionKey);
+      return;
+    }
+    openEdit(sectionKey);
+  };
+
+  const syncAvatarAcrossApp = async (avatarValue = "") => {
+    const normalizedAvatar = String(avatarValue || "").trim();
+    setStatusMessage("");
+    setStatusError("");
+
+    const localProfile = persistOwnerProfile({ ...profile, avatar: normalizedAvatar });
+    setProfile((prev) => ({ ...prev, ...localProfile, avatar: normalizedAvatar }));
+    window.dispatchEvent(new Event("owner-profile-updated"));
+
+    try {
+      const response = await API.updateProfile({ avatar: normalizedAvatar });
+      const synced = persistOwnerProfile(response?.user || { ...localProfile, avatar: normalizedAvatar });
+      setProfile((prev) => ({ ...prev, ...synced, avatar: normalizedAvatar }));
+      window.dispatchEvent(new Event("owner-profile-updated"));
+      if (normalizedAvatar) setShowPhotoConfirmation(true);
+      else setStatusMessage("Profile photo removed.");
+    } catch (error) {
+      setStatusError(error.message || "Profile photo saved locally. Cloud sync failed.");
+    }
+  };
+
+  const handlePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      validateAvatarImageFile(file);
+    } catch (validationError) {
+      setStatusError(validationError.message || "Please choose a valid profile photo.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => syncAvatarAcrossApp(reader.result || "");
+    reader.onerror = () => setStatusError("The selected profile photo could not be read.");
+    reader.readAsDataURL(file);
+  };
+
+  const refreshKycStatus = async () => {
+    setKycLoading(true);
+    setKycError("");
+    try {
+      const response = await API.kycGetStatus();
+      const nextStatus = String(response?.status || "not_started");
+      setKycStatus(nextStatus);
+      setKycRemarks(String(response?.remarks || ""));
+      setKycLastChecked(new Date());
+
+      const profileResponse = await API.getProfile();
+      if (profileResponse?.user) {
+        const normalized = normalizeOwnerProfile(profileResponse.user, profileResponse.user);
+        const persisted = persistOwnerProfile(normalized);
+        setProfile((prev) => ({ ...prev, ...persisted, email: persisted.email || prev.email }));
+        window.dispatchEvent(new Event("owner-profile-updated"));
+      }
+    } catch (error) {
+      setKycError(error.message || "Could not refresh verification status. Please try again.");
+    } finally {
+      setKycLoading(false);
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Owner Profile</h1>
-        <button
-          onClick={() => (editing ? saveProfile() : setEditing(true))}
-          disabled={isSaving}
-          className="px-4 py-2 rounded-full border hover:bg-gray-100 disabled:opacity-60"
-        >
-          {editing ? (isSaving ? "Saving..." : "Save") : "Edit"}
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-7xl space-y-8 pb-12">
+      <OwnerPageHeader
+        title="Account Settings"
+        description="Manage your personal information and owner profile preferences."
+      />
 
       {statusMessage && (
-        <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
           {statusMessage}
-        </p>
+        </div>
       )}
       {statusError && (
-        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {statusError}
-        </p>
+        </div>
       )}
 
-      <div className="bg-white rounded-xl shadow p-6 flex gap-6 items-center">
-        <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-[#017FE6] text-white flex items-center justify-center text-2xl font-bold overflow-hidden">
-            {profile.avatar ? (
-              <img src={profile.avatar} alt={profile.name || "Owner"} className="w-full h-full object-cover" />
-            ) : (
-              `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`.toUpperCase() || "O"
+      <div
+        className={`rp-settings-card relative flex items-center gap-4 overflow-visible p-6 ${
+          showPhotoMenu ? "z-[60]" : "z-10"
+        }`}
+      >
+        <div className="relative z-10">
+          <div className="relative">
+            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-[#017FE6] text-2xl font-bold text-white">
+              {profile.avatar ? (
+                <img src={profile.avatar} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Change profile photo"
+              onClick={() => setShowPhotoMenu((prev) => !prev)}
+              className="absolute bottom-0 right-0 rounded-full border bg-white p-1.5 shadow hover:bg-gray-100"
+            >
+              <Camera size={18} className="text-[#017FE6]" />
+            </button>
+
+            {showPhotoMenu && (
+              <div className="absolute left-0 top-full z-[70] mt-2 w-40 origin-top-left rounded-lg border bg-white shadow-lg">
+                <label className="block cursor-pointer px-4 py-2 text-sm hover:bg-gray-100">
+                  Upload Photo
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      handlePhotoUpload(event);
+                      setShowPhotoMenu(false);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                {profile.avatar && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      syncAvatarAcrossApp("");
+                      setShowPhotoMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            {`${profile.firstName || ""} ${profile.lastName || ""}`.trim() || profile.name || "Owner"}
-            <BadgeCheck className="text-[#017FE6]" size={18} />
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            {displayName}
+            <BadgeCheck size={18} className="text-[#017FE6]" />
           </h2>
           <p className="text-gray-500">{profile.email || "No email found"}</p>
-          <span className="text-sm text-[#017FE6] font-medium">Verified Owner</span>
+          <span className={`text-sm font-medium ${kycStatus === "approved" ? "text-[#017FE6]" : "text-amber-700"}`}>
+            {kycStatus === "approved" ? "Verified Owner" : "Owner verification in progress"}
+          </span>
         </div>
       </div>
 
-      <Section title="Personal Information" icon={User}>
-        <InputField
-          label="First Name"
-          value={profile.firstName}
-          disabled={!editing}
-          onChange={(event) => setProfile((prev) => ({ ...prev, firstName: event.target.value }))}
-        />
-        <InputField
-          label="Last Name"
-          value={profile.lastName}
-          disabled={!editing}
-          onChange={(event) => setProfile((prev) => ({ ...prev, lastName: event.target.value }))}
-        />
-        <InputField label="Email" value={profile.email} disabled />
-        <InputField
-          label="Phone"
-          value={profile.phone}
-          disabled={!editing}
-          onChange={(event) => setProfile((prev) => ({ ...prev, phone: event.target.value }))}
-        />
-      </Section>
+      <SectionCard title="Personal Information" sectionKey="personal" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+        <InputField label="First Name" value={editingSection === "personal" ? current.firstName : profile.firstName} disabled={editingSection !== "personal"} onChange={(event) => updateDraftField("firstName", event.target.value)} />
+        <InputField label="Last Name" value={editingSection === "personal" ? current.lastName : profile.lastName} disabled={editingSection !== "personal"} onChange={(event) => updateDraftField("lastName", event.target.value)} />
+      </SectionCard>
 
-      <Section title="Blockchain Wallet" icon={Wallet}>
-        <div className="col-span-2">
-          <label className="text-xs text-gray-500">Wallet Address</label>
-          <div className="relative">
-            <input
-              ref={walletInputRef}
-              value={profile.walletAddress || ""}
-              onChange={(event) =>
-                setProfile((prev) => ({ ...prev, walletAddress: event.target.value }))
-              }
-              disabled={!editing && !walletEditing}
-              className={`w-full mt-1 border rounded-lg px-3 py-2 text-sm pr-10 ${
-                !editing && !walletEditing ? "bg-gray-100" : "bg-white"
-              }`}
-            />
+      <SectionCard title="Contact Information" sectionKey="contact" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+        <InputField label="Email" value={profile.email} disabled />
+        <InputField label="Phone Number" value={editingSection === "contact" ? current.phone : profile.phone} disabled={editingSection !== "contact"} onChange={(event) => updateDraftField("phone", normalizePhMobileInput(event.target.value))} prefixText="+63" />
+      </SectionCard>
+
+      <SectionCard title="Location Information" sectionKey="location" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+        <InputField label="Full Address" value={editingSection === "location" ? current.address : profile.address} disabled={editingSection !== "location"} onChange={(event) => updateDraftField("address", event.target.value)} />
+        <SelectField label="Region" value={editingSection === "location" ? current.region : profile.region} disabled={editingSection !== "location"} options={regions} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), region: event.target.value, province: "", city: "", barangay: "", address: "" }))} />
+        <SelectField label={provinces.length ? "Province" : "Province (Not required)"} value={editingSection === "location" ? current.province : profile.province} disabled={editingSection !== "location" || !current.region || !provinces.length} options={provinces} placeholder={provinces.length ? "Select" : "Not required"} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), province: event.target.value, city: "", barangay: "", address: "" }))} />
+        <SelectField label="City / Municipality" value={editingSection === "location" ? current.city : profile.city} disabled={editingSection !== "location" || !current.region || (provinces.length > 0 && !current.province)} options={cities} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), city: event.target.value, barangay: "", address: "" }))} />
+        <SelectField label="Barangay" value={editingSection === "location" ? current.barangay : profile.barangay} disabled={editingSection !== "location" || !current.city} options={barangays} placeholder={current.city ? "Select barangay" : "Select a city / municipality first"} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), barangay: event.target.value, address: "" }))} />
+      </SectionCard>
+
+      {profile.ownerType === "business" && (
+        <SectionCard title="Business Information" sectionKey="business" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+          <InputField label="Business Name" value={editingSection === "business" ? current.businessName : profile.businessName} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("businessName", event.target.value)} />
+          <InputField label="Business Permit Number" value={editingSection === "business" ? current.permitNumber : profile.permitNumber} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("permitNumber", event.target.value)} />
+          <InputField label="Business License Number" value={editingSection === "business" ? current.licenseNumber : profile.licenseNumber} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("licenseNumber", event.target.value)} />
+        </SectionCard>
+      )}
+
+      <div className="rp-settings-card p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-semibold">Verification Status</h3>
+            <p className="mt-1 text-sm text-slate-500">Identity approval is required before you can add vehicles.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {canStartVerification && (
+              <button
+                type="button"
+                onClick={() => setShowKycStepper((current) => !current)}
+                className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#017FE6] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0165B8]"
+              >
+                <ShieldCheck size={16} />
+                {showKycStepper ? "Hide verification" : kycStatus === "rejected" ? "Resubmit verification" : "Verify now"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => {
-                if (!editing) {
-                  if (!walletEditing) {
-                    setWalletSnapshot(profile.walletAddress || "");
-                    setWalletEditing(true);
-                  }
-                  setTimeout(() => walletInputRef.current?.focus(), 0);
-                } else {
-                  walletInputRef.current?.focus();
-                }
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-              aria-label="Edit wallet address"
+              onClick={refreshKycStatus}
+              disabled={kycLoading}
+              className="inline-flex w-fit items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Pencil size={16} />
+              <RefreshCw size={16} className={kycLoading ? "animate-spin" : ""} />
+              {kycLoading ? "Checking..." : "Refresh status"}
             </button>
           </div>
         </div>
-        <div className="col-span-2 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={connectWalletAddress}
-            disabled={walletLoading || !getEthereumProvider()}
-            className={`px-3 py-2 rounded-lg text-sm ${
-              walletLoading || !getEthereumProvider()
-                ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                : "bg-[#017FE6] text-white"
-            }`}
-          >
-            {walletLoading
-              ? "Connecting..."
-              : profile.walletAddress
-                ? "Reconnect to Wallet"
-                : "Connect MetaMask"}
-          </button>
-          {walletEditing && !editing && (
-            <>
-              <button
-                type="button"
-                onClick={saveWalletAddress}
-                disabled={walletSaving}
-                className="px-3 py-2 rounded-lg text-sm border hover:bg-gray-100 disabled:opacity-60"
-              >
-                {walletSaving ? "Saving..." : "Save Wallet"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfile((prev) => ({ ...prev, walletAddress: walletSnapshot }));
-                  setWalletEditing(false);
-                }}
-                className="px-3 py-2 rounded-lg text-sm border hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-            </>
-          )}
-          {!getEthereumProvider() && (
-            <p className="text-xs text-gray-500">MetaMask extension is required for Sepolia wallet linking.</p>
-          )}
+
+        <div className={`mb-4 flex items-start gap-3 rounded-xl border p-4 ${KYC_TONE_CLASSES[verification.tone]}`}>
+          {kycStatus === "approved" ? <CheckCircle2 size={20} className="mt-0.5 shrink-0" /> : <CircleAlert size={20} className="mt-0.5 shrink-0" />}
+          <div>
+            <p className="font-semibold">{verification.label}</p>
+            <p className="mt-1 text-sm">{verification.access}</p>
+          </div>
         </div>
-      </Section>
 
-      {walletError && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{walletError}</p>
-      )}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Status label="Government ID" status={verification.idStatus} />
+          {profile.ownerType === "business" && <Status label="Business Permit" status="Submitted" />}
+          <Status label="Selfie Verification" status={verification.selfieStatus} />
+          <Status label="Listing access" status={kycStatus === "approved" ? "Unlocked" : "Locked"} />
+        </div>
 
-      <Section title="Address Information" icon={Building2}>
-        <InputField
-          label="Full Address"
-          value={profile.address}
-          disabled={!editing}
-          onChange={(event) => setProfile((prev) => ({ ...prev, address: event.target.value }))}
-        />
-        <SelectField
-          label="Region"
-          value={profile.region}
-          disabled={!editing}
-          options={regions}
-          onChange={(event) =>
-            setProfile((prev) => ({
-              ...prev,
-              region: event.target.value,
-              province: "",
-              city: "",
-              barangay: "",
-            }))
-          }
-        />
-        <SelectField
-          label="Province"
-          value={profile.province}
-          disabled={!editing || !profile.region}
-          options={provinces}
-          onChange={(event) =>
-            setProfile((prev) => ({
-              ...prev,
-              province: event.target.value,
-              city: "",
-              barangay: "",
-            }))
-          }
-        />
-        <SelectField
-          label="City"
-          value={profile.city}
-          disabled={!editing || !profile.province}
-          options={cities}
-          onChange={(event) =>
-            setProfile((prev) => ({
-              ...prev,
-              city: event.target.value,
-              barangay: "",
-            }))
-          }
-        />
-        <SelectField
-          label="Barangay"
-          value={profile.barangay}
-          disabled={!editing || !profile.city}
-          options={barangays}
-          onChange={(event) =>
-            setProfile((prev) => ({
-              ...prev,
-              barangay: event.target.value,
-            }))
-          }
-        />
-      </Section>
+        {kycRemarks && <p className="mt-4 text-sm text-slate-600">{kycRemarks}</p>}
+        {kycError && <p role="alert" className="mt-4 text-sm text-red-700">{kycError}</p>}
+        <p className="mt-4 text-xs text-slate-500">Last checked: {formatLastChecked(kycLastChecked)}</p>
+        {showKycStepper && (
+          <div className="mt-6 border-t border-slate-200 pt-6">
+            <VerificationStepper onVerificationComplete={refreshKycStatus} />
+          </div>
+        )}
+      </div>
 
-      {profile.ownerType === "business" && (
-        <Section title="Business Information" icon={Building2}>
-          <InputField
-            label="Business Name"
-            value={profile.businessName}
-            disabled={!editing}
-            onChange={(event) =>
-              setProfile((prev) => ({
-                ...prev,
-                businessName: event.target.value,
-              }))
-            }
-          />
-          <InputField
-            label="Permit Number"
-            value={profile.permitNumber}
-            disabled={!editing}
-            onChange={(event) =>
-              setProfile((prev) => ({
-                ...prev,
-                permitNumber: event.target.value,
-              }))
-            }
-          />
-        </Section>
-      )}
-
-      <Section title="Verification Status" icon={ShieldCheck}>
-        <Status label="Government ID" status="Submitted" />
-        {profile.ownerType === "business" && <Status label="Business Permit" status="Submitted" />}
-        <Status label="Selfie Verification" status="Verified" />
-      </Section>
+      <InfoModal isOpen={showPhotoConfirmation} title="Profile Photo Updated" message="Your new profile photo has been uploaded successfully." confirmLabel="Done" onClose={() => setShowPhotoConfirmation(false)} />
     </div>
   );
 }
 
-const Section = ({ title, icon: Icon, children }) => (
-  <div className="bg-white rounded-xl shadow p-6">
-    <h3 className="font-semibold mb-4 flex items-center gap-2">
-      <Icon size={18} /> {title}
-    </h3>
-    <div className="grid grid-cols-2 gap-4">{children}</div>
-  </div>
-);
-
 const Status = ({ label, status = "Submitted" }) => {
-  const color =
-    status === "Approved"
-      ? "text-green-600"
-      : status === "Rejected"
+  const color = ["Approved", "Verified", "Unlocked"].includes(status)
+    ? "text-green-600"
+    : ["Rejected", "Needs resubmission"].includes(status)
       ? "text-red-600"
-      : "text-yellow-600";
-
+      : status === "Locked"
+        ? "text-slate-600"
+        : "text-yellow-600";
   return (
     <div className={`flex items-center gap-2 text-sm ${color}`}>
       <ShieldCheck size={16} />

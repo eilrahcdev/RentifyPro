@@ -1,5 +1,6 @@
 // Auth controller
 import User from "../models/User.js";
+import KycVerification from "../models/KycVerification.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -10,29 +11,41 @@ import LoginChallenge from "../models/LoginChallenge.js";
 import LoginActivity from "../models/LoginActivity.js";
 import sendEmail from "../utils/sendEmail.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
-import { isValidWalletAddress, normalizeAddress } from "../utils/blockchainBooking.js";
-import { getMissingPreKycDocs, clearPreKycDocs } from "../utils/preKycDocs.js";
+import {
+  getMissingPreKycDocs,
+  getPendingPreKycDocs,
+  getActionRequiredPreKycDocs,
+  clearPreKycDocs,
+  preKycIdentityMatchesRegistration,
+  preKycSupportingMatchesRegistration,
+} from "../utils/preKycDocs.js";
 import { isPreKycFaceVerified, clearPreKycFace } from "../utils/preKycFace.js";
+import { isValidPhilippineMobile, normalizePhilippineMobile } from "../utils/phone.js";
+import { verifyPreKycSession } from "../utils/preKycSession.js";
+import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
+import { hashAuthToken, revokeSessionToken } from "../utils/authTokenRevocation.js";
+import { disconnectSessionSockets } from "../socket/index.js";
+import { getAvatarUploadDir } from "../utils/storagePaths.js";
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_SECONDS = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 45);
 const PASSWORD_RESET_TOKEN_EXPIRE = process.env.PASSWORD_RESET_TOKEN_EXPIRE || "15m";
 const PASSWORD_RESET_TOKEN_SECRET = process.env.PASSWORD_RESET_TOKEN_SECRET || process.env.JWT_SECRET;
-const tokenBlacklist = new Set();
 const MIN_RENTER_AGE = 18;
-const PHONE_REGEX = /^[0-9]{11}$/;
+const MAX_RENTER_AGE = 100;
+const EMERGENCY_CONTACT_NAME_REGEX = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
+const MAX_EMERGENCY_CONTACT_NAME_LENGTH = 50;
 const LOGIN_CHALLENGE_TTL_MINUTES = Number(process.env.LOGIN_CHALLENGE_TTL_MINUTES || 180);
 const LOGIN_CHALLENGE_MAX_ATTEMPTS = Number(process.env.LOGIN_CHALLENGE_MAX_ATTEMPTS || 5);
 const CLEAR_PREKYC_ON_REGISTER =
   String(process.env.PREKYC_CLEAR_ON_REGISTER || "").trim().toLowerCase() === "true";
-const AVATAR_UPLOAD_DIR = process.env.AVATAR_UPLOAD_DIR || path.resolve("uploads", "avatars");
+const AVATAR_UPLOAD_DIR = getAvatarUploadDir();
 const AVATAR_MAX_BYTES = Number(process.env.AVATAR_MAX_BYTES || 2 * 1024 * 1024);
-const UPLOADS_SEGMENT = "/uploads/";
-
-export const isTokenBlacklisted = (token) => tokenBlacklist.has(token);
+const AVATAR_MEDIA_PREFIX = "uploads/avatars/";
 
 function signToken(user) {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role, sessionVersion: Number(user.sessionVersion || 0) },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE || "7d" }
   );
@@ -94,10 +107,7 @@ const parseDateOfBirth = (value) => {
     return null;
   }
 
-  const parsed = new Date(clean);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setHours(0, 0, 0, 0);
-  return parsed;
+  return null;
 };
 
 const getAgeFromDate = (birthDate, today) => {
@@ -118,8 +128,9 @@ const buildSafeUserResponse = (user) => {
     avatar: user.avatar || "",
     role: user.role,
     isVerified: user.isVerified || false,
+    isDisabled: Boolean(user.isDisabled),
+    isArchived: Boolean(user.isArchived),
     kycStatus: user.kycStatus,
-    walletAddress: user.walletAddress || null,
     phone: user.phone || "",
     dateOfBirth: user.dateOfBirth || "",
     gender: user.gender || "",
@@ -153,23 +164,29 @@ const validatePasswordStrength = (password) => {
   return "";
 };
 
-const buildDuplicateKeyMessage = (error) => {
+const sendFieldError = (res, status, field, message, details = {}) =>
+  res.status(status).json({
+    success: false,
+    message,
+    errors: { [field]: message },
+    ...details,
+  });
+
+const getDuplicateKeyDetails = (error) => {
   const duplicateField = Object.keys(error?.keyPattern || error?.keyValue || {})[0];
 
   if (duplicateField === "email") {
-    return "This email is already registered.";
+    return { field: "email", message: "This email is already registered." };
   }
 
   if (duplicateField === "phone") {
-    return "This phone number is already registered.";
+    return { field: "phone", message: "This phone number is already registered." };
   }
 
-  if (duplicateField === "walletAddress") {
-    return "This wallet address is already linked to another account.";
-  }
-
-  return "A unique field already exists.";
+  return { field: "account", message: "A unique field already exists." };
 };
+
+const buildDuplicateKeyMessage = (error) => getDuplicateKeyDetails(error).message;
 
 const getPublicBaseUrl = (req) => {
   const configured = String(process.env.BACKEND_PUBLIC_URL || "").trim();
@@ -178,29 +195,29 @@ const getPublicBaseUrl = (req) => {
   return `${req.protocol}://${req.get("host")}`;
 };
 
-const normalizeUploadPath = (value = "") => {
+const normalizeAvatarKey = (value = "") => {
   const raw = String(value || "").trim().replace(/\\/g, "/");
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) {
-    const uploadsIndex = raw.toLowerCase().lastIndexOf(UPLOADS_SEGMENT);
+    const uploadsIndex = raw.toLowerCase().lastIndexOf(`/${AVATAR_MEDIA_PREFIX}`);
     if (uploadsIndex >= 0) return raw.slice(uploadsIndex + 1);
     return "";
   }
-  if (raw.toLowerCase().startsWith("uploads/")) return raw;
-  if (raw.startsWith("./")) return raw.slice(2);
-  if (raw.startsWith("/")) return raw.slice(1);
-  if (/^[a-z]:\//i.test(raw)) return raw;
-  return raw;
+  const prefixIndex = raw.toLowerCase().lastIndexOf(AVATAR_MEDIA_PREFIX);
+  const key = prefixIndex >= 0 ? raw.slice(prefixIndex) : raw;
+  if (!key.toLowerCase().startsWith(AVATAR_MEDIA_PREFIX)) return "";
+  const fileName = key.slice(AVATAR_MEDIA_PREFIX.length);
+  if (!fileName || fileName !== path.basename(fileName) || !/^avatar-[a-z0-9-]+\.(jpg|jpeg|png|webp)$/i.test(fileName)) return "";
+  return `${AVATAR_MEDIA_PREFIX}${fileName}`;
 };
 
 const removeLocalAvatarIfExists = async (avatarValue = "") => {
-  const normalized = normalizeUploadPath(avatarValue);
+  const normalized = normalizeAvatarKey(avatarValue);
   if (!normalized) return;
-  if (!normalized.toLowerCase().includes("/avatars/")) return;
-
-  const absolutePath = path.isAbsolute(normalized)
-    ? normalized
-    : path.resolve(normalized);
+  const fileName = normalized.slice(AVATAR_MEDIA_PREFIX.length);
+  const absolutePath = path.resolve(AVATAR_UPLOAD_DIR, fileName);
+  const relative = path.relative(AVATAR_UPLOAD_DIR, absolutePath);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return;
   try {
     await fs.unlink(absolutePath);
   } catch {
@@ -229,7 +246,7 @@ const extractAvatarPayload = (rawValue) => {
 
 const saveAvatarBase64 = async ({ base64, mimeType = "image/jpeg", req }) => {
   const clean = String(base64 || "");
-  if (!clean) throw new Error("Avatar image is empty.");
+  if (!clean || !/^[A-Za-z0-9+/=\s]+$/.test(clean)) throw new Error("Avatar image is invalid.");
 
   const approxBytes = Math.floor(clean.length * 0.75);
   if (approxBytes > AVATAR_MAX_BYTES) {
@@ -237,17 +254,14 @@ const saveAvatarBase64 = async ({ base64, mimeType = "image/jpeg", req }) => {
   }
 
   const buffer = Buffer.from(clean, "base64");
-  if (!buffer.length) {
+  const isJpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng = buffer.length > 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const isWebp = buffer.length > 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  if (!buffer.length || (!isJpeg && !isPng && !isWebp)) {
     throw new Error("Avatar image is invalid.");
   }
 
-  const safeExt = mimeType?.includes("png")
-    ? "png"
-    : mimeType?.includes("webp")
-    ? "webp"
-    : mimeType?.includes("gif")
-    ? "gif"
-    : "jpg";
+  const safeExt = isPng ? "png" : isWebp ? "webp" : "jpg";
   const fileName = `avatar-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${safeExt}`;
 
   await fs.mkdir(AVATAR_UPLOAD_DIR, { recursive: true });
@@ -291,6 +305,14 @@ const createOtpRecord = async ({ email, otp, purpose }) => {
   });
 };
 
+const getOtpCooldownRemainingSeconds = (lastSentAt) => {
+  if (!lastSentAt) return 0;
+  const sentAtMs = new Date(lastSentAt).getTime();
+  if (!Number.isFinite(sentAtMs)) return 0;
+  const remaining = Math.ceil(OTP_RESEND_COOLDOWN_SECONDS - (Date.now() - sentAtMs) / 1000);
+  return remaining > 0 ? remaining : 0;
+};
+
 const findOtpRecord = async ({ email, otp, purpose }) =>
   Otp.findOne({
     email,
@@ -324,6 +346,25 @@ export const getLoginChallenge = async (_req, res) => {
   }
 };
 
+export const checkRegistrationEmail = async (req, res) => {
+  try {
+    // Match final registration: any account with this email reserves it, regardless of role/status.
+    const existing = await User.exists({ email: normalizeEmail(req.body.email) });
+    if (existing) {
+      return sendFieldError(res, 409, "email", "This email is already registered. Please sign in or use another email.", {
+        code: "EMAIL_ALREADY_REGISTERED",
+      });
+    }
+    return res.json({ success: true, available: true });
+  } catch (error) {
+    auditLog.error("AUTH", "Registration email check failed", { detail: error.message });
+    return res.status(503).json({
+      success: false,
+      message: "We couldn't check your email right now. Please try again.",
+    });
+  }
+};
+
 export const registerUser = async (req, res) => {
   try {
     const {
@@ -331,7 +372,6 @@ export const registerUser = async (req, res) => {
       email,
       password,
       role,
-      walletAddress,
       phone,
       dateOfBirth,
       gender,
@@ -350,37 +390,81 @@ export const registerUser = async (req, res) => {
     } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide name, email, and password.",
-      });
+      const errors = {};
+      if (!name) errors.name = "Name is required.";
+      if (!email) errors.email = "Email is required.";
+      if (!password) errors.password = "Password is required.";
+      return res.status(400).json({ success: false, message: "Validation failed.", errors });
     }
 
     const normalizedEmail = normalizeEmail(email);
-    const normalizedPhone = toText(phone);
+    const hasPhone = Object.prototype.hasOwnProperty.call(req.body, "phone");
+    const normalizedPhone = normalizePhilippineMobile(phone);
     const requestedRole = role === "owner" ? "owner" : "user";
+    let preKycSession;
+    try {
+      preKycSession = verifyPreKycSession(req.body.preKycToken, {
+        email: normalizedEmail,
+        role: requestedRole,
+      });
+    } catch (error) {
+      return res.status(Number(error?.status) || 401).json({ success: false, message: error.message });
+    }
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       auditLog.warn("AUTH", `Register with existing email: ${normalizedEmail}`, { ip: req.ip });
-      return res.status(400).json({
-        success: false,
-        message: "This email is already registered.",
-      });
+      return sendFieldError(res, 409, "email", "This email is already registered.");
+    }
+
+    if (hasPhone && !normalizedPhone) {
+      return sendFieldError(
+        res,
+        400,
+        "phone",
+        "Phone number must be exactly 10 digits and start with 9."
+      );
     }
 
     if (normalizedPhone) {
       const existingPhone = await User.findOne({ phone: normalizedPhone }).select("_id");
       if (existingPhone) {
         auditLog.warn("AUTH", `Register with existing phone: ${normalizedPhone}`, { ip: req.ip });
-        return res.status(409).json({
-          success: false,
-          message: "This phone number is already registered.",
-        });
+        return sendFieldError(res, 409, "phone", "This phone number is already registered.");
       }
     }
 
     const requiredDocs = requestedRole === "owner" ? ["id", "supporting"] : ["id"];
-    const missingDocs = await getMissingPreKycDocs(normalizedEmail, requiredDocs);
+    const pendingDocs = await getPendingPreKycDocs(
+      normalizedEmail,
+      requiredDocs,
+      preKycSession.sessionId
+    );
+    if (pendingDocs.length) {
+      return res.status(409).json({
+        success: false,
+        message: "Your document is awaiting manual review. Please try registration again after it is approved.",
+        reviewRequired: true,
+        pendingDocuments: pendingDocs,
+      });
+    }
+    const actionRequiredDocs = await getActionRequiredPreKycDocs(
+      normalizedEmail,
+      requiredDocs,
+      preKycSession.sessionId
+    );
+    if (actionRequiredDocs.length) {
+      return res.status(409).json({
+        success: false,
+        message: "One or more documents need your attention. Review the document status and upload a corrected file before registering.",
+        reuploadRequired: true,
+        documents: actionRequiredDocs,
+      });
+    }
+    const missingDocs = await getMissingPreKycDocs(
+      normalizedEmail,
+      requiredDocs,
+      preKycSession.sessionId
+    );
     if (missingDocs.length) {
       const needsId = missingDocs.includes("id");
       const needsSupporting = missingDocs.includes("supporting");
@@ -393,7 +477,38 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ success: false, message });
     }
 
-    const faceVerified = await isPreKycFaceVerified(normalizedEmail);
+    const registrationIdentityMatches = await preKycIdentityMatchesRegistration(
+      normalizedEmail,
+      preKycSession.sessionId,
+      { full_name: name, date_of_birth: dateOfBirth },
+      { requireBirthDate: requestedRole === "user" }
+    );
+    if (!registrationIdentityMatches) {
+      return res.status(409).json({
+        success: false,
+        message: "Your personal details changed after ID verification. Return to Identity and upload the matching ID again.",
+        identityDetailsChanged: true,
+      });
+    }
+
+    if (requestedRole === "owner" && !await preKycSupportingMatchesRegistration(
+      normalizedEmail,
+      preKycSession.sessionId,
+      {
+        business_name: businessName,
+        permit_number: permitNumber,
+        tax_identification_number: req.body.taxIdentificationNumber,
+        branch_code: req.body.branchCode,
+      }
+    )) {
+      return res.status(409).json({
+        success: false,
+        message: "Your business details changed after document review. Return to the supporting document step and submit it for review again.",
+        supportingDetailsChanged: true,
+      });
+    }
+
+    const faceVerified = await isPreKycFaceVerified(normalizedEmail, preKycSession.sessionId);
     if (!faceVerified) {
       return res.status(400).json({
         success: false,
@@ -403,19 +518,7 @@ export const registerUser = async (req, res) => {
 
     const passwordMessage = validatePasswordStrength(password);
     if (passwordMessage) {
-      return res.status(400).json({ success: false, message: passwordMessage });
-    }
-
-    let normalizedWalletAddress;
-    const walletAddressText = toText(walletAddress);
-    if (walletAddressText) {
-      if (!isValidWalletAddress(walletAddressText)) {
-        return res.status(400).json({
-          success: false,
-          message: "Wallet address is invalid.",
-        });
-      }
-      normalizedWalletAddress = normalizeAddress(walletAddressText);
+      return sendFieldError(res, 400, "password", passwordMessage);
     }
 
     const salt = await bcrypt.genSalt(12);
@@ -425,7 +528,7 @@ export const registerUser = async (req, res) => {
       email: normalizedEmail,
       password: hashedPassword,
       role: requestedRole,
-      walletAddress: normalizedWalletAddress,
+      kycStatus: "approved",
       phone: normalizedPhone || undefined,
       dateOfBirth: toText(dateOfBirth) || undefined,
       gender: toText(gender) || undefined,
@@ -439,9 +542,29 @@ export const registerUser = async (req, res) => {
       city: toText(city) || undefined,
       barangay: toText(barangay) || undefined,
       emergencyContactName: toText(emergencyContactName) || undefined,
-      emergencyContactPhone: toText(emergencyContactPhone) || undefined,
+      emergencyContactPhone: normalizePhilippineMobile(emergencyContactPhone) || undefined,
       emergencyContactRelationship: toText(emergencyContactRelationship) || undefined,
     });
+
+    try {
+      await KycVerification.findOneAndUpdate(
+        { user: user._id },
+        {
+          user: user._id,
+          status: "approved",
+          verifiedAt: new Date(),
+          remarks: "Identity approved during signed pre-registration KYC.",
+        },
+        { upsert: true, new: true }
+      );
+    } catch (kycCaseError) {
+      // User.kycStatus remains the authorization source and /kyc/me fallback.
+      // Do not strand a fully created account if the secondary audit write fails.
+      auditLog.error("KYC", "Failed to create registration KYC case", {
+        userId: user._id.toString(),
+        detail: kycCaseError.message,
+      });
+    }
 
     clearAuthCookie(res);
 
@@ -458,15 +581,15 @@ export const registerUser = async (req, res) => {
     });
   } catch (error) {
     if (error?.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: buildDuplicateKeyMessage(error),
-      });
+      const duplicate = getDuplicateKeyDetails(error);
+      return sendFieldError(res, 409, duplicate.field, duplicate.message);
     }
 
     if (error?.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((entry) => entry.message);
-      return res.status(400).json({ success: false, message: messages.join(", ") });
+      const errors = Object.fromEntries(
+        Object.entries(error.errors || {}).map(([field, entry]) => [field, entry.message])
+      );
+      return res.status(400).json({ success: false, message: "Validation failed.", errors });
     }
 
     auditLog.error("AUTH", "Register error", { detail: error.message });
@@ -484,43 +607,38 @@ export const loginUser = async (req, res) => {
     const captchaAnswer = String(req.body.captchaAnswer || "").trim();
 
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide email and password.",
-      });
+      const errors = {};
+      if (!email) errors.email = "Email is required.";
+      if (!password) errors.password = "Password is required.";
+      return res.status(400).json({ success: false, message: "Validation failed.", errors });
     }
 
     if (!captchaId || !captchaAnswer) {
-      return res.status(400).json({
-        success: false,
-        message: "Captcha is required.",
-      });
+      return sendFieldError(res, 400, "captchaAnswer", "Security check answer is required.");
     }
     if (!/^[0-9]+$/.test(captchaAnswer)) {
-      return res.status(400).json({
-        success: false,
-        message: "Captcha answer must be a number.",
-      });
+      return sendFieldError(res, 400, "captchaAnswer", "Security check answer must be a number.");
     }
     if (captchaAnswer.length > 3) {
-      return res.status(400).json({
-        success: false,
-        message: "Captcha answer must be at most 3 digits.",
-      });
+      return sendFieldError(res, 400, "captchaAnswer", "Security check answer must be at most 3 digits.");
     }
 
     const challenge = await LoginChallenge.findOne({ challengeId: captchaId }).select("+answerHash");
     if (!challenge) {
-      return res.status(400).json({
-        success: false,
-        message: "Captcha expired. Please refresh and try again.",
-      });
+      return sendFieldError(
+        res,
+        400,
+        "captchaAnswer",
+        "Security check expired. Please refresh and try again."
+      );
     }
     if (challenge.usedAt) {
-      return res.status(400).json({
-        success: false,
-        message: "Captcha expired. Please refresh and try again.",
-      });
+      return sendFieldError(
+        res,
+        400,
+        "captchaAnswer",
+        "Security check expired. Please refresh and try again."
+      );
     }
     if (challenge.attempts >= challenge.maxAttempts) {
       if (!challenge.usedAt) {
@@ -537,10 +655,7 @@ export const loginUser = async (req, res) => {
     challenge.attempts += 1;
     if (!captchaOk) {
       await challenge.save();
-      return res.status(400).json({
-        success: false,
-        message: "Captcha answer is incorrect.",
-      });
+      return sendFieldError(res, 400, "captchaAnswer", "Security check answer is incorrect.");
     }
     challenge.usedAt = new Date();
     await challenge.save();
@@ -550,10 +665,7 @@ export const loginUser = async (req, res) => {
 
     if (!user) {
       auditLog.security("AUTH", "Login failed: unknown email", { email: normalizedEmail, ip: req.ip });
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password.",
-      });
+      return sendFieldError(res, 401, "email", "Invalid email.", { code: "INVALID_EMAIL" });
     }
 
     let isMatch = false;
@@ -565,18 +677,41 @@ export const loginUser = async (req, res) => {
 
     if (!isMatch) {
       auditLog.security("AUTH", "Login failed: wrong password", { email: normalizedEmail, ip: req.ip });
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password.",
+      return sendFieldError(res, 401, "password", "Invalid password.", {
+        code: "INVALID_PASSWORD",
+      });
+    }
+
+    await releaseExpiredModerationSuspension(user);
+
+    if (user.isArchived) {
+      clearAuthCookie(res);
+      auditLog.security("AUTH", "Archived account attempted login", { userId: user._id.toString(), ip: req.ip });
+      return sendFieldError(res, 403, "email", "This account has been archived. Contact the RentifyPro administrator.", {
+        code: "ACCOUNT_ARCHIVED",
+      });
+    }
+
+    if (user.isDisabled) {
+      clearAuthCookie(res);
+      auditLog.security("AUTH", "Disabled account attempted login", {
+        userId: user._id.toString(),
+        email: normalizedEmail,
+        ip: req.ip,
+      });
+      return sendFieldError(res, 403, "email", "This account has been disabled. Contact the RentifyPro administrator.", {
+        code: "ACCOUNT_DISABLED",
       });
     }
 
     if (!user.isVerified) {
       clearAuthCookie(res);
-      return res.status(403).json({
-        success: false,
-        message: "Please verify your email before logging in.",
-      });
+      return sendFieldError(
+        res,
+        403,
+        "email",
+        "Please verify your email before logging in."
+      );
     }
 
     const token = signToken(user);
@@ -609,7 +744,8 @@ export const logoutUser = async (req, res) => {
   try {
     const cookieToken = String(req.cookies?.token || "").trim();
     if (cookieToken) {
-      tokenBlacklist.add(cookieToken);
+      await revokeSessionToken(cookieToken);
+      disconnectSessionSockets(cookieToken);
       auditLog.info("AUTH", "Logged out", { userId: req.user?._id?.toString() });
     }
     clearAuthCookie(res);
@@ -637,11 +773,35 @@ export const sendOTP = async (req, res) => {
       });
     }
 
-    const otp = createOtpCode();
-    await createOtpRecord({ email: normalizedEmail, otp, purpose: "verification" });
-    await sendEmail(normalizedEmail, otp);
+    const recipientEmail = normalizeEmail(user.email);
+    const existingOtp = await Otp.findOne({
+      email: recipientEmail,
+      purpose: "verification",
+    }).select("lastSentAt");
+    const retryAfterSeconds = getOtpCooldownRemainingSeconds(existingOtp?.lastSentAt);
+    if (retryAfterSeconds > 0) {
+      const retryAfterMs = retryAfterSeconds * 1000;
+      const retryAfterAt = new Date(Date.now() + retryAfterMs).toISOString();
+      const countdown = `${String(Math.floor(retryAfterSeconds / 60)).padStart(2, "0")}:${String(
+        retryAfterSeconds % 60
+      ).padStart(2, "0")}`;
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: `Too many OTP attempts. Try again in ${countdown}.`,
+        retryAfterSeconds,
+        retryAfterMs,
+        retryAfterAt,
+        countdown,
+        serverTime: new Date().toISOString(),
+      });
+    }
 
-    auditLog.info("AUTH", `Verification OTP sent to: ${normalizedEmail}`);
+    const otp = createOtpCode();
+    await createOtpRecord({ email: recipientEmail, otp, purpose: "verification" });
+    await sendEmail(recipientEmail, otp, "verification");
+
+    auditLog.info("AUTH", `Verification OTP sent to: ${recipientEmail}`);
 
     res.json({
       success: true,
@@ -742,11 +902,35 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    const otp = createOtpCode();
-    await createOtpRecord({ email: normalizedEmail, otp, purpose: "password_reset" });
-    await sendEmail(normalizedEmail, otp);
+    const recipientEmail = normalizeEmail(user.email);
+    const existingOtp = await Otp.findOne({
+      email: recipientEmail,
+      purpose: "password_reset",
+    }).select("lastSentAt");
+    const retryAfterSeconds = getOtpCooldownRemainingSeconds(existingOtp?.lastSentAt);
+    if (retryAfterSeconds > 0) {
+      const retryAfterMs = retryAfterSeconds * 1000;
+      const retryAfterAt = new Date(Date.now() + retryAfterMs).toISOString();
+      const countdown = `${String(Math.floor(retryAfterSeconds / 60)).padStart(2, "0")}:${String(
+        retryAfterSeconds % 60
+      ).padStart(2, "0")}`;
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: `Too many OTP attempts. Try again in ${countdown}.`,
+        retryAfterSeconds,
+        retryAfterMs,
+        retryAfterAt,
+        countdown,
+        serverTime: new Date().toISOString(),
+      });
+    }
 
-    auditLog.info("AUTH", `Password reset OTP sent to: ${normalizedEmail}`);
+    const otp = createOtpCode();
+    await createOtpRecord({ email: recipientEmail, otp, purpose: "password_reset" });
+    await sendEmail(recipientEmail, otp, "password_reset");
+
+    auditLog.info("AUTH", `Password reset OTP sent to: ${recipientEmail}`);
 
     res.json({
       success: true,
@@ -804,13 +988,30 @@ export const verifyPasswordResetOTP = async (req, res) => {
       });
     }
 
-    await Otp.deleteMany({ email: normalizedEmail, purpose: "password_reset" });
+    const consumedCode = await Otp.findOneAndDelete({
+      _id: record._id,
+      email: normalizedEmail,
+      purpose: "password_reset",
+      expiresAt: { $gt: new Date() },
+    });
+    if (!consumedCode) {
+      return res.status(400).json({ success: false, message: "Invalid or expired code." });
+    }
 
     const resetToken = jwt.sign(
-      { email: normalizedEmail, purpose: "password_reset" },
+      { email: normalizedEmail, purpose: "password_reset", jti: crypto.randomUUID() },
       PASSWORD_RESET_TOKEN_SECRET,
       { expiresIn: PASSWORD_RESET_TOKEN_EXPIRE }
     );
+
+    const resetSession = await User.updateOne(
+      { _id: user._id },
+      { $set: { passwordResetTokenHash: hashAuthToken(resetToken) } }
+    );
+    if (resetSession.matchedCount !== 1) {
+      return res.status(400).json({ success: false, message: "Invalid or expired code." });
+    }
+    await Otp.deleteMany({ email: normalizedEmail, purpose: "password_reset" });
 
     res.json({
       success: true,
@@ -861,19 +1062,23 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: normalizedEmail }).select("+password");
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    const user = await User.findOneAndUpdate(
+      { email: normalizedEmail, passwordResetTokenHash: hashAuthToken(token) },
+      {
+        $set: { password: passwordHash },
+        $unset: { passwordResetTokenHash: "" },
+        $inc: { sessionVersion: 1 },
+      },
+      { new: true }
+    );
     if (!user) {
       return res.status(400).json({
         success: false,
         message: "Reset session is invalid or expired.",
       });
     }
-
-    const salt = await bcrypt.genSalt(12);
-    user.password = await bcrypt.hash(newPassword, salt);
-    await user.save();
-    await Otp.deleteMany({ email: normalizedEmail, purpose: "password_reset" });
-
     clearAuthCookie(res);
     auditLog.info("AUTH", `Password reset completed: ${normalizedEmail}`, { userId: user._id.toString() });
 
@@ -918,8 +1123,20 @@ export const changePassword = async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(12);
-    user.password = await bcrypt.hash(newPassword, salt);
-    await user.save();
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: user._id, password: user.password },
+      {
+        $set: { password: passwordHash },
+        $unset: { passwordResetTokenHash: "" },
+        $inc: { sessionVersion: 1 },
+      },
+      { new: true }
+    );
+    if (!updatedUser) {
+      return res.status(409).json({ success: false, message: "Password changed in another session. Please sign in again." });
+    }
+    setAuthCookie(res, signToken(updatedUser));
 
     auditLog.info("AUTH", "Password changed", { userId: user._id.toString() });
 
@@ -1013,7 +1230,48 @@ export const upgradeToOwner = async (req, res) => {
       });
     }
 
-    const missingDocs = await getMissingPreKycDocs(user.email, ["supporting"]);
+    let preKycSession;
+    try {
+      preKycSession = verifyPreKycSession(req.body.preKycToken, {
+        email: user.email,
+        role: "owner",
+      });
+    } catch (error) {
+      return res.status(Number(error?.status) || 401).json({ success: false, message: error.message });
+    }
+
+    const pendingDocs = await getPendingPreKycDocs(
+      user.email,
+      ["supporting"],
+      preKycSession.sessionId
+    );
+    if (pendingDocs.length) {
+      return res.status(409).json({
+        success: false,
+        message: "Your supporting document is awaiting manual review.",
+        reviewRequired: true,
+      });
+    }
+
+    const actionRequiredDocs = await getActionRequiredPreKycDocs(
+      user.email,
+      ["supporting"],
+      preKycSession.sessionId
+    );
+    if (actionRequiredDocs.length) {
+      return res.status(409).json({
+        success: false,
+        message: "Your supporting document needs attention. Review its status and upload a corrected file before continuing.",
+        reuploadRequired: true,
+        documents: actionRequiredDocs,
+      });
+    }
+
+    const missingDocs = await getMissingPreKycDocs(
+      user.email,
+      ["supporting"],
+      preKycSession.sessionId
+    );
     if (missingDocs.length) {
       return res.status(400).json({
         success: false,
@@ -1031,8 +1289,31 @@ export const upgradeToOwner = async (req, res) => {
     if (licenseNumber) user.licenseNumber = licenseNumber;
     if (permitNumber) user.permitNumber = permitNumber;
 
+    const verifiedAt = new Date();
     user.role = "owner";
+    user.kycStatus = "approved";
+    user.kycStatusUpdatedAt = verifiedAt;
     await user.save();
+
+    try {
+      await KycVerification.findOneAndUpdate(
+        { user: user._id },
+        {
+          user: user._id,
+          status: "approved",
+          verifiedAt,
+          remarks: "Identity approved during owner upgrade verification.",
+        },
+        { upsert: true, new: true }
+      );
+    } catch (kycCaseError) {
+      // The user summary is the authorization source. Keep the verified owner
+      // from being stranded if the secondary KYC audit write is unavailable.
+      auditLog.error("KYC", "Failed to create owner upgrade KYC case", {
+        userId: user._id.toString(),
+        detail: kycCaseError.message,
+      });
+    }
 
     auditLog.info("AUTH", "Upgraded to owner", { userId: user._id.toString() });
 
@@ -1111,31 +1392,75 @@ export const updateProfile = async (req, res) => {
               message: "Looks like you're under 18. RentifyPro accounts are for ages 18+.",
             });
           }
+          if (age > MAX_RENTER_AGE) {
+            return res.status(400).json({
+              success: false,
+              message: "Date of birth must correspond to an age of 18 to 100.",
+            });
+          }
         }
       }
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "phone")) {
-      const phone = toText(req.body.phone);
-      if (phone && !PHONE_REGEX.test(phone)) {
+      const phone = normalizePhilippineMobile(req.body.phone);
+      if (!phone) {
         return res.status(400).json({
           success: false,
-          message: "Phone number must be exactly 11 digits.",
+          message: "Phone number must be exactly 10 digits and start with 9.",
         });
       }
 
-      if (phone) {
-        const existingPhone = await User.findOne({
-          phone,
-          _id: { $ne: user._id },
-        }).select("_id");
+      const existingPhone = await User.findOne({
+        phone,
+        _id: { $ne: user._id },
+      }).select("_id");
 
-        if (existingPhone) {
-          return res.status(409).json({
+      if (existingPhone) {
+        return res.status(409).json({
+          success: false,
+          message: "This phone number is already registered.",
+        });
+      }
+
+      req.body.phone = phone;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "emergencyContactName")) {
+      const emergencyContactName = toText(req.body.emergencyContactName);
+      if (emergencyContactName) {
+        if (!EMERGENCY_CONTACT_NAME_REGEX.test(emergencyContactName)) {
+          return res.status(400).json({
             success: false,
-            message: "This phone number is already registered.",
+            message:
+              "Emergency contact name can only contain letters and single spaces between names.",
           });
         }
+        if (emergencyContactName.length > MAX_EMERGENCY_CONTACT_NAME_LENGTH) {
+          return res.status(400).json({
+            success: false,
+            message: `Emergency contact name is too long (max ${MAX_EMERGENCY_CONTACT_NAME_LENGTH} characters).`,
+          });
+        }
+        req.body.emergencyContactName = emergencyContactName;
+      } else {
+        req.body.emergencyContactName = "";
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "emergencyContactPhone")) {
+      const emergencyContactPhone = toText(req.body.emergencyContactPhone);
+      if (emergencyContactPhone) {
+        const normalizedEmergencyContactPhone = normalizePhilippineMobile(emergencyContactPhone);
+        if (!isValidPhilippineMobile(normalizedEmergencyContactPhone)) {
+          return res.status(400).json({
+            success: false,
+            message: "Emergency contact phone must be exactly 10 digits and start with 9.",
+          });
+        }
+        req.body.emergencyContactPhone = normalizedEmergencyContactPhone;
+      } else {
+        req.body.emergencyContactPhone = "";
       }
     }
 
@@ -1174,7 +1499,17 @@ export const updateProfile = async (req, res) => {
             });
             user.avatar = stored.publicUrl;
           } else {
-            user.avatar = avatarInput;
+            const localAvatarKey = normalizeAvatarKey(avatarInput);
+            if (localAvatarKey) {
+              const baseUrl = getPublicBaseUrl(req);
+              user.avatar = baseUrl ? `${baseUrl}/${localAvatarKey}` : localAvatarKey;
+            } else {
+              const externalUrl = new URL(avatarInput);
+              if (externalUrl.protocol !== "https:" || externalUrl.username || externalUrl.password || avatarInput.length > 2048) {
+                throw new Error("Avatar must be a valid HTTPS image URL.");
+              }
+              user.avatar = externalUrl.toString();
+            }
           }
         }
       } catch (error) {
@@ -1190,20 +1525,6 @@ export const updateProfile = async (req, res) => {
         user[field] = toText(req.body[field]) || undefined;
       }
     });
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "walletAddress")) {
-      const walletAddress = toText(req.body.walletAddress);
-      if (!walletAddress) {
-        user.set("walletAddress", undefined);
-      } else if (!isValidWalletAddress(walletAddress)) {
-        return res.status(400).json({
-          success: false,
-          message: "Wallet address is invalid.",
-        });
-      } else {
-        user.walletAddress = normalizeAddress(walletAddress);
-      }
-    }
 
     await user.save();
 

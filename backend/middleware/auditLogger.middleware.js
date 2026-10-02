@@ -1,7 +1,9 @@
 // Audit logs go to the terminal and daily log files.
 // Clients still get a generic error response.
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -9,11 +11,29 @@ const LOG_DIR = path.join(__dirname, "..", "logs");
 
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
+const REDACTED_KEYS = /password|token|authorization|cookie|secret|api[_-]?key|base64|embedding/i;
+const HASHED_KEYS = /(^|_)(email|phone|ip)(_|$)/i;
+const hashLogIdentifier = (value) =>
+  crypto.createHmac("sha256", process.env.LOG_HASH_SECRET || process.env.JWT_SECRET || "local-log-key")
+    .update(String(value || ""))
+    .digest("hex")
+    .slice(0, 16);
+
+const sanitizeMeta = (value, key = "") => {
+  if (REDACTED_KEYS.test(key)) return "[REDACTED]";
+  if (HASHED_KEYS.test(key) && value) return `h:${hashLogIdentifier(value)}`;
+  if (Array.isArray(value)) return value.slice(0, 20).map((entry) => sanitizeMeta(entry));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).slice(0, 30).map(([nestedKey, nestedValue]) => [nestedKey, sanitizeMeta(nestedValue, nestedKey)]));
+  }
+  return typeof value === "string" && value.length > 2000 ? `${value.slice(0, 2000)}…[truncated]` : value;
+};
+
 function writeLog(level, category, message, meta = {}) {
   const entry = {
     timestamp: new Date().toISOString(),
     level, category, message,
-    ...meta,
+    ...sanitizeMeta(meta),
   };
 
   const line = JSON.stringify(entry);
@@ -27,7 +47,10 @@ function writeLog(level, category, message, meta = {}) {
   }
 
   const dateStr = new Date().toISOString().split("T")[0];
-  fs.appendFileSync(path.join(LOG_DIR, `audit-${dateStr}.log`), line + "\n", "utf-8");
+  // File logs are for local development. Avoid blocking API requests on disk I/O.
+  void fsPromises.appendFile(path.join(LOG_DIR, `audit-${dateStr}.log`), line + "\n", "utf-8").catch((error) => {
+    console.error("[AUDIT] Failed to write local audit log:", error.message);
+  });
 }
 
 export const auditLog = {

@@ -20,7 +20,7 @@ export default function SearchCard({
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <InputField label="Vehicle Types" type="select" value={vehicleType} onChange={onVehicleTypeChange}
             options={[
-              { label: "Select type", value: "" },
+              { label: "All Vehicles", value: "" },
               { label: "Car", value: "car" },
               { label: "Motorcycle", value: "motorcycle" },
               { label: "Van", value: "van" },
@@ -35,7 +35,7 @@ export default function SearchCard({
 
         <div className="flex justify-center">
           <button onClick={onSearch} className="flex items-center gap-3 bg-[#017FE6] text-white px-10 py-3 rounded-xl font-semibold text-lg hover:bg-[#0165B8] transition-all duration-300 hover:shadow-xl hover:scale-105">
-            <Search size={22} className="stroke-[2.5]" />
+            <Search size={24} strokeWidth={2} aria-hidden="true" />
             Search Available Vehicles
           </button>
         </div>

@@ -2,16 +2,23 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { fileURLToPath } from "url";
+import { getVehicleUploadDir } from "../utils/localMedia.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const vehicleUploadDir = path.resolve(__dirname, "..", "uploads", "vehicles");
+const vehicleUploadDir = getVehicleUploadDir();
 fs.mkdirSync(vehicleUploadDir, { recursive: true });
 
 const vehicleStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, vehicleUploadDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
+    const extByMime = {
+      "image/jpeg": ".jpg",
+      "image/jpg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+    };
+    const ext = extByMime[file.mimetype] || path.extname(file.originalname || "").toLowerCase();
     cb(null, `vehicle-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
   },
 });
@@ -51,8 +58,12 @@ const hasWebpMagic = (buffer) =>
   buffer.slice(0, 4).toString("ascii") === "RIFF" &&
   buffer.slice(8, 12).toString("ascii") === "WEBP";
 
-const isAllowedImageSignature = (buffer) =>
-  hasJpegMagic(buffer) || hasPngMagic(buffer) || hasWebpMagic(buffer);
+export const vehicleImageSignatureMatches = (buffer, mimeType) => {
+  if (mimeType === "image/jpeg" || mimeType === "image/jpg") return hasJpegMagic(buffer);
+  if (mimeType === "image/png") return hasPngMagic(buffer);
+  if (mimeType === "image/webp") return hasWebpMagic(buffer);
+  return false;
+};
 
 const removeFileIfExists = (filePath) => {
   if (!filePath) return;
@@ -72,7 +83,7 @@ export const validateUploadedVehicleImages = (req, res, next) => {
       fs.readSync(fd, header, 0, 16, 0);
       fs.closeSync(fd);
 
-      if (!isAllowedImageSignature(header)) {
+      if (!vehicleImageSignatureMatches(header, file.mimetype)) {
         files.forEach((entry) => removeFileIfExists(entry.path));
         return res.status(400).json({
           success: false,
@@ -93,4 +104,20 @@ export const validateUploadedVehicleImages = (req, res, next) => {
 };
 
 export const uploadVehicleImage = vehicleMulter;
-export const uploadVehicleImages = vehicleMulter;
+export const uploadVehicleImages = (req, res, next) => {
+  vehicleMulter.array("images", 8)(req, res, (error) => {
+    if (!error) return next();
+    const files = Array.isArray(req.files) ? req.files : [];
+    files.forEach((file) => removeFileIfExists(file.path));
+    const sizeError = error?.code === "LIMIT_FILE_SIZE";
+    const countError = error?.code === "LIMIT_FILE_COUNT" || error?.code === "LIMIT_UNEXPECTED_FILE";
+    return res.status(400).json({
+      success: false,
+      message: sizeError
+        ? "Each vehicle photo must be 5 MB or smaller."
+        : countError
+          ? "Upload up to eight JPG, PNG, or WEBP vehicle photos."
+          : error?.message || "The vehicle photos could not be uploaded.",
+    });
+  });
+};

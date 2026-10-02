@@ -1,11 +1,11 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PreKycReviewNotice from "../components/PreKycReviewNotice";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Building2,
   Check,
-  CheckCircle2,
-  ChevronDown,
+  CircleCheck,
   Eye,
   EyeOff,
   FileText,
@@ -19,44 +19,63 @@ import {
 } from "lucide-react";
 
 import {
-  captureFramesFromStream,
   fileToBase64,
   getMimeFromDataUrl,
-  startCamera,
-  stopCamera,
   stripDataUrlPrefix,
+  validateDocumentImageFile,
+  validateSupportingDocumentFile,
 } from "../utils/cameraKyc";
 import {
   preRegisterIdFace,
-  preSelfieChallenge,
   preSelfieVerify,
   preVerifySupportingDocument,
+  getPreKycSessionToken,
 } from "../utils/kycApi";
 import AuthShell from "../components/AuthShell";
+import LegalPolicyModal from "../components/LegalPolicyModal";
+import RegistrationDraftNotice from "../components/RegistrationDraftNotice";
+import RegistrationProgress from "../components/RegistrationProgress";
+import HelpLink from "../components/HelpLink";
+import PasswordStrengthIndicator from "../components/PasswordStrengthIndicator";
+import SelfieCapture from "../components/SelfieCapture";
+import useRegistrationDraft from "../hooks/useRegistrationDraft";
+import useRegistrationEmailCheck from "../hooks/useRegistrationEmailCheck";
 import API from "../utils/api";
 import { ALLOWED_EMAIL_DOMAINS, NAME_REGEX } from "../data/registerValidation";
+import { BIR_SUPPORTING_DOCUMENT_TYPES, ID_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 
-const TOTAL_STEPS = 4;
-const STEP_LABELS = ["Personal Details", "Account & Documents", "Face Verification", "Review"];
+const STEP_LABELS = ["Account", "Address", "Business document", "Identity", "Review"];
+const TOTAL_STEPS = STEP_LABELS.length;
+const BIR_DOCUMENT_TYPES = new Set(BIR_SUPPORTING_DOCUMENT_TYPES);
+const DOCUMENT_NUMBER_LABELS = {
+  "DTI Business Name Registration": "DTI registration number",
+  "SEC Certificate of Registration": "SEC registration number",
+  "Mayor's/Business Permit": "Business permit number",
+  "Barangay Business Clearance": "Clearance or reference number (if shown)",
+  "CDA Certificate of Registration": "CDA registration number",
+};
 const ACTION_COOLDOWN_MS = 2000;
 const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-const EMOJI_REGEX =
-  /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
+// The joined/variation-selector code points are intentionally included to reject complete emoji sequences.
+// eslint-disable-next-line no-misleading-character-class
+const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{2028}\u{2029}]/u;
+const PH_LOCAL_MOBILE_REGEX = /^9\d{9}$/;
 
 const normalizeNameInput = (value = "") => {
   let nextValue = String(value);
   nextValue = nextValue.replace(/[^A-Za-z ]/g, "");
   nextValue = nextValue.replace(/\s+/g, " ");
   if (nextValue.startsWith(" ")) nextValue = nextValue.slice(1);
-  const firstSpace = nextValue.indexOf(" ");
-  if (firstSpace !== -1) {
-    const before = nextValue.slice(0, firstSpace);
-    const after = nextValue.slice(firstSpace + 1).replace(/ /g, "");
-    nextValue = `${before} ${after}`;
-  }
   return nextValue;
+};
+
+const normalizePhMobileInput = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (!digits.startsWith("9")) return "";
+  return digits.slice(0, 10);
 };
 
 const initialForm = {
@@ -72,6 +91,8 @@ const initialForm = {
   ownerType: "individual",
   businessName: "",
   permitNumber: "",
+  taxIdentificationNumber: "",
+  branchCode: "",
   password: "",
   confirmPassword: "",
   agree: false,
@@ -82,9 +103,10 @@ const initialFiles = {
 };
 
 const initialKyc = {
+  idType: "",
   idCardFile: null,
   idRegistered: false,
-  challengeId: "",
+  idReadyForSelfie: false,
   selfieVerified: false,
   selfieDataUrl: "",
   selfieBase64Clean: "",
@@ -112,22 +134,63 @@ function friendlyError(msg) {
   return "Something went wrong. Please try again.";
 }
 
-export default function RegisterOwnerPage({
+function validateOwnerPassword(value) {
+  if (!value) return "Password is required.";
+  if (/\s/.test(value)) return "Password must not contain spaces.";
+  if (EMOJI_REGEX.test(value)) return "Password must not contain emoji.";
+  if (value.length < 8) return "Password must be at least 8 characters.";
+  if (!/[A-Z]/.test(value)) return "Password needs an uppercase letter.";
+  if (!/[a-z]/.test(value)) return "Password needs a lowercase letter.";
+  if (!/[0-9]/.test(value)) return "Password needs a number.";
+  if (!/[!@#$%^&*()_+\-=[\]{}|;':",.<>?/`~]/.test(value)) {
+    return "Password needs a special character.";
+  }
+  return "";
+}
+
+export default function RegisterOwnerPage(props) {
+  const [attempt, setAttempt] = useState({ key: 0, reason: "" });
+  const resetDraft = useCallback((reason) => setAttempt((previous) => ({ key: previous.key + 1, reason })), []);
+  return <RegisterOwnerForm key={attempt.key} {...props} onResetDraft={resetDraft} draftResetReason={attempt.reason} />;
+}
+
+function RegisterOwnerForm({
   onBack,
   onNavigateToSignIn,
   onNavigateToHome,
   onNavigateToRegisterOTP,
+  onResetDraft,
+  draftResetReason,
 }) {
-  const [form, setForm] = useState(initialForm);
+  const [isLoading, setIsLoading] = useState(false);
+  const draft = useRegistrationDraft("owner", initialForm, {
+    busy: isLoading, onReset: onResetDraft, resetReason: draftResetReason,
+  });
+  const { form, setForm } = draft;
+  const { check: checkEmail, cancel: cancelEmailCheck, isChecking: isCheckingEmail } = useRegistrationEmailCheck();
   const [files, setFiles] = useState(initialFiles);
   const [kyc, setKyc] = useState(initialKyc);
-  const [supportingDocStatus, setSupportingDocStatus] = useState({ verified: false, message: "" });
+  const [supportingDocType, setSupportingDocType] = useState("");
+  const [supportingDocStatus, setSupportingDocStatus] = useState({ submitted: false, message: "" });
+  const [documentRefreshKey, setDocumentRefreshKey] = useState(0);
+  const [documentStatuses, setDocumentStatuses] = useState({ id: "not_uploaded", supporting: "not_uploaded" });
+  const handleDocumentsChange = useCallback((documents) => {
+    const nextStatuses = { id: "not_uploaded", supporting: "not_uploaded" };
+    documents.forEach((document) => {
+      if (document.docType === "id" || document.docType === "supporting") {
+        nextStatuses[document.docType] = document.status;
+      }
+    });
+    setDocumentStatuses(nextStatuses);
+  }, []);
 
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
+  const [touchedStep1, setTouchedStep1] = useState({});
   const [stepErrors, setStepErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [formError, setFormError] = useState("");
+  const [legalModalType, setLegalModalType] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [showCpw, setShowCpw] = useState(false);
   const [regions, setRegions] = useState([]);
@@ -136,15 +199,43 @@ export default function RegisterOwnerPage({
   const [barangays, setBarangays] = useState([]);
   const [addressLoadError, setAddressLoadError] = useState("");
 
-  const [kycUi, setKycUi] = useState({ showCamera: false, statusText: "" });
-  const [cameraStream, setCameraStream] = useState(null);
-  const [devices, setDevices] = useState([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState("");
-  const [camError, setCamError] = useState("");
-  const [camInfo, setCamInfo] = useState("");
+  const [kycUi, setKycUi] = useState({ statusText: "" });
+  const idPreviewUrl = useMemo(
+    () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
+    [kyc.idCardFile]
+  );
+  const identityStage = !kyc.idRegistered
+    ? "id"
+    : ["reupload_required", "rejected"].includes(documentStatuses.id)
+      ? "id_blocked"
+    : !kyc.idReadyForSelfie
+      ? "id_checking"
+      : !kyc.selfieBase64Clean
+        ? "camera"
+        : !kyc.selfieVerified
+          ? "selfie"
+          : "complete";
+  const handleIdStatus = useCallback((status, document) => {
+    const ready = document?.identityReadyForSelfie === true;
+    setKyc((previous) => {
+      if (previous.idReadyForSelfie === ready) return previous;
+      return {
+        ...previous,
+        idReadyForSelfie: ready,
+        ...(!ready ? { selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" } : {}),
+      };
+    });
+    if (ready) {
+      setKycUi((previous) => ({ ...previous, statusText: "ID details matched. You can now take your selfie." }));
+    } else if (!["queued", "processing", "retry_wait"].includes(status)) {
+      setKycUi((previous) => ({ ...previous, statusText: "" }));
+    }
+    setDocumentStatuses((previous) => ({ ...previous, id: status }));
+  }, []);
+  const areDocumentsApproved = documentStatuses.id === "verified" && documentStatuses.supporting === "verified";
 
-  const videoRef = useRef(null);
   const idInputRef = useRef(null);
+  const emailRef = useRef(null);
   const lastActionRef = useRef(0);
 
   const fullName = useMemo(
@@ -154,37 +245,16 @@ export default function RegisterOwnerPage({
   const canShowBusinessFields = useMemo(() => form.ownerType === "business", [form.ownerType]);
 
   const canAct = useCallback(() => {
+    if (isLoading) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
     return true;
-  }, []);
+  }, [isLoading]);
 
-  const closeCamera = useCallback(() => {
-    try {
-      stopCamera(videoRef.current || cameraStream);
-    } catch {
-      // Ignore cleanup errors here.
-    }
-    setCameraStream(null);
-    setKycUi((prev) => ({ ...prev, showCamera: false }));
-    setCamError("");
-    setCamInfo("");
-  }, [cameraStream]);
-
-  useEffect(() => {
-    return () => {
-      try {
-        stopCamera(cameraStream);
-      } catch {
-        // Ignore cleanup errors here.
-      }
-    };
-  }, [cameraStream]);
-
-  useEffect(() => {
-    if (step !== 3 && kycUi.showCamera) closeCamera();
-  }, [step, kycUi.showCamera, closeCamera]);
+  useEffect(() => () => {
+    if (idPreviewUrl) URL.revokeObjectURL(idPreviewUrl);
+  }, [idPreviewUrl]);
 
   useEffect(() => {
     let active = true;
@@ -226,8 +296,6 @@ export default function RegisterOwnerPage({
         if (!active) return;
 
         setProvinces(provinceList);
-        setCities([]);
-        setBarangays([]);
 
         if (provinceList.length === 0) {
           const cityRes = await fetch(`${PSGC_BASE_URL}/regions/${form.region}/cities-municipalities/`);
@@ -267,7 +335,6 @@ export default function RegisterOwnerPage({
         const data = await res.json();
         if (!active) return;
         setCities(Array.isArray(data) ? data : []);
-        setBarangays([]);
       } catch {
         if (!active) return;
         setCities([]);
@@ -310,6 +377,87 @@ export default function RegisterOwnerPage({
     };
   }, [form.city]);
 
+  const validateStep1Field = useCallback(
+    (field, values = form) => {
+      const trimmedFirstName = values.firstName.trim();
+      const trimmedLastName = values.lastName.trim();
+
+      switch (field) {
+        case "firstName":
+          if (!trimmedFirstName) return "First name is required.";
+          if (!NAME_REGEX.test(trimmedFirstName)) return "First name can only contain letters and spaces between names.";
+          if (EMOJI_REGEX.test(values.firstName)) return "No emoji allowed.";
+          if (trimmedFirstName.length > 50) return "First name is too long (max 50 characters).";
+          return "";
+        case "lastName":
+          if (!trimmedLastName) return "Last name is required.";
+          if (!NAME_REGEX.test(trimmedLastName)) return "Last name can only contain letters and spaces between names.";
+          if (EMOJI_REGEX.test(values.lastName)) return "No emoji allowed.";
+          if (trimmedLastName.length > 50) return "Last name is too long (max 50 characters).";
+          return "";
+        case "businessEmail": {
+          if (!values.businessEmail.trim()) return "Email is required.";
+          if (/\s/.test(values.businessEmail)) return "Email must not contain spaces.";
+          if (EMOJI_REGEX.test(values.businessEmail)) return "Email must not contain emoji.";
+          if (values.businessEmail.length > 254) return "Email is too long (max 254 characters).";
+          if (!EMAIL_REGEX.test(values.businessEmail)) return "Enter a valid email.";
+          const domain = values.businessEmail.split("@")[1]?.toLowerCase() || "";
+          if (!ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+            return "Please use a valid email address from a supported provider.";
+          }
+          return "";
+        }
+        case "phone":
+          if (!values.phone.trim()) return "Phone number is required.";
+          if (!PH_LOCAL_MOBILE_REGEX.test(values.phone)) {
+            return "Phone number must be exactly 10 digits and start with 9.";
+          }
+          if (values.phone.length > 10) return "Phone number is too long (max 10 digits).";
+          return "";
+        case "region":
+          return values.region ? "" : "Region is required.";
+        case "province":
+          if (provinces.length > 0 && !values.province) return "Province is required.";
+          return "";
+        case "city":
+          return values.city ? "" : "City / Municipality is required.";
+        case "barangay":
+          return values.barangay ? "" : "Barangay is required.";
+        case "address":
+          if (!values.address.trim()) return "Complete your address selection.";
+          if (values.address.length > 255) return "Address is too long (max 255 characters).";
+          return "";
+        case "businessName":
+          if (!values.businessName.trim()) return "Business name is required.";
+          if (values.businessName.length > 120) return "Business name is too long (max 120 characters).";
+          return "";
+        case "permitNumber":
+          if (!values.permitNumber.trim() && supportingDocType !== "Barangay Business Clearance") return "Enter the number shown on your document.";
+          if (values.permitNumber.length > 50) return "Document number is too long (max 50 characters).";
+          return "";
+        case "taxIdentificationNumber":
+          if (!/^\d{9}$/.test(values.taxIdentificationNumber)) return "Enter the 9-digit TIN shown on your BIR document.";
+          return "";
+        case "branchCode":
+          if (!/^\d{3,5}$/.test(values.branchCode)) return "Enter the 3- to 5-digit branch code shown on your BIR document.";
+          return "";
+        case "password":
+          return validateOwnerPassword(values.password);
+        case "confirmPassword":
+          if (validateOwnerPassword(values.password)) return "";
+          if (!values.confirmPassword) return "Please confirm password.";
+          if (/\s/.test(values.confirmPassword)) return "Password must not contain spaces.";
+          if (values.password !== values.confirmPassword) return "Passwords do not match.";
+          return "";
+        case "agree":
+          return values.agree ? "" : "You must agree to the terms.";
+        default:
+          return "";
+      }
+    },
+    [form, provinces.length, supportingDocType]
+  );
+
   useEffect(() => {
     const regionName = regions.find((entry) => entry.code === form.region)?.name || "";
     const provinceName = provinces.find((entry) => entry.code === form.province)?.name || "";
@@ -317,154 +465,304 @@ export default function RegisterOwnerPage({
     const barangayName = barangays.find((entry) => entry.code === form.barangay)?.name || "";
     const composedAddress = [barangayName, cityName, provinceName, regionName].filter(Boolean).join(", ");
 
-    setForm((prev) => (prev.address === composedAddress ? prev : { ...prev, address: composedAddress }));
-  }, [form.region, form.province, form.city, form.barangay, regions, provinces, cities, barangays]);
-
-  const handleChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: name === "businessEmail" ? value.toLowerCase().trim() : type === "checkbox" ? checked : value,
-    }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-    if (name === "businessEmail") {
-      setSupportingDocStatus({ verified: false, message: "" });
-      setErrors((prev) => ({ ...prev, supportingDocument: "" }));
+    const nextForm = { ...form, address: composedAddress };
+    setForm((prev) => (prev.address === composedAddress ? prev : nextForm));
+    if (step === 2 && touchedStep1.address) {
+      setErrors((prev) => ({ ...prev, address: validateStep1Field("address", nextForm) }));
     }
-  }, []);
+  }, [
+    form,
+    step,
+    touchedStep1.address,
+    regions,
+    provinces,
+    cities,
+    barangays,
+    validateStep1Field,
+    setForm,
+  ]);
+
+  const handleStep1Blur = useCallback(
+    (field, values = form) => {
+      if (![1, 2, 3, 5].includes(step)) return;
+      if (!touchedStep1[field]) return;
+      setErrors((prev) => {
+        const next = { ...prev, [field]: validateStep1Field(field, values) };
+        if (field === "password" && (touchedStep1.confirmPassword || values.confirmPassword)) {
+          next.confirmPassword = validateStep1Field("confirmPassword", values);
+        }
+        return next;
+      });
+    },
+    [form, step, touchedStep1, validateStep1Field]
+  );
+
+  const handleChange = useCallback(
+    (e) => {
+      const { name, value, type, checked } = e.target;
+      if (name === "businessEmail") cancelEmailCheck();
+      const normalizedPhone = name === "phone" ? normalizePhMobileInput(value) : value;
+      const nextValue =
+        name === "businessEmail"
+          ? value.toLowerCase().trim()
+          : type === "checkbox"
+            ? checked
+            : normalizedPhone;
+      const nextForm = { ...form, [name]: nextValue };
+      setForm(nextForm);
+      setFormError("");
+      if ([1, 2, 3, 5].includes(step)) {
+        setTouchedStep1((prev) => ({ ...prev, [name]: true }));
+      }
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+      if (name === "password") {
+        setErrors((prev) => ({ ...prev, confirmPassword: "" }));
+      }
+      if (["businessEmail", "firstName", "lastName", "businessName", "permitNumber", "taxIdentificationNumber", "branchCode"].includes(name)) {
+        setSupportingDocStatus({ submitted: false, message: "" });
+        setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
+        setErrors((prev) => ({ ...prev, supportingDocument: "" }));
+      }
+      if (["businessEmail", "firstName", "lastName"].includes(name)) {
+        setKyc((prev) => ({
+          ...prev,
+          idRegistered: false,
+          idReadyForSelfie: false,
+          selfieVerified: false,
+          selfieDataUrl: "",
+          selfieBase64Clean: "",
+        }));
+        setStepErrors((prev) => ({ ...prev, idRegistered: "", selfieVerified: "" }));
+        setKycUi((prev) => ({ ...prev, statusText: "" }));
+      }
+    },
+    [form, step, setForm, cancelEmailCheck]
+  );
 
   const handleRegionChange = useCallback((e) => {
     const region = e.target.value;
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       region,
       province: "",
       city: "",
       barangay: "",
       address: "",
-    }));
-    setErrors((prev) => ({ ...prev, region: "", province: "", city: "", barangay: "", address: "" }));
-  }, []);
-
-  const handleProvinceChange = useCallback((e) => {
-    const province = e.target.value;
-    setForm((prev) => ({
+    };
+    setForm(nextForm);
+    setTouchedStep1((prev) => ({
       ...prev,
-      province,
+      region: true,
+      province: false,
+      city: false,
+      barangay: false,
+      address: false,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      region: "",
+      province: "",
       city: "",
       barangay: "",
       address: "",
     }));
-    setErrors((prev) => ({ ...prev, province: "", city: "", barangay: "", address: "" }));
-  }, []);
+  }, [form, setForm]);
 
-  const handleCityChange = useCallback((e) => {
-    const city = e.target.value;
-    setForm((prev) => ({
+  const handleProvinceChange = useCallback((e) => {
+    const province = e.target.value;
+    const nextForm = {
+      ...form,
+      province,
+      city: "",
+      barangay: "",
+      address: "",
+    };
+    setForm(nextForm);
+    setTouchedStep1((prev) => ({
       ...prev,
-      city,
+      province: true,
+      city: false,
+      barangay: false,
+      address: false,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      province: "",
+      city: "",
       barangay: "",
       address: "",
     }));
-    setErrors((prev) => ({ ...prev, city: "", barangay: "", address: "" }));
-  }, []);
+  }, [form, setForm]);
+
+  const handleCityChange = useCallback((e) => {
+    const city = e.target.value;
+    const nextForm = {
+      ...form,
+      city,
+      barangay: "",
+      address: "",
+    };
+    setForm(nextForm);
+    setTouchedStep1((prev) => ({
+      ...prev,
+      city: true,
+      barangay: false,
+      address: false,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      city: "",
+      barangay: "",
+      address: "",
+    }));
+  }, [form, setForm]);
 
   const handleBarangayChange = useCallback((e) => {
     const barangay = e.target.value;
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       barangay,
       address: "",
+    };
+    setForm(nextForm);
+    setTouchedStep1((prev) => ({
+      ...prev,
+      barangay: true,
+      address: false,
     }));
-    setErrors((prev) => ({ ...prev, barangay: "", address: "" }));
-  }, []);
+    setErrors((prev) => ({
+      ...prev,
+      barangay: "",
+      address: "",
+    }));
+  }, [form, setForm]);
 
-  const handleFile = useCallback((e) => {
+  const handleOwnerTypeSelect = useCallback(
+    (type) => {
+      const nextForm = {
+        ...form,
+        ownerType: type,
+      };
+      setForm(nextForm);
+      setErrors((prev) => ({
+        ...prev,
+        businessName: "",
+        permitNumber: "",
+        taxIdentificationNumber: "",
+        branchCode: "",
+        supportingDocument: "",
+      }));
+      setSupportingDocStatus({ submitted: false, message: "" });
+      setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
+    },
+    [form, setForm]
+  );
+
+  const handleFile = useCallback(async (e) => {
     const { name, files: picked } = e.target;
-    setFiles((prev) => ({ ...prev, [name]: picked?.[0] || null }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-    if (name === "supportingDocument") {
-      setSupportingDocStatus({ verified: false, message: "" });
-    }
-  }, []);
-
-  const validateStep1 = useCallback(() => {
-    const next = {};
-
-    const trimmedFirstName = form.firstName.trim();
-    const trimmedLastName = form.lastName.trim();
-
-    if (!trimmedFirstName) next.firstName = "First name is required.";
-    else if (!NAME_REGEX.test(trimmedFirstName)) {
-      next.firstName = "Letters only, with one optional space for a second name.";
-    } else if (EMOJI_REGEX.test(form.firstName)) next.firstName = "No emoji allowed.";
-    else if (trimmedFirstName.length > 50) next.firstName = "First name is too long (max 50 characters).";
-
-    if (!trimmedLastName) next.lastName = "Last name is required.";
-    else if (!NAME_REGEX.test(trimmedLastName)) {
-      next.lastName = "Letters only, with one optional space for a second name.";
-    } else if (EMOJI_REGEX.test(form.lastName)) next.lastName = "No emoji allowed.";
-    else if (trimmedLastName.length > 50) next.lastName = "Last name is too long (max 50 characters).";
-
-    if (!form.businessEmail.trim()) next.businessEmail = "Email is required.";
-    else if (/\s/.test(form.businessEmail)) next.businessEmail = "Email must not contain spaces.";
-    else if (EMOJI_REGEX.test(form.businessEmail)) next.businessEmail = "Email must not contain emoji.";
-    else if (form.businessEmail.length > 254) next.businessEmail = "Email is too long (max 254 characters).";
-    else if (!EMAIL_REGEX.test(form.businessEmail)) next.businessEmail = "Enter a valid email.";
-    else {
-      const domain = form.businessEmail.split("@")[1]?.toLowerCase() || "";
-      if (!ALLOWED_EMAIL_DOMAINS.includes(domain)) {
-        next.businessEmail = "Please use a valid email address from a supported provider.";
+    const file = picked?.[0] || null;
+    if (file) {
+      try {
+        await validateSupportingDocumentFile(file);
+      } catch (validationError) {
+        setFiles((prev) => ({ ...prev, [name]: null }));
+        setErrors((prev) => ({ ...prev, [name]: validationError.message || "Please choose a valid document." }));
+        e.target.value = "";
+        return;
       }
     }
-
-    if (!form.phone.trim()) next.phone = "Phone number is required.";
-    else if (!/^[0-9]{11}$/.test(form.phone)) next.phone = "Phone number must be exactly 11 digits.";
-    else if (form.phone.length > 11) next.phone = "Phone number is too long (max 11 digits).";
-
-    if (!form.region) next.region = "Region is required.";
-    if (provinces.length > 0 && !form.province) next.province = "Province is required.";
-    if (!form.city) next.city = "City / Municipality is required.";
-    if (!form.barangay) next.barangay = "Barangay is required.";
-    if (!form.address.trim()) next.address = "Complete your address selection.";
-    else if (form.address.length > 255) next.address = "Address is too long (max 255 characters).";
-
-    if (canShowBusinessFields) {
-      if (!form.businessName.trim()) next.businessName = "Business name is required.";
-      else if (form.businessName.length > 120) next.businessName = "Business name is too long (max 120 characters).";
-      if (!form.permitNumber.trim()) next.permitNumber = "Permit number is required.";
-      else if (form.permitNumber.length > 50) next.permitNumber = "Permit number is too long (max 50 characters).";
+    setFiles((prev) => ({ ...prev, [name]: file }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (name === "supportingDocument") {
+      setSupportingDocStatus({ submitted: false, message: "" });
+      setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
     }
+  }, []);
 
-    if (!form.password) next.password = "Password is required.";
-    else if (/\s/.test(form.password)) next.password = "Password must not contain spaces.";
-    else if (EMOJI_REGEX.test(form.password)) next.password = "Password must not contain emoji.";
-    else if (form.password.length < 8) next.password = "Password must be at least 8 characters.";
-    else if (!/[A-Z]/.test(form.password)) next.password = "Password needs an uppercase letter.";
-    else if (!/[a-z]/.test(form.password)) next.password = "Password needs a lowercase letter.";
-    else if (!/[0-9]/.test(form.password)) next.password = "Password needs a number.";
-    else if (!/[!@#$%^&*()_+\-=[\]{}|;':",.<>?/`~]/.test(form.password)) {
-      next.password = "Password needs a special character.";
-    }
+  const handleSupportingDocTypeChange = useCallback((e) => {
+    const value = String(e?.target?.value || "");
+    setSupportingDocType(value);
+    setSupportingDocStatus({ submitted: false, message: "" });
+    setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
+    setForm((previous) => ({ ...previous, permitNumber: "", taxIdentificationNumber: "", branchCode: "" }));
+    setErrors((prev) => ({ ...prev, supportingDocType: "", supportingDocument: "", permitNumber: "", taxIdentificationNumber: "", branchCode: "" }));
+  }, [setForm]);
 
-    if (!form.confirmPassword) next.confirmPassword = "Please confirm password.";
-    else if (form.password !== form.confirmPassword) next.confirmPassword = "Passwords do not match.";
+  const handleIdTypeChange = useCallback((e) => {
+    const value = String(e?.target?.value || "");
+    setKyc((prev) => ({
+      ...prev,
+      idType: value,
+      idRegistered: false,
+      idReadyForSelfie: false,
+      selfieVerified: false,
+      selfieDataUrl: "",
+      selfieBase64Clean: "",
+    }));
+    setStepErrors((prev) => ({
+      ...prev,
+      idType: "",
+      idRegistered: "",
+      selfieVerified: "",
+    }));
+    setKycUi((prev) => ({ ...prev, statusText: "" }));
+  }, []);
 
-    if (!form.agree) next.agree = "You must agree to the terms.";
-
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  }, [form, canShowBusinessFields, provinces.length]);
-
-  const validateStep2 = useCallback(() => {
+  const validateFields = useCallback((fields) => {
     const next = {};
-    if (!files.supportingDocument) next.supportingDocument = "Please upload a supporting document.";
-    setErrors((prev) => ({ ...prev, supportingDocument: next.supportingDocument || "" }));
+    for (const field of fields) {
+      const message = validateStep1Field(field, form);
+      if (message) next[field] = message;
+    }
+    setTouchedStep1((previous) => ({
+      ...previous,
+      ...Object.fromEntries(fields.map((field) => [field, true])),
+    }));
+    setErrors((prev) => {
+      const merged = { ...prev };
+      for (const field of fields) {
+        if (next[field]) merged[field] = next[field];
+        else delete merged[field];
+      }
+      return merged;
+    });
     return Object.keys(next).length === 0;
-  }, [files.supportingDocument]);
+  }, [form, validateStep1Field]);
+
+  const validateAccountStep = useCallback(
+    () => validateFields(["firstName", "lastName", "businessEmail", "phone", "password", "confirmPassword"]),
+    [validateFields]
+  );
+  const validateAddressStep = useCallback(
+    () => validateFields(["region", "province", "city", "barangay", "address"]),
+    [validateFields]
+  );
+  const validateReviewStep = useCallback(() => validateFields(["agree"]), [validateFields]);
+
+  const validateSupportingDocumentStep = useCallback(() => {
+    const next = {};
+    const detailFields = ["businessName"];
+    if (supportingDocType) {
+      detailFields.push(...(BIR_DOCUMENT_TYPES.has(supportingDocType)
+        ? ["taxIdentificationNumber", "branchCode"] : ["permitNumber"]));
+    }
+    const detailsValid = validateFields(detailFields);
+    if (!supportingDocType) next.supportingDocType = "Please select a document type.";
+    if (!files.supportingDocument) next.supportingDocument = "Please upload a supporting document.";
+    setErrors((prev) => ({
+      ...prev,
+      supportingDocType: next.supportingDocType || "",
+      supportingDocument: next.supportingDocument || "",
+    }));
+    return detailsValid && Object.keys(next).length === 0;
+  }, [files.supportingDocument, supportingDocType, validateFields]);
 
   const verifySupportingDoc = async () => {
-    if (supportingDocStatus.verified) return true;
+    if (supportingDocStatus.submitted) return true;
+    if (!supportingDocType) {
+      setErrors((prev) => ({ ...prev, supportingDocType: "Please select a document type." }));
+      return false;
+    }
     if (!files.supportingDocument) {
       setErrors((prev) => ({ ...prev, supportingDocument: "Please upload a supporting document." }));
       return false;
@@ -484,21 +782,38 @@ export default function RegisterOwnerPage({
 
     setIsLoading(true);
     setSuccessMessage("");
+    setFormError("");
     try {
+      await validateSupportingDocumentFile(files.supportingDocument);
       const dataUrl = await fileToBase64(files.supportingDocument);
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
-      const result = await preVerifySupportingDocument(form.businessEmail, clean, mime, "owner");
+      const result = await preVerifySupportingDocument(form.businessEmail, clean, mime, "owner", {
+        documentType: supportingDocType,
+        userProfile: {
+          full_name: fullName,
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+          business_name: form.businessName,
+          permit_number: form.permitNumber,
+          tax_identification_number: form.taxIdentificationNumber,
+          branch_code: form.branchCode,
+        },
+      });
       if (!result.success) throw new Error(result.message || "Supporting document verification failed.");
 
       setSupportingDocStatus({
-        verified: true,
-        message: result.message || "Supporting document verified.",
+        submitted: true,
+        message:
+          result.message ||
+          "Supporting document uploaded securely. Automated checks have started.",
       });
-      setErrors((prev) => ({ ...prev, supportingDocument: "" }));
+      setDocumentStatuses((previous) => ({ ...previous, supporting: "queued" }));
+      setDocumentRefreshKey((previous) => previous + 1);
+      setErrors((prev) => ({ ...prev, supportingDocType: "", supportingDocument: "" }));
       return true;
     } catch (error) {
-      setSupportingDocStatus({ verified: false, message: "" });
+      setSupportingDocStatus({ submitted: false, message: "" });
       setErrors((prev) => ({
         ...prev,
         supportingDocument: error?.message || "Supporting document verification failed.",
@@ -509,11 +824,13 @@ export default function RegisterOwnerPage({
     }
   };
 
-  const validateStep3 = useCallback(() => {
+  const validateIdentityStep = useCallback(() => {
     const next = {};
+    if (!kyc.idType) next.idType = "Please select your ID type.";
     if (!kyc.idCardFile) next.idCardFile = "Please upload your government ID.";
-    if (!kyc.idRegistered) next.idRegistered = "Please register your ID first.";
-    if (!kyc.selfieVerified) next.selfieVerified = "Please verify your selfie matches the ID.";
+    if (!kyc.idRegistered) next.idRegistered = "Please upload your ID first.";
+    else if (!kyc.idReadyForSelfie) next.idRegistered = "Wait for your ID details to match before taking your selfie.";
+    else if (!kyc.selfieVerified) next.selfieVerified = "Please verify your selfie matches the ID.";
     setStepErrors(next);
     return Object.keys(next).length === 0;
   }, [kyc]);
@@ -521,13 +838,33 @@ export default function RegisterOwnerPage({
   const goNext = async () => {
     if (!canAct()) return;
     setSuccessMessage("");
-    if (step === 1 && !validateStep1()) return;
-    if (step === 2) {
-      if (!validateStep2()) return;
+    if (step === 1) {
+      if (!validateAccountStep()) return;
+      setFormError("");
+      setIsLoading(true);
+      try {
+        const result = await checkEmail(form.businessEmail);
+        if (!result) return;
+        if (result.available) {
+          setStep(2);
+        } else if (result.fieldError) {
+          setErrors((previous) => ({ ...previous, businessEmail: result.message }));
+          setTimeout(() => emailRef.current?.focus(), 0);
+        } else {
+          setFormError(result.message);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    if (step === 2 && !validateAddressStep()) return;
+    if (step === 3) {
+      if (!validateSupportingDocumentStep()) return;
       const verified = await verifySupportingDoc();
       if (!verified) return;
     }
-    if (step === 3 && !validateStep3()) return;
+    if (step === 4 && !validateIdentityStep()) return;
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
 
@@ -542,31 +879,45 @@ export default function RegisterOwnerPage({
 
   const registerId = async () => {
     if (!canAct()) return;
+    if (!kyc.idType) {
+      setStepErrors((prev) => ({ ...prev, idType: "Select your ID type first." }));
+      return;
+    }
     if (!kyc.idCardFile) {
       setStepErrors((prev) => ({ ...prev, idCardFile: "Upload your ID image first." }));
       return;
     }
 
     setIsLoading(true);
-    setKycUi((prev) => ({ ...prev, statusText: "Registering ID face..." }));
+    setKycUi((prev) => ({ ...prev, statusText: "Uploading ID securely..." }));
 
     try {
+      await validateDocumentImageFile(kyc.idCardFile);
       const dataUrl = await fileToBase64(kyc.idCardFile);
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
-      const result = await preRegisterIdFace(form.businessEmail, fullName, "owner", clean, mime);
+      const result = await preRegisterIdFace(form.businessEmail, fullName, "owner", clean, mime, {
+        idType: kyc.idType,
+        userProfile: {
+          full_name: fullName,
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+        },
+      });
       if (!result.success) throw new Error(result.message || "Failed to register ID.");
 
       setKyc((prev) => ({
         ...prev,
         idRegistered: true,
-        challengeId: "",
+        idReadyForSelfie: false,
         selfieVerified: false,
         selfieDataUrl: "",
         selfieBase64Clean: "",
       }));
-      setStepErrors((prev) => ({ ...prev, idRegistered: "" }));
-      setKycUi((prev) => ({ ...prev, statusText: "ID registered. Open camera to capture your selfie." }));
+      setDocumentStatuses((previous) => ({ ...previous, id: "queued" }));
+      setDocumentRefreshKey((previous) => previous + 1);
+      setStepErrors((prev) => ({ ...prev, idType: "", idRegistered: "" }));
+      setKycUi((prev) => ({ ...prev, statusText: "ID uploaded. We are checking that its personal details match your registration." }));
     } catch (error) {
       setStepErrors((prev) => ({ ...prev, idRegistered: friendlyError(error.message) }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
@@ -575,104 +926,31 @@ export default function RegisterOwnerPage({
     }
   };
 
-  const openCamera = async () => {
-    if (!canAct()) return;
-    setCamError("");
-    setCamInfo("");
-    setKycUi((prev) => ({ ...prev, showCamera: true, statusText: "Initializing camera..." }));
-
-    try {
-      const all = await navigator.mediaDevices.enumerateDevices();
-      const cams = all.filter((d) => d.kind === "videoinput");
-      setDevices(cams);
-
-      let deviceId = selectedDeviceId;
-      if (!deviceId || !cams.find((d) => d.deviceId === deviceId)) {
-        deviceId = cams[0]?.deviceId || "";
-        setSelectedDeviceId(deviceId);
-      }
-
-      const stream = await startCamera(videoRef.current, {
-        audio: false,
-        video: deviceId ? { deviceId: { exact: deviceId }, facingMode: "user" } : { facingMode: "user" },
-      });
-
-      setCameraStream(stream);
-      const track = stream.getVideoTracks()[0];
-      const settings = track?.getSettings?.() || {};
-      const label = cams.find((d) => d.deviceId === deviceId)?.label || "Camera";
-      setCamInfo(`${label} | ${settings.width || "?"}x${settings.height || "?"}`);
-      setKycUi((prev) => ({ ...prev, statusText: "Camera ready. Capture your selfie." }));
-    } catch (error) {
-      const name = error?.name || "";
-      let message = "Something went wrong with the camera.";
-      if (name === "NotAllowedError") message = "Camera permission denied. Please allow access.";
-      if (name === "NotReadableError") message = "Your camera is being used by another app.";
-      if (name === "NotFoundError") message = "No camera found on this device.";
-      setCamError(message);
-      closeCamera();
-    }
+  const handleSelfieCapture = ({ dataUrl, base64 }) => {
+    setKyc((previous) => ({
+      ...previous,
+      selfieVerified: false,
+      selfieDataUrl: dataUrl,
+      selfieBase64Clean: base64,
+    }));
+    setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
+    setKycUi((previous) => ({ ...previous, statusText: "" }));
   };
 
-  const switchCamera = async (deviceId) => {
-    setSelectedDeviceId(deviceId);
-    setCamError("");
-    setCamInfo("");
-    try {
-      stopCamera(videoRef.current || cameraStream);
-      setCameraStream(null);
-      const stream = await startCamera(videoRef.current, {
-        audio: false,
-        video: { deviceId: { exact: deviceId }, facingMode: "user" },
-      });
-      setCameraStream(stream);
-      const track = stream.getVideoTracks()[0];
-      const settings = track?.getSettings?.() || {};
-      const label = devices.find((d) => d.deviceId === deviceId)?.label || "Camera";
-      setCamInfo(`${label} | ${settings.width || "?"}x${settings.height || "?"}`);
-    } catch {
-      setCamError("Failed to switch camera. Please try again.");
-    }
-  };
-
-  const captureSelfie = async () => {
-    if (!canAct()) return;
-    if (!cameraStream) {
-      setStepErrors((prev) => ({ ...prev, selfieVerified: "Open camera first." }));
-      return;
-    }
-
-    setIsLoading(true);
-    setKycUi((prev) => ({ ...prev, statusText: "Capturing selfie..." }));
-
-    try {
-      const frames = await captureFramesFromStream(cameraStream, { count: 3, intervalMs: 220 });
-      if (!frames.length) throw new Error("Failed to capture selfie.");
-      const cleanFrames = frames.map(stripDataUrlPrefix);
-      const lastDataUrl = frames[frames.length - 1];
-      const lastClean = cleanFrames[cleanFrames.length - 1];
-
-      setKyc((prev) => ({ ...prev, selfieDataUrl: lastDataUrl, selfieBase64Clean: lastClean }));
-      setKycUi((prev) => ({ ...prev, statusText: "Checking selfie motion... please blink or move slightly." }));
-
-      const result = await preSelfieChallenge(form.businessEmail, cleanFrames);
-      if (!result.passed) throw new Error(result.message || "Selfie challenge failed.");
-
-      setKyc((prev) => ({ ...prev, challengeId: result.challenge_id }));
-      setStepErrors((prev) => ({ ...prev, selfieVerified: "" }));
-      setKycUi((prev) => ({ ...prev, statusText: "Selfie captured. Click Verify to match with your ID." }));
-    } catch (error) {
-      setKyc((prev) => ({ ...prev, selfieDataUrl: "", selfieBase64Clean: "", challengeId: "" }));
-      setStepErrors((prev) => ({ ...prev, selfieVerified: friendlyError(error.message) }));
-      setKycUi((prev) => ({ ...prev, statusText: "" }));
-    } finally {
-      setIsLoading(false);
-    }
+  const retakeSelfie = () => {
+    setKyc((previous) => ({
+      ...previous,
+      selfieVerified: false,
+      selfieDataUrl: "",
+      selfieBase64Clean: "",
+    }));
+    setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
+    setKycUi((previous) => ({ ...previous, statusText: "" }));
   };
 
   const verifySelfie = async () => {
     if (!canAct()) return;
-    if (!kyc.challengeId || !kyc.selfieBase64Clean) {
+    if (!kyc.selfieBase64Clean) {
       setStepErrors((prev) => ({ ...prev, selfieVerified: "Capture a selfie first." }));
       return;
     }
@@ -681,12 +959,11 @@ export default function RegisterOwnerPage({
     setKycUi((prev) => ({ ...prev, statusText: "Verifying face match..." }));
 
     try {
-      const result = await preSelfieVerify(form.businessEmail, kyc.challengeId, kyc.selfieBase64Clean, "owner");
+      const result = await preSelfieVerify(form.businessEmail, kyc.selfieBase64Clean, "owner");
       if (!result.verified) throw new Error(result.message || "Face does not match ID.");
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((prev) => ({ ...prev, selfieVerified: "" }));
-      setKycUi((prev) => ({ ...prev, statusText: "Face verified successfully." }));
-      closeCamera();
+      setKycUi((prev) => ({ ...prev, statusText: "" }));
     } catch (error) {
       setKyc((prev) => ({ ...prev, selfieVerified: false }));
       setStepErrors((prev) => ({ ...prev, selfieVerified: friendlyError(error.message) }));
@@ -699,23 +976,37 @@ export default function RegisterOwnerPage({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isLoading || !canAct()) return;
-    if (!validateStep1()) {
+    if (!validateAccountStep()) {
       setStep(1);
       return;
     }
-    if (!validateStep2()) {
+    if (!validateAddressStep()) {
       setStep(2);
       return;
     }
-    if (!validateStep3()) {
+    if (!validateSupportingDocumentStep()) {
       setStep(3);
+      return;
+    }
+    if (!validateIdentityStep()) {
+      setStep(4);
+      return;
+    }
+    if (!validateReviewStep()) return;
+    if (!areDocumentsApproved) {
+      const needsNewUpload = Object.values(documentStatuses).some((status) => ["reupload_required", "rejected"].includes(status));
+      setFormError(needsNewUpload
+        ? "One of your documents needs a new upload. Follow the correction shown under Document review, then try again."
+        : "Your ID and supporting document are still being checked. Refresh their status and submit after both are approved.");
       return;
     }
 
     setIsLoading(true);
     setSuccessMessage("");
+    setFormError("");
 
     try {
+      const preKycToken = await getPreKycSessionToken(form.businessEmail, "owner");
       const response = await API.register({
         name: fullName,
         email: form.businessEmail,
@@ -728,16 +1019,37 @@ export default function RegisterOwnerPage({
         city: form.city,
         barangay: form.barangay,
         ownerType: form.ownerType,
-        businessName: canShowBusinessFields ? form.businessName : "",
-        permitNumber: canShowBusinessFields ? form.permitNumber : "",
+        businessName: form.businessName,
+        permitNumber: form.permitNumber,
+        taxIdentificationNumber: form.taxIdentificationNumber,
+        branchCode: form.branchCode,
+        preKycToken,
       });
 
+      const registeredEmail = String(response?.user?.email || form.businessEmail || "").trim().toLowerCase();
+      draft.complete();
       setSuccessMessage(response?.message || "Registration successful. Redirecting to OTP verification...");
-      await API.sendOTP(form.businessEmail).catch(() => {});
-      setTimeout(() => onNavigateToRegisterOTP(form.businessEmail, form.phone, fullName), 1200);
+      await API.sendOTP(registeredEmail).catch(() => {});
+      setTimeout(() => onNavigateToRegisterOTP(registeredEmail, form.phone, fullName), 1200);
     } catch (error) {
       const lower = (error?.message || "").toLowerCase();
       const raw = error?.message || "";
+      const serverErrors = error?.details?.errors;
+      if (serverErrors && typeof serverErrors === "object") {
+        const fieldErrors = { ...serverErrors };
+        if (fieldErrors.email) {
+          fieldErrors.businessEmail = fieldErrors.email;
+          delete fieldErrors.email;
+        }
+        if (fieldErrors.name) {
+          fieldErrors.firstName = fieldErrors.name;
+          delete fieldErrors.name;
+        }
+        setErrors(fieldErrors);
+        setFormError("");
+        setStep(1);
+        return;
+      }
       const phoneConflict = lower.includes("phone") && lower.includes("already");
       const msg = lower.includes("already")
         ? phoneConflict
@@ -748,10 +1060,22 @@ export default function RegisterOwnerPage({
         : /^[A-Z]/.test(raw) && !/request failed/i.test(raw)
         ? raw
         : "Registration failed. Please try again.";
-      if (lower.includes("password")) setErrors({ password: msg });
-      else if (phoneConflict) setErrors({ phone: msg });
-      else setErrors({ businessEmail: msg });
-      setStep(1);
+      if (lower.includes("password")) {
+        setErrors({ password: msg });
+        setFormError("");
+        setStep(1);
+      } else if (phoneConflict) {
+        setErrors({ phone: msg });
+        setFormError("");
+        setStep(1);
+      } else if (lower.includes("email") && (lower.includes("already") || lower.includes("invalid"))) {
+        setErrors({ businessEmail: msg });
+        setFormError("");
+        setStep(1);
+      } else {
+        setErrors({});
+        setFormError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -762,75 +1086,80 @@ export default function RegisterOwnerPage({
       onNavigateToHome={onNavigateToHome}
       badge="Guided account onboarding"
       panelTitle="Create your RentifyPro account."
-      panelDescription="Finish setup in guided steps with secure identity checks and instant access."
+      panelDescription="Complete your owner details, document checks, and email confirmation in focused steps."
       highlights={[
-        "Clear step-by-step onboarding with progress tracking",
+        "Clear 5-step onboarding with progress tracking",
         "Supporting document, ID, and face verification",
         "Ready after successful OTP verification",
       ]}
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div className="rp-surface rp-glass rounded-[28px] border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         <div className="mt-5 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
-          <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
+          <h2 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">Fast, secure onboarding in {TOTAL_STEPS} guided steps.</p>
         </div>
 
-        <div className="mb-7 mt-6 flex items-center justify-center gap-2">
-          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
-            <React.Fragment key={s}>
-              <div className="flex flex-col items-center gap-1">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${step > s ? "bg-[#017FE6] text-white" : step === s ? "bg-[#017FE6] text-white ring-4 ring-blue-100" : "bg-gray-100 text-gray-400"}`}>
-                  {step > s ? <Check size={15} strokeWidth={3} /> : s}
-                </div>
-                <span className="text-[10px] font-medium text-gray-400 hidden sm:block">{STEP_LABELS[s - 1]}</span>
-              </div>
-              {s < TOTAL_STEPS && <div className={`h-1 w-10 sm:w-14 rounded-full transition-all self-start mt-[18px] ${step > s ? "bg-[#017FE6]" : "bg-gray-100"}`} />}
-            </React.Fragment>
-          ))}
+        <div className="mt-6">
+          <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
+          {(step === 3 || step === 4) && <HelpLink guide="owner-verification" className="mt-3">Need help with verification?</HelpLink>}
         </div>
+
+        {step === 1 && (
+          <section aria-labelledby="owner-preparation-title" className="mt-5 border-t border-slate-200 pt-4">
+            <h3 id="owner-preparation-title" className="text-sm font-bold text-slate-900">Have these ready before you start</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+              <li>A readable Philippines-issued business document, such as DTI registration, BIR Form 2303, or a business permit.</li>
+              <li>A government ID, such as a National ID, passport, or driver&apos;s license, and a camera for a live selfie.</li>
+              <li>Access to the email address you will use for the confirmation code.</li>
+            </ul>
+          </section>
+        )}
+
+        <RegistrationDraftNotice draft={draft} busy={isLoading} />
 
         {successMessage && (
           <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 flex items-center gap-2">
-            <CheckCircle2 size={16} /> {successMessage}
+            <CircleCheck size={16} strokeWidth={2} aria-hidden="true" /> {successMessage}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          {step === 1 && (
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (step < TOTAL_STEPS) void goNext();
+          else void handleSubmit(event);
+        }} className="space-y-4" noValidate>
+          {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
+          {formError && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+            >
+              {formError}
+            </div>
+          )}
+
+          <fieldset disabled={isLoading} className="min-w-0 space-y-4">
+          {[1, 2].includes(step) && (
             <>
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                <p className="font-semibold text-gray-900 mb-2">Owner Type</p>
-                <p className="text-sm text-gray-500 mb-3">Choose if you are registering as an individual or business owner.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { type: "individual", label: "Individual", sub: "Personal lessor", icon: User },
-                    { type: "business", label: "Business", sub: "Company lessor", icon: Building2 },
-                  ].map(({ type, label, sub, icon: Icon }) => (
-                    <button key={type} type="button" onClick={() => setForm((prev) => ({ ...prev, ownerType: type }))} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${form.ownerType === type ? "border-[#017FE6] bg-blue-50" : "border-gray-200 hover:border-[#017FE6]"}`}>
-                      <Icon size={18} className="text-gray-600" />
-                      <div className="text-left">
-                        <p className="text-sm font-semibold text-gray-800">{label}</p>
-                        <p className="text-xs text-gray-500">{sub}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <p className="font-semibold text-gray-900 mb-1">Step {step} — {STEP_LABELS[step - 1]}</p>
+                <p className="text-sm text-gray-500">
+                  {step === 1 && "Enter your legal name, contact details, and password."}
+                  {step === 2 && "Select the address tied to your owner registration."}
+                </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                <p className="font-semibold text-gray-900 mb-1">Step 1 — Personal Details</p>
-                <p className="text-sm text-gray-500">Enter your information to create your owner account.</p>
-              </div>
-
+              {step === 1 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   label="First Name"
                   name="firstName"
                   value={form.firstName}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("firstName")}
                   error={errors.firstName}
                   disabled={isLoading}
                   onlyLetters
@@ -844,6 +1173,7 @@ export default function RegisterOwnerPage({
                   name="lastName"
                   value={form.lastName}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("lastName")}
                   error={errors.lastName}
                   disabled={isLoading}
                   onlyLetters
@@ -853,14 +1183,18 @@ export default function RegisterOwnerPage({
                   maxLength={50}
                 />
               </div>
+              )}
 
+              {step === 1 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   label="Enter Email"
                   type="email"
                   name="businessEmail"
+                  inputRef={emailRef}
                   value={form.businessEmail}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("businessEmail")}
                   error={errors.businessEmail}
                   disabled={isLoading}
                   icon={Mail}
@@ -873,16 +1207,20 @@ export default function RegisterOwnerPage({
                   name="phone"
                   value={form.phone}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("phone")}
                   error={errors.phone}
                   disabled={isLoading}
                   onlyNumbers
                   icon={Phone}
-                  placeholder="Enter Phone Number"
-                  helper="Enter Phone Number"
-                  maxLength={11}
+                  placeholder="9XXXXXXXXX"
+                  helper="Enter your 10-digit mobile number."
+                  maxLength={10}
+                  prefixText="+63"
                 />
               </div>
+              )}
 
+              {step === 2 && (
               <div className="rounded-2xl border border-gray-200 p-4 bg-white space-y-3">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -902,6 +1240,7 @@ export default function RegisterOwnerPage({
                     name="region"
                     value={form.region}
                     onChange={handleRegionChange}
+                    onBlur={() => handleStep1Blur("region", form)}
                     options={regions.map((region) => ({ value: region.code, label: region.name }))}
                     error={errors.region}
                     disabled={isLoading}
@@ -913,6 +1252,7 @@ export default function RegisterOwnerPage({
                     name="province"
                     value={form.province}
                     onChange={handleProvinceChange}
+                    onBlur={() => handleStep1Blur("province", form)}
                     options={provinces.map((province) => ({ value: province.code, label: province.name }))}
                     error={errors.province}
                     disabled={isLoading || !form.region || provinces.length === 0}
@@ -928,6 +1268,7 @@ export default function RegisterOwnerPage({
                     name="city"
                     value={form.city}
                     onChange={handleCityChange}
+                    onBlur={() => handleStep1Blur("city", form)}
                     options={cities.map((city) => ({ value: city.code, label: city.name }))}
                     error={errors.city}
                     disabled={isLoading || !form.region || (provinces.length > 0 && !form.province)}
@@ -939,6 +1280,7 @@ export default function RegisterOwnerPage({
                     name="barangay"
                     value={form.barangay}
                     onChange={handleBarangayChange}
+                    onBlur={() => handleStep1Blur("barangay", form)}
                     options={barangays.map((barangay) => ({ value: barangay.code, label: barangay.name }))}
                     error={errors.barangay}
                     disabled={isLoading || !form.city}
@@ -953,42 +1295,16 @@ export default function RegisterOwnerPage({
                 {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
                 {addressLoadError && <p className="text-xs text-red-500">{addressLoadError}</p>}
               </div>
-
-              {canShowBusinessFields && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field
-                    label="Business Name"
-                    name="businessName"
-                    value={form.businessName}
-                    onChange={handleChange}
-                    error={errors.businessName}
-                    disabled={isLoading}
-                    icon={Building2}
-                    placeholder="Sample Transport Services Inc."
-                    helper="Use your registered business name."
-                    maxLength={120}
-                  />
-                  <Field
-                    label="Permit Number"
-                    name="permitNumber"
-                    value={form.permitNumber}
-                    onChange={handleChange}
-                    error={errors.permitNumber}
-                    disabled={isLoading}
-                    icon={Building2}
-                    placeholder="DTI/SEC Permit No."
-                    helper="Enter your official permit or registration number."
-                    maxLength={50}
-                  />
-                </div>
               )}
 
+              {step === 1 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <PasswordField
                   label="Create Password"
                   name="password"
                   value={form.password}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("password")}
                   error={errors.password}
                   disabled={isLoading}
                   show={showPw}
@@ -996,12 +1312,14 @@ export default function RegisterOwnerPage({
                   helper="Create Password"
                   placeholder="Create Password"
                   maxLength={128}
+                  showStrength
                 />
                 <PasswordField
                   label="Confirm Password"
                   name="confirmPassword"
                   value={form.confirmPassword}
                   onChange={handleChange}
+                  onBlur={() => handleStep1Blur("confirmPassword")}
                   error={errors.confirmPassword}
                   disabled={isLoading}
                   show={showCpw}
@@ -1011,46 +1329,6 @@ export default function RegisterOwnerPage({
                   maxLength={128}
                 />
               </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input type="checkbox" name="agree" checked={form.agree} onChange={handleChange} disabled={isLoading} className="w-5 h-5 accent-[#017FE6] cursor-pointer flex-shrink-0 disabled:opacity-60" />
-                  <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                    I agree to the <span className="text-[#017FE6] font-semibold">Terms and Conditions</span> and <span className="text-[#017FE6] font-semibold">Privacy Policy</span>
-                  </span>
-                </label>
-                {errors.agree && <p className="text-red-500 text-sm font-medium">{errors.agree}</p>}
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={20} className="text-[#017FE6]" /></div>
-                  <div>
-                    <p className="font-semibold text-gray-900">Step 2 — Account & Documents</p>
-                    <p className="text-sm text-gray-500 mt-1">Upload your supporting document for owner verification.</p>
-                  </div>
-                </div>
-              </div>
-
-              <FileInput
-                label={canShowBusinessFields ? "Business Permit / DTI / SEC Registration" : "Supporting Document"}
-                helper={
-                  canShowBusinessFields
-                    ? "Upload a Philippines-issued document proving your business is registered."
-                    : "Upload a Philippines-issued document proving your legitimacy as a vehicle owner."
-                }
-                name="supportingDocument"
-                onChange={handleFile}
-                error={errors.supportingDocument}
-                file={files.supportingDocument}
-                disabled={isLoading}
-              />
-              {supportingDocStatus.verified && !errors.supportingDocument && (
-                <p className="text-xs text-emerald-600">{supportingDocStatus.message}</p>
               )}
             </>
           )}
@@ -1059,32 +1337,173 @@ export default function RegisterOwnerPage({
             <>
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><ShieldCheck size={20} className="text-[#017FE6]" /></div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={20} className="text-[#017FE6]" /></div>
                   <div>
-                    <p className="font-semibold text-gray-900">Step 3 — Identity Verification</p>
-                    <p className="text-sm text-gray-500 mt-1">Upload your government ID, then capture a live selfie to verify your identity.</p>
+                    <p className="font-semibold text-gray-900">Step 3 — Business document</p>
+                    <p className="text-sm text-gray-500 mt-1">Enter the details visible on your document, then upload it for review.</p>
                   </div>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+                <p className="font-semibold text-gray-900 mb-2">Owner Type</p>
+                <p className="text-sm text-gray-500 mb-3">Choose if you are registering as an individual or business owner.</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {[
+                    { type: "individual", label: "Individual", sub: "Personal lessor", icon: User },
+                    { type: "business", label: "Business", sub: "Company lessor", icon: Building2 },
+                  ].map(({ type, label, sub, icon: Icon }) => (
+                    <button key={type} type="button" onClick={() => handleOwnerTypeSelect(type)} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${form.ownerType === type ? "border-[#017FE6] bg-blue-50" : "border-gray-200 hover:border-[#017FE6]"}`}>
+                      <Icon size={18} className="text-gray-600" />
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-gray-800">{label}</p>
+                        <p className="text-xs text-gray-500">{sub}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <SelectField
+                label="Supporting Document Type"
+                name="supportingDocType"
+                value={supportingDocType}
+                onChange={handleSupportingDocTypeChange}
+                options={SUPPORTING_DOCUMENT_TYPES.map((entry) => ({ value: entry, label: entry }))}
+                error={errors.supportingDocType}
+                disabled={isLoading}
+                required
+                placeholder="Select the document type you uploaded"
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field
+                  label={form.ownerType === "individual" ? "Business / Trade Name" : "Business Name"}
+                  name="businessName"
+                  value={form.businessName}
+                  onChange={handleChange}
+                  onBlur={() => handleStep1Blur("businessName")}
+                  error={errors.businessName}
+                  disabled={isLoading}
+                  icon={Building2}
+                  placeholder="Name shown on your document"
+                  helper="Use the business or trade name shown in your supporting document."
+                  maxLength={120}
+                />
+                {BIR_DOCUMENT_TYPES.has(supportingDocType) ? (
+                  <>
+                    <Field
+                      label="Taxpayer Identification Number (TIN)"
+                      name="taxIdentificationNumber"
+                      value={form.taxIdentificationNumber}
+                      onChange={handleChange}
+                      onBlur={() => handleStep1Blur("taxIdentificationNumber")}
+                      error={errors.taxIdentificationNumber}
+                      disabled={isLoading}
+                      icon={FileText}
+                      placeholder="9 digits"
+                      helper="Enter the 9-digit TIN on this BIR document."
+                      maxLength={9}
+                      onlyNumbers
+                    />
+                    <Field
+                      label="Branch Code"
+                      name="branchCode"
+                      value={form.branchCode}
+                      onChange={handleChange}
+                      onBlur={() => handleStep1Blur("branchCode")}
+                      error={errors.branchCode}
+                      disabled={isLoading}
+                      icon={FileText}
+                      placeholder="As shown on your document"
+                      helper="Enter the branch code next to the TIN."
+                      maxLength={5}
+                      onlyNumbers
+                    />
+                  </>
+                ) : supportingDocType ? (
+                  <Field
+                    label={DOCUMENT_NUMBER_LABELS[supportingDocType] || "Document number"}
+                    name="permitNumber"
+                    value={form.permitNumber}
+                    onChange={handleChange}
+                    onBlur={() => handleStep1Blur("permitNumber")}
+                    error={errors.permitNumber}
+                    disabled={isLoading}
+                    icon={FileText}
+                    placeholder="Number shown on your document"
+                    helper={supportingDocType === "Barangay Business Clearance"
+                      ? "Leave blank if your clearance has no reference number; it will need manual review."
+                      : "Copy the number exactly as shown on your document."}
+                    maxLength={50}
+                    required={supportingDocType !== "Barangay Business Clearance"}
+                  />
+                ) : null}
+              </div>
+
+              <FileInput
+                label="Supporting Business Document"
+                helper="Upload the selected Philippines-issued document showing the business details you entered."
+                name="supportingDocument"
+                onChange={handleFile}
+                error={errors.supportingDocument}
+                file={files.supportingDocument}
+                disabled={isLoading}
+              />
+              {supportingDocStatus.submitted && !errors.supportingDocument && (
+                <p className="text-xs font-medium text-amber-700">{supportingDocStatus.message}</p>
+              )}
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><ShieldCheck size={20} className="text-[#017FE6]" /></div>
+                  <div>
+                    <p className="font-semibold text-gray-900">Step 4 — Identity verification</p>
+                    <p className="text-sm text-gray-500 mt-1">Upload your government ID, then capture a live selfie to verify your identity.</p>
+                  </div>
+                </div>
+              </div>
+
+              {identityStage === "id" && <>
+              <SelectField
+                label="ID Type"
+                name="idType"
+                value={kyc.idType}
+                onChange={handleIdTypeChange}
+                options={ID_DOCUMENT_TYPES.map((entry) => ({ value: entry, label: entry }))}
+                error={stepErrors.idType}
+                disabled={isLoading}
+                required
+                placeholder="Select the ID type you uploaded"
+              />
+
+              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <p className="font-semibold text-gray-900">Government ID (front side)</p>
                 <p className="text-sm text-gray-600 mt-1">Upload a clear photo of a Philippine government ID.</p>
+                {idPreviewUrl && <img src={idPreviewUrl} alt="Selected government ID preview" className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <input
                     ref={idInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      setKyc((prev) => ({ ...prev, idCardFile: file, idRegistered: false, challengeId: "", selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                      try {
+                        await validateDocumentImageFile(file);
+                      } catch (validationError) {
+                        setStepErrors((prev) => ({ ...prev, idCardFile: validationError.message || "Please choose a valid ID image." }));
+                        e.target.value = "";
+                        return;
+                      }
+                      setKyc((prev) => ({ ...prev, idCardFile: file, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
                       setKycUi((prev) => ({ ...prev, statusText: "" }));
                       setStepErrors({});
-                      setCamError("");
-                      setCamInfo("");
-                      closeCamera();
                     }}
                   />
 
@@ -1101,9 +1520,8 @@ export default function RegisterOwnerPage({
                         type="button"
                         onClick={() => {
                           setKyc(initialKyc);
-                          setKycUi({ showCamera: false, statusText: "" });
+                          setKycUi({ statusText: "" });
                           setStepErrors({});
-                          closeCamera();
                         }}
                         disabled={isLoading}
                         className="px-4 py-2 rounded-xl border border-gray-200 text-gray-800 font-semibold hover:bg-gray-50 transition disabled:opacity-60"
@@ -1116,57 +1534,84 @@ export default function RegisterOwnerPage({
                 {stepErrors.idCardFile && <p className="text-red-500 text-sm font-medium mt-2">{stepErrors.idCardFile}</p>}
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                <p className="font-semibold text-gray-900 mb-3">Verification Steps</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" disabled={isLoading || !kyc.idCardFile} onClick={registerId} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${kyc.idRegistered ? "bg-green-500 text-white cursor-default" : "bg-gray-900 text-white hover:opacity-95"} disabled:opacity-50`}>
-                    {isLoading && !kyc.idRegistered ? <><Loader size={15} className="animate-spin" /> Processing...</> : kyc.idRegistered ? "ID Registered" : "1. Register ID"}
-                  </button>
-                  <button type="button" disabled={isLoading || !kyc.idRegistered} onClick={kycUi.showCamera ? closeCamera : openCamera} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-[#017FE6] to-[#0165B8] hover:opacity-95 disabled:opacity-50 transition">
-                    {kycUi.showCamera ? "Close Camera" : "2. Open Camera"}
-                  </button>
-                  <button type="button" disabled={isLoading || !cameraStream || !kyc.idRegistered} onClick={captureSelfie} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${kyc.selfieBase64Clean ? "bg-blue-500 text-white" : "bg-gray-700 text-white hover:opacity-95"} disabled:opacity-50`}>
-                    {isLoading && !kyc.selfieBase64Clean ? <><Loader size={15} className="animate-spin" /> Capturing...</> : kyc.selfieBase64Clean ? "3. Retake Selfie" : "3. Capture Selfie"}
-                  </button>
-                  <button type="button" disabled={isLoading || !kyc.selfieBase64Clean || !kyc.challengeId || kyc.selfieVerified} onClick={verifySelfie} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm transition ${kyc.selfieVerified ? "bg-green-500 text-white cursor-default" : "bg-green-600 text-white hover:opacity-95"} disabled:opacity-50`}>
-                    {isLoading && !kyc.selfieVerified ? <><Loader size={15} className="animate-spin" /> Verifying...</> : kyc.selfieVerified ? "Face Verified" : "4. Verify Face Match"}
-                  </button>
-                </div>
+              {identityStage === "id" && (
+                <button type="button" disabled={isLoading || !kyc.idType || !kyc.idCardFile} onClick={registerId} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">
+                  {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</> : "Upload and check ID"}
+                </button>
+              )}
+              </>}
 
-                {kycUi.statusText && <p className={`text-sm font-medium mt-3 ${kyc.selfieVerified ? "text-green-600" : "text-gray-600"}`}>{kycUi.statusText}</p>}
-                {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium mt-2">{stepErrors.idRegistered}</p>}
-                {stepErrors.selfieVerified && <p className="text-red-500 text-sm font-medium mt-1">{stepErrors.selfieVerified}</p>}
-              </div>
-
-              {kycUi.showCamera && (
-                <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50 space-y-3">
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl bg-black aspect-video object-cover" style={{ transform: "scaleX(-1)" }} />
-                  {devices.length > 0 && (
-                    <div>
-                      <label className="text-xs text-gray-600 font-medium block mb-1">Camera device</label>
-                      <select value={selectedDeviceId} onChange={(e) => switchCamera(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-white text-sm">
-                        {devices.map((d, idx) => <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${idx + 1}`}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  {camError && <p className="text-sm text-red-600 p-2 bg-red-50 rounded-lg">{camError}</p>}
-                  {camInfo && <p className="text-xs text-gray-600 p-2 bg-gray-100 rounded-lg break-words">{camInfo}</p>}
-                  <button type="button" disabled={isLoading} onClick={closeCamera} className="w-full px-4 py-2 rounded-xl font-semibold border border-gray-200 text-gray-900 hover:bg-white transition disabled:opacity-50">Close Camera</button>
-                  {kyc.selfieDataUrl && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-700 mb-2">Selfie Preview</p>
-                      <img src={kyc.selfieDataUrl} alt="Selfie" className="w-full rounded-xl border border-gray-200" style={{ transform: "scaleX(-1)" }} />
-                    </div>
-                  )}
+              {identityStage === "id_checking" && (
+                <div role="status" aria-live="polite" className="rounded-2xl bg-blue-50 p-4 text-blue-950">
+                  <div className="flex items-center gap-3 font-semibold">
+                    <Loader size={20} className="shrink-0 animate-spin text-blue-700" aria-hidden="true" />
+                    Checking your ID details
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-blue-900">We are comparing the name on your ID with your registration. The selfie step will unlock automatically after it matches.</p>
                 </div>
               )}
+
+              {identityStage === "id_blocked" && (
+                <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
+              )}
+
+              {(["camera", "selfie", "complete"].includes(identityStage)) && (
+                <SelfieCapture
+                  previewUrl={kyc.selfieDataUrl}
+                  matched={identityStage === "complete"}
+                  matchedDescription="Your selfie matched your ID photo. Your ID and business document still require final approval."
+                  disabled={isLoading}
+                  submitting={isLoading && identityStage === "selfie"}
+                  error={stepErrors.selfieVerified}
+                  onCapture={handleSelfieCapture}
+                  onRetake={retakeSelfie}
+                  onSubmit={verifySelfie}
+                />
+              )}
+              {kycUi.statusText && <p role="status" className="text-sm font-medium text-slate-600">{kycUi.statusText}</p>}
+              {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium">{stepErrors.idRegistered}</p>}
             </>
           )}
 
-          {step === 4 && (
+          {(step === 3 || step === 4 || step === 5) && (
+            <PreKycReviewNotice
+              email={form.businessEmail}
+              role="owner"
+              enabled={kyc.idRegistered || supportingDocStatus.submitted}
+              refreshKey={documentRefreshKey}
+              ignoreSupportingDocument={!supportingDocStatus.submitted}
+              onDocumentsChange={handleDocumentsChange}
+              onIdStatus={handleIdStatus}
+              onCorrectDetails={(type) => {
+                if (type === "id") {
+                  setStep(1);
+                  return;
+                }
+                setSupportingDocStatus({ submitted: false, message: "" });
+                setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
+                setStep(3);
+              }}
+              onResubmit={(type) => {
+                if (type === "supporting") {
+                  setSupportingDocStatus({ submitted: false, message: "" });
+                  setFiles((current) => ({ ...current, supportingDocument: null }));
+                  setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
+                  setStep(3);
+                } else {
+                  setKyc(initialKyc);
+                  setKycUi({ statusText: "" });
+                  setDocumentStatuses((current) => ({ ...current, id: "not_uploaded" }));
+                  setStepErrors({});
+                  setStep(4);
+                }
+              }}
+            />
+          )}
+
+          {step === 5 && (
             <>
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-                <p className="font-semibold text-gray-900">Step 4 — Review & Submit</p>
+                <p className="font-semibold text-gray-900">Step 5 — Review & submit</p>
                 <p className="text-sm text-gray-500 mt-1">Confirm your details before creating your account.</p>
               </div>
 
@@ -1181,9 +1626,13 @@ export default function RegisterOwnerPage({
                   { label: "City / Municipality", value: cities.find((entry) => entry.code === form.city)?.name || "-" },
                   { label: "Barangay", value: barangays.find((entry) => entry.code === form.barangay)?.name || "-" },
                   { label: "Owner Type", value: canShowBusinessFields ? "Business" : "Individual" },
-                  ...(canShowBusinessFields ? [{ label: "Business Name", value: form.businessName || "-" }, { label: "Permit Number", value: form.permitNumber || "-" }] : []),
+                  { label: "Business Name", value: form.businessName || "-" },
+                  { label: BIR_DOCUMENT_TYPES.has(supportingDocType) ? "TIN" : DOCUMENT_NUMBER_LABELS[supportingDocType] || "Document number", value: BIR_DOCUMENT_TYPES.has(supportingDocType) ? `•••-•••-${form.taxIdentificationNumber.slice(-3)}` : form.permitNumber || "Not shown" },
+                  ...(BIR_DOCUMENT_TYPES.has(supportingDocType) ? [{ label: "Branch Code", value: form.branchCode || "-" }] : []),
+                  { label: "Supporting Document Type", value: supportingDocType || "-" },
                   { label: "Supporting Document", value: files.supportingDocument ? "Uploaded" : "Missing" },
-                  { label: "Face Verification", value: kyc.selfieVerified ? "Verified" : "Not verified", highlight: kyc.selfieVerified },
+                  { label: "ID Type", value: kyc.idType || "-" },
+                  { label: "Identity verification", value: kyc.selfieVerified ? "Selfie matched" : "Not verified", highlight: kyc.selfieVerified },
                 ].map(({ label, value, highlight }, i, arr) => (
                   <React.Fragment key={label}>
                     <div className="flex items-center justify-between">
@@ -1194,20 +1643,29 @@ export default function RegisterOwnerPage({
                   </React.Fragment>
                 ))}
               </div>
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input type="checkbox" name="agree" checked={form.agree} onChange={handleChange} onBlur={() => handleStep1Blur("agree")} disabled={isLoading} className="mt-0.5 h-5 w-5 flex-shrink-0 cursor-pointer accent-[#017FE6]" />
+                  <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                    I agree to the{" "}<button type="button" onClick={() => setLegalModalType("terms")} className="font-semibold text-[#017FE6] hover:underline">Terms and Conditions</button>{" "}and{" "}<button type="button" onClick={() => setLegalModalType("privacy")} className="font-semibold text-[#017FE6] hover:underline">Privacy Policy</button>.
+                  </span>
+                </label>
+                {errors.agree && <p className="text-red-500 text-sm font-medium">{errors.agree}</p>}
+              </div>
             </>
           )}
 
           <div className="flex items-center gap-3 pt-1">
             <button type="button" onClick={step === 1 ? onBack : goBack} disabled={isLoading} className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-              <ArrowLeft size={18} /> {step === 1 ? "Register as User" : "Back"}
+              <ArrowLeft size={18} /> {step === 1 ? "Register as Renter" : "Back"}
             </button>
             {step < TOTAL_STEPS ? (
               <button type="button" onClick={goNext} disabled={isLoading} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                Next <ArrowRight size={18} />
+                {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : <>{step === 3 ? supportingDocStatus.submitted ? "Continue to ID" : "Upload and continue" : "Next"} <ArrowRight size={18} /></>}
               </button>
             ) : (
-              <button type="submit" disabled={isLoading} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                {isLoading ? <><Loader size={18} className="animate-spin" /> Registering...</> : "Register as Owner"}
+              <button type="submit" disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
+                {isLoading ? <><Loader size={18} className="animate-spin" /> Registering...</> : !areDocumentsApproved ? "Waiting for document approval" : "Register as Owner"}
               </button>
             )}
           </div>
@@ -1220,8 +1678,16 @@ export default function RegisterOwnerPage({
               </button>
             </p>
           )}
+          </fieldset>
         </form>
       </div>
+      <LegalPolicyModal
+        isOpen={Boolean(legalModalType)}
+        documentType={legalModalType === "privacy" ? "privacy" : "terms"}
+        onClose={() => setLegalModalType("")}
+        onSwitchToTerms={() => setLegalModalType("terms")}
+        onSwitchToPrivacy={() => setLegalModalType("privacy")}
+      />
     </AuthShell>
   );
 }
@@ -1240,30 +1706,66 @@ function Field({
   placeholder = "",
   helper = "",
   maxLength,
+  prefixText = "",
+  required = true,
+  onBlur,
+  inputRef,
 }) {
   const handleInputChange = (e) => {
     let nextValue = e.target.value;
     if (onlyLetters) nextValue = normalizeNameInput(nextValue);
     if (onlyNumbers) nextValue = nextValue.replace(/[^0-9]/g, "");
+    if (type === "email") nextValue = nextValue.replace(/\s/g, "");
+    onChange({ target: { name, value: nextValue, type } });
+  };
+
+  const handleInputKeyDown = (e) => {
+    if (type === "email" && e.key === " ") {
+      e.preventDefault();
+    }
+  };
+
+  const handleInputPaste = (e) => {
+    if (type !== "email") return;
+    const pastedText = String(e.clipboardData?.getData("text") || "");
+    if (!/\s/.test(pastedText)) return;
+    e.preventDefault();
+    const sanitizedText = pastedText.replace(/\s/g, "");
+    const input = e.currentTarget;
+    const currentValue = String(input?.value || "");
+    const start = Number.isInteger(input?.selectionStart) ? input.selectionStart : currentValue.length;
+    const end = Number.isInteger(input?.selectionEnd) ? input.selectionEnd : currentValue.length;
+    const nextValue = currentValue.slice(0, start) + sanitizedText + currentValue.slice(end);
     onChange({ target: { name, value: nextValue, type } });
   };
 
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-semibold text-gray-700">
-        {label} <span className="text-red-500">*</span>
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       {helper ? <p className="text-xs text-gray-500">{helper}</p> : null}
       <div className="relative">
+        {prefixText ? (
+          <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-sm font-medium text-gray-500">
+            {prefixText}
+          </span>
+        ) : null}
         <input
+          ref={inputRef}
           type={type}
           name={name}
           value={value}
           onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
+          onPaste={handleInputPaste}
+          onBlur={onBlur}
           disabled={disabled}
           placeholder={placeholder}
           maxLength={maxLength}
-          className={`w-full h-11 rounded-xl border px-4 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${Icon ? "pr-11" : ""} ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
+          inputMode={onlyNumbers ? "numeric" : undefined}
+          autoComplete={["taxIdentificationNumber", "branchCode"].includes(name) ? "off" : undefined}
+          className={`relative z-0 w-full h-11 rounded-xl border px-4 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${Icon ? "pr-11" : ""} ${prefixText ? "pl-14" : ""} ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
         {Icon && <Icon size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
       </div>
@@ -1283,6 +1785,7 @@ function SelectField({
   required = true,
   helper = "",
   placeholder = "",
+  onBlur,
 }) {
   const fallbackPlaceholder = placeholder || `Select ${label.toLowerCase()}`;
   return (
@@ -1296,17 +1799,17 @@ function SelectField({
           name={name}
           value={value}
           onChange={onChange}
+          onBlur={onBlur}
           disabled={disabled}
-          className={`w-full h-11 appearance-none rounded-xl border px-4 pr-10 text-sm outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white text-gray-900"}`}
+          className={`w-full h-11 rounded-xl border px-4 text-sm outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white text-gray-900"}`}
         >
-          <option value="">{fallbackPlaceholder}</option>
+          <option value="" disabled hidden>{fallbackPlaceholder}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
@@ -1325,7 +1828,33 @@ function PasswordField({
   helper = "",
   placeholder = "",
   maxLength,
+  onBlur,
+  showStrength = false,
 }) {
+  const sanitizePasswordValue = (rawValue = "") => String(rawValue).replace(/\s/g, "");
+
+  const handlePasswordChange = (event) => {
+    const sanitizedValue = sanitizePasswordValue(event?.target?.value || "");
+    onChange({ target: { name, value: sanitizedValue, type: "password" } });
+  };
+
+  const handlePasswordKeyDown = (event) => {
+    if (event.key === " ") event.preventDefault();
+  };
+
+  const handlePasswordPaste = (event) => {
+    const pastedText = String(event.clipboardData?.getData("text") || "");
+    if (!/\s/.test(pastedText)) return;
+    event.preventDefault();
+    const sanitizedText = sanitizePasswordValue(pastedText);
+    const input = event.currentTarget;
+    const currentValue = String(input?.value || "");
+    const start = Number.isInteger(input?.selectionStart) ? input.selectionStart : currentValue.length;
+    const end = Number.isInteger(input?.selectionEnd) ? input.selectionEnd : currentValue.length;
+    const nextValue = currentValue.slice(0, start) + sanitizedText + currentValue.slice(end);
+    onChange({ target: { name, value: nextValue, type: "password" } });
+  };
+
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-semibold text-gray-700">
@@ -1341,7 +1870,10 @@ function PasswordField({
           type={show ? "text" : "password"}
           name={name}
           value={value}
-          onChange={onChange}
+          onChange={handlePasswordChange}
+          onKeyDown={handlePasswordKeyDown}
+          onPaste={handlePasswordPaste}
+          onBlur={onBlur}
           disabled={disabled}
           placeholder={placeholder}
           maxLength={maxLength}
@@ -1352,6 +1884,7 @@ function PasswordField({
         </button>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
+      {showStrength && <PasswordStrengthIndicator value={value} />}
     </div>
   );
 }
@@ -1365,7 +1898,7 @@ function FileInput({ label, helper, name, onChange, error, file, disabled = fals
         <span className={`text-sm truncate min-w-0 ${disabled ? "text-gray-400" : "text-gray-600"}`}>{file ? file.name : "No file selected"}</span>
         <label className={`inline-flex items-center gap-2 text-sm font-semibold flex-shrink-0 ${disabled ? "text-gray-400 cursor-not-allowed" : "text-[#017FE6] cursor-pointer hover:underline"}`}>
           <Upload size={16} /> Choose
-          <input type="file" name={name} accept="image/*,.pdf" onChange={onChange} disabled={disabled} className="hidden" />
+          <input type="file" name={name} accept="image/jpeg,image/png,application/pdf" onChange={onChange} disabled={disabled} className="hidden" />
         </label>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}

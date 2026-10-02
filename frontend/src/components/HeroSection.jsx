@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 export default function HeroSection({ onNavigateToVehicles }) {
   return (
     <div className="relative h-[520px] pt-16 text-white overflow-hidden">
-      <img src="/hero-car1.png" alt="Hero" className="absolute inset-0 w-full h-full object-cover" />
+      <img src="/hero-car1-optimized.jpg" alt="Hero" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-black/60"></div>
 
       <div className="relative z-10 h-full flex flex-col items-center justify-start text-center px-4 pt-20 animate-fadeIn">

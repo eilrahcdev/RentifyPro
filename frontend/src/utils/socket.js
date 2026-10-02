@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
+import { SOCKET_URL } from "./runtimeConfig";
 
-const SOCKET_URL = "http://localhost:5000";
 let socketInstance = null;
 
 export const getSocket = () => {
@@ -21,5 +21,11 @@ export const disconnectSocket = () => {
   if (!socketInstance) return;
   socketInstance.disconnect();
   socketInstance = null;
+};
+
+export const reconnectSocket = () => {
+  if (!socketInstance) return;
+  socketInstance.disconnect();
+  socketInstance.connect();
 };
 

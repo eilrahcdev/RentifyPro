@@ -84,8 +84,13 @@ JWT_EXPIRE=7d
 FRONTEND_URL=http://localhost:5173
 FACE_SERVICE_URL=http://localhost:8000
 INTERNAL_API_KEY=rentifypro-internal-secret
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+EMAIL_FROM=your-email@gmail.com
+EMAIL_FROM_NAME=RentifyPro
 ```
 
 Start the backend server:

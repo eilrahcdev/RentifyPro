@@ -1,7 +1,12 @@
+import OwnerPageHeader from "../components/OwnerPageHeader";
+
 export default function Settings() {
   return (
-    <div className="bg-white p-6 rounded-xl shadow">
-      <h1 className="text-xl font-bold">Settings</h1>
+    <div className="space-y-6">
+      <OwnerPageHeader
+        title="Settings"
+        description="Manage owner workspace preferences and account options."
+      />
     </div>
   );
 }
