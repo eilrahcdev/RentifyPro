@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getKycUploadDir } from "../utils/storagePaths.js";
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_RETENTION_HOURS = 3;
@@ -11,7 +12,7 @@ const parsePositiveNumber = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const getKycRoot = () => path.resolve(process.env.KYC_UPLOAD_DIR || path.join(process.cwd(), "private_uploads", "kyc"));
+const getKycRoot = getKycUploadDir;
 const getCutoff = () =>
   Date.now() - parsePositiveNumber(process.env.KYC_FILE_RETENTION_HOURS, DEFAULT_RETENTION_HOURS) * 60 * 60 * 1000;
 const getReviewCutoff = () =>

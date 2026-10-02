@@ -12,6 +12,7 @@ import {
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
 import { reviewKycDocument } from "../services/kycReview.service.js";
+import { getKycUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
 
 const VEHICLE_MEDIA_PREFIX = "uploads/vehicles/";
 const VEHICLE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
@@ -211,9 +212,10 @@ const websiteBackendDirectory = path.resolve(
   process.env.WEBSITE_BACKEND_DIR || path.join(routesDirectory, ".."),
 );
 const kycDirectory = path.resolve(
-  process.env.KYC_UPLOAD_DIR || path.join(websiteBackendDirectory, "private_uploads", "kyc"),
+  process.env.KYC_UPLOAD_DIR || (process.env.STORAGE_ROOT ? getKycUploadDir() : path.join(websiteBackendDirectory, "private_uploads", "kyc")),
 );
-const vehicleDirectory = path.resolve(websiteBackendDirectory, "uploads", "vehicles");
+const vehicleDirectory = path.resolve(process.env.STORAGE_ROOT || process.env.PUBLIC_UPLOAD_DIR
+  ? getPublicUploadsDir() : path.join(websiteBackendDirectory, "uploads"), "vehicles");
 
 router.use(protect, authorize("admin"));
 

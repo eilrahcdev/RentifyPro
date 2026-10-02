@@ -31,7 +31,7 @@ export const createOriginChecker = () => {
     .map((origin) => wildcardToRegex(origin));
 
   const exactOrigins = new Set([
-    ...LOCAL_ORIGINS.map((origin) => normalizeOrigin(origin)),
+    ...(process.env.NODE_ENV === "production" ? [] : LOCAL_ORIGINS).map(normalizeOrigin),
     ...configuredOrigins.filter((origin) => !origin.includes("*")),
   ]);
 

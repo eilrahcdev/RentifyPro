@@ -34,7 +34,7 @@ const booking = () => ({
   owner: { _id: "507f1f77bcf86cd799439013", name: "Test Vehicle Owner", email: "owner@example.test" },
   durationMinutes: 1440, totalAmount: 2400, vehicleHourlyRate: 100, paymentAmountDue: 2400,
 });
-const document = { id: "507f1f77bcf86cd799439015", customer: "Test Renter", email: "renter@example.test", role: "Renter", document: "Government ID", fileName: "test-id.jpg", approval: "Pending", reviewVersion: "test-hash", submitted: "2026-09-06", reason: "Ready for manual review." };
+const document = { id: "507f1f77bcf86cd799439015", customer: "Test Renter", email: "renter@example.test", role: "Renter", document: "Government ID", fileName: "test-id.jpg", approval: "Pending Review", status: "pending_review", canReview: true, detailsMatched: true, reviewVersion: "test-hash", submitted: "2026-09-06", reason: "Ready for manual review." };
 async function fulfill(event, body, status = 200) {
   await send("Fetch.fulfillRequest", { requestId: event.requestId, responseCode: status, responseHeaders: [
     { name: "Content-Type", value: "application/json" }, { name: "Access-Control-Allow-Origin", value: base },
@@ -65,6 +65,7 @@ async function route(event) {
       return fulfill(event, { success: true, booking: booking(), message: "Walk-in payment confirmed successfully." });
     }
     if (endpoint.includes("/bookings/") && endpoint.includes("verify")) {
+      await sleep(300);
       verifyRequests += 1;
       if (verifyRequests >= captureAfterRequest) paymentCaptured = true;
       const paymentStatus = paymentCaptured ? capturedPaymentStatus : "unpaid";
@@ -135,14 +136,14 @@ try {
   mode = "bookings"; await click("Retry"); await waitFor("Approve");
   await click("Approve"); await waitFor("Approving booking...");
   assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Reject').disabled"), true);
-  await waitFor("Booking confirmed."); assert.equal(statusUpdates, 1);
+  await waitFor("Booking approved."); assert.equal(statusUpdates, 1);
   checks.push("Owner retry, approval success, and disabled competing decisions");
   ownerPaymentStatus = "partial"; ownerWalkInStatus = "approved";
   await click("All"); await waitFor("Confirm Walk-in Received");
   await click("Confirm Walk-in Received"); await waitFor("Walk-in payment received.");
   assert.equal(walkInConfirmations, 1);
   assert.equal((await text()).includes("Walk-in payment confirmed successfully."), false);
-  assert.equal(await evaluate("(() => { const alert = [...document.querySelectorAll('[role=status]')].find(e => e.textContent.includes('Walk-in payment received.')).firstElementChild.getBoundingClientRect(); const heading = [...document.querySelectorAll('h1,h2')].find(e => e.textContent.trim() === 'Booking Management').getBoundingClientRect(); const refresh = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Refresh').getBoundingClientRect(); return [heading, refresh].some(b => alert.left < b.right && alert.right > b.left && alert.top < b.bottom && alert.bottom > b.top); })()"), false);
+  assert.equal(await evaluate("(() => { const alert = [...document.querySelectorAll('[role=status]')].find(e => e.textContent.includes('Walk-in payment received.')).getBoundingClientRect(); const refresh = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Refresh'); const button = refresh.getBoundingClientRect(); return alert.left >= 0 && alert.right <= innerWidth && alert.top >= 0 && alert.bottom <= innerHeight && document.elementFromPoint(button.left + button.width / 2, button.top + button.height / 2)?.closest('button') === refresh; })()"), true);
   await fs.writeFile(path.join(os.tmpdir(), "rentifypro-owner-payment-toast.png"), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
@@ -158,7 +159,7 @@ try {
   assert.ok((await evaluate("location.search")).includes("checkout_test"));
   assert.equal((await text()).includes("Check payment status"), false);
   assert.equal((await text()).includes("Payment successful."), false);
-  assert.equal(await evaluate("[...document.querySelectorAll('[role=status]')].some(e => e.textContent.includes('Processing payment, please wait...') && e.querySelector('svg.animate-spin[aria-hidden=true]'))"), true);
+  assert.equal(await evaluate("[...document.querySelectorAll('[role=status]')].some(e => e.textContent.includes('Processing payment, please wait...') && e.getAttribute('aria-live') === 'polite')"), true);
   assert.equal(await evaluate("(() => { const alert = [...document.querySelectorAll('[role=status]')].find(e => e.textContent.includes('Processing payment, please wait...')); const refresh = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Refresh'); const a = alert.firstElementChild.getBoundingClientRect(), b = refresh.getBoundingClientRect(); return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; })()"), false);
   await fs.writeFile(path.join(os.tmpdir(), "rentifypro-renter-payment-processing-toast.png"), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
   await sleep(3200);

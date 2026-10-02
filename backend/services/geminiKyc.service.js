@@ -28,7 +28,7 @@ export async function verifyFaceMatchWithGemini({
   const genAI = new GoogleGenerativeAI(apiKey);
 
   // Pick a free/cheap vision model; you can override via .env
-  const modelName = process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash-lite";
+  const modelName = process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite";
 
   const instruction = `
 You are a strict face verification system.

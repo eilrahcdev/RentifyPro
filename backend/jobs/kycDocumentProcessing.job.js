@@ -6,6 +6,7 @@ import { verifyPhilippinesDocument } from "../services/geminiDocument.service.js
 import { DOCUMENT_REASON_CODES, evaluateDocumentExtraction } from "../services/documentValidation.service.js";
 import { reconcileUserKyc } from "../services/kycReview.service.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
+import { getKycUploadDir } from "../utils/storagePaths.js";
 
 const positiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -29,7 +30,7 @@ const classificationMinimum = () => positiveNumber(
   process.env.KYC_DOCUMENT_CLASSIFICATION_MIN_CONFIDENCE,
   90,
 );
-const uploadRoot = () => path.resolve(process.env.KYC_UPLOAD_DIR || path.resolve("private_uploads", "kyc"));
+const uploadRoot = getKycUploadDir;
 const maxAttempts = () => Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_MAX_ATTEMPTS, 3)));
 const requestsPerMinute = () => Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_REQUESTS_PER_MINUTE, 4)));
 const retryDelayMs = (attempt) => Math.min(30_000 * (2 ** Math.max(attempt - 1, 0)), 5 * 60_000);
@@ -195,7 +196,8 @@ const processClaimedDocument = async (document) => {
 
 const handleProcessingFailure = async (document, error) => {
   const attempt = Number(document.processingAttempts || 1);
-  const retryable = !error?.permanent && [429, 500, 502, 503, 504].includes(Number(error?.status || 503));
+  const retryable = !error?.permanent && error?.retryable !== false
+    && [408, 429, 500, 502, 503, 504].includes(Number(error?.status || 503));
   const shouldRetry = retryable && attempt < maxAttempts();
   const status = shouldRetry ? "retry_wait" : error?.permanent ? "reupload_required" : "pending_review";
   const safeMessage = shouldRetry

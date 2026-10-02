@@ -87,10 +87,21 @@ verified result cannot be reused after changing personal details.
 
 ## Free-tier operation
 
+The default vision model is `gemini-3.5-flash-lite`, overridable with
+`GEMINI_VISION_MODEL`. One document request has a 30-second timeout, configurable with
+`KYC_GEMINI_REQUEST_TIMEOUT_MS`. Timeouts, rate limits, and temporary provider outages
+retain bounded retries. Model-access, authentication, and other non-retryable provider
+errors go directly to `pending_review`; they do not require a new upload. Missing
+credentials or unconfirmed production data handling also go directly to manual review.
+The timeout applies to one provider attempt, not the entire review or final approval.
+After the service is restored, explicitly re-uploading the same file requeues an
+`AUTOMATED_SCREENING_UNAVAILABLE` result. Completed screening and approvals continue
+to be reused when the file, session, type, and profile match.
+
 Start conservatively with four Gemini requests per minute and three attempts. The
 queue continues accepting uploads when the provider is rate-limited, so user traffic
-does not create a burst of parallel Gemini calls. Super Admin can review documents
-while automated screening is queued, retrying, or unavailable.
+does not create a burst of parallel Gemini calls. Queued, processing, and retrying
+documents remain view-only; administrator decisions unlock at `pending_review`.
 
 The upload path wakes the existing queue worker immediately instead of waiting for
 the next scheduled poll. During active screening, registration polls the database-only

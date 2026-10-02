@@ -3,14 +3,6 @@ import axios from "axios";
 const PAYMONGO_API_BASE = "https://api.paymongo.com/v1";
 const DEFAULT_PAYMENT_METHOD_TYPES = ["gcash", "paymaya", "card"];
 const ALLOWED_PAYMENT_METHOD_TYPES = new Set(DEFAULT_PAYMENT_METHOD_TYPES);
-const SUCCESSFUL_PAYMENT_STATUSES = new Set([
-  "paid",
-  "completed",
-  "succeeded",
-  "authorized",
-  "awaiting_capture",
-  "captured",
-]);
 const NETWORK_ERROR_CODES = new Set([
   "ENOTFOUND",
   "EAI_AGAIN",
@@ -103,54 +95,25 @@ const getAuthHeaders = () => {
   };
 };
 
-const getPaymentStatuses = (checkoutSession) => {
-  const attributes = checkoutSession?.attributes || {};
-  const statuses = [];
-
-  const pushStatus = (value) => {
-    const normalized = normalizeText(value).toLowerCase();
-    if (normalized) statuses.push(normalized);
-  };
-
-  const collectStatuses = (value) => {
-    if (!value) return;
-    if (Array.isArray(value)) {
-      value.forEach(collectStatuses);
-      return;
-    }
-    if (typeof value === "string") {
-      pushStatus(value);
-      return;
-    }
-    if (typeof value !== "object") return;
-
-    pushStatus(value.status);
-    pushStatus(value?.attributes?.status);
-
-    const data = value.data;
-    if (Array.isArray(data)) {
-      data.forEach(collectStatuses);
-      return;
-    }
-    if (data && typeof data === "object") {
-      collectStatuses(data);
-    }
-  };
-
-  collectStatuses(checkoutSession?.status);
-  collectStatuses(attributes.status);
-  collectStatuses(attributes.payment_intent);
-  collectStatuses(attributes.payments);
-  collectStatuses(attributes.payment_intent?.payments);
-  collectStatuses(checkoutSession?.included);
-
-  const payments = Array.isArray(attributes.payments) ? attributes.payments : [];
-  for (const payment of payments) {
-    pushStatus(payment?.status);
-    pushStatus(payment?.attributes?.status);
-  }
-
-  return [...new Set(statuses)];
+const unwrap = (value) => value?.data || value;
+const attributesOf = (value) => unwrap(value)?.attributes || unwrap(value) || {};
+const statusOf = (value) => normalizeText(attributesOf(value).status).toLowerCase();
+const paymentResources = (session) => {
+  const intent = unwrap(session?.attributes?.payment_intent);
+  const sources = [session?.attributes?.payments, attributesOf(intent).payments];
+  const payments = sources.flatMap((source) => {
+    const value = unwrap(source);
+    return Array.isArray(value) ? value : [];
+  });
+  const ids = new Set(payments.map((payment) => payment.id).filter(Boolean));
+  return payments.map((payment) => (session.included || []).find(
+    (item) => item.type === "payment" && ids.has(item.id) && item.id === payment.id
+  ) || payment);
+};
+const paymentIntentResource = (session) => {
+  const intent = unwrap(session?.attributes?.payment_intent);
+  const id = typeof intent === "string" ? intent : intent?.id;
+  return (session?.included || []).find((item) => item.type === "payment_intent" && id && item.id === id) || intent;
 };
 
 export const getPayMongoCheckoutId = (checkoutSession) =>
@@ -194,8 +157,27 @@ export const getPayMongoCheckoutAmountInCentavos = (checkoutSession) => {
   }, 0);
 };
 
-export const isPayMongoCheckoutPaid = (checkoutSession) =>
-  getPaymentStatuses(checkoutSession).some((status) => SUCCESSFUL_PAYMENT_STATUSES.has(status));
+export const isPayMongoCheckoutPaid = (session) =>
+  statusOf(paymentIntentResource(session)) === "succeeded" ||
+  paymentResources(session).some((payment) => statusOf(payment) === "paid");
+
+export const isPayMongoCheckoutProcessing = (session) =>
+  ["processing", "authorized", "awaiting_capture", "awaiting_next_action"].includes(statusOf(paymentIntentResource(session)));
+
+export const getPayMongoCapturedAmountInCentavos = (session) => {
+  const paid = paymentResources(session).filter((payment) => statusOf(payment) === "paid");
+  const resources = paid.length ? paid : statusOf(paymentIntentResource(session)) === "succeeded"
+    ? [paymentIntentResource(session)] : [];
+  const unique = [...new Map(resources.map((item, i) => [item.id || i, item])).values()];
+  if (!unique.length) return 0;
+  let total = 0;
+  for (const item of unique) {
+    const { amount, currency } = attributesOf(item);
+    if (currency !== "PHP" || !Number.isSafeInteger(amount) || amount <= 0) return 0;
+    total += amount;
+  }
+  return total;
+};
 
 export const createPayMongoCheckoutSession = async ({
   amountInCentavos,
@@ -207,6 +189,7 @@ export const createPayMongoCheckoutSession = async ({
   metadata = {},
   billing,
   paymentMethodTypes = [],
+  idempotencyKey,
 }) => {
   try {
     if (!Number.isInteger(amountInCentavos) || amountInCentavos <= 0) {
@@ -238,7 +221,7 @@ export const createPayMongoCheckoutSession = async ({
           show_description: true,
           show_line_items: true,
           billing: billing && typeof billing === "object" ? billing : undefined,
-          metadata,
+          metadata: Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key, String(value)])),
         },
       },
     };
@@ -257,7 +240,7 @@ export const createPayMongoCheckoutSession = async ({
     }
 
     const response = await axios.post(`${PAYMONGO_API_BASE}/checkout_sessions`, payload, {
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
       timeout: 15000,
     });
     const checkoutSession = response?.data?.data;
@@ -271,6 +254,18 @@ export const createPayMongoCheckoutSession = async ({
   } catch (error) {
     if (error?.isPayMongoError) throw error;
     throw toPayMongoError(error, "Failed to create PayMongo checkout session.");
+  }
+};
+
+export const expirePayMongoCheckoutSession = async (checkoutId) => {
+  try {
+    const response = await axios.post(
+      `${PAYMONGO_API_BASE}/checkout_sessions/${encodeURIComponent(checkoutId)}/expire`, {},
+      { headers: { ...getAuthHeaders(), "Idempotency-Key": `expire-${checkoutId}` }, timeout: 15000 }
+    );
+    return response?.data?.data;
+  } catch (error) {
+    throw toPayMongoError(error, "Could not close the previous payment checkout.");
   }
 };
 

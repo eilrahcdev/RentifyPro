@@ -19,11 +19,17 @@ Set at least:
 - `MONGO_URI_DIRECT=<atlas-standard-uri>` (recommended fallback)
 - `MONGO_DB_NAME=rentifypro`
 - `FRONTEND_URL=https://<your-vercel-domain>` (or comma-separated origins)
-- `ALLOW_VERCEL_PREVIEW_ORIGINS=true` (optional, for Vercel preview links)
+- `ALLOW_VERCEL_PREVIEW_ORIGINS=false` (list owned preview origins explicitly in `FRONTEND_URL`)
 - `JWT_SECRET=<strong-secret>`
 - `INTERNAL_API_KEY=<long-random-shared-secret>` (must exactly match the face service; never use a default)
 - `MONGO_AUTO_INDEX=false` (run schema/index changes through reviewed migrations)
-- `KYC_UPLOAD_DIR=/var/data/rentifypro/private-kyc` (temporary local fallback only; not under public uploads)
+- `STORAGE_ROOT=/var/data/rentifypro` on a mounted persistent disk for one backend instance
+- `STORAGE_DURABILITY_CONFIRMED=true` only after verifying the disk mount and persistence
+- `GEMINI_SENSITIVE_DATA_APPROVED=true` only after confirming the key's billing-enabled project and applicable sensitive-data terms
+- `BACKEND_PUBLIC_URL=https://<your-render-backend-domain>`
+- `PAYMONGO_SECRET_KEY=<private-live-key>`
+- `PAYMONGO_WEBHOOK_SECRET=<secret-for-the-registered-endpoint>`
+- `PAYMENT_RECONCILIATION_ENABLED=true`
 - `KYC_JSON_BODY_LIMIT=8mb`, `KYC_IMAGE_MAX_BYTES=4194304`, `KYC_MAX_FRAMES=5`
 - `KYC_FILE_RETENTION_HOURS=3`, `AUDIT_LOG_RETENTION_DAYS=30`
 - `NOTIFICATION_EMAIL_ENABLED=true` (enable only after SMTP delivery is tested)
@@ -93,7 +99,9 @@ For local verification from backend folder:
 
 1. Take and test an Atlas point-in-time restore before migrations. Keep an encrypted copy in a separate account/project according to your RPO/RTO.
 2. Run `npm run db:migrate:kyc` first (dry run), review counts, then run `npm run db:migrate:kyc -- --apply`. The legacy collection is retained for rollback.
-3. Use an object store with a private, SSE-KMS encrypted `kyc/` prefix and lifecycle rules for KYC evidence. The local private directory is a development fallback, not durable multi-instance storage.
+3. For one backend instance, attach a persistent disk and set `STORAGE_ROOT`. All upload classes now use this volume while retaining public/private access boundaries. Copy existing files with their original names, back up the volume, and test a restore. An object-storage integration is required before moving to multiple instances; see [production release checks](production-release-checks.md).
 4. Configure Redis for shared rate limits, job leases, and short public-response caching before scaling to multiple backend instances. Logout token revocations are stored in MongoDB.
 5. Run `npm run db:migrate:notifications` first (dry run), then `npm run db:migrate:notifications -- --apply` after backup. Test one booking notification email before enabling it for all users.
 6. Run `npm run db:migrate:session-revocations` first (dry run), then `npm run db:migrate:session-revocations -- --apply` before deploying the backend auth changes. This creates the lookup and TTL indexes for hashed logout tokens.
+7. Run `npm run db:migrate:payments` first (dry run), then `npm run db:migrate:payments -- --apply` after backup. Register the signed PayMongo webhook and complete the staging payment checks in [production release checks](production-release-checks.md).
+8. Run `npm run production:check` on the target environment before starting the backend. Production startup now rejects missing configuration; development startup retains its existing defaults.

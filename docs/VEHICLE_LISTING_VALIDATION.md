@@ -29,7 +29,7 @@ The review queue is implemented in `frontend/src/admin` in this repository. A se
 ## Configuration and rollout
 
 - Install backend dependencies, including Sharp, and restart the backend for the new routes. Deploy frontend and backend together: the new approved-ID contract intentionally rejects the old raw-image submission path.
-- Existing `GEMINI_API_KEY` is reused. Optional `GEMINI_VEHICLE_PHOTO_MODEL` overrides `GEMINI_VISION_MODEL`; fallback is `gemini-2.5-flash-lite`.
+- Existing `GEMINI_API_KEY` is reused. Optional `GEMINI_VEHICLE_PHOTO_MODEL` overrides `GEMINI_VISION_MODEL`; fallback is `gemini-3.5-flash-lite`.
 - No credentials were changed and no live personal photos were sent during implementation testing. If automatic screening is unavailable, administrators can still review photos.
 - Existing image references, including legacy external URLs, may only be retained on their existing listing. They are not retroactively labeled as reviewed. Plan an explicit review/migration of older galleries rather than deleting or hiding them automatically.
 - The new private photo records are durable so owners can resume after closing the form. They are not transient previews and do not have a TTL; include this directory and collection in the application's retention/access processes.

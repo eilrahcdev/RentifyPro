@@ -17,7 +17,7 @@ Set the corresponding environment variables instead of changing source defaults.
 
 ## Production requirements
 
-- Use private object storage (SSE-KMS, blocked public access, signed authenticated downloads) for KYC. Store object key, checksum, MIME type, byte count, classification, and delete time—never public URLs or host paths.
+- For a single backend instance, set `STORAGE_ROOT` to an encrypted persistent volume and confirm its mount with `STORAGE_DURABILITY_CONFIRMED=true`. Public `uploads/vehicles` and `uploads/avatars` stay separate from protected `private_uploads/kyc`, `private_uploads/reports`, and `private_uploads/vehicle-images`. Before scaling to multiple instances, implement private object storage (SSE-KMS, blocked public access, authenticated downloads) and shared retention jobs. See [production release checks](production-release-checks.md).
 - Use a CDN only for transformed public vehicle/avatar media. Version object keys and use immutable cache headers.
 - Run Redis for distributed rate limiting, short-lived response cache, token/session revocation TTLs, and single-execution job leases. Do not cache KYC, OTP, payment, or booking-truth responses.
 - Enable Atlas automated backups/PITR, encrypt backups, maintain an off-account copy, and test restores at least quarterly.

@@ -101,14 +101,16 @@ export const initSocket = (httpServer) => {
     revocationCheck.unref?.();
     socket.once("disconnect", () => clearInterval(revocationCheck));
 
-    socket.on("chat:join", ({ conversationId }) => {
-      if (conversationId) {
+    socket.on("chat:join", (payload) => {
+      const conversationId = payload?.conversationId;
+      if (typeof conversationId === "string" && conversationId.length > 0 && conversationId.length <= 128) {
         socket.join(`chat:${conversationId}`);
       }
     });
 
-    socket.on("chat:leave", ({ conversationId }) => {
-      if (conversationId) {
+    socket.on("chat:leave", (payload) => {
+      const conversationId = payload?.conversationId;
+      if (typeof conversationId === "string" && conversationId.length > 0 && conversationId.length <= 128) {
         socket.leave(`chat:${conversationId}`);
       }
     });

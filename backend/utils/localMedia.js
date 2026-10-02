@@ -1,9 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { getPublicUploadsDir } from "./storagePaths.js";
 
-const backendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const publicUploadsDir = path.join(backendDir, "uploads");
+const publicUploadsDir = getPublicUploadsDir();
 const vehicleUploadDir = path.join(publicUploadsDir, "vehicles");
 
 export const VEHICLE_MEDIA_PREFIX = "uploads/vehicles/";

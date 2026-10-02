@@ -14,16 +14,16 @@ import eventBus from "../events/eventBus.js";
 import { NOTIFICATION_EVENTS } from "../events/notification.events.js";
 import { emitToUser } from "../socket/index.js";
 import {
-  createPayMongoCheckoutSession,
-  getPayMongoCheckoutAmountInCentavos,
   getPayMongoCheckoutId,
   getPayMongoCheckoutMetadata,
   getPayMongoCheckoutReferenceNumber,
   getPayMongoCheckoutSession,
   getPayMongoCheckoutUrl,
-  getPayMongoPaymentIntentId,
   isPayMongoCheckoutPaid,
 } from "../utils/paymongo.js";
+import {
+  acquirePaymentCheckoutLock, applyCapturedBookingCheckout, getOrCreateBookingCheckout,
+} from "../services/bookingPayment.service.js";
 import { getTransactionFee } from "../utils/fees.js";
 import { syncVehicleAvailabilityByBookingState } from "../utils/vehicleAvailability.js";
 import { normalizePhilippineMobile } from "../utils/phone.js";
@@ -130,7 +130,6 @@ const buildReferenceNumber = (bookingId) => {
 
 const DOWNPAYMENT_RATE = 0.3;
 const MIN_SAME_DAY_RENTAL_MS = 60 * 60 * 1000;
-const PAYMENT_AMOUNT_EPSILON = 0.01;
 const PAYMENT_SCOPES = new Set(["downpayment", "full"]);
 const PAYMENT_CHANNELS = new Set(["ewallet", "card"]);
 const PAYMENT_CHANNEL_METHOD_TYPES = {
@@ -318,17 +317,6 @@ const hasVerifiedCheckoutId = (booking, checkoutId) => {
   const normalizedId = normalizeIdText(checkoutId);
   if (!normalizedId) return false;
   return getVerifiedCheckoutIds(booking).includes(normalizedId);
-};
-
-const appendVerifiedCheckoutId = (booking, checkoutId) => {
-  const normalizedId = normalizeIdText(checkoutId);
-  if (!normalizedId) return;
-  const existing = getVerifiedCheckoutIds(booking);
-  if (existing.includes(normalizedId)) {
-    booking.paymongoVerifiedCheckoutIds = existing;
-    return;
-  }
-  booking.paymongoVerifiedCheckoutIds = [...existing, normalizedId];
 };
 
 const resetWalkInPaymentState = (booking, { clearBalancePaymentMethod = true } = {}) => {
@@ -1313,13 +1301,17 @@ export const requestBookingReturn = async (req, res) => {
 export const proceedBookingLateReturn = requestBookingReturn;
 
 export const createBookingPayment = async (req, res) => {
+  let releaseCheckoutLock;
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(
+    let booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).select("+paymentCheckoutAttempt").populate(
       bookingPopulate
     );
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
+    releaseCheckoutLock = await acquirePaymentCheckoutLock(booking._id, req.user._id);
+    booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).select("+paymentCheckoutAttempt").populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
     await syncBookingLifecycleState(req, booking, { emitUpdate: false });
     const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
     if (!["unpaid", "partial"].includes(normalizedPaymentStatus)) {
@@ -1440,7 +1432,7 @@ export const createBookingPayment = async (req, res) => {
       phone: renterPhone,
     };
 
-    const checkoutSession = await createPayMongoCheckoutSession({
+    const { checkout: checkoutSession } = await getOrCreateBookingCheckout(booking, {
       amountInCentavos,
       itemName,
       description,
@@ -1461,6 +1453,7 @@ export const createBookingPayment = async (req, res) => {
         totalPayable,
         remainingAmount,
         transactionFee: Number(getEffectiveTransactionFee(booking) || 0),
+        manualPaymentRevision: Number(booking.manualPaymentRevision || 0),
       },
     });
 
@@ -1472,20 +1465,6 @@ export const createBookingPayment = async (req, res) => {
         message: "Failed to create payment checkout URL.",
       });
     }
-
-    booking.paymentMethod = "PayMongo";
-    resetWalkInPaymentState(booking);
-    booking.paymongoReference = getPayMongoCheckoutReferenceNumber(checkoutSession) || referenceNumber;
-    booking.paymongoCheckoutId = checkoutId;
-    booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
-    booking.paymentScope = effectiveScope;
-    booking.paymentChannel = requestedChannel;
-    booking.paymentCheckoutAmount = amountToCharge;
-    booking.paymentAmountPaid = paidAmount;
-    booking.paymentAmountDue = remainingAmount;
-    booking.paymentRequestedAt = new Date();
-    booking.paymentUpdatedAt = new Date();
-    await booking.save();
 
     const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
     const payload = serializeBooking(req, refreshed);
@@ -1511,6 +1490,9 @@ export const createBookingPayment = async (req, res) => {
       booking: payload,
     });
   } catch (error) {
+    if (!error?.isPayMongoError && error?.statusCode) {
+      return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+    }
     if (error?.isPayMongoError) {
       logPayMongoError("Checkout session creation failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;
@@ -1521,6 +1503,8 @@ export const createBookingPayment = async (req, res) => {
     }
     console.error("[Booking Payment] Checkout session creation failed", error);
     return res.status(500).json({ success: false, message: "Failed to create booking payment." });
+  } finally {
+    await releaseCheckoutLock?.();
   }
 };
 
@@ -1573,7 +1557,6 @@ const autoSyncBookingPaymentFromPayMongo = async (booking) => {
   try {
     const checkoutSession = await getPayMongoCheckoutSession(checkoutId);
     const sessionCheckoutId = getPayMongoCheckoutId(checkoutSession) || checkoutId;
-    const sessionReferenceNumber = getPayMongoCheckoutReferenceNumber(checkoutSession);
     const sessionMetadata = getPayMongoCheckoutMetadata(checkoutSession);
 
     if (!doesCheckoutMetadataMatchBooking(booking, sessionMetadata)) {
@@ -1584,50 +1567,15 @@ const autoSyncBookingPaymentFromPayMongo = async (booking) => {
       return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
     }
 
-    const sessionAmountInCentavos = getPayMongoCheckoutAmountInCentavos(checkoutSession);
-    const sessionAmount = roundCurrency(Number(sessionAmountInCentavos) / 100);
-    if (
-      !Number.isFinite(sessionAmountInCentavos) ||
-      sessionAmountInCentavos <= 0 ||
-      !Number.isFinite(sessionAmount) ||
-      sessionAmount <= 0
-    ) {
-      return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
+    const result = await applyCapturedBookingCheckout(booking, checkoutSession);
+    if (result.booking !== booking) {
+      const updated = result.booking.toObject ? result.booking.toObject() : result.booking;
+      for (const [key, value] of Object.entries(updated)) {
+        if (!["vehicle", "renter", "owner"].includes(key)) booking[key] = value;
+      }
+      if (booking.$locals) booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
     }
-
-    const totalPayable = getBookingPayableAmount(booking);
-    const paidBefore = getBookingPaidAmount(booking);
-    const remainingBefore = roundCurrency(Math.max(totalPayable - paidBefore, 0));
-    if (sessionAmount > roundCurrency(remainingBefore + PAYMENT_AMOUNT_EPSILON)) {
-      return { updated: false, paymentStatus: String(booking?.paymentStatus || "").toLowerCase() };
-    }
-
-    const paidAfter = Math.min(totalPayable, roundCurrency(paidBefore + sessionAmount));
-    const remainingAfter = roundCurrency(Math.max(totalPayable - paidAfter, 0));
-
-    booking.paymentMethod = "PayMongo";
-    booking.paymongoCheckoutId = sessionCheckoutId;
-    booking.paymongoReference = sessionReferenceNumber || booking.paymongoReference;
-    booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
-    booking.paymentAmountPaid = paidAfter;
-    booking.paymentAmountDue = remainingAfter;
-    booking.paymentCheckoutAmount = 0;
-    booking.paymentUpdatedAt = new Date();
-
-    if (remainingAfter <= 0) {
-      booking.paymentStatus = "paid";
-      booking.paidAt = booking.paidAt || new Date();
-    } else {
-      booking.paymentStatus = "partial";
-      booking.paidAt = null;
-    }
-
-    resetWalkInPaymentState(booking);
-    appendVerifiedCheckoutId(booking, sessionCheckoutId);
-
-    await booking.save();
-
-    return { updated: true, paymentStatus: String(booking.paymentStatus || "").toLowerCase() };
+    return { updated: result.updated, paymentStatus: String(result.booking.paymentStatus || "").toLowerCase() };
   } catch (error) {
     if (error?.isPayMongoError) {
       logPayMongoError("Automatic payment sync failed", error);
@@ -1644,6 +1592,16 @@ const emitBookingUpdateToParties = (req, booking) => {
   if (ownerId) emitToUser(ownerId, "booking:updated", payload);
   if (renterId) emitToUser(renterId, "booking:updated", payload);
 };
+
+export async function notifyBookingPaymentRecorded(req, bookingId) {
+  const booking = await Booking.findById(bookingId).populate(bookingPopulate);
+  if (!booking) return;
+  const { ownerId, renterId } = getBookingParties(booking);
+  eventBus.emit(NOTIFICATION_EVENTS.PAYMENT_RECEIVED, {
+    booking, actor: req.user, ownerId, renterId, paymentStatus: booking.paymentStatus,
+  });
+  emitBookingUpdateToParties(req, booking);
+}
 
 const syncBookingLifecycleState = async (req, booking, { emitUpdate = false } = {}) => {
   if (!booking?._id) return { updated: false };
@@ -1862,11 +1820,11 @@ export const verifyBookingPayment = async (req, res) => {
         message: "Booking payment can only be verified for approved, extended, or completed bookings.",
       });
     }
-    let isPaid = wasPaid;
+    let isPaid = wasPaid && hasVerifiedCheckoutId(booking, req.body?.checkoutId || booking.paymongoCheckoutId);
     let checkoutStatus = "";
     let verificationApplied = false;
 
-    if (!wasPaid) {
+    if (!wasPaid || (!isPaid && req.body?.checkoutId)) {
       const checkoutIdInput = String(req.body?.checkoutId || "").trim();
       const storedCheckoutId = String(booking.paymongoCheckoutId || "").trim();
       const checkoutId = checkoutIdInput || storedCheckoutId;
@@ -1882,7 +1840,6 @@ export const verifyBookingPayment = async (req, res) => {
       const sessionCheckoutId = getPayMongoCheckoutId(checkoutSession);
       const sessionReferenceNumber = getPayMongoCheckoutReferenceNumber(checkoutSession);
       const sessionMetadata = getPayMongoCheckoutMetadata(checkoutSession);
-      const sessionAmountInCentavos = getPayMongoCheckoutAmountInCentavos(checkoutSession);
 
       const expectedBookingId = String(booking._id || "");
       const expectedRenterId = String(booking.renter?._id || booking.renter || "");
@@ -1919,76 +1876,8 @@ export const verifyBookingPayment = async (req, res) => {
       }
 
       isPaid = isPayMongoCheckoutPaid(checkoutSession);
-      const normalizedSessionCheckoutId = sessionCheckoutId || checkoutId;
-      const alreadyVerifiedCheckout = hasVerifiedCheckoutId(booking, normalizedSessionCheckoutId);
-
-      booking.paymentMethod = "PayMongo";
-      booking.paymongoCheckoutId = normalizedSessionCheckoutId || booking.paymongoCheckoutId;
-      booking.paymongoReference = sessionReferenceNumber || booking.paymongoReference;
-      booking.paymentIntentId = getPayMongoPaymentIntentId(checkoutSession) || booking.paymentIntentId;
-      booking.paymentUpdatedAt = new Date();
-
-      if (isPaid && !alreadyVerifiedCheckout) {
-        const configuredCheckoutAmount = roundCurrency(Number(booking.paymentCheckoutAmount || 0));
-        const metadataPaymentAmount = roundCurrency(Number(sessionMetadata?.paymentAmount || 0));
-        const fallbackCheckoutAmount =
-          String(booking.paymentStatus || "").toLowerCase() === "partial"
-            ? getBookingRemainingAmount(booking)
-            : getBookingPayableAmount(booking);
-        const candidateAmounts = [configuredCheckoutAmount, metadataPaymentAmount, fallbackCheckoutAmount].filter(
-          (amount) => Number.isFinite(amount) && amount > 0
-        );
-        const sessionAmount = roundCurrency(Number(sessionAmountInCentavos) / 100);
-        let resolvedCheckoutAmount = candidateAmounts.find(
-          (amount) => Math.abs(amount - sessionAmount) <= PAYMENT_AMOUNT_EPSILON
-        );
-        if (!resolvedCheckoutAmount && metadataMatchesExpected) {
-          resolvedCheckoutAmount = sessionAmount;
-        }
-
-        if (
-          !Number.isFinite(sessionAmountInCentavos) ||
-          sessionAmountInCentavos <= 0 ||
-          !Number.isFinite(sessionAmount) ||
-          sessionAmount <= 0 ||
-          !resolvedCheckoutAmount
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Payment amount does not match this booking.",
-          });
-        }
-
-        const totalPayable = getBookingPayableAmount(booking);
-        const paidBefore = getBookingPaidAmount(booking);
-        const remainingBefore = roundCurrency(Math.max(totalPayable - paidBefore, 0));
-        if (sessionAmount > roundCurrency(remainingBefore + PAYMENT_AMOUNT_EPSILON)) {
-          return res.status(409).json({
-            success: false,
-            message: "This payment has already been applied or exceeds the remaining balance.",
-          });
-        }
-
-        const paidAfter = Math.min(totalPayable, roundCurrency(paidBefore + resolvedCheckoutAmount));
-        const remainingAfter = roundCurrency(Math.max(totalPayable - paidAfter, 0));
-
-        booking.paymentAmountPaid = paidAfter;
-        booking.paymentAmountDue = remainingAfter;
-        booking.paymentCheckoutAmount = 0;
-
-        if (remainingAfter <= 0) {
-          booking.paymentStatus = "paid";
-          booking.paidAt = booking.paidAt || new Date();
-        } else {
-          booking.paymentStatus = "partial";
-          booking.paidAt = null;
-        }
-        resetWalkInPaymentState(booking);
-        appendVerifiedCheckoutId(booking, normalizedSessionCheckoutId);
-        verificationApplied = true;
-      }
-
-      await booking.save();
+      const result = await applyCapturedBookingCheckout(booking, checkoutSession);
+      verificationApplied = result.updated;
     }
 
     const refreshed = await Booking.findById(booking._id).populate(bookingPopulate);
@@ -2032,6 +1921,9 @@ export const verifyBookingPayment = async (req, res) => {
       message,
     });
   } catch (error) {
+    if (!error?.isPayMongoError && error?.statusCode) {
+      return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+    }
     if (error?.isPayMongoError) {
       logPayMongoError("Payment verification failed", error);
       const statusCode = error?.statusCode >= 400 && error?.statusCode < 600 ? error.statusCode : 502;

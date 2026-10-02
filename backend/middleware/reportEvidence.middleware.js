@@ -2,13 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { getReportEvidenceDir } from "../utils/storagePaths.js";
 import multer from "multer";
 
-const backendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const reportEvidenceDirectory = path.resolve(
-  process.env.REPORT_EVIDENCE_DIR || path.join(backendDirectory, "private_uploads", "reports")
-);
+export const reportEvidenceDirectory = getReportEvidenceDir();
 fs.mkdirSync(reportEvidenceDirectory, { recursive: true });
 
 const mimeExtensions = {

@@ -820,8 +820,9 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
       {
         _id: booking._id, owner: req.user._id, updatedAt: booking.updatedAt,
         manualPaymentRevision: booking.manualPaymentRevision || { $in: [0, null] },
+        paymentRevision: booking.paymentRevision || { $in: [0, null] },
       },
-      { $set: changes, $inc: { manualPaymentRevision: 1 } },
+      { $set: changes, $inc: { manualPaymentRevision: 1, paymentRevision: 1 } },
       { new: true, runValidators: true }
     ).populate(populateFields);
     if (!updated) {

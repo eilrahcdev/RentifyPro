@@ -25,6 +25,7 @@ import { verifyPreKycSession } from "../utils/preKycSession.js";
 import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
 import { hashAuthToken, revokeSessionToken } from "../utils/authTokenRevocation.js";
 import { disconnectSessionSockets } from "../socket/index.js";
+import { getAvatarUploadDir } from "../utils/storagePaths.js";
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const OTP_RESEND_COOLDOWN_SECONDS = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 45);
@@ -38,7 +39,7 @@ const LOGIN_CHALLENGE_TTL_MINUTES = Number(process.env.LOGIN_CHALLENGE_TTL_MINUT
 const LOGIN_CHALLENGE_MAX_ATTEMPTS = Number(process.env.LOGIN_CHALLENGE_MAX_ATTEMPTS || 5);
 const CLEAR_PREKYC_ON_REGISTER =
   String(process.env.PREKYC_CLEAR_ON_REGISTER || "").trim().toLowerCase() === "true";
-const AVATAR_UPLOAD_DIR = process.env.AVATAR_UPLOAD_DIR || path.resolve("uploads", "avatars");
+const AVATAR_UPLOAD_DIR = getAvatarUploadDir();
 const AVATAR_MAX_BYTES = Number(process.env.AVATAR_MAX_BYTES || 2 * 1024 * 1024);
 const AVATAR_MEDIA_PREFIX = "uploads/avatars/";
 

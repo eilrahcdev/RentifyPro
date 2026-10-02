@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { assertGeminiSensitiveDataAllowed } from "../utils/geminiDataPolicy.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import {
   ID_DOCUMENT_TYPES,
@@ -50,16 +51,31 @@ const summarizeGeminiError = (error) => [
   error?.code ? `code=${error.code}` : "",
 ].filter(Boolean).join(" | ");
 
-const toSafeGeminiError = (error) => {
+const toSafeGeminiError = (error, { timedOut = false } = {}) => {
   const detail = summarizeGeminiError(error);
   const isLimitError = /\b429\b|quota|rate[\s-]*limit|resource[\s-]*exhausted|too many requests/i.test(detail);
-  auditLog.error("KYC", "Gemini document extraction failed", { detail });
-  const safe = new Error(isLimitError
+  const providerStatus = Number(error?.status);
+  const status = timedOut ? 504
+    : Number.isInteger(providerStatus) && providerStatus >= 400 && providerStatus <= 599
+      ? providerStatus : isLimitError ? 429 : 503;
+  const retryable = [408, 429, 500, 502, 503, 504].includes(status);
+  auditLog.error("KYC", "Gemini document extraction failed", { detail, httpStatus: status, retryable });
+  const safe = new Error(status === 429
     ? "Document screening is temporarily busy. We will retry automatically."
-    : "Document screening is temporarily unavailable. We will send the document for manual review if retries do not succeed.");
-  safe.status = isLimitError ? 429 : 503;
+    : retryable
+      ? "Document screening is temporarily unavailable. We will send the document for manual review if retries do not succeed."
+      : "Automated screening is unavailable. A reviewer will check this document manually.");
+  safe.status = status;
+  safe.retryable = retryable;
+  if (timedOut) safe.code = "GEMINI_REQUEST_TIMEOUT";
   safe.publicMessage = safe.message;
   return safe;
+};
+
+const documentRequestTimeoutMs = () => {
+  const configured = Number(process.env.KYC_GEMINI_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 1 && configured <= 2_147_483_647
+    ? Math.floor(configured) : 30_000;
 };
 
 export const buildDocumentExtractionInstruction = ({ docType = "id" } = {}) => {
@@ -200,6 +216,13 @@ export async function verifyPhilippinesDocument({
   if (!apiKey) {
     const error = new Error("Gemini document extraction is not configured.");
     error.status = 503;
+    error.retryable = false;
+    throw error;
+  }
+  try {
+    assertGeminiSensitiveDataAllowed();
+  } catch (error) {
+    error.retryable = false;
     throw error;
   }
   if (!base64) {
@@ -232,11 +255,13 @@ export async function verifyPhilippinesDocument({
   // The selected type is intentionally validated here but never included in the model prompt.
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash-lite",
+    model: process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite",
     systemInstruction: buildDocumentExtractionInstruction({ docType }),
   });
 
   let result;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), documentRequestTimeoutMs());
   try {
     result = await model.generateContent({
       contents: [{
@@ -247,9 +272,11 @@ export async function verifyPhilippinesDocument({
         ],
       }],
       generationConfig: { responseMimeType: "application/json", temperature: 0 },
-    });
+    }, { signal: controller.signal });
   } catch (error) {
-    throw toSafeGeminiError(error);
+    throw toSafeGeminiError(error, { timedOut: controller.signal.aborted });
+  } finally {
+    clearTimeout(timeout);
   }
 
   const parsed = safeJsonParse(result?.response?.text?.() || "");

@@ -6,6 +6,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.pid
+*.pid.lock
+*.har
+*.heapsnapshot
 
 # Environment files (keep examples)
 .env
@@ -13,6 +17,24 @@ lerna-debug.log*
 !.env.example
 !.env.sample
 !.env.template
+
+# Local credentials and private keys
+.aws/
+.ssh/
+.npmrc
+.pypirc
+.netrc
+secrets/
+credentials/
+credentials.json
+service-account*.json
+*-service-account.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 # Node / JS dependencies
 node_modules/
@@ -41,6 +63,8 @@ coverage/
 .svelte-kit/
 .turbo/
 .parcel-cache/
+.cache/
+.vercel/
 
 # Python
 __pycache__/
@@ -57,6 +81,7 @@ venv/
 .coverage
 coverage.xml
 htmlcov/
+.deepface/
 
 # IDE / OS
 .vscode/
@@ -64,19 +89,38 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+*.orig
+*.rej
 
 # Local runtime data
 uploads/
 private_uploads/
-backend/backups/
+backups/
+storage/
 temp/
 tmp/
+*.bson
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # QA artifacts
 qa/
+playwright-report/
+test-results/
+blob-report/
+.nyc_output/
 
 # Local agent guidance, skills, and configuration
 RULES.md
+AGENTS.md
 DESIGN.md
 README-QUICK-TUNNEL.md
 .agents/

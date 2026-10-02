@@ -15,6 +15,7 @@ import { reconcileUserKyc, reviewKycDocument } from "../services/kycReview.servi
 import { isBirSupportingDocumentType, resolveSupportedDocumentType } from "../services/documentValidation.service.js";
 import { triggerKycDocumentProcessing } from "../jobs/kycDocumentProcessing.job.js";
 import { isIdentityReadyForSelfie, screeningProfileMatchesSnapshot } from "../utils/preKycDocs.js";
+import { getKycUploadDir } from "../utils/storagePaths.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 const getFaceServiceUrl = () => {
@@ -26,7 +27,7 @@ const INTERNAL_KEY = process.env.INTERNAL_API_KEY || "";
 const PRE_KYC_DOC_TTL_HOURS = Number(process.env.PREKYC_DOC_TTL_HOURS || 3);
 const PRE_KYC_FACE_TTL_HOURS = Number(process.env.PREKYC_FACE_TTL_HOURS || PRE_KYC_DOC_TTL_HOURS || 3);
 const MAX_KYC_IMAGE_BYTES = Number(process.env.KYC_IMAGE_MAX_BYTES || 4 * 1024 * 1024);
-const KYC_UPLOAD_DIR = process.env.KYC_UPLOAD_DIR || path.resolve("private_uploads", "kyc");
+const KYC_UPLOAD_DIR = getKycUploadDir();
 const DEFAULT_KYC_ERROR_MESSAGE = "We couldn't complete verification right now. Please try again.";
 
 const identitySelfieGateMessage = (document) => {
@@ -123,13 +124,16 @@ const queuePreKycDocument = async ({
   if (!normalizedEmail || !normalizedSessionId || !docType || !fileMeta?.fileHash) return null;
 
   const existing = await PreKycDocument.findOne({ email: normalizedEmail, docType })
-    .select("status fileHash sessionId selectedDocCategory +profileSnapshot");
+    .select("status reasonCode fileHash sessionId selectedDocCategory +profileSnapshot");
+  const screeningFailed = existing?.status === "pending_review"
+    && existing.reasonCode === "AUTOMATED_SCREENING_UNAVAILABLE";
   if (
     existing?.fileHash === fileMeta.fileHash &&
     existing.sessionId === normalizedSessionId &&
     existing.selectedDocCategory === String(selectedDocCategory || "").trim() &&
     screeningProfileMatchesSnapshot(existing.profileSnapshot, profileSnapshot) &&
     ["queued", "processing", "retry_wait", "pending_review", "verified"].includes(existing.status)
+    && !screeningFailed
   ) {
     return existing;
   }

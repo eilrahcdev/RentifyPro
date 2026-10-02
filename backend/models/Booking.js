@@ -398,6 +398,20 @@ const bookingSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    paymentCheckoutAttempt: {
+      type: new mongoose.Schema({
+        key: { type: String, required: true },
+        request: { type: mongoose.Schema.Types.Mixed, required: true },
+        createdAt: { type: Date, required: true },
+      }, { _id: false }),
+      default: null,
+      select: false,
+    },
+    paymentRevision: { type: Number, default: 0 },
+    paymentMutationToken: { type: String, select: false },
+    paymentMutationUntil: { type: Date, select: false },
+    paymentLastCheckedAt: { type: Date, default: null },
+    paymentCheckoutClosedAt: { type: Date, default: null },
     paymentIntentId: {
       type: String,
       trim: true,
@@ -442,6 +456,7 @@ const bookingSchema = new mongoose.Schema(
 // its old payment snapshot over the correction after an asynchronous operation.
 bookingSchema.post("init", function (booking) {
   booking.$locals.manualPaymentRevisionOnRead = Number(booking.manualPaymentRevision || 0);
+  booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
 });
 bookingSchema.pre("save", function () {
   if (this.isNew) return;
@@ -452,6 +467,12 @@ bookingSchema.pre("save", function () {
   if (!paymentFields.some((field) => this.isModified(field))) return;
   const revision = this.$locals.manualPaymentRevisionOnRead ?? Number(this.manualPaymentRevision || 0);
   this.$where = { ...this.$where, manualPaymentRevision: revision === 0 ? { $in: [0, null] } : revision };
+  const paymentRevision = this.$locals.paymentRevisionOnRead ?? Number(this.paymentRevision || 0);
+  this.$where.paymentRevision = paymentRevision === 0 ? { $in: [0, null] } : paymentRevision;
+  this.$inc("paymentRevision", 1);
+});
+bookingSchema.post("save", function (booking) {
+  booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
 });
 
 bookingSchema.index({ vehicle: 1, pickupAt: 1, returnAt: 1 });
@@ -466,6 +487,9 @@ bookingSchema.index({ owner: 1, status: 1, pickupAt: 1 });
 bookingSchema.index({ owner: 1, status: 1, updatedAt: -1 });
 bookingSchema.index({ owner: 1, updatedAt: -1 });
 bookingSchema.index({ paymentStatus: 1, createdAt: -1 });
+bookingSchema.index({ paymentLastCheckedAt: 1, _id: 1 }, {
+  name: "payment_reconciliation_queue", partialFilterExpression: { paymongoCheckoutId: { $type: "string" } },
+});
 bookingSchema.index({ vehicle: 1, status: 1, actualReturnAt: 1 });
 bookingSchema.index(
   { vehicle: 1, status: 1, reviewCreatedAt: -1 },

@@ -2,7 +2,10 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
-import mongoose from "mongoose";
+import { getHealth } from "./controllers/health.controller.js";
+import rateLimit from "express-rate-limit";
+import { receivePayMongoWebhook } from "./controllers/paymentWebhook.controller.js";
+import { startPaymentReconciliationJob, stopPaymentReconciliationJob } from "./jobs/paymentReconciliation.job.js";
 import cookieParser from "cookie-parser";
 import http from "http";
 import path from "path";
@@ -38,6 +41,8 @@ import { warmupFaceService } from "./utils/faceServiceManager.js";
 import { warmupChatbotService } from "./utils/chatbotServiceManager.js";
 import { createOriginChecker } from "./utils/corsOrigins.js";
 import { mountFrontendDist } from "./utils/mountFrontendDist.js";
+import { getAvatarUploadDir, getPublicUploadsDir } from "./utils/storagePaths.js";
+import { assertProductionConfiguration } from "./utils/productionConfig.js";
 import {
   startNotificationCleanupJob,
   stopNotificationCleanupJob,
@@ -62,7 +67,7 @@ const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 1);
 app.set("trust proxy", Number.isFinite(trustProxyHops) ? trustProxyHops : 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const backendUploadsDir = path.resolve(__dirname, "uploads");
+const backendUploadsDir = getPublicUploadsDir();
 const cwdUploadsDir = path.resolve(process.cwd(), "uploads");
 const serveFrontendDist = String(process.env.SERVE_FRONTEND_DIST || "").trim().toLowerCase() === "true";
 const chatbotUrl = process.env.CHATBOT_URL || "http://localhost:8001";
@@ -87,6 +92,11 @@ const allowPublicAvatarMedia = (_req, res, next) => {
 // Security headers
 app.use(securityHeaders);
 
+// Signature verification requires the original bytes, before JSON parsing and sanitization.
+app.post("/api/payments/paymongo/webhook",
+  rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false }),
+  express.raw({ type: "application/json", limit: "256kb" }), receivePayMongoWebhook);
+
 // CORS
 app.use(cors({
   origin: corsOriginHandler,
@@ -107,7 +117,10 @@ app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_
 app.use(cookieParser());
 // Only public vehicle and avatar media are exposed. Private KYC files are never static.
 app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(backendUploadsDir, "vehicles")));
-app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(backendUploadsDir, "avatars")));
+app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(getAvatarUploadDir()));
+if (getAvatarUploadDir() !== path.join(backendUploadsDir, "avatars")) {
+  app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(backendUploadsDir, "avatars")));
+}
 if (backendUploadsDir.toLowerCase() !== cwdUploadsDir.toLowerCase()) {
   app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(cwdUploadsDir, "vehicles")));
   app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(cwdUploadsDir, "avatars")));
@@ -148,15 +161,7 @@ if (!serveFrontendDist) {
   });
 }
 
-app.get("/api/health", (_req, res) => {
-  const states = { 0: "disconnected", 1: "connected", 2: "connecting", 3: "disconnecting" };
-  res.json({
-    success: true,
-    status: "running",
-    database: states[mongoose.connection.readyState],
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get("/api/health", getHealth);
 
 app.get("/api/face-service-health", async (_req, res) => {
   try {
@@ -198,6 +203,7 @@ httpServer.on("error", (error) => {
 });
 
 const startServer = async () => {
+  assertProductionConfiguration();
   await connectDB();
 
   server = httpServer.listen(PORT, () => {
@@ -216,6 +222,7 @@ const startServer = async () => {
   });
   startNotificationCleanupJob();
   startBookingLifecycleJob();
+  startPaymentReconciliationJob();
   startKycFileCleanupJob();
   startKycDocumentProcessingJob();
   startLogRetentionJob();
@@ -232,6 +239,7 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
   stopNotificationCleanupJob();
   stopBookingLifecycleJob();
+  stopPaymentReconciliationJob();
   stopKycFileCleanupJob();
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
@@ -247,6 +255,7 @@ process.on("SIGTERM", () => {
   console.log("SIGTERM received: closing server");
   stopNotificationCleanupJob();
   stopBookingLifecycleJob();
+  stopPaymentReconciliationJob();
   stopKycFileCleanupJob();
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
@@ -262,6 +271,7 @@ process.on("SIGINT", () => {
   console.log("SIGINT received: closing server");
   stopNotificationCleanupJob();
   stopBookingLifecycleJob();
+  stopPaymentReconciliationJob();
   stopKycFileCleanupJob();
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
