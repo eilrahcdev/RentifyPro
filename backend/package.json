@@ -15,6 +15,7 @@
     "db:migrate:session-revocations": "node scripts/migrate-session-revocation-indexes.js",
     "db:migrate:payments": "node scripts/migrate-payment-indexes.js",
     "db:migrate:local": "node scripts/migrate-mongo-to-local.js",
+    "db:migrate:atlas": "node scripts/migrate-local-to-atlas.js",
     "services:check": "node scripts/check-external-services.js",
     "production:check": "node scripts/check-production-readiness.js",
     "test:payment-mongo": "node scripts/check-payment-mongo.js"
@@ -40,5 +41,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
+  },
+  "engines": {
+  "node": ">=20.19.0"
   }
 }

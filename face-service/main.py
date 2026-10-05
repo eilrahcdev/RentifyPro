@@ -848,6 +848,9 @@ async def post_kyc_selfie_verify(req: KycSelfieVerifyRequest):
 
 
 # Health check
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 @app.get("/")
 async def root():

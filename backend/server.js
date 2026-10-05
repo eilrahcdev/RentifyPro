@@ -166,7 +166,7 @@ app.get("/api/health", getHealth);
 app.get("/api/face-service-health", async (_req, res) => {
   try {
     const axios = (await import("axios")).default;
-    const url = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+    const url = process.env.FACE_SERVICE_URL || "http://localhost:8010";
     const { data } = await axios.get(`${url}/`, { timeout: 5000 });
     res.json({ success: true, faceService: data });
   } catch (err) {
