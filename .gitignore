@@ -126,3 +126,5 @@ README-QUICK-TUNNEL.md
 .agents/
 .codex/
 .impeccable/
+
+/backend-deploy*.zip

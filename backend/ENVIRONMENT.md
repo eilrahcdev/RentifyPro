@@ -54,6 +54,21 @@ Use a complete SMTP credential pair from one provider. The existing implementati
 
 `CHATBOT_DATASET_PATH` appears in a regression test that confirms the backend ignores this old override. It is not a supported backend setting and is not included in the template.
 
+## Chatbot metadata in backend-only deployments
+
+The backend loads its chatbot metadata from `data/chatbot/chatbot_config.json` and `data/chatbot/rentifypro_chatbot_dataset_v6.json`, relative to the backend module location. These files must be included in the backend App Service deployment. They are byte-for-byte copies of the Python service's current source files; the Node backend keeps its existing v6 schema checks, response validation, guardrails, and multilingual behavior.
+
+After editing either source file in `chatbot-service/`, run these commands from `backend/` before packaging or deploying:
+
+```powershell
+npm.cmd run chatbot:assets:sync
+npm.cmd run chatbot:assets:check
+```
+
+The sync command validates both source JSON files before copying them. The check command is read-only and fails if either backend copy is missing or differs. The automated suite also checks synchronization when the full repository is available, and tests runtime loading in an isolated `wwwroot` directory without a sibling Python service.
+
+Synchronization is a development/release step and does not run at App Service startup. The deployed backend needs only its own copies, not the Python application or its source directory. `CHATBOT_URL` and `CHATBOT_SERVICE_AUTOSTART` retain their existing behavior; Azure should continue using the external HTTPS classifier URL and `CHATBOT_SERVICE_AUTOSTART=false`. No new environment variables are required or introduced, and the old `CHATBOT_DATASET_PATH` override remains ignored.
+
 ## Variables added to the example
 
 The original example had 38 variables. All 38 remain documented; the following 69 were added. Defaults, secret placeholders, inheritance rules, units, and optional overrides are recorded beside their assignments in `.env.example`.
