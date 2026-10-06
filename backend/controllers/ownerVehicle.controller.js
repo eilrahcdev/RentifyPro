@@ -223,7 +223,7 @@ export const createOwnerVehicle = async (req, res) => {
       dailyRentalRate: toNumeric(req.body.dailyRentalRate, 0),
       pricingUnit: HOURLY_RATE_UNIT,
       lateReturnFeeType: req.body.lateReturnFeeType,
-      lateReturnFeeValue: toNumeric(req.body.lateReturnFeeValue, 25),
+      lateReturnFeeValue: toNumeric(req.body.lateReturnFeeValue, 0),
       lateReturnGraceMinutes: toNumeric(req.body.lateReturnGraceMinutes, 0),
       location: req.body.location.trim(),
       availabilityStatus: req.body.availabilityStatus,
@@ -262,7 +262,7 @@ export const updateOwnerVehicle = async (req, res) => {
       vehicle.lateReturnFeeType = req.body.lateReturnFeeType;
     }
     if (req.body.lateReturnFeeValue !== undefined) {
-      vehicle.lateReturnFeeValue = toNumeric(req.body.lateReturnFeeValue, vehicle.lateReturnFeeValue ?? 25);
+      vehicle.lateReturnFeeValue = toNumeric(req.body.lateReturnFeeValue, vehicle.lateReturnFeeValue ?? 0);
     }
     if (req.body.lateReturnGraceMinutes !== undefined) {
       vehicle.lateReturnGraceMinutes = toNumeric(

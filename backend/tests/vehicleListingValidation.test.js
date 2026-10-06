@@ -7,6 +7,22 @@ import { validateVehicleCreate, validateVehicleUpdate } from "../middleware/vali
 const valid = () => ({ name: "Honda Civic RS", description: "A clean, comfortable sedan with air conditioning and room for four passengers.", location: "Dagupan City, Pangasinan", specType: "car", specSubType: "Sedan", specSeats: 5, specTransmission: "Automatic", specFuel: "Gasoline", specPlateNumber: "ABC-1234", dailyRentalRate: "250.50", driverOptionEnabled: false, lateReturnFeeType: "percentage", lateReturnFeeValue: "25", lateReturnGraceMinutes: "0" });
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
 
+test("vehicle creation without an owner late-return policy defaults to zero", async () => {
+  const body = valid();
+  body.approvedImageIds = '["507f1f77bcf86cd799439099"]';
+  delete body.lateReturnFeeType;
+  delete body.lateReturnFeeValue;
+  delete body.lateReturnGraceMinutes;
+  const req = { body, files: [] };
+  const res = response();
+  let called = false;
+  await validateVehicleCreate(req, res, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(req.body.lateReturnFeeType, "percentage");
+  assert.equal(req.body.lateReturnFeeValue, 0);
+  assert.equal(req.body.lateReturnGraceMinutes, 0);
+});
+
 test("frontend and backend agree on field limits, decimals, enums, and meaningful text", () => {
   assert.deepEqual(validateListingFields(valid()), {});
   for (const patch of [

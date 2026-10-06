@@ -366,7 +366,7 @@ const sanitizeVehicleBody = (req, { isUpdate = false } = {}) => {
   }
 
   if (!isUpdate && !hasOwn(req.body, "lateReturnFeeValue")) {
-    req.body.lateReturnFeeValue = 25;
+    req.body.lateReturnFeeValue = 0;
   }
   if (!isUpdate && !hasOwn(req.body, "lateReturnGraceMinutes")) {
     req.body.lateReturnGraceMinutes = 0;

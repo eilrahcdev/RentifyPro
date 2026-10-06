@@ -212,7 +212,7 @@ const startServer = async () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`  Server:       http://localhost:${PORT}`);
   console.log(`  Health:       http://localhost:${PORT}/api/health`);
-  console.log(`  Face Service: ${process.env.FACE_SERVICE_URL || "http://localhost:8000"}`);
+  console.log(`  Face Service: ${process.env.FACE_SERVICE_URL || "http://localhost:8010"}`);
   console.log(`  Chatbot:      ${chatbotUrl}`);
   warmupFaceService();
   warmupChatbotService();

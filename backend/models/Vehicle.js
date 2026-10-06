@@ -74,7 +74,7 @@ const vehicleSchema = new mongoose.Schema(
     lateReturnFeeValue: {
       type: Number,
       min: [0, "Late-return fee value must be zero or greater."],
-      default: 25,
+      default: 0,
     },
     lateReturnGraceMinutes: {
       type: Number,
