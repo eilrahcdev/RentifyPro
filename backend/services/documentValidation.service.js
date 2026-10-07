@@ -161,6 +161,35 @@ const textMatches = (expected, actual) => {
   return expectedTokens.length > 0 && expectedTokens.every((token) => actualTokens.has(token));
 };
 
+export const compareDocumentRegistration = ({ docType = "id", profile = {}, data = {}, documentType = "" } = {}) => {
+  const isBirSupporting = docType === "supporting" && isBirSupportingDocumentType(documentType);
+  const optionalReference = docType === "supporting" && OPTIONAL_REFERENCE_TYPES.has(documentType);
+  const expectedBirthDate = normalizeDate(profile.date_of_birth || profile.birth_date);
+  const nameMatches = docType === "id"
+    ? namesMatch(profile, data.full_name)
+    : clean(profile.business_name)
+      ? textMatches(profile.business_name, data.business_name)
+      : namesMatch(profile, data.full_name);
+  const birthDateMatches = docType !== "id" || !expectedBirthDate
+    ? null : Boolean(normalizeDate(data.birth_date) && expectedBirthDate === normalizeDate(data.birth_date));
+  const expectedPermit = normalizeIdentifier(profile.permit_number);
+  const extractedPermit = normalizeIdentifier(data.permit_number || data.document_number);
+  const expectedTin = normalizeIdentifier(profile.tax_identification_number);
+  const expectedBranch = normalizeIdentifier(profile.branch_code);
+  const permitNumberMatches = docType !== "supporting"
+    || (isBirSupporting
+      ? Boolean(expectedTin && expectedBranch
+        && normalizeIdentifier(data.tax_identification_number) === expectedTin
+        && normalizeIdentifier(data.branch_code) === expectedBranch)
+      : optionalReference && !expectedPermit ? true
+        : Boolean(expectedPermit && extractedPermit && expectedPermit === extractedPermit));
+  const mismatchFields = [];
+  if (!nameMatches) mismatchFields.push(docType === "id" ? "Name" : "Registered name");
+  if (birthDateMatches === false) mismatchFields.push("Date of birth");
+  if (!permitNumberMatches) mismatchFields.push(isBirSupporting ? "TIN or branch code" : "Permit or registration number");
+  return { nameMatches, birthDateMatches, permitNumberMatches, mismatchFields };
+};
+
 const isExpired = (value, now = new Date()) => {
   const normalized = normalizeDate(value);
   if (!normalized) return false;
@@ -439,28 +468,9 @@ export const evaluateDocumentExtraction = ({
       reasonCode: DOCUMENT_REASON_CODES.REGISTRATION_DATA_INCOMPLETE,
     });
   }
-  const nameMatches = docType === "id"
-    ? namesMatch(profile, data.full_name)
-    : clean(profile.business_name)
-      ? textMatches(profile.business_name, data.business_name)
-      : namesMatch(profile, data.full_name);
-  const birthDateMatches = docType !== "id" || !expectedBirthDate
-    ? null
-    : Boolean(extractedBirthDate && expectedBirthDate === extractedBirthDate);
-  const expectedPermit = normalizeIdentifier(profile.permit_number);
-  const extractedPermit = normalizeIdentifier(data.permit_number || data.document_number);
-  const expectedTin = normalizeIdentifier(profile.tax_identification_number);
-  const expectedBranch = normalizeIdentifier(profile.branch_code);
-  const permitNumberMatches = docType !== "supporting"
-    || (isBirSupporting
-      ? Boolean(expectedTin && expectedBranch && extractedTin === expectedTin && extractedBranch === expectedBranch)
-      : optionalReference && !expectedPermit
-        ? true
-        : Boolean(expectedPermit && extractedPermit && expectedPermit === extractedPermit));
-  const mismatchFields = [];
-  if (!nameMatches) mismatchFields.push(docType === "id" ? "Name" : "Registered name");
-  if (birthDateMatches === false) mismatchFields.push("Date of birth");
-  if (!permitNumberMatches) mismatchFields.push(isBirSupporting ? "TIN or branch code" : "Permit or registration number");
+  const { nameMatches, birthDateMatches, permitNumberMatches, mismatchFields } = compareDocumentRegistration({
+    docType, profile, data, documentType: detectedCanonical,
+  });
   checks.nameMatches = nameMatches;
   checks.birthDateMatches = birthDateMatches;
   checks.permitNumberMatches = permitNumberMatches;

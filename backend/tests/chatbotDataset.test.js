@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import datasetV6 from "../../chatbot-service/rentifypro_chatbot_dataset_v6.json" with { type: "json" };
+import datasetV6 from "../data/chatbot/rentifypro_chatbot_dataset_v6.json" with { type: "json" };
 
 import {
   applyChatbotGuardrails,

@@ -25,7 +25,7 @@ Set at least:
 - `MONGO_AUTO_INDEX=false` (run schema/index changes through reviewed migrations)
 - `STORAGE_ROOT=/var/data/rentifypro` on a mounted persistent disk for one backend instance
 - `STORAGE_DURABILITY_CONFIRMED=true` only after verifying the disk mount and persistence
-- `GEMINI_SENSITIVE_DATA_APPROVED=true` only after confirming the key's billing-enabled project and applicable sensitive-data terms
+- `GEMINI_SENSITIVE_DATA_APPROVED=false` blocks sensitive Gemini KYC. Use manual review, or deploy the separate private OCR service and configure `KYC_DOCUMENT_PROVIDER=private_ocr`, its owned HTTPS `KYC_PRIVATE_SERVICE_URL`, and a shared explicit document-fingerprint secret as described in [backend configuration](../backend/ENVIRONMENT.md#private-document-extraction). Enable Gemini only after confirming the key's billing-enabled project and applicable sensitive-data terms.
 - `BACKEND_PUBLIC_URL=https://<your-render-backend-domain>`
 - `PAYMONGO_SECRET_KEY=<private-live-key>`
 - `PAYMONGO_WEBHOOK_SECRET=<secret-for-the-registered-endpoint>`

@@ -1,10 +1,14 @@
 import PreKycDocument from "../models/PreKycDocument.js";
+import { hasCurrentManualDocumentComparison } from "../services/manualDocumentComparison.js";
+import { hasCurrentPrivateAutomatedMatch } from "../services/privateDocumentLayout.service.js";
 
 const SELFIE_READY_DOCUMENT_STATUSES = new Set(["pending_review", "verified"]);
 
 export const isIdentityReadyForSelfie = (document) => document?.docType === "id"
-  && document.detailsMatched === true
-  && SELFIE_READY_DOCUMENT_STATUSES.has(document.status);
+  && SELFIE_READY_DOCUMENT_STATUSES.has(document.status)
+  && (hasCurrentPrivateAutomatedMatch(document) || (document.detailsMatched === true
+    && (document.status === "verified" || !["private-ocr", "manual"].includes(document.provider)
+      || hasCurrentManualDocumentComparison(document))));
 
 export const isVerifiedPreKycDocument = (document) => document?.status === "verified"
   && (document.docType !== "id" || document.detailsMatched === true);

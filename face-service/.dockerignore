@@ -1,0 +1,12 @@
+# Exclude all files and folders, including:
+# - .env files, backups, credentials, and private keys
+# - venv/.venv, Python bytecode, and caches
+# - tests, coverage reports, logs, and generated files
+# - Git metadata, editor settings, and local model weights
+**
+
+# Include only the files needed by this service's Dockerfile.
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!main.py    

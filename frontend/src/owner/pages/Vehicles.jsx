@@ -29,7 +29,7 @@ const createInitialForm = () => ({
   description: "",
   dailyRentalRate: "",
   lateReturnFeeType: "percentage",
-  lateReturnFeeValue: "25",
+  lateReturnFeeValue: "0",
   lateReturnGraceMinutes: "0",
   location: "",
   availabilityStatus: "available",
@@ -71,7 +71,7 @@ const formatCurrency = (value) => `\u20b1${Number(value || 0).toLocaleString("en
 const formatLateReturnPolicy = (source = {}) => {
   const policy = source.lateReturnPolicy || source;
   const feeType = policy.feeType || source.lateReturnFeeType || "percentage";
-  const value = Number(policy.value ?? source.lateReturnFeeValue ?? 25);
+  const value = Number(policy.value ?? source.lateReturnFeeValue ?? 0);
   const graceMinutes = Number(policy.graceMinutes ?? source.lateReturnGraceMinutes ?? 0);
   const feeLabel = feeType === "fixed_hourly" ? `${formatCurrency(value)} / overdue hour` : `${value}% of hourly rate`;
   return `${feeLabel} after ${graceMinutes} minute${graceMinutes === 1 ? "" : "s"} grace`;
@@ -1144,7 +1144,7 @@ function Vehicles() {
       description: vehicle.description || "",
       dailyRentalRate: String(vehicle.dailyRentalRate ?? ""),
       lateReturnFeeType: vehicle.lateReturnPolicy?.feeType || vehicle.lateReturnFeeType || "percentage",
-      lateReturnFeeValue: String(vehicle.lateReturnPolicy?.value ?? vehicle.lateReturnFeeValue ?? 25),
+      lateReturnFeeValue: String(vehicle.lateReturnPolicy?.value ?? vehicle.lateReturnFeeValue ?? 0),
       lateReturnGraceMinutes: String(vehicle.lateReturnPolicy?.graceMinutes ?? vehicle.lateReturnGraceMinutes ?? 0),
       location: vehicle.location || "",
       availabilityStatus: vehicle.availabilityStatus || "available",

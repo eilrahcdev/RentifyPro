@@ -142,6 +142,9 @@ function RegisterForm({
 
   const [kycUi, setKycUi] = useState({ statusText: "" });
   const [documentReviewStatus, setDocumentReviewStatus] = useState("not_uploaded");
+  const [idRevision, setIdRevision] = useState("");
+  const [reviewingId, setReviewingId] = useState(false);
+  const identityHeadingRef = useRef(null);
   const idPreviewUrl = useMemo(
     () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
     [kyc.idCardFile]
@@ -157,6 +160,7 @@ function RegisterForm({
         : !kyc.selfieVerified
           ? "selfie"
           : "complete";
+  const showingSelfie = !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
   const handleIdStatus = useCallback((status, document) => {
     setDocumentReviewStatus(status);
     const ready = document?.identityReadyForSelfie === true;
@@ -169,7 +173,7 @@ function RegisterForm({
       };
     });
     if (ready) {
-      setKycUi((previous) => ({ ...previous, statusText: "ID details matched. You can now take your selfie." }));
+      setKycUi((previous) => ({ ...previous, statusText: "" }));
     } else if (!["queued", "processing", "retry_wait"].includes(status)) {
       setKycUi((previous) => ({ ...previous, statusText: "" }));
     }
@@ -178,6 +182,9 @@ function RegisterForm({
 
   // Page state
   const [step, setStep] = useState(1);
+  useEffect(() => {
+    if (step === 4) identityHeadingRef.current?.focus();
+  }, [step, showingSelfie]);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [stepErrors, setStepErrors] = useState({});
@@ -474,6 +481,8 @@ function RegisterForm({
       ...(field === "password" ? { confirmPassword: "" } : {}),
     }));
     if (["firstName", "lastName", "email", "dateOfBirth", "gender"].includes(field)) {
+      setDocumentReviewStatus("not_uploaded");
+      setIdRevision("");
       setKyc((prev) => ({
         ...prev,
         idRegistered: false,
@@ -593,6 +602,7 @@ function RegisterForm({
     });
     setKycUi((p) => ({ ...p, statusText: "" }));
     setDocumentReviewStatus("not_uploaded");
+    setIdRevision("");
     setStepErrors({});
   }, []);
 
@@ -687,6 +697,11 @@ function RegisterForm({
     }
     if (step === 2 && !validateAboutStep()) return;
     if (step === 3 && !validateLocationStep()) return;
+    if (step === 4 && reviewingId && kyc.idRegistered && kyc.idReadyForSelfie) {
+      setReviewingId(false);
+      setStepErrors({});
+      return;
+    }
     if (step === 4 && !validateIdentityStep()) return;
     setStep((current) => Math.min(TOTAL_STEPS, current + 1));
   };
@@ -697,6 +712,10 @@ function RegisterForm({
     setSuccessMessage("");
     setStepErrors({});
     setErrors({});
+    if (step === 4 && showingSelfie) {
+      setReviewingId(true);
+      return;
+    }
     setStep((s) => Math.max(1, s - 1));
   };
 
@@ -714,6 +733,7 @@ function RegisterForm({
       return;
     }
     setIsLoading(true);
+    setReviewingId(false);
     setKycUi((p) => ({ ...p, statusText: "Uploading ID securely..." }));
     try {
       await validateDocumentImageFile(kyc.idCardFile);
@@ -738,9 +758,10 @@ function RegisterForm({
         selfieDataUrl: "",
         selfieBase64Clean: "",
       }));
-      setDocumentReviewStatus("queued");
+      setDocumentReviewStatus(result.documentStatus || "queued");
+      setIdRevision(result.documentRevision || "");
       setStepErrors((p) => ({ ...p, idType: "", idRegistered: "" }));
-      setKycUi((p) => ({ ...p, statusText: "ID uploaded. We are checking that its personal details match your registration." }));
+      setKycUi((p) => ({ ...p, statusText: "" }));
     } catch (e) {
       const msg = friendlyError(e.message);
       setStepErrors((p) => ({ ...p, idRegistered: msg }));
@@ -1018,6 +1039,16 @@ function RegisterForm({
 
   // Render
 
+  const documentReviewNotice = <PreKycReviewNotice
+    key={`${idRevision}:${kyc.idRegistered}`}
+    email={form.email}
+    enabled={kyc.idRegistered}
+    idRevision={idRevision}
+    onIdStatus={handleIdStatus}
+    onCorrectDetails={() => setStep(2)}
+    onResubmit={() => { resetKyc(); setStep(4); }}
+  />;
+
   return (
     <AuthShell
       onNavigateToHome={onNavigateToHome}
@@ -1238,25 +1269,30 @@ function RegisterForm({
                 {/* step 2 */}
                 {step === 4 && (
                   <>
-                    <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+                    <div data-identity-view={showingSelfie ? "selfie" : "id"} className="rounded-2xl border border-gray-200 p-4 bg-white">
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                           <ShieldCheck size={20} className="text-[#017FE6]" />
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900">Step 4 — Identity verification</p>
+                          <h2 ref={identityHeadingRef} tabIndex={-1} className="font-semibold text-gray-900">
+                            Step 4 — {showingSelfie ? "Selfie verification" : "Identity verification"}
+                          </h2>
                           <p className="text-sm text-gray-500 mt-1">
-                            Upload your <span className="font-semibold text-gray-700">full ID card</span>, then capture a live selfie to verify your identity.
+                            {showingSelfie ? "Your ID check passed. Capture a live selfie to match your ID photo."
+                              : <>Upload your <span className="font-semibold text-gray-700">full ID card</span> to check its type and registration details.</>}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {identityStage === "id" && <>
+                    {!showingSelfie && <>
                     <SelectField
                       label="ID Type"
                       value={kyc.idType}
                       onChange={(value) => {
+                        setDocumentReviewStatus("not_uploaded");
+                        setIdRevision("");
                         setKyc((prev) => ({
                           ...prev,
                           idType: value,
@@ -1296,6 +1332,8 @@ function RegisterForm({
                           return;
                         }
                         setKyc((prev) => ({ ...prev, idCardFile: f, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                        setDocumentReviewStatus("not_uploaded");
+                        setIdRevision("");
                         setKycUi((p) => ({ ...p, statusText: "" }));
                         setStepErrors({});
                       }}
@@ -1303,27 +1341,17 @@ function RegisterForm({
                       accept="image/jpeg,image/png" inputRef={idInputRef} icon={Upload}
                       error={stepErrors.idCardFile}
                     />
-                    <button type="button" disabled={isLoading || !kyc.idType || !kyc.idCardFile} onClick={registerId}
+                    <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || !kyc.idCardFile} onClick={registerId}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</> : "Upload and check ID"}
+                      {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
+                        : ["queued", "processing"].includes(documentReviewStatus) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
+                        : kyc.idRegistered ? "ID uploaded" : "Upload and check ID"}
                     </button>
                     </>}
 
-                    {identityStage === "id_checking" && (
-                      <div role="status" aria-live="polite" className="rounded-2xl bg-blue-50 p-4 text-blue-950">
-                        <div className="flex items-center gap-3 font-semibold">
-                          <Loader size={20} className="shrink-0 animate-spin text-blue-700" aria-hidden="true" />
-                          Checking your ID details
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-blue-900">We are comparing the name and birth date on your ID with your registration. The selfie step will unlock automatically after they match.</p>
-                      </div>
-                    )}
+                    <div hidden={showingSelfie}>{documentReviewNotice}</div>
 
-                    {identityStage === "id_blocked" && (
-                      <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
-                    )}
-
-                    {(["camera", "selfie", "complete"].includes(identityStage)) && (
+                    {showingSelfie && (
                       <SelfieCapture
                         previewUrl={kyc.selfieDataUrl}
                         matched={identityStage === "complete"}
@@ -1382,24 +1410,13 @@ function RegisterForm({
                   </>
                 )}
 
-                {(step === 4 || step === 5) && (
-                  <PreKycReviewNotice
-                    email={form.email}
-                    enabled={kyc.idRegistered}
-                    onIdStatus={handleIdStatus}
-                    onCorrectDetails={() => setStep(2)}
-                    onResubmit={() => {
-                      resetKyc();
-                      setStep(4);
-                    }}
-                  />
-                )}
+                {step === 5 && documentReviewNotice}
 
                 {/* navigation */}
                 <div className="flex items-center gap-3 pt-1">
                   <button type="button" onClick={goBack} disabled={step === 1 || isFormLocked}
                     className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                    <ArrowLeft size={18} /> Back
+                    <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : "Back"}
                   </button>
                   {step < TOTAL_STEPS ? (
                     <button type="button" onClick={goNext} disabled={isFormLocked}

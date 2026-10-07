@@ -6,10 +6,9 @@ import { containsModeratedContent } from "./chatModeration.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../..");
-const chatbotServiceDir = path.resolve(repoRoot, "chatbot-service");
-const CHATBOT_DATASET_PATH = path.resolve(chatbotServiceDir, "rentifypro_chatbot_dataset_v6.json");
-const CHATBOT_CONFIG_PATH = path.resolve(chatbotServiceDir, "chatbot_config.json");
+const chatbotDataDir = path.resolve(__dirname, "../data/chatbot");
+const CHATBOT_DATASET_PATH = path.resolve(chatbotDataDir, "rentifypro_chatbot_dataset_v6.json");
+const CHATBOT_CONFIG_PATH = path.resolve(chatbotDataDir, "chatbot_config.json");
 const CHATBOT_DATASET_SCHEMA_VERSION = "v6_intent_multilingual_conversational";
 
 const chatbotConfig = JSON.parse(fs.readFileSync(CHATBOT_CONFIG_PATH, "utf-8"));

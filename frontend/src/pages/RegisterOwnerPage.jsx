@@ -173,6 +173,9 @@ function RegisterOwnerForm({
   const [supportingDocType, setSupportingDocType] = useState("");
   const [supportingDocStatus, setSupportingDocStatus] = useState({ submitted: false, message: "" });
   const [documentRefreshKey, setDocumentRefreshKey] = useState(0);
+  const [idRevision, setIdRevision] = useState("");
+  const [supportingRevision, setSupportingRevision] = useState("");
+  const documentUploadInFlight = useRef(false);
   const [documentStatuses, setDocumentStatuses] = useState({ id: "not_uploaded", supporting: "not_uploaded" });
   const handleDocumentsChange = useCallback((documents) => {
     const nextStatuses = { id: "not_uploaded", supporting: "not_uploaded" };
@@ -200,6 +203,8 @@ function RegisterOwnerForm({
   const [addressLoadError, setAddressLoadError] = useState("");
 
   const [kycUi, setKycUi] = useState({ statusText: "" });
+  const [reviewingId, setReviewingId] = useState(false);
+  const identityHeadingRef = useRef(null);
   const idPreviewUrl = useMemo(
     () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
     [kyc.idCardFile]
@@ -215,6 +220,10 @@ function RegisterOwnerForm({
         : !kyc.selfieVerified
           ? "selfie"
           : "complete";
+  const showingSelfie = !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
+  useEffect(() => {
+    if (step === 4) identityHeadingRef.current?.focus();
+  }, [step, showingSelfie]);
   const handleIdStatus = useCallback((status, document) => {
     const ready = document?.identityReadyForSelfie === true;
     setKyc((previous) => {
@@ -226,7 +235,7 @@ function RegisterOwnerForm({
       };
     });
     if (ready) {
-      setKycUi((previous) => ({ ...previous, statusText: "ID details matched. You can now take your selfie." }));
+      setKycUi((previous) => ({ ...previous, statusText: "" }));
     } else if (!["queued", "processing", "retry_wait"].includes(status)) {
       setKycUi((previous) => ({ ...previous, statusText: "" }));
     }
@@ -690,6 +699,8 @@ function RegisterOwnerForm({
 
   const handleIdTypeChange = useCallback((e) => {
     const value = String(e?.target?.value || "");
+    setDocumentStatuses((previous) => ({ ...previous, id: "not_uploaded" }));
+    setIdRevision("");
     setKyc((prev) => ({
       ...prev,
       idType: value,
@@ -758,6 +769,7 @@ function RegisterOwnerForm({
   }, [files.supportingDocument, supportingDocType, validateFields]);
 
   const verifySupportingDoc = async () => {
+    if (documentUploadInFlight.current) return false;
     if (supportingDocStatus.submitted) return true;
     if (!supportingDocType) {
       setErrors((prev) => ({ ...prev, supportingDocType: "Please select a document type." }));
@@ -780,6 +792,7 @@ function RegisterOwnerForm({
       return false;
     }
 
+    documentUploadInFlight.current = true;
     setIsLoading(true);
     setSuccessMessage("");
     setFormError("");
@@ -808,7 +821,8 @@ function RegisterOwnerForm({
           result.message ||
           "Supporting document uploaded securely. Automated checks have started.",
       });
-      setDocumentStatuses((previous) => ({ ...previous, supporting: "queued" }));
+      setDocumentStatuses((previous) => ({ ...previous, supporting: result.documentStatus || "queued" }));
+      setSupportingRevision(result.documentRevision || "");
       setDocumentRefreshKey((previous) => previous + 1);
       setErrors((prev) => ({ ...prev, supportingDocType: "", supportingDocument: "" }));
       return true;
@@ -820,6 +834,7 @@ function RegisterOwnerForm({
       }));
       return false;
     } finally {
+      documentUploadInFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -861,8 +876,16 @@ function RegisterOwnerForm({
     if (step === 2 && !validateAddressStep()) return;
     if (step === 3) {
       if (!validateSupportingDocumentStep()) return;
-      const verified = await verifySupportingDoc();
-      if (!verified) return;
+      if (!supportingDocStatus.submitted) {
+        setErrors((previous) => ({ ...previous, supportingDocument: "Upload and check your business document before continuing." }));
+        return;
+      }
+      if (["reupload_required", "rejected"].includes(documentStatuses.supporting)) return;
+    }
+    if (step === 4 && reviewingId && kyc.idRegistered && kyc.idReadyForSelfie) {
+      setReviewingId(false);
+      setStepErrors({});
+      return;
     }
     if (step === 4 && !validateIdentityStep()) return;
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
@@ -874,6 +897,10 @@ function RegisterOwnerForm({
     setSuccessMessage("");
     setStepErrors({});
     setErrors({});
+    if (step === 4 && showingSelfie) {
+      setReviewingId(true);
+      return;
+    }
     setStep((prev) => Math.max(1, prev - 1));
   };
 
@@ -889,6 +916,7 @@ function RegisterOwnerForm({
     }
 
     setIsLoading(true);
+    setReviewingId(false);
     setKycUi((prev) => ({ ...prev, statusText: "Uploading ID securely..." }));
 
     try {
@@ -914,10 +942,11 @@ function RegisterOwnerForm({
         selfieDataUrl: "",
         selfieBase64Clean: "",
       }));
-      setDocumentStatuses((previous) => ({ ...previous, id: "queued" }));
+      setDocumentStatuses((previous) => ({ ...previous, id: result.documentStatus || "queued" }));
+      setIdRevision(result.documentRevision || "");
       setDocumentRefreshKey((previous) => previous + 1);
       setStepErrors((prev) => ({ ...prev, idType: "", idRegistered: "" }));
-      setKycUi((prev) => ({ ...prev, statusText: "ID uploaded. We are checking that its personal details match your registration." }));
+      setKycUi((prev) => ({ ...prev, statusText: "" }));
     } catch (error) {
       setStepErrors((prev) => ({ ...prev, idRegistered: friendlyError(error.message) }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
@@ -1080,6 +1109,40 @@ function RegisterOwnerForm({
       setIsLoading(false);
     }
   };
+
+  const documentReviewNotice = <PreKycReviewNotice
+    key={`${idRevision}:${supportingRevision}:${kyc.idRegistered}:${supportingDocStatus.submitted}`}
+    email={form.businessEmail}
+    role="owner"
+    enabled={kyc.idRegistered || supportingDocStatus.submitted}
+    refreshKey={documentRefreshKey}
+    ignoreSupportingDocument={!supportingDocStatus.submitted}
+    ignoreIdDocument={!kyc.idRegistered}
+    idRevision={idRevision}
+    supportingRevision={supportingRevision}
+    onDocumentsChange={handleDocumentsChange}
+    onIdStatus={handleIdStatus}
+    onCorrectDetails={(type) => {
+      if (type === "id") { setStep(1); return; }
+      setSupportingDocStatus({ submitted: false, message: "" });
+      setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
+      setStep(3);
+    }}
+    onResubmit={(type) => {
+      if (type === "supporting") {
+        setSupportingDocStatus({ submitted: false, message: "" });
+        setFiles((current) => ({ ...current, supportingDocument: null }));
+        setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
+        setStep(3);
+      } else {
+        setKyc(initialKyc);
+        setKycUi({ statusText: "" });
+        setDocumentStatuses((current) => ({ ...current, id: "not_uploaded" }));
+        setStepErrors({});
+        setStep(4);
+      }
+    }}
+  />;
 
   return (
     <AuthShell
@@ -1380,6 +1443,7 @@ function RegisterOwnerForm({
                 <Field
                   label={form.ownerType === "individual" ? "Business / Trade Name" : "Business Name"}
                   name="businessName"
+                  alignRows
                   value={form.businessName}
                   onChange={handleChange}
                   onBlur={() => handleStep1Blur("businessName")}
@@ -1395,6 +1459,7 @@ function RegisterOwnerForm({
                     <Field
                       label="Taxpayer Identification Number (TIN)"
                       name="taxIdentificationNumber"
+                      alignRows
                       value={form.taxIdentificationNumber}
                       onChange={handleChange}
                       onBlur={() => handleStep1Blur("taxIdentificationNumber")}
@@ -1409,6 +1474,7 @@ function RegisterOwnerForm({
                     <Field
                       label="Branch Code"
                       name="branchCode"
+                      horizontal
                       value={form.branchCode}
                       onChange={handleChange}
                       onBlur={() => handleStep1Blur("branchCode")}
@@ -1425,6 +1491,7 @@ function RegisterOwnerForm({
                   <Field
                     label={DOCUMENT_NUMBER_LABELS[supportingDocType] || "Document number"}
                     name="permitNumber"
+                    alignRows
                     value={form.permitNumber}
                     onChange={handleChange}
                     onBlur={() => handleStep1Blur("permitNumber")}
@@ -1450,25 +1517,32 @@ function RegisterOwnerForm({
                 file={files.supportingDocument}
                 disabled={isLoading}
               />
-              {supportingDocStatus.submitted && !errors.supportingDocument && (
-                <p className="text-xs font-medium text-amber-700">{supportingDocStatus.message}</p>
-              )}
+              <button type="button" onClick={verifySupportingDoc} disabled={isLoading || supportingDocStatus.submitted || !supportingDocType || !files.supportingDocument}
+                className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
+                {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading document...</>
+                  : ["queued", "processing"].includes(documentStatuses.supporting) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
+                  : supportingDocStatus.submitted ? "Document uploaded" : "Upload and check document"}
+              </button>
             </>
           )}
 
           {step === 4 && (
             <>
-              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+              <div data-identity-view={showingSelfie ? "selfie" : "id"} className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><ShieldCheck size={20} className="text-[#017FE6]" /></div>
                   <div>
-                    <p className="font-semibold text-gray-900">Step 4 — Identity verification</p>
-                    <p className="text-sm text-gray-500 mt-1">Upload your government ID, then capture a live selfie to verify your identity.</p>
+                    <h2 ref={identityHeadingRef} tabIndex={-1} className="font-semibold text-gray-900">
+                      Step 4 — {showingSelfie ? "Selfie verification" : "Identity verification"}
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">{showingSelfie
+                      ? "Your ID check passed. Capture a live selfie to match your ID photo."
+                      : "Upload your government ID to check its type and registration details."}</p>
                   </div>
                 </div>
               </div>
 
-              {identityStage === "id" && <>
+              {!showingSelfie && <>
               <SelectField
                 label="ID Type"
                 name="idType"
@@ -1502,6 +1576,8 @@ function RegisterOwnerForm({
                         return;
                       }
                       setKyc((prev) => ({ ...prev, idCardFile: file, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                      setDocumentStatuses((previous) => ({ ...previous, id: "not_uploaded" }));
+                      setIdRevision("");
                       setKycUi((prev) => ({ ...prev, statusText: "" }));
                       setStepErrors({});
                     }}
@@ -1520,6 +1596,8 @@ function RegisterOwnerForm({
                         type="button"
                         onClick={() => {
                           setKyc(initialKyc);
+                          setDocumentStatuses((previous) => ({ ...previous, id: "not_uploaded" }));
+                          setIdRevision("");
                           setKycUi({ statusText: "" });
                           setStepErrors({});
                         }}
@@ -1534,28 +1612,16 @@ function RegisterOwnerForm({
                 {stepErrors.idCardFile && <p className="text-red-500 text-sm font-medium mt-2">{stepErrors.idCardFile}</p>}
               </div>
 
-              {identityStage === "id" && (
-                <button type="button" disabled={isLoading || !kyc.idType || !kyc.idCardFile} onClick={registerId} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">
-                  {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</> : "Upload and check ID"}
+                <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || !kyc.idCardFile} onClick={registerId} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">
+                  {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
+                    : ["queued", "processing"].includes(documentStatuses.id) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
+                    : kyc.idRegistered ? "ID uploaded" : "Upload and check ID"}
                 </button>
-              )}
               </>}
 
-              {identityStage === "id_checking" && (
-                <div role="status" aria-live="polite" className="rounded-2xl bg-blue-50 p-4 text-blue-950">
-                  <div className="flex items-center gap-3 font-semibold">
-                    <Loader size={20} className="shrink-0 animate-spin text-blue-700" aria-hidden="true" />
-                    Checking your ID details
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-blue-900">We are comparing the name on your ID with your registration. The selfie step will unlock automatically after it matches.</p>
-                </div>
-              )}
+              <div hidden={showingSelfie}>{documentReviewNotice}</div>
 
-              {identityStage === "id_blocked" && (
-                <p role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">Selfie verification is unavailable until your ID details match. Check the reason below, then correct your registration details or upload a matching ID.</p>
-              )}
-
-              {(["camera", "selfie", "complete"].includes(identityStage)) && (
+              {showingSelfie && (
                 <SelfieCapture
                   previewUrl={kyc.selfieDataUrl}
                   matched={identityStage === "complete"}
@@ -1573,40 +1639,7 @@ function RegisterOwnerForm({
             </>
           )}
 
-          {(step === 3 || step === 4 || step === 5) && (
-            <PreKycReviewNotice
-              email={form.businessEmail}
-              role="owner"
-              enabled={kyc.idRegistered || supportingDocStatus.submitted}
-              refreshKey={documentRefreshKey}
-              ignoreSupportingDocument={!supportingDocStatus.submitted}
-              onDocumentsChange={handleDocumentsChange}
-              onIdStatus={handleIdStatus}
-              onCorrectDetails={(type) => {
-                if (type === "id") {
-                  setStep(1);
-                  return;
-                }
-                setSupportingDocStatus({ submitted: false, message: "" });
-                setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
-                setStep(3);
-              }}
-              onResubmit={(type) => {
-                if (type === "supporting") {
-                  setSupportingDocStatus({ submitted: false, message: "" });
-                  setFiles((current) => ({ ...current, supportingDocument: null }));
-                  setDocumentStatuses((current) => ({ ...current, supporting: "not_uploaded" }));
-                  setStep(3);
-                } else {
-                  setKyc(initialKyc);
-                  setKycUi({ statusText: "" });
-                  setDocumentStatuses((current) => ({ ...current, id: "not_uploaded" }));
-                  setStepErrors({});
-                  setStep(4);
-                }
-              }}
-            />
-          )}
+          {(step === 3 || step === 5) && documentReviewNotice}
 
           {step === 5 && (
             <>
@@ -1657,11 +1690,11 @@ function RegisterOwnerForm({
 
           <div className="flex items-center gap-3 pt-1">
             <button type="button" onClick={step === 1 ? onBack : goBack} disabled={isLoading} className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-              <ArrowLeft size={18} /> {step === 1 ? "Register as Renter" : "Back"}
+              <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : step === 1 ? "Register as Renter" : "Back"}
             </button>
             {step < TOTAL_STEPS ? (
               <button type="button" onClick={goNext} disabled={isLoading} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : <>{step === 3 ? supportingDocStatus.submitted ? "Continue to ID" : "Upload and continue" : "Next"} <ArrowRight size={18} /></>}
+                {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : <>Next <ArrowRight size={18} /></>}
               </button>
             ) : (
               <button type="submit" disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
@@ -1710,6 +1743,8 @@ function Field({
   required = true,
   onBlur,
   inputRef,
+  alignRows = false,
+  horizontal = false,
 }) {
   const handleInputChange = (e) => {
     let nextValue = e.target.value;
@@ -1740,18 +1775,21 @@ function Field({
   };
 
   return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-semibold text-gray-700">
+    <div className={horizontal
+      ? "min-w-0 space-y-1.5 sm:space-y-0 sm:col-span-2 sm:grid sm:grid-cols-2 sm:gap-x-3 sm:gap-y-1.5"
+      : alignRows ? "min-w-0 space-y-1.5 sm:space-y-0 sm:grid sm:row-span-4 sm:grid-rows-subgrid sm:gap-y-1.5" : "space-y-1.5"}>
+      <label htmlFor={horizontal ? name : undefined} className="block text-sm font-semibold text-gray-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      {helper ? <p className="text-xs text-gray-500">{helper}</p> : null}
-      <div className="relative">
+      {helper ? <p className={`text-xs text-gray-500 ${horizontal ? "sm:col-start-1 sm:row-start-2" : ""}`}>{helper}</p> : null}
+      <div className={`relative ${horizontal ? "sm:col-start-2 sm:row-start-1 sm:row-span-2 sm:self-center" : ""}`}>
         {prefixText ? (
           <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-sm font-medium text-gray-500">
             {prefixText}
           </span>
         ) : null}
         <input
+          id={horizontal ? name : undefined}
           ref={inputRef}
           type={type}
           name={name}
@@ -1769,7 +1807,7 @@ function Field({
         />
         {Icon && <Icon size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
       </div>
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className={`text-xs text-red-500 ${horizontal ? "sm:col-start-2 sm:row-start-3" : ""}`}>{error}</p>}
     </div>
   );
 }

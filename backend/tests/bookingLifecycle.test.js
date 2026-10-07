@@ -45,6 +45,8 @@ test("paid bookings become overdue without being auto-completed", async () => {
   assert.equal(booking.autoCompletedAt, null);
   assert.equal(booking.lateReturnIsOverdue, true);
   assert.equal(booking.lateReturnOverdueMinutes, 60);
+  assert.equal(booking.lateReturnPenaltyRatePerHour, 0);
+  assert.equal(getEstimatedLateReturnPenaltyFee(booking), 0);
 });
 
 test("a snapshotted grace period is excluded from overdue minutes", async () => {
@@ -167,7 +169,7 @@ test("vehicle schema supports an inspection availability hold", async () => {
   const { default: Vehicle } = await import("../models/Vehicle.js");
   assert.deepEqual(Vehicle.schema.path("availabilityHoldReason").enumValues, ["none", "manual", "inspection"]);
   assert.deepEqual(Vehicle.schema.path("lateReturnFeeType").enumValues, ["percentage", "fixed_hourly"]);
-  assert.equal(Vehicle.schema.path("lateReturnFeeValue").defaultValue, 25);
+  assert.equal(Vehicle.schema.path("lateReturnFeeValue").defaultValue, 0);
   assert.equal(Vehicle.schema.path("lateReturnGraceMinutes").defaultValue, 0);
 });
 

@@ -39,6 +39,7 @@ import { initSocket } from "./socket/index.js";
 import { registerNotificationHandlers } from "./handlers/notification.handlers.js";
 import { warmupFaceService } from "./utils/faceServiceManager.js";
 import { warmupChatbotService } from "./utils/chatbotServiceManager.js";
+import { warmupPrivateOcrService, stopPrivateOcrService } from "./utils/privateOcrServiceManager.js";
 import { createOriginChecker } from "./utils/corsOrigins.js";
 import { mountFrontendDist } from "./utils/mountFrontendDist.js";
 import { getAvatarUploadDir, getPublicUploadsDir } from "./utils/storagePaths.js";
@@ -166,7 +167,7 @@ app.get("/api/health", getHealth);
 app.get("/api/face-service-health", async (_req, res) => {
   try {
     const axios = (await import("axios")).default;
-    const url = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+    const url = process.env.FACE_SERVICE_URL || "http://localhost:8010";
     const { data } = await axios.get(`${url}/`, { timeout: 5000 });
     res.json({ success: true, faceService: data });
   } catch (err) {
@@ -212,10 +213,11 @@ const startServer = async () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`  Server:       http://localhost:${PORT}`);
   console.log(`  Health:       http://localhost:${PORT}/api/health`);
-  console.log(`  Face Service: ${process.env.FACE_SERVICE_URL || "http://localhost:8000"}`);
+  console.log(`  Face Service: ${process.env.FACE_SERVICE_URL || "http://localhost:8010"}`);
   console.log(`  Chatbot:      ${chatbotUrl}`);
   warmupFaceService();
   warmupChatbotService();
+  warmupPrivateOcrService();
   console.log(`  Security:     helmet, rate-limit, nosql-sanitize, xss, hpp`);
   console.log(`  Logs:         ./logs/audit-YYYY-MM-DD.log`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -235,6 +237,7 @@ startServer().catch((error) => {
 });
 
 // Clean shutdown
+process.on("exit", stopPrivateOcrService);
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
   stopNotificationCleanupJob();
@@ -244,6 +247,7 @@ process.on("unhandledRejection", (err) => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopPrivateOcrService();
   if (!server) {
     process.exit(1);
     return;
@@ -260,6 +264,7 @@ process.on("SIGTERM", () => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopPrivateOcrService();
   if (!server) {
     process.exit(0);
     return;
@@ -276,6 +281,7 @@ process.on("SIGINT", () => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopPrivateOcrService();
   if (!server) {
     process.exit(0);
     return;

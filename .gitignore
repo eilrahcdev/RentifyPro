@@ -82,6 +82,7 @@ venv/
 coverage.xml
 htmlcov/
 .deepface/
+kyc-ocr-service/models/
 
 # IDE / OS
 .vscode/
@@ -126,3 +127,5 @@ README-QUICK-TUNNEL.md
 .agents/
 .codex/
 .impeccable/
+
+/backend-deploy*.zip

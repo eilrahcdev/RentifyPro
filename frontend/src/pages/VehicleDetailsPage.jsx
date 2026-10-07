@@ -242,7 +242,7 @@ export default function VehicleDetailsPage({
   const driverHourlyRate = Number(currentVehicle?.driverDailyRate || currentVehicle?.driverHourlyRate || 0);
   const lateReturnPolicy = currentVehicle?.lateReturnPolicy || {};
   const lateReturnFeeType = lateReturnPolicy.feeType || currentVehicle?.lateReturnFeeType || "percentage";
-  const lateReturnFeeValue = Number(lateReturnPolicy.value ?? currentVehicle?.lateReturnFeeValue ?? 25);
+  const lateReturnFeeValue = Number(lateReturnPolicy.value ?? currentVehicle?.lateReturnFeeValue ?? 0);
 
   useEffect(() => {
     if (!driverOptionEnabled && driverSelected) setDriverSelected(false);

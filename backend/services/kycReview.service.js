@@ -3,6 +3,7 @@ import PreKycDocument from "../models/PreKycDocument.js";
 import KycVerification from "../models/KycVerification.js";
 import User from "../models/User.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
+import { hasCurrentManualDocumentComparison } from "./manualDocumentComparison.js";
 
 export const REVIEWABLE_DOCUMENT_STATUSES = ["pending_review"];
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -59,6 +60,9 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   const now = new Date();
   const current = await PreKycDocument.findById(id);
   if (!current) throw fail(404, "This document is no longer available. Refresh the document list.");
+  if (["private-ocr", "manual"].includes(current.provider) && !reviewVersion) {
+    throw fail(409, "Refresh the document and include its current review version before deciding.");
+  }
   if (reviewVersion && (current.reviewVersion || current.fileHash) !== reviewVersion) {
     throw fail(409, "The applicant uploaded a replacement document. Refresh and review the new file before deciding.");
   }
@@ -70,6 +74,10 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   }
   if (current.status !== status && action === "approve" && current.docType === "id" && current.detailsMatched !== true) {
     throw fail(409, "This ID cannot be approved because its identity details did not pass comparison. Ask the applicant to correct their registration details or upload the matching ID.");
+  }
+  if (current.status !== status && action === "approve" && ["private-ocr", "manual"].includes(current.provider)
+    && !hasCurrentManualDocumentComparison(current)) {
+    throw fail(409, "Inspect and save the manual document comparison, including its document type, before approving this document.");
   }
 
   const updated = current.status === status ? null : await PreKycDocument.findOneAndUpdate(

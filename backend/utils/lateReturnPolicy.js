@@ -9,7 +9,7 @@ export const LATE_RETURN_FEE_TYPES = Object.freeze({
   FIXED_HOURLY: "fixed_hourly",
 });
 
-export const DEFAULT_LATE_RETURN_PERCENTAGE = 25;
+export const DEFAULT_LATE_RETURN_PERCENTAGE = 0;
 export const DEFAULT_LATE_RETURN_GRACE_MINUTES = 0;
 export const MAX_LATE_RETURN_PERCENTAGE = 100;
 export const MAX_LATE_RETURN_FIXED_HOURLY = 100000;
@@ -21,12 +21,6 @@ const finiteNumber = (value) => {
   if (value === null || value === undefined || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
-};
-
-const configuredDefaultPercentage = () => {
-  const multiplier = finiteNumber(process.env.LATE_RETURN_PENALTY_MULTIPLIER);
-  if (multiplier === null || multiplier < 0) return DEFAULT_LATE_RETURN_PERCENTAGE;
-  return roundCurrency(multiplier * 100);
 };
 
 const configuredDefaultGraceMinutes = () => {
@@ -43,8 +37,7 @@ export const normalizeLateReturnFeeType = (value, fallback = LATE_RETURN_FEE_TYP
 export const getVehicleLateReturnPolicy = (vehicle = {}) => {
   const feeType = normalizeLateReturnFeeType(vehicle?.lateReturnFeeType);
   const configuredValue = finiteNumber(vehicle?.lateReturnFeeValue);
-  const defaultValue = feeType === LATE_RETURN_FEE_TYPES.PERCENTAGE ? configuredDefaultPercentage() : 0;
-  const value = configuredValue !== null && configuredValue >= 0 ? roundCurrency(configuredValue) : defaultValue;
+  const value = configuredValue !== null && configuredValue >= 0 ? roundCurrency(configuredValue) : 0;
   const configuredGrace = finiteNumber(vehicle?.lateReturnGraceMinutes);
   const graceMinutes =
     configuredGrace !== null && configuredGrace >= 0
@@ -103,7 +96,7 @@ export const getBookingLateReturnPolicy = (booking = {}) => {
     : LATE_RETURN_FEE_TYPES.PERCENTAGE;
   const value = hasSnapshot
     ? Math.max(0, roundCurrency(booking.lateReturnFeeValue))
-    : configuredDefaultPercentage();
+    : DEFAULT_LATE_RETURN_PERCENTAGE;
   const snapshottedGrace = finiteNumber(booking?.lateReturnGraceMinutes);
   const graceMinutes =
     snapshottedGrace !== null && snapshottedGrace >= 0

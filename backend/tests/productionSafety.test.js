@@ -14,7 +14,7 @@ import { initSocket, emitToUser } from "../socket/index.js";
 import { getHealth } from "../controllers/health.controller.js";
 import { createOriginChecker } from "../utils/corsOrigins.js";
 import { assertGeminiSensitiveDataAllowed } from "../utils/geminiDataPolicy.js";
-import { getProductionConfigurationErrors } from "../utils/productionConfig.js";
+import { assertProductionConfiguration, getProductionConfigurationErrors } from "../utils/productionConfig.js";
 import { getPublicUploadsDir, getKycUploadDir, getAvatarUploadDir, getReportEvidenceDir, getVehiclePhotoDir } from "../utils/storagePaths.js";
 
 const socketRequire = createRequire(import.meta.resolve("socket.io"));
@@ -62,11 +62,56 @@ test("production CORS allows only configured origins while development keeps loc
 
 test("production configuration reports missing requirements without exposing secrets", () => {
   assert.deepEqual(getProductionConfigurationErrors(validConfiguration()), []);
-  const env = { ...validConfiguration(), JWT_SECRET: "secret", FRONTEND_URL: "https://*.vercel.app", BACKEND_PUBLIC_URL: "https://127.0.0.1", STORAGE_DURABILITY_CONFIRMED: "false", GEMINI_SENSITIVE_DATA_APPROVED: "false" };
+  const env = { ...validConfiguration(), JWT_SECRET: "secret", FRONTEND_URL: "https://*.vercel.app", BACKEND_PUBLIC_URL: "https://127.0.0.1", STORAGE_DURABILITY_CONFIRMED: "false", GEMINI_SENSITIVE_DATA_APPROVED: undefined };
   const errors = getProductionConfigurationErrors(env);
   for (const key of ["JWT_SECRET", "FRONTEND_URL", "BACKEND_PUBLIC_URL", "STORAGE_ROOT", "GEMINI_SENSITIVE_DATA_APPROVED"]) assert.ok(errors.some((error) => error.includes(key)), key);
   assert.equal(errors.some((error) => error.includes(env.PAYMONGO_SECRET_KEY)), false);
   assert.ok(getProductionConfigurationErrors({ ...validConfiguration(), KYC_UPLOAD_DIR: path.join(validConfiguration().STORAGE_ROOT, "uploads", "kyc") }).some((error) => /separate/.test(error)));
+});
+
+test("production accepts manual KYC without a Gemini key and still validates explicit opt-in", (t) => {
+  const manual = { ...validConfiguration(), GEMINI_SENSITIVE_DATA_APPROVED: "false", GEMINI_API_KEY: undefined };
+  assert.deepEqual(getProductionConfigurationErrors(manual), []);
+  environment(t, manual);
+  assert.doesNotThrow(assertProductionConfiguration);
+  assert.deepEqual(getProductionConfigurationErrors(validConfiguration()), []);
+  const missingKey = getProductionConfigurationErrors({ ...validConfiguration(), GEMINI_API_KEY: undefined });
+  assert.equal(missingKey.length, 1);
+  assert.match(missingKey[0], /GEMINI_API_KEY/);
+  for (const flag of [undefined, "", "FALSE", "invalid"]) {
+    assert.ok(getProductionConfigurationErrors({ ...manual, GEMINI_SENSITIVE_DATA_APPROVED: flag }).some((error) => error.includes("GEMINI_SENSITIVE_DATA_APPROVED")));
+  }
+});
+
+test("manual KYC leaves every unrelated production validation unchanged", () => {
+  for (const overrides of [
+    { NODE_ENV: "development" },
+    { JWT_SECRET: "short" },
+    { INTERNAL_API_KEY: "short" },
+    { PASSWORD_RESET_TOKEN_SECRET: "short" },
+    { MONGO_URI: undefined, MONGO_URI_DIRECT: undefined },
+    { MONGO_AUTO_INDEX: "true" },
+    { FRONTEND_URL: "https://*.example.test" },
+    { ALLOW_VERCEL_PREVIEW_ORIGINS: "true" },
+    { BACKEND_PUBLIC_URL: "http://localhost:5000" },
+    { FACE_SERVICE_URL: "http://localhost:8010" },
+    { CHATBOT_URL: "http://localhost:8001" },
+    { FACE_SERVICE_AUTOSTART: "true" },
+    { CHATBOT_SERVICE_AUTOSTART: "true" },
+    { PAYMONGO_SECRET_KEY: undefined },
+    { PAYMONGO_WEBHOOK_SECRET: undefined },
+    { PAYMENT_RECONCILIATION_ENABLED: "false" },
+    { STORAGE_ROOT: undefined },
+    { STORAGE_DURABILITY_CONFIRMED: "false" },
+    { KYC_UPLOAD_DIR: path.join(validConfiguration().STORAGE_ROOT, "uploads", "kyc") },
+    { AVATAR_UPLOAD_DIR: path.join(validConfiguration().STORAGE_ROOT, "private_uploads", "avatars") },
+  ]) {
+    const automated = { ...validConfiguration(), ...overrides };
+    const manual = { ...automated, GEMINI_SENSITIVE_DATA_APPROVED: "false", GEMINI_API_KEY: undefined };
+    const errors = getProductionConfigurationErrors(automated);
+    assert.ok(errors.length > 0, JSON.stringify(Object.keys(overrides)));
+    assert.deepEqual(getProductionConfigurationErrors(manual), errors);
+  }
 });
 
 test("Gemini cannot receive production KYC until data handling is confirmed", (t) => {

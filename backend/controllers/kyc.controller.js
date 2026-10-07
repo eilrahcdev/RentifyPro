@@ -16,6 +16,10 @@ import { isBirSupportingDocumentType, resolveSupportedDocumentType } from "../se
 import { triggerKycDocumentProcessing } from "../jobs/kycDocumentProcessing.job.js";
 import { isIdentityReadyForSelfie, screeningProfileMatchesSnapshot } from "../utils/preKycDocs.js";
 import { getKycUploadDir } from "../utils/storagePaths.js";
+import { GEMINI_MANUAL_REVIEW_REASON } from "../utils/geminiDataPolicy.js";
+import { isKycScreeningEnabled, getKycScreeningProvider } from "../utils/kycScreeningProvider.js";
+import { publicPrivateScreening, PRIVATE_AUTOMATED_CHECK_VERSION, privateScreeningBinding } from "../services/privateDocumentLayout.service.js";
+import { hasCurrentManualDocumentComparison } from "../services/manualDocumentComparison.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 const getFaceServiceUrl = () => {
@@ -124,9 +128,17 @@ const queuePreKycDocument = async ({
   if (!normalizedEmail || !normalizedSessionId || !docType || !fileMeta?.fileHash) return null;
 
   const existing = await PreKycDocument.findOne({ email: normalizedEmail, docType })
-    .select("status reasonCode fileHash sessionId selectedDocCategory +profileSnapshot");
-  const screeningFailed = existing?.status === "pending_review"
-    && existing.reasonCode === "AUTOMATED_SCREENING_UNAVAILABLE";
+    .select("status reasonCode fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role +profileSnapshot");
+  const automatedScreening = isKycScreeningEnabled();
+  const screeningFailed = automatedScreening && existing?.status === "pending_review"
+    && (["AUTOMATED_SCREENING_UNAVAILABLE", "GEMINI_DATA_POLICY_UNCONFIRMED", "KYC_SCREENING_DISABLED"].includes(existing.reasonCode)
+      || (existing.reasonCode === "PRIVATE_KYC_SERVICE_INCOMPATIBLE" && !hasCurrentManualDocumentComparison(existing)));
+  const existingCheck = existing?.privateScreening?.automatedCheck;
+  const screeningOutdated = automatedScreening && getKycScreeningProvider() === "private_ocr"
+    && existing?.status === "pending_review" && !hasCurrentManualDocumentComparison(existing)
+    && (existingCheck?.version !== PRIVATE_AUTOMATED_CHECK_VERSION
+      || existingCheck.profileBinding !== privateScreeningBinding({ profile: profileSnapshot, sessionId: normalizedSessionId,
+        role: role || "user", docType, selectedDocType: selectedDocCategory }));
   if (
     existing?.fileHash === fileMeta.fileHash &&
     existing.sessionId === normalizedSessionId &&
@@ -134,6 +146,8 @@ const queuePreKycDocument = async ({
     screeningProfileMatchesSnapshot(existing.profileSnapshot, profileSnapshot) &&
     ["queued", "processing", "retry_wait", "pending_review", "verified"].includes(existing.status)
     && !screeningFailed
+    && !screeningOutdated
+    && (automatedScreening || !["queued", "processing", "retry_wait"].includes(existing.status))
   ) {
     return existing;
   }
@@ -151,16 +165,18 @@ const queuePreKycDocument = async ({
         sessionId: normalizedSessionId,
         role: role || "user",
         docType,
-        status: "queued",
+        status: automatedScreening ? "queued" : "pending_review",
         queuedAt: now,
         reviewVersion: crypto.randomUUID(),
         selectedDocCategory: String(selectedDocCategory || "").trim(),
-        provider: "gemini-queued",
+        provider: automatedScreening ? getKycScreeningProvider() === "private_ocr" ? "private-ocr" : "gemini-queued" : "manual",
+        privateScreening: null,
+        manualComparison: null,
         profileSnapshot: profileSnapshot || {},
         ...fileMeta,
         filePath: "",
         processingAttempts: 0,
-        nextAttemptAt: now,
+        nextAttemptAt: automatedScreening ? now : null,
         processingLockedAt: null,
         lastProcessedAt: null,
         processingError: "",
@@ -172,8 +188,8 @@ const queuePreKycDocument = async ({
         confidence: 0,
         classificationConfidence: 0,
         documentSurface: "",
-        reason: "Your document was uploaded securely and is waiting for automated checks.",
-        reasonCode: "QUEUED",
+        reason: automatedScreening ? "Your document was uploaded securely and is waiting for automated checks." : GEMINI_MANUAL_REVIEW_REASON,
+        reasonCode: automatedScreening ? "QUEUED" : "GEMINI_DATA_POLICY_UNCONFIRMED",
         decisionSource: "",
         validationChecks: {},
         extractedData: {},
@@ -419,7 +435,9 @@ export const registerIdFace = async (req, res) => {
       verificationQueued: true,
       reviewRequired: true,
       message: result.success
-        ? "ID uploaded securely. Document screening has started; this is not an approval yet."
+        ? isKycScreeningEnabled()
+          ? "ID uploaded securely. Document screening has started; this is not an approval yet."
+          : "ID uploaded securely. An administrator must review your document."
         : result.message,
     });
   } catch (err) {
@@ -581,7 +599,7 @@ export const preRegisterIdFace = async (req, res) => {
         fallbackMessage: "Please upload a valid ID image.",
       });
     }
-    await queuePreKycDocument({
+    const queuedDocument = await queuePreKycDocument({
       email,
       role,
       sessionId,
@@ -593,12 +611,27 @@ export const preRegisterIdFace = async (req, res) => {
     triggerKycDocumentProcessing();
     auditLog.info("KYC", "Pre-registration ID register requested");
     const result = await proxyToFaceService("/api/kyc/id/register", payload);
+    let latestDocument = null;
+    if (queuedDocument?._id) {
+      try {
+        latestDocument = await PreKycDocument.findOne({
+          _id: queuedDocument._id, email, sessionId, reviewVersion: queuedDocument.reviewVersion,
+        }).select("status privateScreening fileHash reviewVersion");
+      } catch {
+        auditLog.warn("KYC", "Upload completed; latest screening status will be obtained by polling");
+      }
+    }
     res.json({
       ...result,
+      documentStatus: latestDocument?.status || queuedDocument?.status || "queued",
+      documentRevision: queuedDocument?.reviewVersion || "",
+      automatedScreening: latestDocument ? publicPrivateScreening(latestDocument) : null,
       verificationQueued: true,
       reviewRequired: true,
       message: result?.success
-        ? "ID uploaded securely. We are checking its personal details before the selfie step unlocks."
+        ? isKycScreeningEnabled()
+          ? "ID uploaded securely. Its document type and registration details are being checked."
+          : "ID uploaded securely. An administrator must review your document."
         : result?.message,
     });
   } catch (err) {
@@ -621,7 +654,7 @@ export const preSelfieVerify = async (req, res) => {
     validateKycImage(selfie_image_base64);
 
     const idDocument = await PreKycDocument.findOne({ email, sessionId, docType: "id" })
-      .select("docType status detailsMatched")
+      .select("docType status detailsMatched provider selectedDocCategory validationChecks manualComparison privateScreening fileHash reviewVersion sessionId role suspectedTampering expiresAt +profileSnapshot")
       .lean();
     if (!isIdentityReadyForSelfie(idDocument)) {
       return res.status(409).json({
@@ -703,7 +736,7 @@ export const preVerifySupportingDocument = async (req, res) => {
       mimeType: doc_image_mime || "image/jpeg",
       prefix: "review-queued-pre-supporting",
     });
-    await queuePreKycDocument({
+    const queuedDocument = await queuePreKycDocument({
       email,
       role,
       sessionId,
@@ -715,9 +748,13 @@ export const preVerifySupportingDocument = async (req, res) => {
     triggerKycDocumentProcessing();
     return res.json({
       success: true,
+      documentStatus: queuedDocument?.status || "queued",
+      documentRevision: queuedDocument?.reviewVersion || "",
       verificationQueued: true,
       reviewRequired: true,
-      message: "Supporting document uploaded securely. Automated checks have started.",
+      message: isKycScreeningEnabled()
+        ? "Supporting document uploaded securely. Automated checks have started."
+        : "Supporting document uploaded securely. An administrator must review your document.",
       selectedDocType: selectedSupportingType,
     });
   } catch (err) {
@@ -732,15 +769,17 @@ export const getPreKycStatus = async (req, res) => {
   try {
     const { email, sessionId } = req.preKyc;
     const documents = await PreKycDocument.find({ email, sessionId })
-      .select("docType status docCategory selectedDocCategory detailsMatched reason reasonCode processingAttempts createdAt updatedAt")
+      .select("docType status docCategory selectedDocCategory detailsMatched reason reasonCode processingAttempts createdAt updatedAt provider validationChecks manualComparison privateScreening fileHash reviewVersion sessionId role suspectedTampering expiresAt +profileSnapshot")
       .sort({ createdAt: 1 })
       .lean();
     return res.json({
       success: true,
-      documents: documents.map((document) => ({
-        ...document,
-        identityReadyForSelfie: isIdentityReadyForSelfie(document),
-      })),
+      documents: documents.map((document) => {
+        const { provider, validationChecks, manualComparison, privateScreening, fileHash, reviewVersion, profileSnapshot, sessionId, role, suspectedTampering, expiresAt, ...publicDocument } = document;
+        return { ...publicDocument, identityReadyForSelfie: isIdentityReadyForSelfie(document),
+          documentRevision: reviewVersion || "",
+          automatedScreening: publicPrivateScreening(document) };
+      }),
     });
   } catch (error) {
     return sendKycError(res, error, {

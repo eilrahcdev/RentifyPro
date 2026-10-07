@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { assertGeminiSensitiveDataAllowed } from "../utils/geminiDataPolicy.js";
 
 function safeJsonParse(text) {
   try {
@@ -19,6 +20,7 @@ export async function verifyFaceMatchWithGemini({
   selfieImageBase64,
   selfieMimeType = "image/jpeg",
 }) {
+  assertGeminiSensitiveDataAllowed();
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is missing in backend .env");
 

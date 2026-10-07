@@ -12,6 +12,10 @@ import {
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
 import { reviewKycDocument } from "../services/kycReview.service.js";
+import { compareManualKycDocument } from "../services/manualKycComparison.service.js";
+import { canManuallyCompareDocument, hasCurrentManualDocumentComparison } from "../services/manualDocumentComparison.js";
+import { getPrivateKycReviewContext } from "../services/privateKycReviewContext.js";
+import PreKycDocument from "../models/PreKycDocument.js";
 import { getKycUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
 
 const VEHICLE_MEDIA_PREFIX = "uploads/vehicles/";
@@ -123,7 +127,15 @@ const mapDocument = (document, usersByEmail) => {
     approval: mapDocumentStatus(document.status),
     reviewStatus: document.status,
     canReview: reviewReady,
-    canApprove: reviewReady && identityComparisonPassed,
+    canApprove: reviewReady && identityComparisonPassed && (!["private-ocr", "manual"].includes(document.provider)
+      || hasCurrentManualDocumentComparison(document)),
+    canCompareManually: canManuallyCompareDocument(document),
+    docType: document.docType,
+    selectedDocCategory: document.selectedDocCategory,
+    fileHash: document.fileHash,
+    provider: document.provider,
+    privateScreening: document.privateScreening || null,
+    detailsMatched: document.detailsMatched === true,
     approvalBlockedReason: reviewReady && !identityComparisonPassed
       ? "Identity details have not passed comparison. Ask the applicant to correct their registration details or upload the matching ID."
       : "",
@@ -236,7 +248,7 @@ router.get("/data", async (_request, response, next) => {
           projection: { owner: 1, name: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("prekycdocuments").find({}, {
-          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1 },
+          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, provider: 1, privateScreening: 1, manualComparison: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("bookings").find({}, {
           projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, status: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
@@ -308,6 +320,31 @@ router.get("/vehicles/:id/image", async (request, response, next) => {
     } catch (error) {
       return next(error);
     }
+});
+
+router.get("/documents/:id/comparison", async (request, response, next) => {
+  try {
+    if (!validObjectId(request.params.id)) return response.status(400).json({ message: "Invalid document ID." });
+    const document = await PreKycDocument.findById(request.params.id).select("+profileSnapshot");
+    if (!document) return response.status(404).json({ message: "Document not found." });
+    const context = await getPrivateKycReviewContext(document, kycDirectory);
+    response.setHeader("Cache-Control", "private, no-store");
+    return response.json(context);
+  } catch (error) {
+    if (error.status) return response.status(error.status).json({ message: error.message });
+    return next(error);
+  }
+});
+
+router.post("/documents/:id/comparison", async (request, response, next) => {
+  try {
+    const document = await compareManualKycDocument({ id: request.params.id, input: request.body, reviewerId: request.user._id });
+    response.setHeader("Cache-Control", "private, no-store");
+    return response.json({ document: mapDocument(document, new Map()) });
+  } catch (error) {
+    if (error.status) return response.status(error.status).json({ message: error.message });
+    return next(error);
+  }
 });
 
 router.patch("/documents/:id", async (request, response, next) => {
