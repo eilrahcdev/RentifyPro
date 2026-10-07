@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isPrivateKycServiceUrl, KYC_SCREENING_PROVIDERS } from "./kycScreeningProvider.js";
 
 const publicHttpsUrl = (value) => {
   try {
@@ -36,7 +37,15 @@ export function getProductionConfigurationErrors(env = process.env) {
       !(env.PAYMONGO_ALLOW_TEST_MODE === "true" && /^sk_test_/.test(env.PAYMONGO_SECRET_KEY || ""))) errors.push("Configure a live PayMongo secret key (or explicitly allow test mode on staging).");
   if (!env.PAYMONGO_WEBHOOK_SECRET) errors.push("PAYMONGO_WEBHOOK_SECRET is required for the registered webhook endpoint.");
   if (env.PAYMENT_RECONCILIATION_ENABLED === "false") errors.push("Payment reconciliation must be enabled.");
-  if (!env.GEMINI_API_KEY || env.GEMINI_SENSITIVE_DATA_APPROVED !== "true") errors.push("Production KYC needs a Gemini key with its billing and sensitive-data terms confirmed; set GEMINI_SENSITIVE_DATA_APPROVED only after confirmation.");
+  if (!["true", "false"].includes(env.GEMINI_SENSITIVE_DATA_APPROVED)) errors.push("Set GEMINI_SENSITIVE_DATA_APPROVED=false for manual KYC review, or true only after confirming the sensitive-data setup.");
+  if (env.GEMINI_SENSITIVE_DATA_APPROVED === "true" && !env.GEMINI_API_KEY) errors.push("GEMINI_API_KEY is required when GEMINI_SENSITIVE_DATA_APPROVED=true.");
+  if (env.KYC_DOCUMENT_PROVIDER && !KYC_SCREENING_PROVIDERS.includes(env.KYC_DOCUMENT_PROVIDER)) errors.push("KYC_DOCUMENT_PROVIDER must be gemini, private_ocr, or manual.");
+  if (env.KYC_DOCUMENT_PROVIDER === "private_ocr") {
+    if (!isPrivateKycServiceUrl(env.KYC_PRIVATE_SERVICE_URL, true)) errors.push("KYC_PRIVATE_SERVICE_URL must be an HTTPS URL for your private checker.");
+    if (env.KYC_PRIVATE_INTERNAL_API_KEY && (String(env.KYC_PRIVATE_INTERNAL_API_KEY).length < 32
+      || /changeme|example|<|>/i.test(env.KYC_PRIVATE_INTERNAL_API_KEY))) errors.push("KYC_PRIVATE_INTERNAL_API_KEY must be a private random secret of at least 32 characters when supplied.");
+    if (String(env.KYC_DOCUMENT_FINGERPRINT_SECRET || "").length < 32) errors.push("Private KYC review requires a shared KYC_DOCUMENT_FINGERPRINT_SECRET of at least 32 characters.");
+  }
   const root = env.STORAGE_ROOT;
   if (!root || !path.isAbsolute(root) || env.STORAGE_DURABILITY_CONFIRMED !== "true") {
     errors.push("STORAGE_ROOT must point to a mounted persistent volume; confirm it with STORAGE_DURABILITY_CONFIRMED=true.");

@@ -67,6 +67,8 @@ const preKycDocumentSchema = new mongoose.Schema(
       fieldsDetected: { type: [String], default: [] },
     },
     qualityIssues: { type: [String], default: [] },
+    privateScreening: { type: mongoose.Schema.Types.Mixed, default: null },
+    manualComparison: { type: mongoose.Schema.Types.Mixed, default: null },
     // Keyed fingerprint for duplicate checks. The original number is never persisted.
     documentNumberFingerprint: { type: String, default: "", select: false, index: true },
     provider: { type: String, default: "gemini" },

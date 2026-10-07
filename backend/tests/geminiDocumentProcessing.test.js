@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import PreKycDocument from "../models/PreKycDocument.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
-import { processNextKycDocument } from "../jobs/kycDocumentProcessing.job.js";
+import { processNextKycDocument, startKycDocumentProcessingJob, stopKycDocumentProcessingJob, triggerKycDocumentProcessing } from "../jobs/kycDocumentProcessing.job.js";
 import { screenVehiclePhoto } from "../services/vehiclePhoto.service.js";
 import { preVerifySupportingDocument } from "../controllers/kyc.controller.js";
 
@@ -106,6 +106,64 @@ function fixture(t, { attempt = 1, fetch = async () => providerResponse(), env =
   const provider = t.mock.method(globalThis, "fetch", fetch);
   return { writes, alerts, provider };
 }
+
+test("production opt-in still screens documents without automatically approving them", async (t) => {
+  const { writes, provider } = fixture(t, { env: { NODE_ENV: "production", GEMINI_SENSITIVE_DATA_APPROVED: "true" } });
+  assert.equal(await processNextKycDocument(), true);
+  assert.equal(provider.mock.callCount(), 1);
+  assert.equal(writes[0].status, "pending_review");
+  assert.equal(writes[0].detailsMatched, true);
+  assert.equal(writes[0].verifiedAt, null);
+});
+
+test("disabled KYC screening routes queued documents to review without reading or uploading images", async (t) => {
+  for (const mode of ["production", "development", "test"]) {
+    await t.test(mode, async (t) => {
+      const { writes, provider } = fixture(t, { env: {
+        NODE_ENV: mode, GEMINI_SENSITIVE_DATA_APPROVED: "false", GEMINI_API_KEY: undefined,
+        KYC_ALLOW_RULE_BASED_AUTO_VERIFY: "true", KYC_ALLOW_GEMINI_AUTO_APPROVE: "true",
+      } });
+      const fileReads = t.mock.method(fs, "readFile", async () => { throw new Error("The disabled worker must not read private images."); });
+      assert.equal(await processNextKycDocument(), true);
+      assert.equal(fileReads.mock.callCount(), 0);
+      assert.equal(provider.mock.callCount(), 0);
+      assert.equal(writes[0].status, "pending_review");
+      assert.equal(writes[0].reasonCode, "GEMINI_DATA_POLICY_UNCONFIRMED");
+      assert.equal(writes[0].provider, "manual");
+      assert.equal(writes[0].verifiedAt, null);
+      assert.equal(writes[0].nextAttemptAt, null);
+      assert.equal(writes[0].processingLockedAt, null);
+      for (const field of ["fileKey", "fileHash", "fileName", "profileSnapshot", "expiresAt", "detailsMatched"]) assert.equal(field in writes[0], false);
+    });
+  }
+});
+
+test("starting and triggering the disabled-screening queue cannot call Gemini", async (t) => {
+  const { writes, provider } = fixture(t, { env: { NODE_ENV: "production", GEMINI_SENSITIVE_DATA_APPROVED: "false" } });
+  t.after(stopKycDocumentProcessingJob);
+  startKycDocumentProcessingJob();
+  for (let attempt = 0; attempt < 20 && writes.length < 1; attempt += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  stopKycDocumentProcessingJob();
+  triggerKycDocumentProcessing();
+  for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 2);
+  assert.ok(writes.every((write) => write.status === "pending_review" && write.verifiedAt === null));
+  assert.equal(provider.mock.callCount(), 0);
+});
+
+test("the provider gate rechecks approval after an asynchronous private-file read", async (t) => {
+  const { writes, provider } = fixture(t, { env: { NODE_ENV: "production", GEMINI_SENSITIVE_DATA_APPROVED: "true" } });
+  t.mock.method(fs, "readFile", async () => {
+    process.env.GEMINI_SENSITIVE_DATA_APPROVED = "false";
+    return Buffer.from("synthetic document bytes; no personal information");
+  });
+  assert.equal(await processNextKycDocument(), true);
+  assert.equal(provider.mock.callCount(), 0);
+  assert.equal(writes[0].status, "pending_review");
+  assert.equal(writes[0].verifiedAt, null);
+  assert.equal(writes[0].nextAttemptAt, null);
+});
 
 test("the working default model extracts a matching ID while retaining admin approval", async (t) => {
   const { writes } = fixture(t, { fetch: async (url, options) => {
@@ -241,6 +299,7 @@ test("explicitly retrying the same upload requeues only an unavailable screening
   const buffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXeoAAAAASUVORK5CYII=", "base64");
   for (const [status, reasonCode, requeue] of [
     ["pending_review", "AUTOMATED_SCREENING_UNAVAILABLE", true],
+    ["pending_review", "GEMINI_DATA_POLICY_UNCONFIRMED", true],
     ["pending_review", "REVIEW_REQUIRED", false],
     ["verified", "PASSED", false],
     ["queued", "QUEUED", false],

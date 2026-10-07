@@ -82,6 +82,7 @@ venv/
 coverage.xml
 htmlcov/
 .deepface/
+kyc-ocr-service/models/
 
 # IDE / OS
 .vscode/

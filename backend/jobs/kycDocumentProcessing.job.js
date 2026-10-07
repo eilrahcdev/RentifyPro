@@ -7,6 +7,10 @@ import { DOCUMENT_REASON_CODES, evaluateDocumentExtraction } from "../services/d
 import { reconcileUserKyc } from "../services/kycReview.service.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { getKycUploadDir } from "../utils/storagePaths.js";
+import { GEMINI_MANUAL_REVIEW_REASON } from "../utils/geminiDataPolicy.js";
+import { getKycScreeningProvider, assertKycScreeningAvailable } from "../utils/kycScreeningProvider.js";
+import { inspectPrivateKycDocument } from "../services/privateKycOcr.service.js";
+import { evaluatePrivateDocumentInspection } from "../services/privateDocumentExtraction.service.js";
 
 const positiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -31,13 +35,16 @@ const classificationMinimum = () => positiveNumber(
   90,
 );
 const uploadRoot = getKycUploadDir;
-const maxAttempts = () => Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_MAX_ATTEMPTS, 3)));
+const maxAttempts = () => getKycScreeningProvider() === "private_ocr" ? 2
+  : Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_MAX_ATTEMPTS, 3)));
 const requestsPerMinute = () => Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_REQUESTS_PER_MINUTE, 4)));
-const retryDelayMs = (attempt) => Math.min(30_000 * (2 ** Math.max(attempt - 1, 0)), 5 * 60_000);
+const retryDelayMs = (attempt) => getKycScreeningProvider() === "private_ocr" ? 3_000
+  : Math.min(30_000 * (2 ** Math.max(attempt - 1, 0)), 5 * 60_000);
 
 let timer = null;
 let running = false;
 let lastGeminiRequestAt = 0;
+let draining = false;
 
 const safeFilePath = (fileKey) => {
   const root = uploadRoot();
@@ -76,6 +83,8 @@ const claimNextDocument = async () => {
 };
 
 const processClaimedDocument = async (document) => {
+  const provider = getKycScreeningProvider();
+  assertKycScreeningAvailable(provider);
   const filePath = safeFilePath(document.fileKey);
   if (!filePath) throw Object.assign(new Error("Private document file is unavailable."), { permanent: true });
   const buffer = await fs.readFile(filePath);
@@ -85,11 +94,11 @@ const processClaimedDocument = async (document) => {
   }
 
   const throttleStartedAt = Date.now();
-  await throttleGemini();
+  if (provider === "gemini") await throttleGemini();
   const providerStartedAt = Date.now();
   let result;
   try {
-    result = await verifyPhilippinesDocument({
+    result = await (provider === "private_ocr" ? inspectPrivateKycDocument : verifyPhilippinesDocument)({
       base64: buffer.toString("base64"),
       mimeType: document.mimeType || "image/jpeg",
       docType: document.docType,
@@ -104,7 +113,14 @@ const processClaimedDocument = async (document) => {
   }
   const providerFinishedAt = Date.now();
 
-  const preliminary = evaluateDocumentExtraction({
+  const preliminary = provider === "private_ocr" ? evaluatePrivateDocumentInspection({
+    inspection: result, docType: document.docType, selectedDocType: document.selectedDocCategory,
+    profile: document.profileSnapshot || {},
+    minimumClassificationConfidence: classificationMinimum(), fileHash: document.fileHash,
+    sessionId: document.sessionId, role: document.role,
+    requireBirthDate: document.docType === "id" && document.role === "user",
+    reviewVersion: document.reviewVersion || document.fileHash,
+  }) : evaluateDocumentExtraction({
     extraction: result,
     docType: document.docType,
     selectedDocType: document.selectedDocCategory,
@@ -122,7 +138,12 @@ const processClaimedDocument = async (document) => {
         status: { $in: ["verified", "pending_review", "rejected"] },
       })
     : null;
-  const decision = duplicate
+  const decision = duplicate && provider === "private_ocr"
+    ? { ...preliminary, status: "pending_review", reasonCode: DOCUMENT_REASON_CODES.DUPLICATE_DOCUMENT,
+      reviewReason: "This document may already be linked to another registration. An administrator must review it.",
+      privateScreening: { ...preliminary.privateScreening,
+        automatedCheck: { ...preliminary.privateScreening.automatedCheck, outcome: "review_needed" } } }
+    : duplicate
     ? evaluateDocumentExtraction({
         extraction: result,
         docType: document.docType,
@@ -171,6 +192,7 @@ const processClaimedDocument = async (document) => {
         qualityIssues: result.warnings || result.quality_issues || [],
         documentNumberFingerprint: decision.documentNumberFingerprint,
         verifiedAt: status === "verified" ? now : null,
+        ...(provider === "private_ocr" ? { provider: "private-ocr", privateScreening: decision.privateScreening } : {}),
         lastProcessedAt: now,
         processingLockedAt: null,
         nextAttemptAt: retryUncertainIdentity ? new Date(Date.now() + retryDelayMs(document.processingAttempts)) : null,
@@ -195,31 +217,42 @@ const processClaimedDocument = async (document) => {
 };
 
 const handleProcessingFailure = async (document, error) => {
+  const screeningDisabled = ["GEMINI_DATA_POLICY_UNCONFIRMED", "KYC_SCREENING_DISABLED"].includes(error?.code);
+  const privateServiceIncompatible = error?.code === "PRIVATE_KYC_SERVICE_INCOMPATIBLE";
   const attempt = Number(document.processingAttempts || 1);
   const retryable = !error?.permanent && error?.retryable !== false
     && [408, 429, 500, 502, 503, 504].includes(Number(error?.status || 503));
-  const shouldRetry = retryable && attempt < maxAttempts();
+  const privateTimeout = getKycScreeningProvider() === "private_ocr" && Number(error?.status) === 504;
+  const shouldRetry = retryable && !privateTimeout && attempt < maxAttempts();
   const status = shouldRetry ? "retry_wait" : error?.permanent ? "reupload_required" : "pending_review";
-  const safeMessage = shouldRetry
-    ? "Automated screening is temporarily unavailable. The request will retry automatically."
-    : error?.permanent
-      ? "We could not securely read the uploaded file. Please upload the document again."
-      : "Automated screening was unavailable. A reviewer will check this document manually.";
+  const safeMessage = screeningDisabled
+    ? GEMINI_MANUAL_REVIEW_REASON
+    : privateServiceIncompatible
+      ? "Document verification is temporarily unavailable. An administrator can review your uploaded document."
+      : shouldRetry
+        ? "Automated screening is temporarily unavailable. The request will retry automatically."
+        : error?.permanent
+          ? "We could not securely read the uploaded file. Please upload the document again."
+          : "Automated screening was unavailable. A reviewer will check this document manually.";
   const updateResult = await PreKycDocument.updateOne(
     { _id: document._id, status: "processing", fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
     {
       $set: {
         status,
         reason: safeMessage,
-        reasonCode: shouldRetry
-          ? "SCREENING_RETRY_PENDING"
-          : error?.permanent
-            ? "IMAGE_UNREADABLE"
-            : "AUTOMATED_SCREENING_UNAVAILABLE",
+        reasonCode: screeningDisabled || privateServiceIncompatible
+          ? error.code
+          : shouldRetry
+            ? "SCREENING_RETRY_PENDING"
+            : error?.permanent
+              ? "IMAGE_UNREADABLE"
+              : "AUTOMATED_SCREENING_UNAVAILABLE",
         processingError: String(error?.message || "Processing failed").slice(0, 240),
         processingLockedAt: null,
         lastProcessedAt: new Date(),
         nextAttemptAt: shouldRetry ? new Date(Date.now() + retryDelayMs(attempt)) : null,
+        ...(screeningDisabled ? { provider: "manual", verifiedAt: null }
+          : getKycScreeningProvider() === "private_ocr" ? { provider: "private-ocr", verifiedAt: null } : {}),
       },
     },
   );
@@ -254,8 +287,16 @@ export const processNextKycDocument = async () => {
 };
 
 export const triggerKycDocumentProcessing = () => {
-  if (!workerEnabled()) return;
-  void processNextKycDocument().catch((error) => {
+  if (!workerEnabled() || draining) return;
+  draining = true;
+  void (async () => {
+    try {
+      do {
+        if (!await processNextKycDocument()) break;
+        if (getKycScreeningProvider() !== "private_ocr") break;
+      } while (workerEnabled());
+    } finally { draining = false; }
+  })().catch((error) => {
     auditLog.error("KYC", "Document screening worker could not start", {
       detail: String(error?.message || error || "Unknown worker error"),
     });

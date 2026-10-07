@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!main.py
+!download_models.py
