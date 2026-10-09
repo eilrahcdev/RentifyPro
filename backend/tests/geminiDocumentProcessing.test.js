@@ -308,7 +308,7 @@ test("explicitly retrying the same upload requeues only an unavailable screening
   ]) {
     await t.test(`${status}: ${reasonCode}`, async (t) => {
       environment(t, { KYC_DOCUMENT_QUEUE_ENABLED: "false" });
-      const existing = { status, reasonCode, fileHash: crypto.createHash("sha256").update(buffer).digest("hex"), sessionId: "registration-fixture", selectedDocCategory: "DTI Business Name Registration", profileSnapshot: profile };
+      const existing = { status, reasonCode, fileHash: crypto.createHash("sha256").update(buffer).digest("hex"), sessionId: "registration-fixture", selectedDocCategory: "DTI Business Name Registration", profileSnapshot: profile, expiresAt: new Date(Date.now() + 3600000) };
       const writes = [];
       t.mock.method(fs, "mkdir", async () => {});
       t.mock.method(fs, "writeFile", async () => {});

@@ -1,3 +1,5 @@
+import RegistrationActions from "../components/RegistrationActions";
+import useRegistrationNavigation from "../hooks/useRegistrationNavigation";
 import PreKycReviewNotice from "./PreKycReviewNotice";
 import { documentStatusLabel as formatDocumentStatus } from "../utils/workflowStatus";
 // User registration
@@ -182,6 +184,8 @@ function RegisterForm({
 
   // Page state
   const [step, setStep] = useState(1);
+  const { formRef, formId, revealError } = useRegistrationNavigation(step);
+  const actionsSpaceRef = useRef(null);
   useEffect(() => {
     if (step === 4) identityHeadingRef.current?.focus();
   }, [step, showingSelfie]);
@@ -676,7 +680,7 @@ function RegisterForm({
     if (!canAct()) return;
     setSuccessMessage("");
     if (step === 1) {
-      if (!validateAccountStep()) return;
+      if (!validateAccountStep()) { revealError(); return; }
       setFormError("");
       setIsLoading(true);
       try {
@@ -695,14 +699,14 @@ function RegisterForm({
       }
       return;
     }
-    if (step === 2 && !validateAboutStep()) return;
-    if (step === 3 && !validateLocationStep()) return;
+    if (step === 2 && !validateAboutStep()) { revealError(); return; }
+    if (step === 3 && !validateLocationStep()) { revealError(); return; }
     if (step === 4 && reviewingId && kyc.idRegistered && kyc.idReadyForSelfie) {
       setReviewingId(false);
       setStepErrors({});
       return;
     }
-    if (step === 4 && !validateIdentityStep()) return;
+    if (step === 4 && !validateIdentityStep()) { revealError(); return; }
     setStep((current) => Math.min(TOTAL_STEPS, current + 1));
   };
 
@@ -959,8 +963,8 @@ function RegisterForm({
   // File upload card
 
   const FileCard = ({ title, description, file, previewUrl, onPick, onRemove, accept, inputRef, icon: Icon, error }) => (
-    <div className="rounded-2xl border border-gray-200 p-4 bg-white">
-      <div className="flex items-start gap-3">
+    <div className="rp-registration-upload min-w-0 rounded-2xl border border-gray-200 p-4 bg-white">
+      <div className="flex min-w-0 items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
           <Icon size={20} className="text-gray-700" />
         </div>
@@ -980,7 +984,7 @@ function RegisterForm({
               </button>
             ) : (
               <>
-                <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 truncate">
+                <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
                   <span className="font-medium">Selected:</span> {file.name}
                 </div>
                 <button type="button" onClick={onRemove} disabled={isLoading}
@@ -1064,9 +1068,9 @@ function RegisterForm({
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div {...draft.activityProps} className="rp-surface rp-glass rp-registration-card min-w-0 rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         {/* header */}
-        <div className="mb-6 text-center">
+        <div className="rp-registration-header mb-6 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
           <h2 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
@@ -1093,7 +1097,7 @@ function RegisterForm({
           event.preventDefault();
           if (step < TOTAL_STEPS) void goNext();
           else void handleFinalRegister(event);
-        }} className="space-y-4" noValidate>
+        }} id={formId} ref={formRef} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
           {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
           {formError && (
             <div
@@ -1104,12 +1108,12 @@ function RegisterForm({
             </div>
           )}
 
-          <fieldset disabled={isFormLocked} className="space-y-4">
+          <fieldset disabled={isFormLocked} className="min-w-0 space-y-4">
                 {/* step 1 */}
                 {[1, 2, 3].includes(step) && (
                   <>
                     {step === 1 && (
-                    <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+                    <div className="rp-registration-role-picker rounded-2xl border border-gray-200 p-4 bg-white">
                       <p className="font-semibold text-gray-900 mb-1">Register as</p>
                       <p className="text-sm text-gray-500 mb-3">Choose what type of account you want to create.</p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1131,7 +1135,7 @@ function RegisterForm({
                     </div>
                     )}
 
-                    <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+                    <div className="rp-registration-step-intro rounded-2xl border border-gray-200 p-4 bg-white">
                       <p className="font-semibold text-gray-900 mb-1">Step {step} — {STEP_LABELS[step - 1]}</p>
                       <p className="text-sm text-gray-500">
                         {step === 1 && "Set up the contact details and password for your account."}
@@ -1387,7 +1391,7 @@ function RegisterForm({
                         { label: "Document Review", value: formatDocumentStatus(documentReviewStatus), highlight: documentReviewStatus === "verified" },
                       ].map(({ label, value, highlight }, i, arr) => (
                         <React.Fragment key={label}>
-                          <div className="flex items-center justify-between">
+                          <div className="rp-registration-review-row">
                             <p className="text-sm text-gray-500">{label}</p>
                             <p className={`text-sm font-semibold ${highlight ? "text-green-600" : "text-gray-900"}`}>{value}</p>
                           </div>
@@ -1413,7 +1417,7 @@ function RegisterForm({
                 {step === 5 && documentReviewNotice}
 
                 {/* navigation */}
-                <div className="flex items-center gap-3 pt-1">
+                <RegistrationActions spaceRef={actionsSpaceRef}>
                   <button type="button" onClick={goBack} disabled={step === 1 || isFormLocked}
                     className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
                     <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : "Back"}
@@ -1432,7 +1436,7 @@ function RegisterForm({
                       )}
                     </button>
                   ) : (
-                    <button type="submit" disabled={isFormLocked || !isDocumentApproved}
+                    <button type="submit" form={formId} disabled={isFormLocked || !isDocumentApproved}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
                       {isLoading ? (
                         <>
@@ -1447,10 +1451,10 @@ function RegisterForm({
                       )}
                     </button>
                   )}
-                </div>
+                </RegistrationActions>
 
                 {step === 1 && (
-                  <p className="text-center text-gray-500 text-sm mt-1">
+                  <p className="rp-registration-signin text-center text-slate-600 text-sm mt-1">
                     Already have an account?{" "}
                     <button type="button" onClick={onNavigateToSignIn} disabled={isFormLocked}
                       className="text-[#017FE6] font-semibold hover:underline transition-colors disabled:opacity-50">
@@ -1466,6 +1470,7 @@ function RegisterForm({
           )}
         </form>
       </div>
+      <div ref={actionsSpaceRef} className="rp-registration-actions-space" aria-hidden="true" />
       <LegalPolicyModal
         isOpen={Boolean(legalModalType)}
         documentType={legalModalType === "privacy" ? "privacy" : "terms"}

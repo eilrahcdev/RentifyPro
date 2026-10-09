@@ -1,3 +1,6 @@
+import ResponsiveDisclosure from "../../components/ResponsiveDisclosure";
+import useResponsiveList from "../../hooks/useResponsiveList";
+import ListRevealControls from "../../components/ListRevealControls";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, CarFront, Check, ImagePlus, MapPin, Save, Settings2, UploadCloud, UserRoundCheck, Users, Wrench, X } from "lucide-react";
 import API from "../../utils/api";
@@ -300,7 +303,7 @@ function VehicleModal({
           }));
           onSubmit();
           }}
-          className="relative flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:rounded-3xl"
+          className="rp-vehicle-editor relative flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:rounded-3xl"
         >
           <fieldset disabled={loading} className="contents">
           <div className="border-b border-slate-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
@@ -331,9 +334,18 @@ function VehicleModal({
             </div>
           </div>
 
-          <div id="owner-vehicle-form-scroll-region" className="grid flex-1 overflow-y-auto bg-[#f7f9fc] xl:grid-cols-[minmax(0,1.75fr)_minmax(300px,0.75fr)]">
+          <nav aria-label="Vehicle form sections" className="rp-editor-navigation">
+            {["Listing details", "Vehicle specifications", "Driver option", "Photos and cover"].map((label, index) => (
+              <button key={label} type="button" onClick={() => {
+                const section = document.getElementById(`vehicle-editor-section-${index + 1}`);
+                section?.focus({ preventScroll: true });
+                section?.scrollIntoView({ block: "start", behavior: "instant" });
+              }}>{label}</button>
+            ))}
+          </nav>
+          <div id="owner-vehicle-form-scroll-region" className="rp-vehicle-editor-scroll grid min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fc] xl:grid-cols-[minmax(0,1.75fr)_minmax(300px,0.75fr)]">
             <div className="min-w-0 space-y-5 p-4 sm:p-6">
-            <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
+            <section id="vehicle-editor-section-1" tabIndex={-1} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
               <VehicleFormSectionHeader
                 step="01"
                 icon={CarFront}
@@ -491,7 +503,7 @@ function VehicleModal({
               </div>
             </section>
 
-            <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
+            <section id="vehicle-editor-section-2" tabIndex={-1} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
               <VehicleFormSectionHeader
                 step="02"
                 icon={Settings2}
@@ -571,7 +583,7 @@ function VehicleModal({
               </div>
             </section>
 
-            <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
+            <section id="vehicle-editor-section-3" tabIndex={-1} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
               <VehicleFormSectionHeader
                 step="03"
                 icon={UserRoundCheck}
@@ -638,7 +650,7 @@ function VehicleModal({
               )}
             </section>
 
-            <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
+            <section id="vehicle-editor-section-4" tabIndex={-1} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
               <div className="relative">
                 <VehicleFormSectionHeader
                   step="04"
@@ -933,6 +945,7 @@ function VehicleModal({
           </div>
 
             <aside className="border-t border-slate-200 bg-white p-5 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-t-0 xl:p-6">
+              <ResponsiveDisclosure label="Listing preview and readiness">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#017FE6]">Renter view</p>
@@ -1006,6 +1019,7 @@ function VehicleModal({
                   ))}
                 </div>
               </div>
+              </ResponsiveDisclosure>
             </aside>
           </div>
 
@@ -1135,6 +1149,8 @@ function Vehicles() {
       return matchesSearch && matchesStatus;
     });
   }, [vehicles, search, statusFilter]);
+
+  const visibleVehicles = useResponsiveList(filteredVehicles, `${search}|${statusFilter}`);
 
   const openEditModal = (vehicle) => {
     setModalMode("edit");
@@ -1376,7 +1392,7 @@ function Vehicles() {
       )}
 
       {!loading && <div className="rp-owner-vehicle-grid">
-        {filteredVehicles.map((vehicle) => (
+        {visibleVehicles.items.map((vehicle) => (
           <VehicleCard
             key={vehicle._id}
             vehicle={vehicle}
@@ -1417,6 +1433,8 @@ function Vehicles() {
           />
         ))}
       </div>}
+      {!loading && <ListRevealControls list={visibleVehicles} />}
+
       {modalOpen && (
         <VehicleModal
           mode={modalMode}

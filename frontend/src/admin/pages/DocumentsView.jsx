@@ -33,7 +33,7 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(280px,1.5fr)_220px_230px_auto] lg:items-end">
+        <div className="rp-admin-filters grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(280px,1.5fr)_220px_230px_auto] lg:items-end">
           <SearchField label="Search Documents" value={search} onChange={setSearch} placeholder="Search by customer, filename, or document type..." />
           <FilterSelect label="Approval Status" value={status} onChange={setStatus} options={["All Statuses", "Queued", "Screening", "Retrying", "Pending Review", "Needs Re-upload", "Rejected"]} />
           <FilterSelect label="Document Type" value={type} onChange={setType} options={["All Document Types", ...documentTypes]} />

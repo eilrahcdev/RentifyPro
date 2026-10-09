@@ -1000,9 +1000,79 @@ export default function Dashboard() {
         {syncing ? "Syncing live updates..." : loading ? "Loading dashboard..." : `Last updated: ${formatDateTime(lastUpdated)}`}
       </p>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.92fr)]">
+      <section className="rp-dashboard-work grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.92fr)]">
+        <aside className="rp-dashboard-tasks flex h-full min-h-0 flex-col gap-5">
+          {/* Today's Tasks */}
+          <Panel className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center gap-2 border-b border-slate-200/80 pb-4 text-sm font-semibold text-slate-800">
+              <ListTodo size={16} className="text-[#017FE6]" />
+              Today&apos;s Tasks
+            </div>
+
+            <div className={`mt-4 min-h-0 flex-1 overflow-y-auto pr-1 ${todayTasks.length === 0 ? "mb-4 flex" : "space-y-3"}`}>
+              {todayTasks.length === 0 ? (
+                <EmptyState message="No scheduled tasks today." icon={ListTodo} compact fill />
+              ) : (
+                todayTasks.slice(0, 3).map((task) => {
+                  const renter = getRenterProfile(task.booking.renter);
+                  const TaskIcon = taskIconOverrides[task.type] || task.icon;
+                  return (
+                    <DashboardActionRow
+                      key={`${task.type}-${task.booking._id}`}
+                      onClick={openBookingTab}
+                      icon={TaskIcon}
+                      tone={task.tone}
+                      label={task.label}
+                      vehicleName={task.booking.vehicle?.name || "Vehicle"}
+                      renterName={renter.displayName}
+                      actionLabel={task.value}
+                      actionIsBadge={task.value === "Review"}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            <SectionViewAllFooter label="View all tasks" onClick={() => openViewAllModal("tasks")} pushToBottom />
+          </Panel>
+
+          {/* Renter Requests */}
+          <Panel className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center gap-2 border-b border-slate-200/80 pb-4 text-sm font-semibold text-slate-800">
+              <Inbox size={16} className="text-[#017FE6]" />
+              Renter Requests
+            </div>
+
+            <div className={`mt-4 min-h-0 flex-1 overflow-y-auto pr-1 ${renterRequests.length === 0 ? "mb-4 flex" : "space-y-3"}`}>
+              {renterRequests.length === 0 ? (
+                <EmptyState message="No renter requests right now." icon={Inbox} compact fill />
+              ) : (
+                renterRequests.slice(0, 3).map((request) => {
+                  const renter = getRenterProfile(request.booking.renter);
+                  const RequestIcon = request.icon;
+
+                  return (
+                    <DashboardActionRow
+                      key={request.key}
+                      onClick={() => openRenterRequestReview(request)}
+                      icon={RequestIcon}
+                      tone={request.tone}
+                      label={request.label}
+                      vehicleName={request.booking.vehicle?.name || "Vehicle"}
+                      renterName={renter.displayName}
+                      actionLabel="Review"
+                      actionIsBadge
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            <SectionViewAllFooter label="View all requests" onClick={() => openViewAllModal("requests")} pushToBottom />
+          </Panel>
+        </aside>
         {/* Calendar */}
-        <Panel className="overflow-hidden">
+        <Panel className="rp-dashboard-calendar overflow-hidden">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-slate-200/80 pb-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <CalendarDays size={20} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />
@@ -1110,76 +1180,7 @@ export default function Dashboard() {
           </div>
         </Panel>
 
-        <aside className="flex h-full min-h-0 flex-col gap-5">
-          {/* Today's Tasks */}
-          <Panel className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 border-b border-slate-200/80 pb-4 text-sm font-semibold text-slate-800">
-              <ListTodo size={16} className="text-[#017FE6]" />
-              Today&apos;s Tasks
-            </div>
 
-            <div className={`mt-4 min-h-0 flex-1 overflow-y-auto pr-1 ${todayTasks.length === 0 ? "mb-4 flex" : "space-y-3"}`}>
-              {todayTasks.length === 0 ? (
-                <EmptyState message="No scheduled tasks today." icon={ListTodo} compact fill />
-              ) : (
-                todayTasks.slice(0, 3).map((task) => {
-                  const renter = getRenterProfile(task.booking.renter);
-                  const TaskIcon = taskIconOverrides[task.type] || task.icon;
-                  return (
-                    <DashboardActionRow
-                      key={`${task.type}-${task.booking._id}`}
-                      onClick={openBookingTab}
-                      icon={TaskIcon}
-                      tone={task.tone}
-                      label={task.label}
-                      vehicleName={task.booking.vehicle?.name || "Vehicle"}
-                      renterName={renter.displayName}
-                      actionLabel={task.value}
-                      actionIsBadge={task.value === "Review"}
-                    />
-                  );
-                })
-              )}
-            </div>
-
-            <SectionViewAllFooter label="View all tasks" onClick={() => openViewAllModal("tasks")} pushToBottom />
-          </Panel>
-
-          {/* Renter Requests */}
-          <Panel className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 border-b border-slate-200/80 pb-4 text-sm font-semibold text-slate-800">
-              <Inbox size={16} className="text-[#017FE6]" />
-              Renter Requests
-            </div>
-
-            <div className={`mt-4 min-h-0 flex-1 overflow-y-auto pr-1 ${renterRequests.length === 0 ? "mb-4 flex" : "space-y-3"}`}>
-              {renterRequests.length === 0 ? (
-                <EmptyState message="No renter requests right now." icon={Inbox} compact fill />
-              ) : (
-                renterRequests.slice(0, 3).map((request) => {
-                  const renter = getRenterProfile(request.booking.renter);
-                  const RequestIcon = request.icon;
-
-                  return (
-                    <DashboardActionRow
-                      key={request.key}
-                      onClick={() => openRenterRequestReview(request)}
-                      icon={RequestIcon}
-                      tone={request.tone}
-                      label={request.label}
-                      vehicleName={request.booking.vehicle?.name || "Vehicle"}
-                      renterName={renter.displayName}
-                      actionLabel="Review"
-                      actionIsBadge
-                    />
-                  );
-                })
-              )}
-            </div>
-
-            <SectionViewAllFooter label="View all requests" onClick={() => openViewAllModal("requests")} pushToBottom />
-          </Panel>
-        </aside>
       </section>
 
       {/* ── Schedule + Recent Activity ────────────────── */}

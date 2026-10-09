@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from "react";
+import ProfileSection from "../components/ProfileSection";
+import BecomeVehicleOwner from "../components/BecomeVehicleOwner";
+import useCompactLayout from "../hooks/useCompactLayout";
+import React, { useEffect, useRef, useState } from "react";
 import {
   CarFront,
   ShieldCheck,
@@ -16,25 +19,17 @@ import InfoModal from "../components/InfoModal";
 import API from "../utils/api";
 import { reconnectSocket } from "../utils/socket";
 import VerificationStepper from "../verification/VerificationStepper";
+import { describeLoginDevice } from "../utils/loginDevice";
 import {
   getStoredUser,
   getUserProfileFromStorage,
   normalizeUserProfile,
   persistUserProfile,
 } from "../utils/userProfile";
-import {
-  fileToBase64,
-  stripDataUrlPrefix,
-  getMimeFromDataUrl,
-  validateSupportingDocumentFile,
-} from "../utils/cameraKyc";
 import { validateAvatarImageFile } from "../utils/fileValidation";
-import { getPreKycSessionToken, preVerifySupportingDocument } from "../utils/kycApi";
 import { RELATIONSHIP_OPTIONS } from "../data/registerValidation";
-import { BIR_SUPPORTING_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 
 const PSGC_BASE_URL = "https://psgc.gitlab.io/api";
-const BIR_SUPPORTING_TYPES = new Set(BIR_SUPPORTING_DOCUMENT_TYPES);
 const fetchPsgcOptions = async (path, signal) => {
   const response = await fetch(`${PSGC_BASE_URL}${path}`, { signal });
   if (!response.ok) throw new Error(`PSGC request failed with status ${response.status}.`);
@@ -46,7 +41,7 @@ const KYC_STATUS_LABELS = {
   not_started: "Not started",
   id_uploaded: "ID uploaded",
   challenge_passed: "Document review pending",
-  approved: "Approved",
+  approved: "Identity verified",
   rejected: "Rejected",
 };
 const MIN_RENTER_AGE = 18;
@@ -304,11 +299,13 @@ const AccountSettings = ({
   onNavigateToNotifications,
   onNavigateToAccountSettings,
   onNavigateToReports,
+  onOpenOwnerDashboard,
   isLoggedIn,
   user,
   onLogout,
 }) => {
   const [showAI, setShowAI] = useState(false);
+  const compact = useCompactLayout();
   const [activeTab, setActiveTab] = useState(() =>
     isLoggedIn && user?.role !== "admin" && user?.kycStatus !== "approved"
       ? "Verification"
@@ -325,6 +322,18 @@ const AccountSettings = ({
   }));
   const [draftProfile, setDraftProfile] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
+  const previousTab = useRef(activeTab);
+  useEffect(() => {
+    const changed = previousTab.current !== activeTab;
+    previousTab.current = activeTab;
+    if (!compact || !changed) return;
+    const frame = requestAnimationFrame(() => {
+      const heading = document.getElementById("account-content-title");
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, compact]);
   const [, setLoadingProfile] = useState(false);
   const [savingSection, setSavingSection] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -341,9 +350,7 @@ const AccountSettings = ({
   const [passwordError, setPasswordError] = useState("");
   const [notificationSettings, setNotificationSettings] = useState({
     email: true,
-    sms: false,
     bookingUpdates: true,
-    promotions: false,
   });
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
@@ -357,25 +364,12 @@ const AccountSettings = ({
   const [kycError, setKycError] = useState("");
   const [kycLoading, setKycLoading] = useState(false);
   const [showKycStepper, setShowKycStepper] = useState(false);
+  const [kycStepperMode, setKycStepperMode] = useState("verify");
+  const [faceReverification, setFaceReverification] = useState(null);
+  const [lastFaceReverifiedAt, setLastFaceReverifiedAt] = useState(null);
   const [loginActivity, setLoginActivity] = useState([]);
   const [loginActivityLoading, setLoginActivityLoading] = useState(false);
   const [loginActivityError, setLoginActivityError] = useState("");
-  const [ownerUpgradeLoading, setOwnerUpgradeLoading] = useState(false);
-  const [ownerUpgradeMessage, setOwnerUpgradeMessage] = useState("");
-  const [ownerUpgradeError, setOwnerUpgradeError] = useState("");
-  const [supportingDocFile, setSupportingDocFile] = useState(null);
-  const [supportingDocType, setSupportingDocType] = useState("");
-  const [supportingTin, setSupportingTin] = useState("");
-  const [supportingBranchCode, setSupportingBranchCode] = useState("");
-  const [supportingDocStatus, setSupportingDocStatus] = useState("");
-  const [supportingDocLoading, setSupportingDocLoading] = useState(false);
-  const [ownerForm, setOwnerForm] = useState({
-    ownerType: "",
-    businessName: "",
-    licenseNumber: "",
-    permitNumber: "",
-  });
-
   const [regions, setRegions] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
@@ -386,7 +380,6 @@ const AccountSettings = ({
 
   const current = draftProfile || profile;
   const activeUserIdentity = String(user?._id || user?.email || "").trim().toLowerCase();
-  const isOwner = String(profile.role || user?.role || "").trim().toLowerCase() === "owner";
 
   useEffect(() => {
     let mounted = true;
@@ -401,10 +394,13 @@ const AccountSettings = ({
       try {
         const response = await API.getProfile();
         if (!mounted || !response?.user) return;
-        const normalized = persistUserProfile(response.user);
+        const storedProfile = getStoredUser();
+        const normalized = normalizeUserProfile(response.user, storedProfile);
+        if (Object.entries(normalized).some(([key, value]) => storedProfile[key] !== value)) {
+          persistUserProfile(response.user);
+        }
         setProfile({ ...DEFAULT_PROFILE, ...normalized });
         setProfilePhoto(normalized.avatar || null);
-        window.dispatchEvent(new Event("user-profile-updated"));
       } catch {
         if (!mounted) return;
         const storedProfile = getUserProfileFromStorage();
@@ -586,39 +582,13 @@ const AccountSettings = ({
     if (activeTab === "Notifications Settings") {
       loadNotificationSettings();
     }
-    if (activeTab === "Login Activity") {
+    if (activeTab === "Recent sign-ins") {
       loadLoginActivity();
     }
     if (activeTab === "Verification") {
       loadKycStatus();
     }
-    if (activeTab === "Become a Vehicle Owner") {
-      setOwnerUpgradeMessage("");
-      setOwnerUpgradeError("");
-    }
   }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== "Become a Vehicle Owner") return;
-    setOwnerForm({
-      ownerType: profile.ownerType || "",
-      businessName: profile.businessName || "",
-      licenseNumber: profile.licenseNumber || "",
-      permitNumber: profile.permitNumber || "",
-    });
-  }, [
-    activeTab,
-    profile.ownerType,
-    profile.businessName,
-    profile.licenseNumber,
-    profile.permitNumber,
-  ]);
-
-  useEffect(() => {
-    if (supportingDocFile || supportingDocType) {
-      setSupportingDocStatus("");
-    }
-  }, [supportingDocFile, supportingDocType]);
 
   useEffect(() => {
     if (editingSection !== "location" || isAddressEdited || !draftProfile) return;
@@ -692,7 +662,10 @@ const AccountSettings = ({
     setNotificationError("");
     try {
       const response = await API.getNotificationSettings();
-      setNotificationSettings((prev) => ({ ...prev, ...(response.settings || {}) }));
+      setNotificationSettings((prev) => ({
+        email: response.settings?.email ?? prev.email,
+        bookingUpdates: response.settings?.bookingUpdates ?? prev.bookingUpdates,
+      }));
     } catch (error) {
       setNotificationError(error.message || "Failed to load notification settings.");
     } finally {
@@ -706,7 +679,10 @@ const AccountSettings = ({
     setNotificationError("");
     try {
       const response = await API.updateNotificationSettings(notificationSettings);
-      setNotificationSettings((prev) => ({ ...prev, ...(response.settings || notificationSettings) }));
+      setNotificationSettings((prev) => ({
+        email: response.settings?.email ?? prev.email,
+        bookingUpdates: response.settings?.bookingUpdates ?? prev.bookingUpdates,
+      }));
       setNotificationMessage("Notification settings saved.");
     } catch (error) {
       setNotificationError(error.message || "Failed to update notification settings.");
@@ -760,6 +736,8 @@ const AccountSettings = ({
       const nextStatus = response?.status || "not_started";
       setKycStatus(nextStatus);
       setKycRemarks(response?.remarks || "");
+      setFaceReverification(response?.reverification || null);
+      setLastFaceReverifiedAt(response?.lastFaceReverifiedAt || null);
 
       if (nextStatus === "approved") {
         try {
@@ -789,95 +767,6 @@ const AccountSettings = ({
       setLoginActivityError(error.message || "Failed to load login activity.");
     } finally {
       setLoginActivityLoading(false);
-    }
-  };
-
-  const verifySupportingDoc = async () => {
-    if (!supportingDocType) {
-      setSupportingDocStatus("Please select your supporting document type first.");
-      return;
-    }
-    if (!supportingDocFile) {
-      setSupportingDocStatus("Please upload your supporting document first.");
-      return;
-    }
-    if (!profile.email) {
-      setSupportingDocStatus("We could not find your email. Please refresh and try again.");
-      return;
-    }
-    if (BIR_SUPPORTING_TYPES.has(supportingDocType)) {
-      if (!String(ownerForm.businessName || "").trim()) {
-        setSupportingDocStatus("Enter the business name shown on your BIR document.");
-        return;
-      }
-      if (!/^\d{9}$/.test(supportingTin) || !/^\d{3,5}$/.test(supportingBranchCode)) {
-        setSupportingDocStatus("Enter the 9-digit TIN and the branch code shown on your BIR document.");
-        return;
-      }
-    }
-    setSupportingDocLoading(true);
-    setSupportingDocStatus("");
-    try {
-      await validateSupportingDocumentFile(supportingDocFile);
-      const dataUrl = await fileToBase64(supportingDocFile);
-      const clean = stripDataUrlPrefix(dataUrl);
-      const mime = getMimeFromDataUrl(dataUrl);
-      const response = await preVerifySupportingDocument(profile.email, clean, mime, "owner", {
-        documentType: supportingDocType,
-        userProfile: {
-          full_name: profile.name,
-          first_name: String(profile.firstName || "").trim(),
-          last_name: String(profile.lastName || "").trim(),
-          email: profile.email,
-          owner_type: ownerForm.ownerType || profile.ownerType,
-          business_name: ownerForm.businessName || profile.businessName,
-          permit_number: ownerForm.permitNumber || profile.permitNumber,
-          tax_identification_number: BIR_SUPPORTING_TYPES.has(supportingDocType) ? supportingTin : "",
-          branch_code: BIR_SUPPORTING_TYPES.has(supportingDocType) ? supportingBranchCode : "",
-          address: profile.address,
-        },
-      });
-      setSupportingDocStatus(
-        response.message ||
-          "Supporting document queued for automated screening and Super Admin review."
-      );
-    } catch (error) {
-      setSupportingDocStatus(error.message || "Supporting document verification failed.");
-    } finally {
-      setSupportingDocLoading(false);
-    }
-  };
-
-  const handleUpgradeToOwner = async () => {
-    setOwnerUpgradeLoading(true);
-    setOwnerUpgradeError("");
-    setOwnerUpgradeMessage("");
-    try {
-      const preKycToken = await getPreKycSessionToken(profile.email, "owner");
-      const response = await API.upgradeToOwner({
-        ownerType: ownerForm.ownerType || "",
-        businessName: ownerForm.businessName || "",
-        licenseNumber: ownerForm.licenseNumber || "",
-        permitNumber: ownerForm.permitNumber || "",
-        preKycToken,
-      });
-      const updated = persistUserProfile(
-        response.user || {
-          ...profile,
-          role: "owner",
-          ownerType: ownerForm.ownerType,
-          businessName: ownerForm.businessName,
-          licenseNumber: ownerForm.licenseNumber,
-          permitNumber: ownerForm.permitNumber,
-        }
-      );
-      setProfile((prev) => ({ ...prev, ...updated, role: "owner" }));
-      setOwnerUpgradeMessage(response.message || "You are now registered as a vehicle owner.");
-      window.dispatchEvent(new Event("user-profile-updated"));
-    } catch (error) {
-      setOwnerUpgradeError(error.message || "Failed to upgrade to owner.");
-    } finally {
-      setOwnerUpgradeLoading(false);
     }
   };
 
@@ -1033,14 +922,20 @@ const AccountSettings = ({
 
       <div className="min-h-screen bg-transparent pt-24">
         <div className="rp-page-shell mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:flex-row">
-          <aside className="w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
+          <aside className="rp-account-sidebar w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
+            <label className="rp-account-selector">
+              <span className="text-sm font-semibold">Account section</span>
+              <select value={activeTab} onChange={(event) => setActiveTab(event.target.value)} className="rp-input mt-2 w-full">
+                {["Profile Settings", "Change Password", "Notifications Settings", "Verification", "Recent sign-ins", "Become a Vehicle Owner"].map((label) => <option key={label}>{label}</option>)}
+              </select>
+            </label>
             <div className="rp-account-navigation rp-minimal-card space-y-1 p-5">
               {[
                 { label: "Profile Settings", icon: User },
                 { label: "Change Password", icon: Lock },
                 { label: "Notifications Settings", icon: BellRing },
                 { label: "Verification", icon: ShieldCheck },
-                { label: "Login Activity", icon: Shield },
+                { label: "Recent sign-ins", icon: Shield },
                 { label: "Become a Vehicle Owner", icon: CarFront },
               ].map(({ label, icon: Icon }) => (
                 <button
@@ -1062,7 +957,7 @@ const AccountSettings = ({
 
           <main className="rp-account-content min-w-0 flex-1 space-y-8 pb-12">
             <div className="rp-page-header mb-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
+              <h1 id="account-content-title" tabIndex={-1} className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
               <p className="text-base text-gray-500 max-w-xl">
                 Manage your personal information and account preferences
               </p>
@@ -1082,7 +977,7 @@ const AccountSettings = ({
                 )}
 
                 <div
-                  className={`rp-settings-card relative flex items-center gap-4 overflow-visible p-6 ${
+                  className={`rp-settings-card rp-profile-summary relative flex items-center gap-4 overflow-visible p-6 ${
                     showPhotoMenu ? "z-[60]" : "z-10"
                   }`}
                 >
@@ -1415,25 +1310,10 @@ const AccountSettings = ({
                 ),
               },
             ].map((section) => (
-              <div key={section.key} className="rp-settings-card p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold">{section.title}</h3>
-
-                  <button
-                    onClick={() => toggleEdit(section.key)}
-                    disabled={savingSection === section.key}
-                    className="text-sm border px-4 py-1 rounded-full hover:bg-gray-100 disabled:opacity-60"
-                  >
-                    {savingSection === section.key
-                      ? "Saving..."
-                      : editingSection === section.key
-                        ? "Save"
-                        : "Edit"}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{section.content}</div>
-              </div>
+              <ProfileSection key={section.key} title={section.title}
+                summary={section.key === "personal" ? [profile.name, profile.gender].filter(Boolean).join(" · ") : section.key === "contact" ? profile.email : section.key === "location" ? profile.address : profile.emergencyContactName}
+                editing={editingSection === section.key} saving={savingSection === section.key}
+                onEdit={() => toggleEdit(section.key)}>{section.content}</ProfileSection>
             ))}
               </>
             )}
@@ -1542,28 +1422,7 @@ const AccountSettings = ({
                     <span>
                       <span className="font-medium">Email notifications</span>
                       <span className="block text-xs text-gray-500">
-                        Receive important updates in your inbox.
-                      </span>
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-3 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="mt-1 accent-[#017FE6]"
-                      checked={Boolean(notificationSettings.sms)}
-                      disabled={notificationLoading}
-                      onChange={(event) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          sms: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>
-                      <span className="font-medium">SMS alerts</span>
-                      <span className="block text-xs text-gray-500">
-                        Get time-sensitive updates via text message.
+                        Receive account updates by email.
                       </span>
                     </span>
                   </label>
@@ -1573,7 +1432,7 @@ const AccountSettings = ({
                       type="checkbox"
                       className="mt-1 accent-[#017FE6]"
                       checked={Boolean(notificationSettings.bookingUpdates)}
-                      disabled={notificationLoading}
+                      disabled={notificationLoading || !notificationSettings.email}
                       onChange={(event) =>
                         setNotificationSettings((prev) => ({
                           ...prev,
@@ -1582,34 +1441,15 @@ const AccountSettings = ({
                       }
                     />
                     <span>
-                      <span className="font-medium">Booking updates</span>
+                      <span className="font-medium">Booking and payment emails</span>
                       <span className="block text-xs text-gray-500">
-                        Stay informed about booking confirmations and changes.
+                        Receive booking confirmations, changes, and payment updates by email.
                       </span>
                     </span>
                   </label>
 
-                  <label className="flex items-start gap-3 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="mt-1 accent-[#017FE6]"
-                      checked={Boolean(notificationSettings.promotions)}
-                      disabled={notificationLoading}
-                      onChange={(event) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          promotions: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>
-                      <span className="font-medium">Promotions</span>
-                      <span className="block text-xs text-gray-500">
-                        Receive deals and product updates.
-                      </span>
-                    </span>
-                  </label>
                 </div>
+                <p className="text-sm text-gray-600">In-app notifications remain available. Verification codes and password reset emails are sent when you request them.</p>
 
                 <button
                   onClick={saveNotificationSettings}
@@ -1685,7 +1525,7 @@ const AccountSettings = ({
                     <div>
                       <h3 className="font-semibold text-lg">ID & Selfie Verification</h3>
                       <p className="text-sm text-gray-500">
-                        Complete your identity verification to unlock rentals and owner access.
+                        Verify your ID and selfie before requesting a rental.
                       </p>
                     </div>
                     <span
@@ -1702,10 +1542,17 @@ const AccountSettings = ({
                   </div>
 
                   <div className="flex flex-wrap gap-3">
+                    {kycStatus === "approved" && (
+                      <button type="button" onClick={() => { setKycStepperMode("reverify"); setShowKycStepper(true); }}
+                        disabled={showKycStepper || kycLoading}
+                        className="rp-btn-primary min-h-11 px-4 py-2 text-sm disabled:opacity-60">
+                        Reverify face
+                      </button>
+                    )}
                     {!['approved', 'challenge_passed'].includes(kycStatus) && (
                       <button
                         type="button"
-                        onClick={() => setShowKycStepper((prev) => !prev)}
+                        onClick={() => { setKycStepperMode("verify"); setShowKycStepper((prev) => !prev); }}
                         className="px-4 py-2 rounded-lg bg-[#017FE6] text-sm font-semibold text-white hover:bg-[#0165B8]"
                       >
                         {showKycStepper ? "Hide verification" : kycStatus === "rejected" ? "Resubmit verification" : "Verify now"}
@@ -1724,19 +1571,30 @@ const AccountSettings = ({
                   {kycError && <p role="alert" className="text-sm text-rose-700">{kycError}</p>}
                   {kycRemarks && <p role="status" className="text-sm text-slate-600">{kycRemarks}</p>}
                   {kycStatus === "challenge_passed" && <p className="text-sm text-amber-700">Your selfie passed. Document approval is still pending. Refresh your status after review.</p>}
+                  {kycStatus === "approved" && faceReverification?.status === "selfie_matched" && (
+                    <p role="status" className="text-sm text-amber-800">Your new selfie matched. ID review for this reverification is pending. Your existing approval remains active.</p>
+                  )}
+                  {kycStatus === "approved" && ["rejected", "expired"].includes(faceReverification?.status) && (
+                    <p role="status" className="text-sm text-gray-600">Your last reverification needs another attempt. Your existing identity approval is unchanged.</p>
+                  )}
+                  {kycStatus === "approved" && lastFaceReverifiedAt && (
+                    <p className="text-sm text-gray-600">Face last reverified: {new Date(lastFaceReverifiedAt).toLocaleString()}</p>
+                  )}
                   {showKycStepper && (
                     <div className="pt-2">
-                      <VerificationStepper onVerificationComplete={loadKycStatus} />
+                      <VerificationStepper mode={kycStepperMode}
+                        reverification={faceReverification} onVerificationComplete={loadKycStatus}
+                        onCancel={() => { setShowKycStepper(false); void loadKycStatus(); }} />
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {activeTab === "Login Activity" && (
+            {activeTab === "Recent sign-ins" && (
               <div className="rp-settings-card space-y-4 p-6">
                 <div className="space-y-1">
-                  <h3 className="font-semibold text-lg">Login Activity</h3>
+                  <h3 className="font-semibold text-lg">Recent sign-ins</h3>
                   <p className="text-sm text-gray-500">
                     Track recent sign-ins to your account.
                   </p>
@@ -1749,7 +1607,7 @@ const AccountSettings = ({
                 )}
 
                 {loginActivityLoading ? (
-                  null
+                  <p role="status" className="text-sm text-gray-600">Loading recent sign-ins...</p>
                 ) : loginActivity.length ? (
                   <div className="divide-y">
                     {loginActivity.map((entry) => {
@@ -1765,9 +1623,9 @@ const AccountSettings = ({
                         >
                           <p className="text-sm font-medium text-gray-800">{timestamp}</p>
                           <p className="text-xs text-gray-500">
-                            IP: {entry.ip || "Unknown"} -{" "}
-                            {entry.userAgent || "Unknown device"}
+                            {describeLoginDevice(entry.userAgent)}
                           </p>
+                          <p className="break-words text-xs text-gray-500">IP address: {entry.ip || "Unknown"}</p>
                         </div>
                       );
                     })}
@@ -1779,205 +1637,13 @@ const AccountSettings = ({
             )}
 
             {activeTab === "Become a Vehicle Owner" && (
-              isOwner ? (
-                <div className="rp-settings-card space-y-2 p-6">
-                  <h3 className="font-semibold text-lg">You are already a Vehicle Owner</h3>
-                  <p className="text-sm text-gray-500">
-                    Your account is already upgraded. You can list vehicles from your owner dashboard.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="rp-settings-card space-y-4 p-6">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div>
-                      <h3 className="font-semibold text-lg">Become a Vehicle Owner</h3>
-                      <p className="text-sm text-gray-500">
-                        Verify your details and list vehicles for rent on RentifyPro.
-                      </p>
-                    </div>
-                    {isOwner && (
-                      <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">
-                        Owner Account
-                      </span>
-                    )}
-                  </div>
-
-                  {ownerUpgradeMessage && (
-                    <div className="bg-green-50 border border-green-100 rounded-lg px-4 py-3 text-sm text-green-700">
-                      {ownerUpgradeMessage}
-                    </div>
-                  )}
-                  {ownerUpgradeError && (
-                    <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3 text-sm text-red-700">
-                      {ownerUpgradeError}
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 text-sm text-gray-600">
-                    <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-3 py-2">
-                      <span>Email verification</span>
-                      <span className={profile.isVerified ? "text-green-600 font-medium" : "text-yellow-600"}>
-                        {profile.isVerified ? "Verified" : "Required"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-3 py-2">
-                      <span>Supporting document</span>
-                      <span
-                        className={
-                          supportingDocStatus.toLowerCase().includes("verified")
-                            ? "text-green-600 font-medium"
-                            : "text-gray-500"
-                        }
-                      >
-                        {supportingDocStatus || "Not verified yet"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rp-settings-card space-y-4 p-6">
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-lg">Supporting Document</h4>
-                    <p className="text-sm text-gray-500">
-                      Upload a valid Philippine business permit or registration document.
-                    </p>
-                  </div>
-
-                  <SelectField
-                    label="Document Type"
-                    value={supportingDocType}
-                    onChange={(event) => {
-                      setSupportingDocType(event.target.value);
-                      setSupportingTin("");
-                      setSupportingBranchCode("");
-                    }}
-                    options={SUPPORTING_DOCUMENT_TYPES.map((entry) => ({ label: entry, value: entry }))}
-                    placeholder="Select document type"
-                    disabled={supportingDocLoading}
-                  />
-
-                  {BIR_SUPPORTING_TYPES.has(supportingDocType) && (
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <label className="space-y-1 text-sm font-semibold text-gray-700">
-                        <span>Business name on document</span>
-                        <input value={ownerForm.businessName} onChange={(event) => setOwnerForm((previous) => ({ ...previous, businessName: event.target.value }))} maxLength={120} className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
-                      </label>
-                      <label className="space-y-1 text-sm font-semibold text-gray-700">
-                        <span>Taxpayer Identification Number (TIN)</span>
-                        <input value={supportingTin} onChange={(event) => setSupportingTin(event.target.value.replace(/\D/g, "").slice(0, 9))} inputMode="numeric" autoComplete="off" placeholder="9 digits" className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
-                      </label>
-                      <label className="space-y-1 text-sm font-semibold text-gray-700">
-                        <span>Branch code</span>
-                        <input value={supportingBranchCode} onChange={(event) => setSupportingBranchCode(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" autoComplete="off" placeholder="As shown" className="w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" />
-                      </label>
-                    </div>
-                  )}
-
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,application/pdf"
-                    onChange={async (event) => {
-                      const file = event.target.files?.[0] || null;
-                      if (!file) return setSupportingDocFile(null);
-                      try {
-                        await validateSupportingDocumentFile(file);
-                        setSupportingDocFile(file);
-                        setSupportingDocStatus("");
-                      } catch (validationError) {
-                        setSupportingDocFile(null);
-                        setSupportingDocStatus(validationError.message || "Please choose a valid supporting document.");
-                        event.target.value = "";
-                      }
-                    }}
-                    className="block w-full text-sm text-gray-600"
-                  />
-
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={verifySupportingDoc}
-                      disabled={supportingDocLoading || !supportingDocType || !supportingDocFile}
-                      className="px-4 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-100 disabled:opacity-60"
-                    >
-                      {supportingDocLoading ? "Verifying..." : "Verify Document"}
-                    </button>
-                  </div>
-
-                  {supportingDocStatus && (
-                    <div
-                      className={`border rounded-lg px-4 py-3 text-sm ${
-                        supportingDocStatus.toLowerCase().includes("verified")
-                          ? "bg-green-50 border-green-100 text-green-700"
-                          : "bg-yellow-50 border-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {supportingDocStatus}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rp-settings-card space-y-4 p-6">
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-lg">Owner Details</h4>
-                    <p className="text-sm text-gray-500">
-                      Provide the details you want to display on your owner profile.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <SelectField
-                      label="Owner Type"
-                      value={ownerForm.ownerType}
-                      options={[
-                        { label: "Individual", value: "individual" },
-                        { label: "Business", value: "business" },
-                      ]}
-                      onChange={(event) =>
-                        setOwnerForm((prev) => ({
-                          ...prev,
-                          ownerType: event.target.value,
-                        }))
-                      }
-                    />
-                    <InputField
-                      label="Business Name"
-                      value={ownerForm.businessName}
-                      onChange={(event) =>
-                        setOwnerForm((prev) => ({ ...prev, businessName: event.target.value }))
-                      }
-                    />
-                    <InputField
-                      label="Business License No."
-                      value={ownerForm.licenseNumber}
-                      onChange={(event) =>
-                        setOwnerForm((prev) => ({ ...prev, licenseNumber: event.target.value }))
-                      }
-                    />
-                    <InputField
-                      label="Business Permit No."
-                      value={ownerForm.permitNumber}
-                      onChange={(event) =>
-                        setOwnerForm((prev) => ({ ...prev, permitNumber: event.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleUpgradeToOwner}
-                    disabled={ownerUpgradeLoading || isOwner || !profile.isVerified}
-                    className="px-5 py-2.5 rounded-lg bg-[#017FE6] text-white text-sm font-semibold hover:bg-[#0165B8] disabled:opacity-60"
-                  >
-                    {ownerUpgradeLoading ? "Submitting..." : isOwner ? "Already an Owner" : "Upgrade to Owner"}
-                  </button>
-
-                  {!profile.isVerified && (
-                    <p className="text-xs text-gray-500">
-                      Verify your email before upgrading to a vehicle owner account.
-                    </p>
-                  )}
-                  </div>
-                </div>
-              )
+              <BecomeVehicleOwner key={profile._id || profile.email} profile={profile}
+                onUpgraded={(updatedUser) => {
+                  const updated = persistUserProfile(updatedUser);
+                  setProfile((previous) => ({ ...previous, ...updated }));
+                }}
+                onOpenDashboard={onOpenOwnerDashboard}
+                onVerifyIdentity={() => setActiveTab("Verification")} />
             )}
           </main>
         </div>

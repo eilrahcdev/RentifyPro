@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import fs from "fs/promises";
 import path from "path";
 import KycVerification from "../models/KycVerification.js";
+import User from "../models/User.js";
 import PreKycDocument from "../models/PreKycDocument.js";
 import PreKycFace from "../models/PreKycFace.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
@@ -20,6 +21,10 @@ import { GEMINI_MANUAL_REVIEW_REASON } from "../utils/geminiDataPolicy.js";
 import { isKycScreeningEnabled, getKycScreeningProvider } from "../utils/kycScreeningProvider.js";
 import { publicPrivateScreening, PRIVATE_AUTOMATED_CHECK_VERSION, privateScreeningBinding } from "../services/privateDocumentLayout.service.js";
 import { hasCurrentManualDocumentComparison } from "../services/manualDocumentComparison.js";
+import { repairLegacyKycSummary } from "../services/kycSummary.service.js";
+import { publicKycStatus } from "../utils/publicKycStatus.js";
+import { startFaceReverification, getFaceReverificationAttempt, recordFaceReverification,
+  cancelFaceReverification, reconcileFaceReverification, reverificationFaceKey } from "../services/kycReverification.service.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 const getFaceServiceUrl = () => {
@@ -128,7 +133,7 @@ const queuePreKycDocument = async ({
   if (!normalizedEmail || !normalizedSessionId || !docType || !fileMeta?.fileHash) return null;
 
   const existing = await PreKycDocument.findOne({ email: normalizedEmail, docType })
-    .select("status reasonCode fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role +profileSnapshot");
+    .select("status reasonCode fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role expiresAt +profileSnapshot");
   const automatedScreening = isKycScreeningEnabled();
   const screeningFailed = automatedScreening && existing?.status === "pending_review"
     && (["AUTOMATED_SCREENING_UNAVAILABLE", "GEMINI_DATA_POLICY_UNCONFIRMED", "KYC_SCREENING_DISABLED"].includes(existing.reasonCode)
@@ -145,6 +150,7 @@ const queuePreKycDocument = async ({
     existing.selectedDocCategory === String(selectedDocCategory || "").trim() &&
     screeningProfileMatchesSnapshot(existing.profileSnapshot, profileSnapshot) &&
     ["queued", "processing", "retry_wait", "pending_review", "verified"].includes(existing.status)
+    && existing.expiresAt && new Date(existing.expiresAt).getTime() > Date.now()
     && !screeningFailed
     && !screeningOutdated
     && (automatedScreening || !["queued", "processing", "retry_wait"].includes(existing.status))
@@ -366,8 +372,12 @@ export const faceDetect = async (req, res) => {
 
 // Step 2: save ID face data
 // POST /api/kyc/id-register
-export const registerIdFace = async (req, res) => {
+const registerIdentityDocument = async (req, res, reverification = false) => {
   try {
+    await repairLegacyKycSummary(req.user);
+    if (!reverification && req.user.kycStatus === "approved") {
+      throw Object.assign(new Error("Your identity is already verified. Use Reverify face to check a new selfie."), { status: 409 });
+    }
     const { id_image_base64, id_image_mime, id_type, user_profile } = req.body;
     if (!id_image_base64) return res.status(400).json({ message: "Please choose an ID image before continuing." });
     validateKycImage(id_image_base64);
@@ -375,7 +385,6 @@ export const registerIdFace = async (req, res) => {
     const selectedIdType = resolveSupportedDocumentType(id_type, "id");
     if (!selectedIdType) return res.status(400).json({ message: "That ID type is not supported. Please select one from the list." });
 
-    const sessionId = `user:${req.user._id.toString()}`;
     const imageBuffer = decodeKycBase64(id_image_base64);
     const imageHash = crypto.createHash("sha256").update(imageBuffer).digest("hex");
 
@@ -388,6 +397,9 @@ export const registerIdFace = async (req, res) => {
       business_name: req.user?.businessName || user_profile?.business_name,
       permit_number: req.user?.permitNumber || user_profile?.permit_number,
     };
+
+    const attempt = reverification ? await startFaceReverification(req.user, imageHash, profileContext) : null;
+    const sessionId = attempt?.sessionId || `user:${req.user._id.toString()}`;
 
     const fileMeta = await saveKycBase64File({
       base64: id_image_base64,
@@ -406,14 +418,14 @@ export const registerIdFace = async (req, res) => {
     triggerKycDocumentProcessing();
 
     const payload = {
-      user_id: req.user._id.toString(),
+      user_id: attempt ? reverificationFaceKey(attempt.attemptId) : req.user._id.toString(),
       role: req.user.role,
       full_name: req.user.name,
       id_image_base64,
     };
 
     const result = await proxyToFaceService("/api/kyc/id/register", payload);
-    if (result.success) {
+    if (result.success && !attempt) {
       await KycVerification.findOneAndUpdate(
         { user: req.user._id },
         {
@@ -432,6 +444,7 @@ export const registerIdFace = async (req, res) => {
 
     res.json({
       ...result,
+      ...(attempt ? { attemptId: attempt.attemptId } : {}),
       verificationQueued: true,
       reviewRequired: true,
       message: result.success
@@ -448,10 +461,16 @@ export const registerIdFace = async (req, res) => {
   }
 };
 
+export const registerIdFace = (req, res) => registerIdentityDocument(req, res);
+export const registerReverificationId = (req, res) => registerIdentityDocument(req, res, true);
+
 // Step 3: match one captured selfie with the registered ID
 // POST /api/kyc/selfie/verify
 export const selfieVerify = async (req, res) => {
   try {
+    if (req.user.kycStatus === "approved") {
+      throw Object.assign(new Error("Your identity is already verified. Use Reverify face for a new selfie."), { status: 409 });
+    }
     const { selfie_image_base64 } = req.body;
     if (!selfie_image_base64)
       return res.status(400).json({ message: "selfie_image_base64 is required" });
@@ -464,12 +483,42 @@ export const selfieVerify = async (req, res) => {
 
     const result = await proxyToFaceService("/api/kyc/selfie/verify", payload);
     const kyc = await reconcileUserKyc(req.user._id);
-    res.json({ ...result, kycStatus: kyc?.status || req.user.kycStatus, reviewRequired: Boolean(result.verified && kyc?.status !== "approved") });
+    res.json({ verified: result.verified === true, message: result.verified
+      ? "Your selfie matched your ID photo." : "We couldn't match this selfie. Keep your face visible and try again.",
+    kycStatus: kyc?.status || req.user.kycStatus, reviewRequired: Boolean(result.verified && kyc?.status !== "approved") });
   } catch (err) {
     return sendKycError(res, err, {
       logMessage: "Selfie verify failed",
       fallbackMessage: "We couldn't verify your selfie right now. Please try again.",
     });
+  }
+};
+
+export const verifyReverificationSelfie = async (req, res) => {
+  try {
+    const { attemptId, selfie_image_base64 } = req.body;
+    if (!selfie_image_base64) throw Object.assign(new Error("Take a selfie before continuing."), { status: 400 });
+    validateKycImage(selfie_image_base64);
+    await getFaceReverificationAttempt(req.user._id, attemptId);
+    const result = await proxyToFaceService("/api/kyc/selfie/verify", {
+      user_id: reverificationFaceKey(attemptId), selfie_image_base64,
+    });
+    const kyc = await recordFaceReverification(req.user._id, attemptId, result);
+    const completed = kyc?.faceReverification?.status === "approved";
+    res.json({ verified: result.verified === true, kycStatus: completed ? "approved" : "challenge_passed",
+      reverificationStatus: kyc?.faceReverification?.status, reviewRequired: Boolean(result.verified && !completed),
+      message: result.verified ? "Your selfie matched your ID photo." : "We couldn't match this selfie. Try again in even lighting." });
+  } catch (error) {
+    return sendKycError(res, error, { logMessage: "Face reverification failed", fallbackMessage: "We couldn't reverify your face right now. Your existing approval is unchanged. Try again." });
+  }
+};
+
+export const cancelReverification = async (req, res) => {
+  try {
+    await cancelFaceReverification(req.user._id, req.body.attemptId);
+    res.json({ success: true });
+  } catch (error) {
+    return sendKycError(res, error, { logMessage: "Cancel reverification failed" });
   }
 };
 
@@ -512,10 +561,8 @@ export const internalUpdateStatus = async (req, res) => {
         challengePassedAt: status === "approved" ? new Date() : null,
         verifiedAt: null,
         remarks:
-          effectiveStatus === "approved"
-            ? `Face and document verified with ${confidence}% face confidence.`
-            : status === "approved"
-            ? `Face verified with ${confidence}% confidence; document review is pending.`
+          status === "approved"
+            ? "Your selfie matched. Document approval is still pending."
             : "Face did not match ID photo.",
       },
       { upsert: true }
@@ -535,10 +582,13 @@ export const internalUpdateStatus = async (req, res) => {
 // GET /api/kyc/me
 export const getMyKyc = async (req, res) => {
   try {
+    await repairLegacyKycSummary(req.user);
     const kyc = await reconcileUserKyc(req.user._id);
+    const latest = kyc?.faceReverification ? await reconcileFaceReverification(req.user._id) : kyc;
+    const user = await User.findById(req.user._id).select("kycStatus kycStatusUpdatedAt");
     // During the collection-split rollout, User.kycStatus preserves the existing status
     // until the explicit migration has copied legacy kycverifications records.
-    res.json(kyc || { status: req.user.kycStatus || "not_started" });
+    res.json(publicKycStatus(latest, user || req.user));
   } catch (err) {
     return sendKycError(res, err, {
       logMessage: "Get KYC status failed",
@@ -776,7 +826,7 @@ export const getPreKycStatus = async (req, res) => {
       success: true,
       documents: documents.map((document) => {
         const { provider, validationChecks, manualComparison, privateScreening, fileHash, reviewVersion, profileSnapshot, sessionId, role, suspectedTampering, expiresAt, ...publicDocument } = document;
-        return { ...publicDocument, identityReadyForSelfie: isIdentityReadyForSelfie(document),
+        return { ...publicDocument, expiresAt: expiresAt || null, identityReadyForSelfie: isIdentityReadyForSelfie(document),
           documentRevision: reviewVersion || "",
           automatedScreening: publicPrivateScreening(document) };
       }),

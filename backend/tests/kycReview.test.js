@@ -16,6 +16,7 @@ function fixture(t, { facePassed = true, documentStatus = "pending_review", sess
   const document = { _id: docId, sessionId, docType: "id", role: "user", email: "applicant@example.test", fileHash: "current-id", status: documentStatus, detailsMatched, reasonCode };
   const kyc = { _id: "case", user: userId, status: caseStatus || (facePassed ? "challenge_passed" : "id_uploaded"), idDocumentHash: "current-id", challengePassedAt: facePassed ? new Date() : null, updatedAt: new Date(), summarySyncPending: syncPending };
   const writes = [];
+  t.mock.method(User, "findById", () => ({ select: async () => ({ _id: userId, role: "user", kycStatus: "approved" }) }));
   t.mock.method(PreKycDocument, "findOneAndUpdate", async (filter, update) => {
     if (!filter.status.$in.includes(document.status) || (filter.fileHash && filter.fileHash !== document.fileHash)) return null;
     Object.assign(document, update.$set); return { ...document };

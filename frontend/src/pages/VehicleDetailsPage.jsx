@@ -2,16 +2,12 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
-  CarFront,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Fuel,
   MapPin,
   MessageCircle,
-  Settings,
-  ShieldCheck,
   Star,
-  Users,
 } from "lucide-react";
 import API from "../utils/api";
 import Navbar from "../components/Navbar";
@@ -434,7 +430,7 @@ export default function VehicleDetailsPage({
   };
 
   return (
-    <div className="rp-renter-page min-h-screen">
+    <div className="rp-vehicle-details rp-renter-page min-h-screen">
       <Navbar
         activePage="vehicles"
         isLoggedIn={isLoggedIn}
@@ -453,59 +449,36 @@ export default function VehicleDetailsPage({
         onLogout={onLogout}
       />
 
-      <main className="rp-renter-main mx-auto max-w-[1380px] space-y-5 px-4 pb-16 pt-24 sm:space-y-6 sm:px-6 sm:pt-28">
-        <section className="rp-surface p-5 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-              <button
-                type="button"
-                onClick={onBack}
-                aria-label="Go back"
-                className="rp-btn-secondary mt-1 h-11 w-11 shrink-0 rounded-2xl px-0"
-              >
-                <ArrowLeft size={18} />
-              </button>
-
-              <div className="min-w-0 max-w-3xl">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="break-words text-[clamp(1.72rem,4.1vw,2.65rem)] font-bold tracking-[-0.04em] text-slate-900">
-                    {currentVehicle?.name || "Vehicle"}
-                  </h1>
-                  <span
-                    className={`rp-chip ${
-                      isAvailable ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
+      <main className="rp-renter-main mx-auto max-w-[1380px] px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
+        <button type="button" onClick={onBack} aria-label="Go back" className="rp-detail-back">
+          <ArrowLeft size={18} aria-hidden="true" />Back to vehicles
+        </button>
+        <div className="rp-vehicle-details-layout">
+            <section className="rp-detail-gallery rp-surface p-4" aria-labelledby="vehicle-detail-name">
+              <div className="rp-detail-vehicle-summary">
+                <div className="min-w-0">
+                  <p className="rp-detail-meta">
+                    <MapPin size={16} strokeWidth={2} className="shrink-0 text-[#0B75E7]" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{currentVehicle?.location || "Location not provided"}</span>
+                  </p>
+                  <h1 id="vehicle-detail-name" className="rp-detail-vehicle-name">{currentVehicle?.name || "Vehicle"}</h1>
+                  <span className={`rp-detail-availability ${isAvailable ? "text-emerald-700" : "text-slate-600"}`}>
                     {isAvailable ? "Available" : "Unavailable"}
                   </span>
                 </div>
-                <p className="rp-detail-meta mt-2.5">
-                  <MapPin size={16} strokeWidth={2} className="shrink-0 text-[#0B75E7]" aria-hidden="true" />
-                  <span className="min-w-0 break-words">{currentVehicle?.location || "Location not provided"}</span>
-                </p>
+                <div className="rp-detail-hourly-price">
+                  <span className="sr-only">Hourly vehicle rate</span>
+                  <p>{money(hourlyRate)}<span> / hour</span></p>
+                </div>
               </div>
-            </div>
-
-            <div className="rp-detail-price-panel flex flex-col items-start justify-center text-left lg:items-end lg:text-right">
-              <p className="rp-detail-price-label">Starting price</p>
-              <p className="rp-detail-price-value">
-                {money(hourlyRate)}
-                <span> / hour</span>
-              </p>
-              <a href="#booking-form" className="rp-detail-booking-link mt-3 inline-flex min-h-11 items-center font-semibold text-blue-700 underline underline-offset-4">Choose dates and book</a>
-            </div>
-          </div>
-        </section>
-
-        <div className="rp-vehicle-details-layout">
-            <section className="rp-detail-gallery rp-surface p-5 sm:p-6">
-              <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
+              <div className="relative">
                 <VehicleCover
                   vehicle={currentVehicle}
                   src={galleryImages[activeImageIndex]}
                   alt={currentVehicle?.name || "Vehicle"}
-                  className="min-h-[220px] sm:min-h-[320px] lg:min-h-[360px] rounded-none border-0 shadow-none"
-                  contentClassName="p-5 sm:p-7 lg:p-9"
+                  variant="listing"
+                  className="rp-detail-cover"
+                  contentClassName="p-4 sm:p-5"
                 />
 
                 {galleryImages.length > 1 && (
@@ -531,13 +504,15 @@ export default function VehicleDetailsPage({
               </div>
 
               {galleryImages.length > 1 && (
-                <div className="mt-4 grid grid-cols-4 gap-2.5 sm:grid-cols-6">
+                <div className="rp-detail-thumbnails" aria-label="Vehicle images">
                   {galleryImages.map((image, index) => (
                     <button
                       key={`${image}-${index}`}
                       type="button"
                       onClick={() => setActiveImageIndex(index)}
-                      className={`overflow-hidden rounded-2xl border transition ${
+                      aria-label={`Show vehicle image ${index + 1}`}
+                      aria-pressed={index === activeImageIndex}
+                      className={`shrink-0 overflow-hidden rounded-xl border transition ${
                         index === activeImageIndex
                           ? "border-[#0B75E7] ring-2 ring-blue-100"
                           : "border-slate-200 hover:border-slate-300"
@@ -547,7 +522,7 @@ export default function VehicleDetailsPage({
                         vehicle={currentVehicle}
                         src={image}
                         alt={`Vehicle preview ${index + 1}`}
-                        className="h-16 w-full sm:h-[4.5rem]"
+                        className="h-12 w-16"
                       />
                     </button>
                   ))}
@@ -555,15 +530,16 @@ export default function VehicleDetailsPage({
               )}
             </section>
 
-            <section id="booking-form" aria-labelledby="booking-form-title" className="rp-vehicle-booking rp-surface p-5 sm:p-6">
+            <section id="booking-form" aria-labelledby="booking-form-title" className="rp-vehicle-booking rp-surface p-4">
               <h2 id="booking-form-title" tabIndex={-1} className="rp-detail-section-title">Book This Vehicle</h2>
               <p className="rp-detail-section-copy mt-1.5">
-                Choose pickup and return dates within 6 months, then review your total.
+                Select pickup and return dates within 6 months.
               </p>
 
-              <div className="mt-5 space-y-5">
+              <div className="rp-detail-booking-fields">
+                <div className="rp-detail-schedule">
                 <div>
-                  <label className="rp-detail-form-label">Pickup Date & Time</label>
+                  <p className="rp-detail-form-label">Pickup</p>
                   <div className="rp-detail-date-fields grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <input
                       type="date"
@@ -586,7 +562,7 @@ export default function VehicleDetailsPage({
                 </div>
 
                 <div>
-                  <label className="rp-detail-form-label">Return Date & Time</label>
+                  <p className="rp-detail-form-label">Return</p>
                   <div className="rp-detail-date-fields grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <input
                       type="date"
@@ -611,11 +587,12 @@ export default function VehicleDetailsPage({
                     />
                   </div>
                 </div>
+                </div>
 
                 {driverOptionEnabled && (
                   <div>
                     <label className="rp-detail-form-label">Driver Option</label>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    <div className="rp-detail-driver-fields grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={() => setDriverSelected(false)}
@@ -645,27 +622,26 @@ export default function VehicleDetailsPage({
                   </div>
                 )}
 
-                <div className="rp-detail-summary space-y-2.5">
+                <div className="rp-detail-summary">
                   <SummaryRow label="Hourly vehicle rate" value={money(hourlyRate)} />
                   <SummaryRow label="Duration" value={formatDurationMinutes(durationMinutes)} />
                   <SummaryRow label="Vehicle subtotal" value={money(vehicleCost)} />
                   <SummaryRow label="Late-return rate" value={`${moneyWithCents(lateReturnHourlyRate)} / overdue hour`} muted />
                   <SummaryRow label="Transaction fee" value={moneyWithCents(transactionFee)} />
-                  <SummaryRow label="Downpayment (30%)" value={moneyWithCents(downpaymentFee)} muted />
-                  <div className="my-2.5 h-px bg-slate-200/80" />
+                  <SummaryRow label="Booking downpayment (30%)" value={moneyWithCents(downpaymentFee)} muted />
+                  <div className="h-px bg-slate-200/80" aria-hidden="true" />
                   <SummaryRow label="Estimated total" value={moneyWithCents(estimatedTotal)} strong />
                 </div>
-                <p className="text-sm leading-6 text-slate-600">
-                  The 30% downpayment is part of the estimated total. Submitting a booking request does not charge you; payment options appear in Bookings after the owner approves it.
-                </p>
-
-                <div className="rp-detail-note border border-slate-200 bg-slate-50 text-slate-700">
-                  <p className="font-semibold text-slate-900">Booking limits</p>
+                <div className="rp-detail-eligibility" role="status" aria-live="polite" aria-atomic="true">
+                  <p className="rp-detail-limits"><span className="font-semibold">Booking limits:</span>{" "}
+                    {!isLoggedIn ? "Up to 3 open · Up to 2 pending" : eligibility
+                      ? `${eligibility.counts.open}/${eligibility.limits.open} open · ${eligibility.counts.pending}/${eligibility.limits.pending} pending`
+                      : eligibilityError ? null : "Checking limits..."}
+                  </p>
                   {isLoggedIn && (
-                    <div className="mt-1" role="status" aria-live="polite" aria-atomic="true">
+                    <div>
                       {eligibility ? (
                         <>
-                          <p>{eligibility.counts.open}/{eligibility.limits.open} open · {eligibility.counts.pending}/{eligibility.limits.pending} pending</p>
                           {balanceReasons.length > 0 ? (
                             <>
                               <p className="mt-2 font-medium text-amber-950">Pay your remaining balance first.</p>
@@ -688,11 +664,8 @@ export default function VehicleDetailsPage({
                           <p>{eligibilityError}</p>
                           <button type="button" onClick={() => setEligibilityRetry((value) => value + 1)} className="mt-2 font-semibold text-blue-700 underline underline-offset-2">Retry check</button>
                         </>
-                      ) : "Checking limits..."}
+                      ) : null}
                     </div>
-                  )}
-                  {!isLoggedIn && (
-                    <p className="mt-1">Up to 3 open · Up to 2 pending</p>
                   )}
                 </div>
 
@@ -725,61 +698,56 @@ export default function VehicleDetailsPage({
               </div>
             </section>
 
-            <div className="rp-detail-information space-y-5 sm:space-y-6">
-              <section className="rp-surface p-5 sm:p-6">
+            <div className="rp-detail-information">
+              <section className="rp-detail-specifications rp-surface p-4">
                 <h2 className="rp-detail-section-title">Vehicle Specifications</h2>
-                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-                  <SpecItem icon={CarFront} label="Type" value={vehicleTypeLabel} />
-                  <SpecItem icon={Users} label="Seats" value={`${seats}`} />
-                  <SpecItem icon={Settings} label="Transmission" value={transmission} />
-                  <SpecItem icon={Fuel} label="Fuel" value={fuel} />
-                  <SpecItem icon={ShieldCheck} label="Plate Number" value={plateNumber} />
-                  <SpecItem icon={BadgeCheck} label="Driver Option" value={driverOptionEnabled ? "With driver available" : "Self-drive only"} />
-                </div>
+                <dl className="rp-detail-specification-grid">
+                  <SpecItem label="Type" value={vehicleTypeLabel} />
+                  <SpecItem label="Seats" value={`${seats}`} />
+                  <SpecItem label="Transmission" value={transmission} />
+                  <SpecItem label="Fuel" value={fuel} />
+                  <SpecItem label="Plate number" value={plateNumber} />
+                  <SpecItem label="Driver option" value={driverOptionEnabled ? "With driver available" : "Self-drive only"} />
+                </dl>
               </section>
-              <section className="rp-surface p-5 sm:p-6">
-                <h2 className="rp-detail-section-title">About This Vehicle</h2>
-                <p className="mt-3 break-words text-[0.96rem] leading-7 text-slate-600">
+              <div className="rp-detail-secondary rp-surface">
+              <details key={`${vehicleId}-about`} className="rp-detail-disclosure">
+                <summary><h2>About This Vehicle</h2><ChevronDown size={18} aria-hidden="true" /></summary>
+                <p className="rp-detail-description">
                   {currentVehicle?.description || "No additional description provided by the owner."}
                 </p>
-              </section>
-              <section className="rp-surface p-5 sm:p-6">
+              </details>
+              <section className="rp-detail-owner">
                 <h2 className="rp-detail-section-title">Owner Information</h2>
-                <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-[#0B75E7] font-bold text-white sm:h-16 sm:w-16">{ownerInitials}</div>
+                  <div className="rp-detail-owner-row">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0B75E7] text-xs font-bold text-white">{ownerInitials}</div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="break-words text-base font-semibold text-slate-900">{ownerName}</p>
+                          <p className="break-words text-sm font-semibold text-slate-900">{ownerName}</p>
                           {ownerVerified && <BadgeCheck size={18} className="shrink-0 text-[#0B75E7]" />}
                         </div>
-                        <p className="mt-1 break-words text-sm text-slate-500">{ownerEmail || "Verified RentifyPro owner"}</p>
+                        <p className="mt-1 break-words text-xs text-slate-600">{ownerEmail || "Verified RentifyPro owner"}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={handleChatOwner} disabled={isOwnVehicle} className="rp-btn-secondary inline-flex shrink-0 items-center gap-2 self-start px-3.5 py-2.5 text-xs sm:text-sm disabled:cursor-not-allowed disabled:opacity-60">
+                    <button type="button" onClick={handleChatOwner} disabled={isOwnVehicle} className="rp-btn-secondary inline-flex min-h-11 shrink-0 items-center gap-2 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60">
                       <MessageCircle size={18} strokeWidth={2} aria-hidden="true" />Chat Owner
                     </button>
                   </div>
-                </div>
                 {chatOwnerError && <p className="mt-3 text-sm text-red-600">{chatOwnerError}</p>}
               </section>
-            </div>
-
-            <section className="rp-detail-reviews rp-surface flex flex-col p-5 sm:p-6">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="rp-detail-section-title">Reviews</h2>
-                  <p className="rp-detail-section-copy mt-1.5">Recent renter feedback for this vehicle.</p>
-                </div>
-                <span className="rp-chip self-start bg-amber-100 text-amber-700">
-                  <Star size={16} strokeWidth={2} className="fill-current" aria-hidden="true" />
-                  {reviews.length > 0 ? averageRating : "No reviews"}
+            <details key={`${vehicleId}-reviews`} className="rp-detail-reviews rp-detail-disclosure">
+              <summary>
+                <h2>Reviews</h2>
+                <span className="rp-detail-review-status">
+                  {reviews.length > 0 ? <><Star size={14} strokeWidth={2} className="fill-current text-amber-700" aria-hidden="true" />{averageRating} · {reviews.length} {reviews.length === 1 ? "review" : "reviews"}</> : "No reviews"}
                 </span>
-              </div>
+                <ChevronDown size={18} aria-hidden="true" />
+              </summary>
 
-              <div className="mt-4 flex flex-1 flex-col">
-                <div className={sortedReviews.length > 0 ? "space-y-2.5 sm:space-y-3 xl:flex-1" : "flex flex-1 items-center"}>
+              <div className="rp-detail-review-body">
+                <p className="rp-detail-section-copy mb-3">Recent renter feedback for this vehicle.</p>
+                <div className="space-y-3">
                   {sortedReviews.length > 0 ? (
                     sortedReviews.slice(0, 3).map((review) => (
                       <article key={review.id} className="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4">
@@ -802,7 +770,7 @@ export default function VehicleDetailsPage({
                       </article>
                     ))
                   ) : (
-                    <p className="w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-500 xl:flex xl:min-h-[9rem] xl:items-center">
+                    <p className="text-sm text-slate-600">
                       No reviews yet for this vehicle.
                     </p>
                   )}
@@ -816,7 +784,9 @@ export default function VehicleDetailsPage({
                   View all reviews
                 </button>
               </div>
-            </section>
+            </details>
+              </div>
+            </div>
         </div>
       </main>
 
@@ -889,15 +859,11 @@ export default function VehicleDetailsPage({
   );
 }
 
-function SpecItem({ icon, label, value }) {
-  const IconComponent = icon;
+function SpecItem({ label, value }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-slate-200/90 bg-slate-50/80 px-3 py-3.5 sm:px-4">
-      <p className="flex items-center gap-1.5 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-slate-500">
-        <IconComponent size={16} strokeWidth={2} className="shrink-0 text-[#0B75E7]" aria-hidden="true" />
-        {label}
-      </p>
-      <p className="mt-2 break-words text-[0.95rem] font-semibold leading-snug text-slate-900">{value}</p>
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }

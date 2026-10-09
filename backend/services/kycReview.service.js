@@ -4,6 +4,8 @@ import KycVerification from "../models/KycVerification.js";
 import User from "../models/User.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { hasCurrentManualDocumentComparison } from "./manualDocumentComparison.js";
+import { repairLegacyKycSummary } from "./kycSummary.service.js";
+import { reconcileFaceReverification } from "./kycReverification.service.js";
 
 export const REVIEWABLE_DOCUMENT_STATUSES = ["pending_review"];
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -33,7 +35,13 @@ export async function reconcileUserKyc(userId) {
   }
 
   const changed = status !== current.status || remarks !== current.remarks;
-  if (!changed && !current.summarySyncPending) return current;
+  if (!changed && !current.summarySyncPending) {
+    if (current.status === "approved") {
+      const user = await User.findById(userId).select("role kycStatus kycStatusUpdatedAt");
+      await repairLegacyKycSummary(user, current);
+    }
+    return current;
+  }
   const updated = !changed ? current : await KycVerification.findOneAndUpdate(
     { _id: current._id, updatedAt: current.updatedAt, status: current.status },
     { $set: { status, remarks, summarySyncPending: true, ...(status === "approved" ? { verifiedAt: current.verifiedAt || new Date() } : {}) } },
@@ -103,6 +111,8 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   const sessionId = String(document.sessionId || "");
   if (sessionId.startsWith("user:") && mongoose.Types.ObjectId.isValid(sessionId.slice(5))) {
     await reconcileUserKyc(sessionId.slice(5));
+  } else if (sessionId.startsWith("reverify:") && mongoose.Types.ObjectId.isValid(sessionId.split(":")[1])) {
+    await reconcileFaceReverification(sessionId.split(":")[1]);
   }
   return document;
 }

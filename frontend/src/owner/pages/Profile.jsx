@@ -1,3 +1,4 @@
+import ProfileSection from "../../components/ProfileSection";
 import React, { useEffect, useState } from "react";
 import { BadgeCheck, Camera, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck } from "lucide-react";
 import InfoModal from "../../components/InfoModal";
@@ -143,25 +144,9 @@ const buildAddressFromSelections = (profile, lists) => {
   return [barangayName, cityName, provinceName, regionName].filter(Boolean).join(", ");
 };
 
-const SectionCard = ({ title, sectionKey, editingSection, savingSection, onToggle, children }) => (
-  <div className="rp-settings-card p-6">
-    <div className="mb-4 flex items-center justify-between">
-      <h3 className="font-semibold">{title}</h3>
-      <button
-        type="button"
-        onClick={() => onToggle(sectionKey)}
-        disabled={savingSection === sectionKey}
-        className="rounded-full border px-4 py-1 text-sm hover:bg-gray-100 disabled:opacity-60"
-      >
-        {savingSection === sectionKey
-          ? "Saving..."
-          : editingSection === sectionKey
-            ? "Save"
-            : "Edit"}
-      </button>
-    </div>
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</div>
-  </div>
+const SectionCard = ({ title, summary, sectionKey, editingSection, savingSection, onToggle, children }) => (
+  <ProfileSection title={title} summary={summary} editing={editingSection === sectionKey}
+    saving={savingSection === sectionKey} onEdit={() => onToggle(sectionKey)}>{children}</ProfileSection>
 );
 
 export default function Profile() {
@@ -485,21 +470,22 @@ export default function Profile() {
           <p className="text-gray-500">{profile.email || "No email found"}</p>
           <span className={`text-sm font-medium ${kycStatus === "approved" ? "text-[#017FE6]" : "text-amber-700"}`}>
             {kycStatus === "approved" ? "Verified Owner" : "Owner verification in progress"}
+            <a href="#owner-verification" className="ml-3 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">View verification</a>
           </span>
         </div>
       </div>
 
-      <SectionCard title="Personal Information" sectionKey="personal" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+      <SectionCard title="Personal Information" sectionKey="personal" summary={profile.name} editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
         <InputField label="First Name" value={editingSection === "personal" ? current.firstName : profile.firstName} disabled={editingSection !== "personal"} onChange={(event) => updateDraftField("firstName", event.target.value)} />
         <InputField label="Last Name" value={editingSection === "personal" ? current.lastName : profile.lastName} disabled={editingSection !== "personal"} onChange={(event) => updateDraftField("lastName", event.target.value)} />
       </SectionCard>
 
-      <SectionCard title="Contact Information" sectionKey="contact" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+      <SectionCard title="Contact Information" sectionKey="contact" summary={profile.email} editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
         <InputField label="Email" value={profile.email} disabled />
         <InputField label="Phone Number" value={editingSection === "contact" ? current.phone : profile.phone} disabled={editingSection !== "contact"} onChange={(event) => updateDraftField("phone", normalizePhMobileInput(event.target.value))} prefixText="+63" />
       </SectionCard>
 
-      <SectionCard title="Location Information" sectionKey="location" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+      <SectionCard title="Location Information" sectionKey="location" summary={profile.address} editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
         <InputField label="Full Address" value={editingSection === "location" ? current.address : profile.address} disabled={editingSection !== "location"} onChange={(event) => updateDraftField("address", event.target.value)} />
         <SelectField label="Region" value={editingSection === "location" ? current.region : profile.region} disabled={editingSection !== "location"} options={regions} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), region: event.target.value, province: "", city: "", barangay: "", address: "" }))} />
         <SelectField label={provinces.length ? "Province" : "Province (Not required)"} value={editingSection === "location" ? current.province : profile.province} disabled={editingSection !== "location" || !current.region || !provinces.length} options={provinces} placeholder={provinces.length ? "Select" : "Not required"} onChange={(event) => setDraftProfile((prev) => ({ ...(prev || profile), province: event.target.value, city: "", barangay: "", address: "" }))} />
@@ -508,7 +494,7 @@ export default function Profile() {
       </SectionCard>
 
       {profile.ownerType === "business" && (
-        <SectionCard title="Business Information" sectionKey="business" editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
+        <SectionCard title="Business Information" sectionKey="business" summary={profile.businessName} editingSection={editingSection} savingSection={savingSection} onToggle={toggleEdit}>
           <InputField label="Business Name" value={editingSection === "business" ? current.businessName : profile.businessName} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("businessName", event.target.value)} />
           <InputField label="Business Permit Number" value={editingSection === "business" ? current.permitNumber : profile.permitNumber} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("permitNumber", event.target.value)} />
           <InputField label="Business License Number" value={editingSection === "business" ? current.licenseNumber : profile.licenseNumber} disabled={editingSection !== "business"} onChange={(event) => updateDraftField("licenseNumber", event.target.value)} />
@@ -518,7 +504,7 @@ export default function Profile() {
       <div className="rp-settings-card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-semibold">Verification Status</h3>
+            <h3 id="owner-verification" tabIndex={-1} className="font-semibold">Verification Status</h3>
             <p className="mt-1 text-sm text-slate-500">Identity approval is required before you can add vehicles.</p>
           </div>
           <div className="flex flex-wrap gap-2">

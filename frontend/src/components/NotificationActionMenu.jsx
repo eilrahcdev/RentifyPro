@@ -41,7 +41,7 @@ export default function NotificationActionMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((value) => !value)}
-        className="rounded-lg px-2 py-1 text-lg leading-none text-slate-600 hover:bg-slate-100"
+        className="rp-icon-button inline-flex h-11 w-11 items-center justify-center rounded-lg text-lg leading-none text-slate-600 hover:bg-slate-100"
       >
         &#8942;
       </button>

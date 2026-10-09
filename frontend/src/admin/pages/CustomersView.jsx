@@ -40,7 +40,7 @@ export default function CustomersView({ customers, adminEmail, initialRole = "Al
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(260px,1.4fr)_190px_210px_190px_auto] lg:items-end">
+        <div className="rp-admin-filters grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(260px,1.4fr)_190px_210px_190px_auto] lg:items-end">
           <SearchField label="Search Customers" value={search} onChange={setSearch} placeholder="Search by name, email, or phone..." />
           <FilterSelect label="Role" value={role} onChange={setRole} options={["All Roles", "Renter", "Vehicle Owner"]} />
           <FilterSelect label="Status" value={status} onChange={setStatus} options={["All Statuses", "Active", "Pending Verification", "Inactive", "Suspended"]} />

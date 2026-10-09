@@ -64,7 +64,7 @@ export function AdminPageHeader({ title, description, onMenuOpen, actions }) {
           <button type="button" aria-label="Open navigation" onClick={onMenuOpen} className="mt-0.5 rounded-xl border border-slate-200 p-2.5 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden"><Menu size={20} /></button>
           <div><h1 className="text-2xl font-bold tracking-[-0.035em] text-slate-950 sm:text-3xl">{title}</h1><p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div>
         </div>
-        {actions ? <div className="shrink-0 pl-12 sm:pl-0">{actions}</div> : null}
+        {actions ? <div className="min-w-0 sm:shrink-0">{actions}</div> : null}
       </div>
     </header>
   );

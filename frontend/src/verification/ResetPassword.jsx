@@ -46,7 +46,7 @@ export default function ResetPassword({ onSuccess, onBack, email, token: resetTo
   };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-50">
+    <div className="rp-auth-page rp-reset-page flex min-h-dvh bg-gray-50">
       {/* left panel */}
       <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
         <img
@@ -65,8 +65,8 @@ export default function ResetPassword({ onSuccess, onBack, email, token: resetTo
       </div>
 
       {/* right panel */}
-      <div className="flex-1 overflow-y-auto flex items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-md">
+      <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-8">
+        <div className="mx-auto my-auto w-full max-w-md">
           <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-2xl">
             {/* header */}
             <div className="text-center mb-6">

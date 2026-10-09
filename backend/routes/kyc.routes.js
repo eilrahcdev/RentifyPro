@@ -15,6 +15,9 @@ import {
   getKycReviewFile,
   decideKycReview,
   getPreKycStatus,
+  registerReverificationId,
+  verifyReverificationSelfie,
+  cancelReverification,
 } from "../controllers/kyc.controller.js";
 import {
   kycLimiter,
@@ -24,7 +27,7 @@ import {
   preKycStatusLimiter,
 } from "../middleware/security.middleware.js";
 import { requirePreKycSession } from "../middleware/preKycSession.middleware.js";
-import { authorize } from "../middleware/rbac.middleware.js";
+import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
 import { validateObjectIdParam } from "../middleware/validate.middleware.js";
 
 const router = express.Router();
@@ -40,6 +43,9 @@ router.post("/face/detect", protect, kycLimiter, faceDetect);
 router.post("/id-register", protect, kycLimiter, registerIdFace);
 router.post("/selfie/verify", protect, kycLimiter, selfieVerify);
 router.get("/me", protect, getMyKyc);
+router.post("/reverify/id-register", protect, kycLimiter, requireKyc, registerReverificationId);
+router.post("/reverify/selfie/verify", protect, kycLimiter, requireKyc, verifyReverificationSelfie);
+router.post("/reverify/cancel", protect, kycLimiter, cancelReverification);
 
 // Pre-registration KYC routes
 router.post("/pre/session", preKycLimiter, createPreKycSession);

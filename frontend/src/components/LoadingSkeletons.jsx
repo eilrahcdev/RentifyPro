@@ -365,11 +365,18 @@ function RouteContent({ page }) {
   );
 
   if (page === "vehicles") return (
-    <main className="mx-auto max-w-[1440px] space-y-6 px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
-      <Block className="h-9 w-72 max-w-full" /><Block className="h-4 w-4/5 max-w-xl" />
-      <div className="flex flex-wrap items-center justify-between gap-4"><div className="space-y-2"><Block className="h-4 w-32" /><Block className="h-8 w-44" /><Block className="h-4 w-52" /></div><Block className="h-12 w-full sm:w-72" /></div>
-      <div className="flex flex-wrap gap-2">{[0, 1, 2, 3, 4].map((item) => <Block key={item} className="h-10 w-24 !rounded-full" />)}</div>
+    <main className="mx-auto max-w-[1440px] px-4 pb-16 pt-24 sm:px-6">
       <div className="rp-fleet-results">
+        <div className="rp-page-header rp-bookings-page-header mb-6">
+          <Block className="rp-bookings-page-header__title h-8 w-64 max-w-full" />
+          <Block className="rp-bookings-page-header__description h-4 w-52 max-w-full" />
+          <Block className="rp-bookings-page-header__help h-11 w-36 max-w-full" />
+          <Block className="rp-bookings-page-header__refresh h-11 w-11 min-[360px]:w-24" />
+        </div>
+        <div className="rp-results-toolbar">
+          <div className="rp-quick-filters" aria-hidden="true">{[0, 1, 2, 3, 4].map((item) => <Block key={item} className="h-11 w-24 shrink-0" />)}</div>
+          <div className="rp-vehicle-search"><Block className="rp-vehicle-search__label-placeholder h-4 w-24" /><Block className="rp-vehicle-search__control h-[3.25rem] w-full" /><Block className="h-3 w-52 max-w-full" /></div>
+        </div>
         <VehicleGridSkeleton label="Loading available vehicles" count={4} />
       </div>
     </main>

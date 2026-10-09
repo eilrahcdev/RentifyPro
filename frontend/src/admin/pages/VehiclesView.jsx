@@ -37,7 +37,7 @@ export default function VehiclesView({ vehicles, onView }) {
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(280px,1.6fr)_220px_220px_auto] lg:items-end">
+        <div className="rp-admin-filters grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(280px,1.6fr)_220px_220px_auto] lg:items-end">
           <SearchField value={search} onChange={setSearch} placeholder="Search by vehicle, plate number, vehicle owner, or location..." />
           <FilterSelect value={status} onChange={setStatus} options={["All Statuses", "Available", "Unavailable"]} />
           <FilterSelect value={type} onChange={setType} options={["All Types", ...types]} />

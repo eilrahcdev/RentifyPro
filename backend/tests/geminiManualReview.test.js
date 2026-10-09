@@ -41,6 +41,7 @@ async function fixture(t, approved, existing = null) {
   t.mock.method(PreKycDocument, "findOne", () => ({ select: async () => existing }));
   t.mock.method(PreKycDocument, "findOneAndUpdate", async (_filter, update) => { writes.push(update.$set); return update.$set; });
   t.mock.method(KycVerification, "findOneAndUpdate", async (_filter, update) => { cases.push(update); return update; });
+  t.mock.method(KycVerification, "findOne", () => ({ select: async () => null }));
   t.mock.method(auditLog, "info", () => {});
   t.mock.method(auditLog, "error", () => {});
   const face = t.mock.method(axios, "post", async () => ({ data: { success: true }, status: 200 }));
@@ -102,6 +103,7 @@ test("disabled screening preserves repeated manual uploads and existing approval
   for (const status of ["pending_review", "verified"]) {
     await t.test(status, async (t) => {
       const existing = { status, reasonCode: status === "verified" ? "PASSED" : "AUTOMATED_SCREENING_UNAVAILABLE",
+        expiresAt: new Date(Date.now() + 3600000),
         fileHash: crypto.createHash("sha256").update(buffer).digest("hex"), sessionId: "registration-fixture",
         selectedDocCategory: "DTI Business Name Registration", profileSnapshot: { ...profile, date_of_birth: undefined } };
       const { controller, writes, provider } = await fixture(t, "false", existing);

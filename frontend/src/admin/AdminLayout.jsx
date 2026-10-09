@@ -200,7 +200,7 @@ export default function AdminLayout({ user, onLogout }) {
   };
 
   const headerActions = (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       {activeView === "dashboard" ? <DashboardPeriodSelect value={dashboardPeriod} options={dashboardPeriodOptions} onChange={setDashboardPeriod} /> : null}
       <button
         type="button"
@@ -216,7 +216,7 @@ export default function AdminLayout({ user, onLogout }) {
   );
 
   return (
-    <div className="min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-[#f5f7fb] lg:w-auto">
+    <div className="rp-admin-page min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-[#f5f7fb] lg:w-auto">
       <ConfirmationDialog confirmation={confirmation} loading={actionLoading} onCancel={() => setConfirmation(null)} onConfirm={confirmAction} />
       <ViewerDialog item={viewerItem} onClose={() => setViewerItem(null)} />
       <DocumentReviewDialog
@@ -281,10 +281,10 @@ function DataErrorState({ message, onRetry, onLogout }) {
 
 function DashboardPeriodSelect({ value, options, onChange }) {
   return (
-    <label className="relative inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white pl-10 pr-8 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 focus-within:ring-4 focus-within:ring-blue-100">
+    <label className="relative inline-flex h-11 min-w-0 max-w-full items-center rounded-xl border border-slate-200 bg-white pl-10 pr-8 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 focus-within:ring-4 focus-within:ring-blue-100">
       <CalendarDays aria-hidden="true" size={18} className="pointer-events-none absolute left-3 text-slate-500" />
       <span className="sr-only">Dashboard reporting month and year</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-full appearance-none bg-transparent pr-2 text-sm font-semibold text-slate-700 outline-none">
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-full min-w-0 appearance-none bg-transparent pr-2 text-sm font-semibold text-slate-700 outline-none">
         {options.map((option) => <option key={option} value={option}>{periodLabel(option)}</option>)}
       </select>
       <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 text-slate-500" />

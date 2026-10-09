@@ -385,10 +385,12 @@ export default function Bookings() {
         </>}
       />
 
-      <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="rp-booking-filters flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         {statusFilters.map((status) => (
           <button
             key={status.id}
+            type="button"
+            aria-pressed={statusFilter === status.id}
             onClick={() => setStatusFilter(status.id)}
             className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
               statusFilter === status.id

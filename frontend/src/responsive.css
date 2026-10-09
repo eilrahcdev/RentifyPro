@@ -112,25 +112,23 @@
 @media (min-width: 640px) {
   .rp-site-navbar { padding-inline: max(1.25rem, env(safe-area-inset-left)) max(1.25rem, env(safe-area-inset-right)); }
 }
-@media (min-width: 400px) {
-  .rp-detail-date-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (min-width: 640px) {
   .rp-booking-detail-grid { gap: 0.75rem; }
   .rp-booking-vehicle-title { font-size: 1.25rem; }
   .rp-booking-contact > span { flex-basis: auto; }
 }
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .rp-vehicle-details-layout {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-    grid-template-areas: "gallery booking" "information booking" "information reviews";
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-areas: "gallery booking" "information booking";
+    gap: 1rem;
   }
   .rp-detail-gallery { grid-area: gallery; }
   .rp-vehicle-booking { grid-area: booking; }
   .rp-detail-information { grid-area: information; }
-  .rp-detail-reviews { grid-area: reviews; }
-  .rp-detail-booking-link { display: none; }
+}
+@media (min-width: 1024px) {
+  .rp-vehicle-details-layout { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.5rem; }
 }
 @media (min-width: 1280px) {
   .rp-booking-detail-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -187,4 +185,192 @@
   .rp-payment-dialog > header h2 { font-size: 1rem; }
   .rp-payment-dialog > header h2 + p { display: none; }
   .rp-payment-dialog > footer { padding-block: 0.5rem; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+}
+
+.rp-registration-form { min-width: 0; scroll-margin-top: 1rem; }
+.rp-registration-form:focus { outline: none; }
+.rp-registration-form fieldset { min-width: 0; }
+.rp-registration-form img { max-width: 100%; }
+.rp-registration-actions-space { display: none; }
+.rp-registration-signin button { min-height: 2.75rem; padding-inline: 0.25rem; color: #075eb9; }
+
+.rp-detail-back { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; margin-bottom: 0.75rem; padding: 0; background: transparent; color: #334155; font-size: 0.875rem; touch-action: manipulation; }
+.rp-detail-vehicle-summary { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(40%); align-items: start; gap: 0.75rem; margin-bottom: 0.75rem; }
+.rp-vehicle-details .rp-detail-meta { gap: 0.25rem; font-size: 0.8125rem; color: #475569; }
+.rp-detail-vehicle-name { margin-top: 0.25rem; font-size: 1.125rem; font-weight: 700; line-height: 1.35; letter-spacing: -0.025em; color: #0f172a; overflow-wrap: anywhere; }
+.rp-detail-availability { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; }
+.rp-detail-availability::before { content: ""; width: 0.375rem; height: 0.375rem; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.rp-detail-hourly-price { min-width: 0; color: #075eb9; text-align: right; font-size: 1.375rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rp-detail-hourly-price p > span { display: block; margin-top: 0.25rem; color: #475569; font-size: 0.75rem; font-weight: 500; }
+.rp-detail-cover { height: 12rem; min-height: 0; }
+.rp-detail-thumbnails { display: flex; gap: 0.5rem; margin-top: 0.5rem; padding: 0.5rem; overflow-x: auto; scrollbar-width: thin; }
+.rp-vehicle-booking { container-type: inline-size; container-name: vehicle-booking; overflow-wrap: anywhere; }
+.rp-vehicle-details .rp-detail-section-title { font-size: 1.125rem; line-height: 1.35; }
+.rp-vehicle-booking > .rp-detail-section-copy { font-size: 0.8125rem; }
+.rp-detail-booking-fields { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.rp-detail-schedule { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+.rp-detail-schedule > div { min-width: 0; }
+.rp-vehicle-booking .rp-detail-form-label { margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; text-transform: none; letter-spacing: normal; }
+.rp-vehicle-booking .rp-detail-date-fields, .rp-vehicle-booking .rp-detail-driver-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.rp-vehicle-booking .rp-detail-input { width: 100%; min-width: 0; min-height: 2.75rem; padding: 0.5rem; font-size: 1rem; }
+.rp-vehicle-booking .rp-detail-input::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+.rp-vehicle-booking .rp-detail-summary { display: grid; gap: 0.5rem; padding: 1rem 0 0; border: 0; border-top: 1px solid #e2e8f0; border-radius: 0; background: transparent; box-shadow: none; }
+.rp-vehicle-booking .rp-detail-summary-row { grid-template-columns: minmax(0, 1fr) fit-content(45%); gap: 0.5rem 0.75rem; }
+.rp-vehicle-booking .rp-detail-summary-label, .rp-vehicle-booking .rp-detail-summary-value { font-size: 0.8125rem; color: #475569; }
+.rp-vehicle-booking .rp-detail-summary-value { color: #1e293b; }
+.rp-vehicle-booking .rp-detail-summary-value--strong { font-size: 1rem; color: #0f172a; }
+.rp-vehicle-booking .rp-detail-summary-row:has(.rp-detail-summary-value--strong) .rp-detail-summary-label { font-size: 1rem; font-weight: 700; color: #0f172a; }
+.rp-detail-eligibility { color: #475569; font-size: 0.8125rem; line-height: 1.5; }
+.rp-detail-limits { font-size: 0.75rem; }
+.rp-detail-information { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.rp-detail-information > * { min-width: 0; }
+.rp-detail-specification-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; margin-top: 0.25rem; }
+.rp-detail-specification-grid > div { min-width: 0; padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0; }
+.rp-detail-specification-grid > div:nth-last-child(-n+2) { padding-bottom: 0; border-bottom: 0; }
+.rp-detail-specification-grid dt { font-size: 0.75rem; line-height: 1.5; color: #475569; }
+.rp-detail-specification-grid dd { margin-top: 0.25rem; font-size: 0.875rem; font-weight: 600; line-height: 1.5; color: #0f172a; }
+.rp-detail-secondary.rp-surface { padding: 0 1rem; }
+.rp-detail-secondary > * + * { border-top: 1px solid #e2e8f0; }
+.rp-detail-disclosure > summary { display: flex; align-items: center; gap: 0.5rem; min-height: 3.25rem; list-style: none; cursor: pointer; touch-action: manipulation; }
+.rp-detail-disclosure > summary::-webkit-details-marker { display: none; }
+.rp-detail-disclosure > summary:focus-visible { outline: 2px solid #075eb9; outline-offset: 2px; border-radius: 0.5rem; }
+.rp-detail-disclosure > summary h2 { min-width: 0; font-size: 0.875rem; font-weight: 700; color: #0f172a; }
+.rp-detail-disclosure > summary > svg { flex-shrink: 0; margin-left: auto; color: #475569; }
+.rp-detail-disclosure[open] > summary > svg { transform: rotate(180deg); }
+.rp-detail-description, .rp-detail-review-body { padding-bottom: 1rem; font-size: 0.875rem; line-height: 1.6; color: #475569; }
+.rp-detail-owner { padding-block: 0.75rem; }
+.rp-detail-owner .rp-detail-section-title { font-size: 0.875rem; letter-spacing: normal; }
+.rp-detail-owner-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem; }
+.rp-detail-owner-row > div { flex: 1; }
+.rp-detail-review-status { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.25rem; margin-left: auto; font-size: 0.75rem; color: #475569; }
+.rp-detail-disclosure > summary .rp-detail-review-status + svg { margin-left: 0; }
+@container vehicle-booking (min-width: 290px) {
+  .rp-detail-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp-vehicle-booking .rp-detail-date-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@container vehicle-booking (max-width: 249px) {
+  .rp-vehicle-booking .rp-detail-date-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 359px) {
+  .rp-detail-owner-row { flex-wrap: wrap; }
+  .rp-detail-owner-row > div { flex-basis: 100%; }
+}
+@media (min-width: 768px) {
+  .rp-detail-vehicle-name { font-size: 1.25rem; }
+  .rp-detail-cover { height: 16rem; }
+}
+@media (min-width: 1024px) {
+  .rp-detail-cover { height: 20rem; }
+}
+.rp-registration-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 0.5rem 1rem;
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+.rp-registration-review-row > :last-child { text-align: right; }
+.rp-otp-fields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(0.25rem, 1vw, 0.75rem); }
+.rp-list-reveal { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1rem; padding: 1rem; font-size: 0.875rem; color: #475569; }
+.rp-profile-section { padding: 1.5rem; }
+.rp-profile-section__header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+.rp-profile-section__header h3 { min-width: 0; font-weight: 600; }
+.rp-profile-section__header > button { min-width: 4rem; min-height: 2.75rem; padding-inline: 1rem; flex-shrink: 0; }
+.rp-profile-section__toggle { display: flex; align-items: center; gap: 0.5rem; text-align: left; }
+.rp-profile-section__toggle svg { flex-shrink: 0; }
+.rp-profile-section__summary { font-size: 0.875rem; color: #475569; overflow-wrap: anywhere; }
+.rp-profile-summary { min-width: 0; overflow-wrap: anywhere; }
+.rp-profile-summary > div:last-child { min-width: 0; }
+.rp-account-selector { display: none; }
+#account-content-title, #owner-verification { scroll-margin-top: 6rem; }
+.rp-editor-navigation { display: flex; gap: 0.5rem; overflow-x: auto; flex-shrink: 0; padding: 0.5rem 1rem; border-bottom: 1px solid #e2e8f0; background: white; }
+.rp-editor-navigation button { min-height: 2.75rem; flex-shrink: 0; padding: 0.5rem 0.75rem; border-radius: 0.75rem; background: #eff6ff; color: #075eb9; font-size: 0.875rem; font-weight: 600; }
+.rp-vehicle-editor-scroll { grid-template-columns: minmax(0, 1fr); overscroll-behavior: contain; scroll-padding: 1rem; }
+.rp-vehicle-editor-scroll > *, .rp-vehicle-editor-scroll section { min-width: 0; }
+.rp-vehicle-editor-scroll :is(input, select, textarea) { min-width: 0; max-width: 100%; }
+.rp-vehicle-editor-scroll section { scroll-margin-top: 1rem; }
+.rp-vehicle-editor > fieldset > :last-child { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.rp-policy-section, #policy-top { scroll-margin-top: 6rem; }
+.rp-policy-contents { border-block: 1px solid #e2e8f0; padding-block: 0.75rem; }
+.rp-policy-contents summary { min-height: 2.75rem; display: flex; align-items: center; color: #075eb9; cursor: pointer; font-weight: 600; }
+.rp-policy-contents nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 0.5rem; }
+.rp-policy-contents a, .rp-policy-back { display: inline-flex; min-height: 2.75rem; align-items: center; color: #075eb9; text-decoration: underline; text-underline-offset: 0.2em; }
+.rp-dashboard-work { grid-template-areas: "tasks" "calendar"; }
+.rp-dashboard-tasks { grid-area: tasks; }
+.rp-dashboard-calendar { grid-area: calendar; }
+@media (min-width: 1280px) {
+  .rp-dashboard-work { grid-template-areas: "calendar tasks"; }
+  .rp-vehicle-editor-scroll { grid-template-columns: minmax(0, 1.75fr) minmax(0, 0.75fr); }
+}
+@media (max-width: 1023px), (hover: none) {
+  .rp-admin-page :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) { min-height: 2.75rem; min-width: 0; font-size: 1rem; }
+  .rp-admin-page button { min-height: 2.75rem; touch-action: manipulation; }
+  .rp-admin-page button[aria-label="Open navigation"] { min-width: 2.75rem; flex-shrink: 0; }
+  .rp-owner-topbar button, .rp-quick-filters button, .rp-bookings-page-header button,
+  .rp-owner-page-header__actions button, .rp-booking-filters button { min-width: 2.75rem; flex-shrink: 0; }
+  :is(.rp-renter-page, .rp-owner-workspace) button[aria-pressed], button[aria-label="Go back"] { min-width: 2.75rem; }
+  button[aria-label="Refresh vehicle analytics"] { min-width: 2.75rem; }
+  .rp-owner-vehicle-grid .rp-btn-secondary { min-width: 2.75rem; }
+  :is(.rp-renter-page, .rp-owner-workspace) button:has(> svg.lucide-camera) { min-width: 2.75rem; }
+  .rp-site-navbar button, .rp-site-footer button, .rp-policy-page button,
+  .rp-owner-proceed button { min-width: 2.75rem; min-height: 2.75rem; touch-action: manipulation; }
+}
+@media (max-width: 1023px) {
+  .rp-auth-content:has(.rp-registration-card) { overflow: visible; }
+  .rp-registration-card { padding: 0.75rem; }
+  .rp-registration-header { margin-top: 0; margin-bottom: 0.75rem; }
+  .rp-registration-header > .rp-chip { display: none; }
+  .rp-registration-header h2 { margin-top: 0; font-size: 1.5rem; }
+  .rp-registration-header p { margin-top: 0.25rem; }
+  .rp-registration-card nav[aria-label="Registration progress"] { margin-bottom: 0.75rem; }
+  .rp-registration-step-intro, .rp-registration-role-picker { padding: 0.75rem; }
+  .rp-registration-step-intro > p:first-child { font-size: 0.875rem; }
+  .rp-registration-form > fieldset > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+  .rp-registration-actions { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 40; width: calc(100% - 2rem); max-width: 52rem; padding: 0.75rem 0.5rem max(0.75rem, env(safe-area-inset-bottom)); border: 1px solid #e2e8f0; border-radius: 1rem 1rem 0 0; background: #fff; box-shadow: 0 -4px 16px rgb(15 23 42 / 0.08); }
+  .rp-registration-actions-space { display: block; height: calc(9rem + env(safe-area-inset-bottom)); }
+  .rp-registration-actions button { min-height: 2.75rem; touch-action: manipulation; }
+  .rp-registration-actions > button { min-width: 0; flex: 1; padding-inline: 0.5rem; overflow-wrap: anywhere; }
+  .rp-registration-form { scroll-padding-bottom: 6rem; }
+  .rp-registration-form :is(input, select, textarea) { scroll-margin-block: 1rem 7rem; }
+  .rp-draft-details summary { min-height: 2.75rem; display: flex; align-items: center; color: #075eb9; cursor: pointer; }
+  .rp-registration-preparation { margin-block: 0.75rem; padding-top: 0.75rem; }
+  .rp-account-sidebar { margin-top: 0; }
+  .rp-account-navigation { display: none; }
+  .rp-account-selector { display: block; }
+  .rp-account-content { gap: 1rem; }
+  .rp-account-content > * + * { margin-top: 1rem; }
+  .rp-profile-summary { padding: 1rem; }
+  .rp-profile-summary .w-24 { width: 4rem; height: 4rem; }
+  .rp-profile-section { padding: 1rem; }
+  .rp-profile-section__header { margin-bottom: 0.5rem; }
+  .rp-vehicle-editor > fieldset > div:first-child { padding: 0.75rem 1rem; }
+  .rp-vehicle-editor > fieldset > div:first-child h2 { font-size: 1.125rem; }
+  .rp-vehicle-editor > fieldset > div:first-child p:last-child { font-size: 0.875rem; }
+  .rp-vehicle-editor-scroll section { padding: 1rem; }
+  .rp-booking-details { margin-top: 0.75rem; padding-top: 0.75rem; }
+  .rp-booking-info { padding: 0.5rem; }
+  .rp-booking-info dd { margin-top: 0.125rem; }
+  .rp-booking-card .rp-booking-actions { margin-top: 0.75rem; padding-top: 0.75rem; }
+  .rp-renter-home .rp-home-section, .rp-renter-home .rp-featured-section { padding-block: 2rem; }
+  .rp-renter-home .rp-how-it-works { padding-block: 2rem; }
+  .rp-renter-home .rp-section-heading { margin-bottom: 1.5rem; }
+  .rp-renter-home .rp-home-section img { max-height: 12rem; }
+  .rp-site-footer { padding-block: 2rem; }
+  .rp-admin-page .overflow-x-auto:has(> table)::before { content: "Scroll sideways to see all columns"; display: block; position: sticky; left: 0; padding: 0.5rem 1rem; width: fit-content; font-size: 0.875rem; color: #475569; }
+}
+@media (max-width: 479px) {
+  .rp-registration-review-row { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+  .rp-registration-review-row > :last-child { text-align: left; }
+  .rp-registration-upload > div { flex-direction: column; }
+  .rp-registration-upload > div > .flex-1 { width: 100%; }
+  .rp-otp-page .p-6 { padding: 1rem; }
+}
+@media (max-height: 600px) and (max-width: 1023px) {
+  .rp-vehicle-editor > fieldset > div:first-child p { display: none; }
+  .rp-vehicle-editor > fieldset > div:first-child { padding-block: 0.5rem; }
+  .rp-editor-navigation { padding-block: 0.25rem; }
+}
+@media (max-width: 1399px) {
+  .rp-admin-filters { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); align-items: end; }
+  .rp-admin-filters > * { min-width: 0; }
 }

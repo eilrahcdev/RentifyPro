@@ -1,12 +1,15 @@
+import useResponsiveList from "../hooks/useResponsiveList";
+import ListRevealControls from "../components/ListRevealControls";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CarFront,
+  RefreshCw,
   X,
 } from "lucide-react";
 import API from "../utils/api";
 import Navbar from "../components/Navbar";
 import ChatWidget from "../components/ChatWidget";
-import { ChatHelpLink } from "../components/ChatLauncher";
+import HelpLink from "../components/HelpLink";
 import BookingAccessModal from "../components/BookingAccessModal";
 import VehiclePreviewModal from "../components/VehiclePreviewModal";
 import { sanitizeBookingRange } from "../utils/dateUtils";
@@ -157,6 +160,7 @@ export default function VehiclesPage({
     [combinedSearch, locationFilter, vehicleTypeFilter]
   );
   const showingCurrentResults = loadedQueryKey === queryKey;
+  const visibleVehicles = useResponsiveList(vehicles, queryKey);
 
   useEffect(() => {
     const refreshExisting = reloadSignal > 0 &&
@@ -320,27 +324,46 @@ export default function VehiclesPage({
           onLogout={onLogout}
         />
 
-        <main className="rp-page-shell mx-auto max-w-[1440px] px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
-          <header className="rp-fleet-header">
-            <h1>Choose Your Perfect Ride</h1>
-            <p>
-              Compare available vehicles from verified owners with clear hourly pricing and
-              practical details for every trip.
-            </p>
-          </header>
-
+        <main className="rp-page-shell mx-auto max-w-[1440px] px-4 pb-16 pt-24 sm:px-6">
           <section className="rp-fleet-results" aria-labelledby="vehicle-results-heading">
-              <div className="rp-results-toolbar">
-                <div>
-                  <span className="rp-page-eyebrow">Explore the fleet</span>
-                  <h2 id="vehicle-results-heading">Available vehicles</h2>
-                  <p>
+              <header className="rp-page-header rp-bookings-page-header mb-6">
+                  <h1 id="vehicle-results-heading" className="rp-bookings-page-header__title text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Available vehicles</h1>
+                  <p role="status" className="rp-bookings-page-header__description text-sm text-slate-500">
                     {loading || (!showingCurrentResults && !error)
                       ? "Checking the latest listings..."
                       : refreshing
                         ? "Updating the latest listings..."
                       : `${vehicles.length} ${vehicles.length === 1 ? "vehicle" : "vehicles"} match your search`}
                   </p>
+                  <div className="rp-bookings-page-header__help">
+                    <HelpLink guide="request-booking">Need help choosing?</HelpLink>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={loading || refreshing}
+                    onClick={() => setReloadSignal((value) => value + 1)}
+                    className="rp-bookings-page-header__refresh inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50"
+                    aria-label={refreshing ? "Refreshing vehicles" : "Refresh vehicles"}
+                  >
+                    <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
+                    <span className="rp-bookings-page-header__refresh-label">{refreshing ? "Refreshing..." : "Refresh"}</span>
+                  </button>
+              </header>
+
+              <div className="rp-results-toolbar">
+                <div className="rp-quick-filters" role="group" aria-label="Quick vehicle type filters">
+                  {VEHICLE_TYPE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value || "all"}
+                      type="button"
+                      aria-pressed={vehicleTypeFilter === filter.value}
+                      className={vehicleTypeFilter === filter.value ? "is-active" : ""}
+                      onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
+                      onClick={() => setVehicleTypeFilter(filter.value)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
                 <VehicleSearchInput
                   value={searchQuery}
@@ -353,8 +376,6 @@ export default function VehiclesPage({
                 />
               </div>
 
-              <ChatHelpLink onOpen={() => setShowAI(true)}>Need help choosing? Ask Rentify AI.</ChatHelpLink>
-
               {locationFilter && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                   <span>Location:</span>
@@ -364,19 +385,6 @@ export default function VehiclesPage({
                   </button>
                 </div>
               )}
-              <div className="rp-quick-filters" role="group" aria-label="Quick vehicle type filters">
-                {VEHICLE_TYPE_FILTERS.map((filter) => (
-                  <button
-                    key={filter.value || "all"}
-                    type="button"
-                    aria-pressed={vehicleTypeFilter === filter.value}
-                    className={vehicleTypeFilter === filter.value ? "is-active" : ""}
-                    onClick={() => setVehicleTypeFilter(filter.value)}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
 
               {loading && (
                 <div className="min-h-[27rem]">
@@ -405,7 +413,7 @@ export default function VehiclesPage({
 
               {!loading && !error && showingCurrentResults && vehicles.length > 0 && (
                 <div className="rp-market-grid">
-                  {vehicles.map((vehicle) => (
+                  {visibleVehicles.items.map((vehicle) => (
                     <VehicleCard
                       key={vehicle.id}
                       vehicle={vehicle}
@@ -416,6 +424,7 @@ export default function VehiclesPage({
                   ))}
                 </div>
               )}
+              {!loading && !error && showingCurrentResults && <ListRevealControls list={visibleVehicles} />}
           </section>
         </main>
         <VehiclePreviewModal

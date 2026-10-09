@@ -274,6 +274,7 @@ export const securityHeaders = helmet({
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       connectSrc: ["'self'", "http://localhost:5000", "http://localhost:8000", "https://psgc.gitlab.io"],
       objectSrc: ["'none'"],
+      frameSrc: ["'self'", "blob:"],
       baseUri: ["'self'"],
       frameAncestors: ["'self'"],
       formAction: ["'self'"],

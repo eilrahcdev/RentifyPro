@@ -1,3 +1,4 @@
+import PolicyContents from "../components/PolicyContents";
 import React from "react";
 import Navbar from "../components/Navbar";
 
@@ -5,7 +6,7 @@ const LAST_UPDATED = "March 16, 2026";
 
 function Section({ title, children }) {
   return (
-    <section className="space-y-3">
+    <section id={`policy-section-${title.split(".")[0]}`} className="rp-policy-section space-y-3">
       <h2 className="text-lg sm:text-xl font-semibold text-slate-900">{title}</h2>
       <div className="space-y-3 text-sm sm:text-base text-slate-700 leading-7">{children}</div>
     </section>
@@ -30,7 +31,7 @@ export default function PrivacyPolicyPage({
   onLogout,
 }) {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="rp-policy-page min-h-screen bg-slate-50">
       <Navbar
         activePage=""
         isLoggedIn={isLoggedIn}
@@ -50,7 +51,7 @@ export default function PrivacyPolicyPage({
       />
 
       <main className="pt-28 pb-20 px-4 sm:px-6 lg:px-8">
-        <article className="max-w-4xl mx-auto rp-surface p-6 sm:p-8 space-y-8">
+        <article id="policy-top" className="max-w-4xl mx-auto rp-surface p-6 sm:p-8 space-y-8">
           <header className="space-y-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Privacy Policy</h1>
             <p className="text-sm text-slate-500">Last updated: {LAST_UPDATED}</p>
@@ -60,6 +61,7 @@ export default function PrivacyPolicyPage({
               services.
             </p>
           </header>
+          <PolicyContents sections={["1. Information We Collect", "2. How We Use Your Information", "3. Legal and Operational Bases", "4. Sharing of Information", "5. Data Retention", "6. Data Security", "7. Your Choices and Rights", "8. Cookies and Similar Technologies", "9. Children", "10. Changes to This Policy", "11. Contact"]} />
 
           <Section title="1. Information We Collect">
             <p>
@@ -177,6 +179,7 @@ export default function PrivacyPolicyPage({
             </button>
             .
           </div>
+          <a href="#policy-top" className="rp-policy-back">Back to top</a>
         </article>
       </main>
     </div>

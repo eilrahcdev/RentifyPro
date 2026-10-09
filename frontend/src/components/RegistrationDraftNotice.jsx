@@ -50,11 +50,16 @@ export default function RegistrationDraftNotice({ draft, busy }) {
   return (
     <div className="mb-5 space-y-3 text-sm" data-registration-draft data-draft-state={noticeState}>
       <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1 basis-56">
+        <div role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1">
           <p className={`font-semibold ${noticeState === "expired" ? "text-amber-800" : "text-slate-800"}`}>{notice.title}</p>
-          <p className="mt-1 text-slate-600">{notice.description}</p>
+          {["new", "restored", "restarted"].includes(noticeState) ? (
+            <details className="rp-draft-details">
+              <summary>Expiry and saved details</summary>
+              <p className="mt-1 text-slate-600">{notice.description}</p>
+            </details>
+          ) : <p className="mt-1 text-slate-600">{notice.description}</p>}
         </div>
-        <button type="button" disabled={busy} onClick={() => setConfirmReset(true)} className="shrink-0 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">Start over</button>
+        <button type="button" disabled={busy} onClick={() => setConfirmReset(true)} className="shrink-0 min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">Start over</button>
       </div>
       {draft.warning && createPortal(
         <div className="rp-floating-alert-position">

@@ -16,6 +16,9 @@ const STEPS = [
 
 function verificationErrorMessage(error) {
   const message = String(error?.message || "").toLowerCase();
+  if (message.includes("attempt") && /ended|expired|cancelled|replaced/.test(message)) {
+    return "This attempt ended. Cancel verification and start Reverify face again with your ID.";
+  }
   if (message.includes("face") && message.includes("match")) {
     return "We couldn't match this selfie to your ID photo. Try again in even lighting and face the camera directly.";
   }
@@ -31,7 +34,7 @@ function verificationErrorMessage(error) {
   return "We couldn't complete verification right now. Please try again.";
 }
 
-export default function VerificationStepper({ onVerificationComplete }) {
+export default function VerificationStepper({ onVerificationComplete, mode = "verify", reverification, onCancel }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +48,25 @@ export default function VerificationStepper({ onVerificationComplete }) {
   const [selfieBase64, setSelfieBase64] = useState("");
   const [selfiePreview, setSelfiePreview] = useState(null);
   const [result, setResult] = useState(null);
+  const [attemptId, setAttemptId] = useState("");
+  const isReverification = mode === "reverify";
+  const attemptStatus = reverification?.attemptId === attemptId ? reverification.status : result?.reverificationStatus;
+  const needsIdCorrection = isReverification && ["rejected", "expired", "cancelled"].includes(attemptStatus) && result?.verified;
+  const complete = isReverification ? attemptStatus === "approved" : result?.kycStatus === "approved";
+  const successfulResult = result?.verified && !needsIdCorrection;
+
+  const cancel = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      if (isReverification && attemptId) await API.kycCancelReverification(attemptId);
+      onCancel?.();
+    } catch (err) {
+      setError(err.message || "Couldn't cancel this attempt. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Step 1: upload ID
   const handleIdUpload = async (e) => {
@@ -70,12 +92,14 @@ export default function VerificationStepper({ onVerificationComplete }) {
     setError("");
     try {
       const mimeMatch = idBase64.match(/^data:([^;,]+)[;,]/i);
-      const data = await API.kycRegisterFace({
+      const registerId = isReverification ? API.kycReverifyId : API.kycRegisterFace;
+      const data = await registerId({
         id_image_base64: idBase64,
         id_image_mime: mimeMatch?.[1] || "image/jpeg",
         id_type: idType,
       });
       if (!data.success) { setError(data.message); return; }
+      setAttemptId(data.attemptId || "");
       setStep(2);
     } catch (err) {
       setError(err.message || "ID registration failed.");
@@ -102,8 +126,10 @@ export default function VerificationStepper({ onVerificationComplete }) {
     setLoading(true);
     setError("");
     try {
-      const data = await API.kycVerifySelfie({
+      const verifySelfie = isReverification ? API.kycReverifySelfie : API.kycVerifySelfie;
+      const data = await verifySelfie({
         selfie_image_base64: selfieBase64,
+        ...(isReverification ? { attemptId } : {}),
       });
       setResult(data);
       setStep(3);
@@ -125,6 +151,7 @@ export default function VerificationStepper({ onVerificationComplete }) {
 
   return (
     <div className="max-w-lg mx-auto p-6 bg-white rounded-3xl border border-gray-200 shadow-2xl">
+      {isReverification && <p className="mb-5 text-sm leading-6 text-gray-700">Upload your ID again, then take a new selfie. Your current identity approval stays active during this check.</p>}
       {/* step indicator */}
       <div className="flex items-center justify-between mb-6">
         {STEPS.map((s, i) => (
@@ -224,20 +251,21 @@ export default function VerificationStepper({ onVerificationComplete }) {
       {/* step 3 */}
       {step === 3 && result && (
         <div className="text-center py-4">
-          <div className={`text-5xl mb-4 ${result.verified ? "text-green-500" : "text-red-500"}`}>
-            {result.verified ? <CircleCheck size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" /> : <CircleX size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" />}
+          <div className={`text-5xl mb-4 ${successfulResult ? "text-green-500" : "text-red-500"}`}>
+            {successfulResult ? <CircleCheck size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" /> : <CircleX size={48} strokeWidth={2} className="mx-auto" aria-hidden="true" />}
           </div>
-          <h2 className={`text-2xl font-bold mb-2 ${result.verified ? "text-green-700" : "text-red-700"}`}>
-            {result.verified ? result.kycStatus === "approved" ? "Identity verified" : "Selfie matched" : "Selfie needs another try"}
+          <h2 className={`text-2xl font-bold mb-2 ${successfulResult ? "text-green-700" : "text-red-700"}`}>
+            {needsIdCorrection ? "Reverification needs another attempt" : result.verified ? complete ? isReverification ? "Face reverified" : "Identity verified" : "Selfie matched" : "Selfie needs another try"}
           </h2>
           <p className="mb-4 text-sm leading-6 text-gray-600">
-            {result.verified
-              ? result.kycStatus === "approved"
-                ? "Your selfie matched your ID photo and your identity verification is complete."
+            {needsIdCorrection ? "Start again with a clear ID that matches your account details. Your existing approval is unchanged." : result.verified
+              ? complete
+                ? isReverification ? "Your ID and new selfie passed reverification." : "Your selfie matched your ID photo and your identity verification is complete."
                 : "Your selfie matched your ID photo. Your document is still being reviewed."
               : result.message || "We couldn't verify this selfie. Keep your face visible and try again."}
           </p>
-          {result.verified && result.kycStatus !== "approved" && <p role="status" className="mb-4 text-sm leading-6 text-amber-800">Use Refresh status in your account settings to check document approval before booking.</p>}
+          {result.verified && !complete && !needsIdCorrection && <p role="status" className="mb-4 text-sm leading-6 text-amber-800">{isReverification ? "Use Refresh Status to check the new ID review. Your existing approval remains active." : "Use Refresh status in your account settings to check document approval before booking."}</p>}
+          {needsIdCorrection && <button type="button" onClick={() => { setStep(1); setResult(null); retakeSelfie(); }} className="rp-btn-primary w-full px-4 py-3">Upload ID again</button>}
 
           {!result.verified && (
             <button onClick={retrySelfie} className="rp-btn-primary w-full px-4 py-3">
@@ -246,6 +274,10 @@ export default function VerificationStepper({ onVerificationComplete }) {
           )}
         </div>
       )}
+      {onCancel && <button type="button" onClick={cancel} disabled={loading}
+        className="mt-4 min-h-11 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-60">
+        {complete ? "Close verification" : "Cancel verification"}
+      </button>}
     </div>
   );
 }

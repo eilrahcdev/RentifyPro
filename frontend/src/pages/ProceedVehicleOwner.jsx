@@ -3,7 +3,7 @@ import { CheckCircle, ArrowLeft } from "lucide-react";
 
 const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }) => {
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+    <div className="rp-owner-proceed min-h-screen bg-gray-100 flex items-center justify-center px-4">
       {/* container */}
       <div className="bg-white rounded-2xl shadow-lg max-w-5xl w-full overflow-hidden">
         

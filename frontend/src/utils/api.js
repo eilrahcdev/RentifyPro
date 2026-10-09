@@ -157,6 +157,9 @@ const API = {
   kycRegisterFace: (body) => request("/kyc/id-register", { method: "POST", body: JSON.stringify(body) }),
   kycVerifySelfie: (body) => request("/kyc/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
   kycGetStatus: () => request("/kyc/me"),
+  kycReverifyId: (body) => request("/kyc/reverify/id-register", { method: "POST", body: JSON.stringify(body) }),
+  kycReverifySelfie: (body) => request("/kyc/reverify/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
+  kycCancelReverification: (attemptId) => request("/kyc/reverify/cancel", { method: "POST", body: JSON.stringify({ attemptId }) }),
 
   getPublicVehicles: (params = {}) =>
     request(`/vehicles${buildQueryString(params)}`, { cache: "no-store" }),

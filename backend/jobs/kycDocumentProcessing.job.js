@@ -5,6 +5,7 @@ import PreKycDocument from "../models/PreKycDocument.js";
 import { verifyPhilippinesDocument } from "../services/geminiDocument.service.js";
 import { DOCUMENT_REASON_CODES, evaluateDocumentExtraction } from "../services/documentValidation.service.js";
 import { reconcileUserKyc } from "../services/kycReview.service.js";
+import { reconcileFaceReverification } from "../services/kycReverification.service.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { getKycUploadDir } from "../utils/storagePaths.js";
 import { GEMINI_MANUAL_REVIEW_REASON } from "../utils/geminiDataPolicy.js";
@@ -213,6 +214,8 @@ const processClaimedDocument = async (document) => {
   const sessionId = String(document.sessionId || "");
   if (updateResult.modifiedCount === 1 && status === "verified" && sessionId.startsWith("user:")) {
     await reconcileUserKyc(sessionId.slice(5));
+  } else if (updateResult.modifiedCount === 1 && sessionId.startsWith("reverify:")) {
+    await reconcileFaceReverification(sessionId.split(":")[1]);
   }
 };
 

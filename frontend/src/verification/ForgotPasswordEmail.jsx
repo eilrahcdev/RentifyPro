@@ -70,7 +70,7 @@ export default function ForgotPasswordEmail({ onNavigateToOTP, onNavigateToSignI
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#f6f9ff] to-[#eaf3ff]">
+    <div className="rp-auth-page min-h-screen bg-gradient-to-br from-slate-50 via-[#f6f9ff] to-[#eaf3ff]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
         <div className="hidden lg:flex lg:w-[44%] relative flex-shrink-0 overflow-hidden rounded-r-3xl">
           <img
@@ -100,7 +100,7 @@ export default function ForgotPasswordEmail({ onNavigateToOTP, onNavigateToSignI
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+        <div className="flex min-w-0 flex-1 items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-lg">
             <div className="rounded-3xl border border-white/80 bg-white/95 p-6 shadow-[0_24px_70px_rgba(2,40,96,0.14)] backdrop-blur-sm sm:p-8">
               <div className="mb-6 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">

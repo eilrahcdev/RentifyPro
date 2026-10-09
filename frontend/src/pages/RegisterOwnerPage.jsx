@@ -1,3 +1,6 @@
+import RegistrationActions from "../components/RegistrationActions";
+import ResponsiveDisclosure from "../components/ResponsiveDisclosure";
+import useRegistrationNavigation from "../hooks/useRegistrationNavigation";
 import PreKycReviewNotice from "../components/PreKycReviewNotice";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -188,6 +191,8 @@ function RegisterOwnerForm({
   }, []);
 
   const [step, setStep] = useState(1);
+  const { formRef, formId, revealError } = useRegistrationNavigation(step);
+  const actionsSpaceRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [touchedStep1, setTouchedStep1] = useState({});
   const [stepErrors, setStepErrors] = useState({});
@@ -854,7 +859,7 @@ function RegisterOwnerForm({
     if (!canAct()) return;
     setSuccessMessage("");
     if (step === 1) {
-      if (!validateAccountStep()) return;
+      if (!validateAccountStep()) { revealError(); return; }
       setFormError("");
       setIsLoading(true);
       try {
@@ -873,11 +878,12 @@ function RegisterOwnerForm({
       }
       return;
     }
-    if (step === 2 && !validateAddressStep()) return;
+    if (step === 2 && !validateAddressStep()) { revealError(); return; }
     if (step === 3) {
-      if (!validateSupportingDocumentStep()) return;
+      if (!validateSupportingDocumentStep()) { revealError(); return; }
       if (!supportingDocStatus.submitted) {
         setErrors((previous) => ({ ...previous, supportingDocument: "Upload and check your business document before continuing." }));
+        revealError();
         return;
       }
       if (["reupload_required", "rejected"].includes(documentStatuses.supporting)) return;
@@ -887,7 +893,7 @@ function RegisterOwnerForm({
       setStepErrors({});
       return;
     }
-    if (step === 4 && !validateIdentityStep()) return;
+    if (step === 4 && !validateIdentityStep()) { revealError(); return; }
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
 
@@ -1158,8 +1164,8 @@ function RegisterOwnerForm({
       contentMaxWidth="max-w-4xl"
       contentContainerClassName="items-start py-2 sm:py-4"
     >
-      <div {...draft.activityProps} className="rp-surface rp-glass min-w-0 overflow-hidden rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
-        <div className="mt-5 text-center">
+      <div {...draft.activityProps} className="rp-surface rp-glass rp-registration-card min-w-0 rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+        <div className="rp-registration-header mt-5 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Register</span>
           <h2 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-4xl">Create your account</h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">Fast, secure onboarding in {TOTAL_STEPS} guided steps.</p>
@@ -1171,13 +1177,15 @@ function RegisterOwnerForm({
         </div>
 
         {step === 1 && (
-          <section aria-labelledby="owner-preparation-title" className="mt-5 border-t border-slate-200 pt-4">
+          <section aria-labelledby="owner-preparation-title" className="rp-registration-preparation mt-5 border-t border-slate-200 pt-4">
             <h3 id="owner-preparation-title" className="text-sm font-bold text-slate-900">Have these ready before you start</h3>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-              <li>A readable Philippines-issued business document, such as DTI registration, BIR Form 2303, or a business permit.</li>
-              <li>A government ID, such as a National ID, passport, or driver&apos;s license, and a camera for a live selfie.</li>
-              <li>Access to the email address you will use for the confirmation code.</li>
-            </ul>
+            <ResponsiveDisclosure label="Have these ready before you start">
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                <li>A readable Philippines-issued business document, such as DTI registration, BIR Form 2303, or a business permit.</li>
+                <li>A government ID, such as a National ID, passport, or driver&apos;s license, and a camera for a live selfie.</li>
+                <li>Access to the email address you will use for the confirmation code.</li>
+              </ul>
+            </ResponsiveDisclosure>
           </section>
         )}
 
@@ -1193,7 +1201,7 @@ function RegisterOwnerForm({
           event.preventDefault();
           if (step < TOTAL_STEPS) void goNext();
           else void handleSubmit(event);
-        }} className="space-y-4" noValidate>
+        }} id={formId} ref={formRef} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
           {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
           {formError && (
             <div
@@ -1207,7 +1215,7 @@ function RegisterOwnerForm({
           <fieldset disabled={isLoading} className="min-w-0 space-y-4">
           {[1, 2].includes(step) && (
             <>
-              <div className="rounded-2xl border border-gray-200 p-4 bg-white">
+              <div className="rp-registration-step-intro rounded-2xl border border-gray-200 p-4 bg-white">
                 <p className="font-semibold text-gray-900 mb-1">Step {step} — {STEP_LABELS[step - 1]}</p>
                 <p className="text-sm text-gray-500">
                   {step === 1 && "Enter your legal name, contact details, and password."}
@@ -1589,7 +1597,7 @@ function RegisterOwnerForm({
                     </button>
                   ) : (
                     <>
-                      <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 truncate">
+                      <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
                         <span className="font-medium">Selected:</span> {kyc.idCardFile.name}
                       </div>
                       <button
@@ -1668,7 +1676,7 @@ function RegisterOwnerForm({
                   { label: "Identity verification", value: kyc.selfieVerified ? "Selfie matched" : "Not verified", highlight: kyc.selfieVerified },
                 ].map(({ label, value, highlight }, i, arr) => (
                   <React.Fragment key={label}>
-                    <div className="flex items-center justify-between">
+                    <div className="rp-registration-review-row">
                       <p className="text-sm text-gray-500">{label}</p>
                       <p className={`text-sm font-semibold ${highlight ? "text-green-600" : "text-gray-900"}`}>{value}</p>
                     </div>
@@ -1688,7 +1696,7 @@ function RegisterOwnerForm({
             </>
           )}
 
-          <div className="flex items-center gap-3 pt-1">
+          <RegistrationActions spaceRef={actionsSpaceRef}>
             <button type="button" onClick={step === 1 ? onBack : goBack} disabled={isLoading} className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
               <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : step === 1 ? "Register as Renter" : "Back"}
             </button>
@@ -1697,14 +1705,14 @@ function RegisterOwnerForm({
                 {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : <>Next <ArrowRight size={18} /></>}
               </button>
             ) : (
-              <button type="submit" disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
+              <button type="submit" form={formId} disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
                 {isLoading ? <><Loader size={18} className="animate-spin" /> Registering...</> : !areDocumentsApproved ? "Waiting for document approval" : "Register as Owner"}
               </button>
             )}
-          </div>
+          </RegistrationActions>
 
           {step === 1 && (
-            <p className="text-center text-gray-500 text-sm mt-1">
+            <p className="rp-registration-signin text-center text-slate-600 text-sm mt-1">
               Already have an account?{" "}
               <button type="button" onClick={onNavigateToSignIn} disabled={isLoading} className="text-[#017FE6] font-semibold hover:underline transition-colors disabled:opacity-50">
                 Sign In
@@ -1714,6 +1722,7 @@ function RegisterOwnerForm({
           </fieldset>
         </form>
       </div>
+      <div ref={actionsSpaceRef} className="rp-registration-actions-space" aria-hidden="true" />
       <LegalPolicyModal
         isOpen={Boolean(legalModalType)}
         documentType={legalModalType === "privacy" ? "privacy" : "terms"}
@@ -1793,6 +1802,7 @@ function Field({
           ref={inputRef}
           type={type}
           name={name}
+          aria-invalid={Boolean(error)}
           value={value}
           onChange={handleInputChange}
           onKeyDown={handleInputKeyDown}
@@ -1835,6 +1845,7 @@ function SelectField({
       <div className="relative">
         <select
           name={name}
+          aria-invalid={Boolean(error)}
           value={value}
           onChange={onChange}
           onBlur={onBlur}
@@ -1907,6 +1918,7 @@ function PasswordField({
         <input
           type={show ? "text" : "password"}
           name={name}
+          aria-invalid={Boolean(error)}
           value={value}
           onChange={handlePasswordChange}
           onKeyDown={handlePasswordKeyDown}
@@ -1917,7 +1929,7 @@ function PasswordField({
           maxLength={maxLength}
           className={`w-full h-11 rounded-xl border px-4 pr-11 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
-        <button type="button" onClick={toggle} disabled={disabled} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button type="button" onClick={toggle} disabled={disabled} className="rp-icon-button absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
           {show ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>

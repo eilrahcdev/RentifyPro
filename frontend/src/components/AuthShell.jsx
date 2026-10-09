@@ -99,7 +99,7 @@ export default function AuthShell({
             </button>
           </div>
 
-          <div className={`flex flex-1 justify-center overflow-y-auto ${contentContainerClassName}`}>
+          <div className={`rp-auth-content flex flex-1 justify-center overflow-y-auto ${contentContainerClassName}`}>
             <div className={`w-full ${contentMaxWidth} pb-4 pt-4 sm:pb-6`}>{children}</div>
           </div>
         </section>

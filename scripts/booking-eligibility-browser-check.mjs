@@ -121,7 +121,8 @@ try {
   await openDetails();
   await wait(hasText("1/3 open · 0/2 pending"));
   assert.equal(await evaluate(hasText("Partial payments are allowed until due")), false);
-  assert.equal(await evaluate(hasText("The 30% downpayment is part of the estimated total.")), true);
+  assert.equal(await evaluate(hasText("The 30% downpayment is part of the estimated total.")), false);
+  assert.equal(await evaluate(hasText("Booking downpayment (30%)")), true);
   checks.push("Allowed state shows only the renter's compact booking counts");
 
   await click("Book Now");
@@ -150,7 +151,7 @@ try {
     await pause(80);
     assert.ok(await evaluate("document.documentElement.scrollWidth <= innerWidth"), `Horizontal overflow at ${width}px`);
   }
-  await evaluate("[...document.querySelectorAll('p')].find(el => el.textContent === 'Booking limits').scrollIntoView({block:'start'})");
+  await evaluate("document.querySelector('.rp-detail-eligibility').scrollIntoView({block:'start'})");
   const screenshot = await send("Page.captureScreenshot", { format: "png" });
   await fs.mkdir(new URL("../frontend/.vite/", import.meta.url), { recursive: true });
   await fs.writeFile(new URL("../frontend/.vite/booking-policy-mobile.png", import.meta.url), Buffer.from(screenshot.data, "base64"));
@@ -201,6 +202,19 @@ try {
   await wait(`${hasText("1/3 open · 0/2 pending")} && !${hasText("P350.00 due")}`);
   assert.equal(await evaluate(hasText("P350.00 due")), false);
   postMode = "allow";
+  await evaluate(`(() => {
+    const pickup = new Date(Date.now() + 60 * 60 * 1000);
+    const dropoff = new Date(pickup.getTime() + 24 * 60 * 60 * 1000);
+    const date = value => value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0');
+    const time = value => String(value.getHours()).padStart(2, '0') + ':' + String(value.getMinutes()).padStart(2, '0');
+    const fields = [...document.querySelectorAll('input[type=date], input[type=time]')];
+    [date(pickup), time(pickup), date(dropoff), time(dropoff)].forEach((value, index) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(fields[index], value);
+      fields[index].dispatchEvent(new Event('input', { bubbles: true }));
+      fields[index].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  })()`);
+  await wait(hasText("1/3 open · 0/2 pending"));
   await click("Book Now");
   await wait("location.pathname === '/bookings'");
   checks.push("Verified settlement refresh permits submission and preserves success navigation");

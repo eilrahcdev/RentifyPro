@@ -131,7 +131,7 @@ export default function FormInput({
               onClick={handleIconClick}
               disabled={disabled}
               aria-label={`Open ${label}`}
-              className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 transition ${
+              className={`rp-icon-button absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg border transition ${
                 error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-[#017FE6]"
               } ${disabled ? "cursor-not-allowed opacity-60" : "hover:bg-slate-100"}`}
             >
@@ -174,7 +174,7 @@ export default function FormInput({
           autoComplete={type === "email" ? "email" : "off"}
           aria-invalid={Boolean(error)}
           className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none ${
-            hasRightIcon ? "pr-12" : ""
+            hasRightIcon ? "pr-14" : ""
           } ${
             hasLeftIcon ? "pl-12" : ""
           } ${

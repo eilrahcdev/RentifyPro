@@ -22,6 +22,21 @@ const kycVerificationSchema = new mongoose.Schema(
     idRegisteredAt: { type: Date },
     challengePassedAt: { type: Date },
     verifiedAt: { type: Date },
+    lastFaceReverifiedAt: { type: Date },
+    faceReverification: {
+      type: new mongoose.Schema({
+        attemptId: { type: String, required: true },
+        status: { type: String, enum: ["id_uploaded", "selfie_matched", "approved", "rejected", "cancelled"], required: true },
+        documentHash: { type: String, required: true },
+        profileSnapshot: { type: mongoose.Schema.Types.Mixed, required: true },
+        createdAt: { type: Date, required: true },
+        expiresAt: { type: Date, required: true },
+        faceMatchedAt: { type: Date },
+        faceMatchScore: { type: Number },
+        completedAt: { type: Date },
+      }, { _id: false }),
+      default: undefined,
+    },
   },
   { timestamps: true, collection: "kyc_cases" }
 );

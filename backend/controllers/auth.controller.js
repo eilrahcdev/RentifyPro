@@ -9,6 +9,8 @@ import path from "path";
 import Otp from "../models/Otp.js";
 import LoginChallenge from "../models/LoginChallenge.js";
 import LoginActivity from "../models/LoginActivity.js";
+import { repairLegacyKycSummary } from "../services/kycSummary.service.js";
+import { validateOwnerUpgradeDetails, validateOwnerUpgradeDocument } from "../services/ownerUpgrade.service.js";
 import sendEmail from "../utils/sendEmail.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import {
@@ -1153,6 +1155,8 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   bookingUpdates: true,
   promotions: false,
 };
+const publicNotificationSettings = (settings, role) => role === "user"
+  ? { email: settings.email, bookingUpdates: settings.bookingUpdates } : settings;
 
 export const getNotificationSettings = async (req, res) => {
   try {
@@ -1163,10 +1167,10 @@ export const getNotificationSettings = async (req, res) => {
 
     res.json({
       success: true,
-      settings: {
+      settings: publicNotificationSettings({
         ...DEFAULT_NOTIFICATION_SETTINGS,
         ...(user.notificationSettings || {}),
-      },
+      }, req.user.role),
     });
   } catch (error) {
     auditLog.error("AUTH", "Get notification settings error", { detail: error.message });
@@ -1184,15 +1188,15 @@ export const updateNotificationSettings = async (req, res) => {
     const current = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(user.notificationSettings || {}) };
     const nextSettings = {
       email: toBool(req.body.email, current.email),
-      sms: toBool(req.body.sms, current.sms),
+      sms: req.user.role === "user" ? current.sms : toBool(req.body.sms, current.sms),
       bookingUpdates: toBool(req.body.bookingUpdates, current.bookingUpdates),
-      promotions: toBool(req.body.promotions, current.promotions),
+      promotions: req.user.role === "user" ? current.promotions : toBool(req.body.promotions, current.promotions),
     };
 
     user.notificationSettings = nextSettings;
     await user.save();
 
-    res.json({ success: true, settings: nextSettings });
+    res.json({ success: true, settings: publicNotificationSettings(nextSettings, req.user.role) });
   } catch (error) {
     auditLog.error("AUTH", "Update notification settings error", { detail: error.message });
     res.status(500).json({ success: false, message: "Failed to update notification settings." });
@@ -1237,82 +1241,29 @@ export const upgradeToOwner = async (req, res) => {
         role: "owner",
       });
     } catch (error) {
-      return res.status(Number(error?.status) || 401).json({ success: false, message: error.message });
+      return res.status(409).json({ success: false, code: "DOCUMENT_SESSION_REQUIRED", message: error.message });
     }
 
-    const pendingDocs = await getPendingPreKycDocs(
-      user.email,
-      ["supporting"],
-      preKycSession.sessionId
-    );
-    if (pendingDocs.length) {
-      return res.status(409).json({
-        success: false,
-        message: "Your supporting document is awaiting manual review.",
-        reviewRequired: true,
-      });
+    if (user.role !== "user" || user.isDisabled || user.isArchived) {
+      return res.status(403).json({ success: false, message: "This account cannot upgrade to a vehicle owner." });
     }
-
-    const actionRequiredDocs = await getActionRequiredPreKycDocs(
-      user.email,
-      ["supporting"],
-      preKycSession.sessionId
-    );
-    if (actionRequiredDocs.length) {
-      return res.status(409).json({
-        success: false,
-        message: "Your supporting document needs attention. Review its status and upload a corrected file before continuing.",
-        reuploadRequired: true,
-        documents: actionRequiredDocs,
-      });
+    await repairLegacyKycSummary(user);
+    if (user.kycStatus !== "approved") {
+      return res.status(403).json({ success: false, code: "IDENTITY_VERIFICATION_REQUIRED",
+        message: "Verify your identity in Account Settings before upgrading to a vehicle owner." });
     }
-
-    const missingDocs = await getMissingPreKycDocs(
-      user.email,
-      ["supporting"],
-      preKycSession.sessionId
-    );
-    if (missingDocs.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Please verify your supporting business document before upgrading to a vehicle owner.",
-      });
-    }
-
-    const ownerType = toText(req.body.ownerType);
-    const businessName = toText(req.body.businessName);
-    const licenseNumber = toText(req.body.licenseNumber);
-    const permitNumber = toText(req.body.permitNumber);
-
-    if (ownerType) user.ownerType = ownerType;
-    if (businessName) user.businessName = businessName;
-    if (licenseNumber) user.licenseNumber = licenseNumber;
-    if (permitNumber) user.permitNumber = permitNumber;
-
-    const verifiedAt = new Date();
-    user.role = "owner";
-    user.kycStatus = "approved";
-    user.kycStatusUpdatedAt = verifiedAt;
-    await user.save();
-
-    try {
-      await KycVerification.findOneAndUpdate(
-        { user: user._id },
-        {
-          user: user._id,
-          status: "approved",
-          verifiedAt,
-          remarks: "Identity approved during owner upgrade verification.",
-        },
-        { upsert: true, new: true }
-      );
-    } catch (kycCaseError) {
-      // The user summary is the authorization source. Keep the verified owner
-      // from being stranded if the secondary KYC audit write is unavailable.
-      auditLog.error("KYC", "Failed to create owner upgrade KYC case", {
-        userId: user._id.toString(),
-        detail: kycCaseError.message,
-      });
+    const details = validateOwnerUpgradeDetails(req.body);
+    await validateOwnerUpgradeDocument(user, preKycSession.sessionId, req.body, details);
+    // Changing roles must preserve the existing identity decision and its original date.
+    const updated = await User.findOneAndUpdate({
+      _id: user._id, email: user.email, role: "user", isVerified: true, kycStatus: "approved",
+      kycStatusUpdatedAt: user.kycStatusUpdatedAt || null,
+      isDisabled: { $ne: true }, isArchived: { $ne: true },
+    }, { $set: { role: "owner", ownerType: details.ownerType, businessName: details.businessName,
+      licenseNumber: details.licenseNumber, permitNumber: details.permitNumber } }, { new: true, runValidators: true });
+    if (!updated) {
+      return res.status(409).json({ success: false, code: "ACCOUNT_CHANGED",
+        message: "Your account changed during submission. Refresh Account Settings before trying again." });
     }
 
     auditLog.info("AUTH", "Upgraded to owner", { userId: user._id.toString() });
@@ -1320,11 +1271,12 @@ export const upgradeToOwner = async (req, res) => {
     res.json({
       success: true,
       message: "You are now registered as a vehicle owner.",
-      user: buildSafeUserResponse(user),
+      user: buildSafeUserResponse(updated),
     });
   } catch (error) {
     auditLog.error("AUTH", "Upgrade to owner error", { detail: error.message });
-    res.status(500).json({ success: false, message: "Failed to upgrade account." });
+    res.status(Number(error.status) || 500).json({ success: false, ...(error.code ? { code: error.code } : {}),
+      message: error.status ? error.message : "Failed to upgrade account. Please try again." });
   }
 };
 
@@ -1334,6 +1286,7 @@ export const getMe = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
     }
+    await repairLegacyKycSummary(user);
     res.json({ success: true, user: buildSafeUserResponse(user) });
   } catch {
     res.status(500).json({ success: false, message: "Could not fetch profile." });

@@ -86,6 +86,10 @@ export const normalizeUserProfile = (source = {}, fallback = {}) => {
     role: pickText("role") || "user",
     isVerified: pickBool("isVerified", false),
     kycStatus: pickText("kycStatus"),
+    ownerType: pickText("ownerType"),
+    businessName: pickText("businessName"),
+    licenseNumber: pickText("licenseNumber"),
+    permitNumber: pickText("permitNumber"),
     avatar: pickText("avatar"),
   };
 };

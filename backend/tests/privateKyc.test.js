@@ -526,6 +526,7 @@ test("same-file submissions refresh legacy screening without overwriting approve
   const bytes = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from("synthetic cache fixture")]);
   const profile = { full_name: "Sample Applicant", first_name: "Sample", last_name: "Applicant", business_name: "Sample Rentals", permit_number: "TEST123" };
   const document = doc({ docType: "supporting", role: "owner", selectedDocCategory: "DTI Business Name Registration", profileSnapshot: profile,
+    expiresAt: new Date(Date.now() + 3600000),
     fileHash: crypto.createHash("sha256").update(bytes).digest("hex") });
   const fresh = evaluatePrivateDocumentInspection({ inspection: normalizePrivateOcrResponse(ocr(["DEPARTMENT OF TRADE AND INDUSTRY",
     "CERTIFICATE OF BUSINESS NAME REGISTRATION", "Business Name: SAMPLE RENTALS", "Permit Number: TEST123"])), docType: "supporting",
@@ -570,6 +571,10 @@ test("same-file submissions refresh legacy screening without overwriting approve
     documentType: document.selectedDocCategory, documentTypeCheckVersion: 1 };
   assert.equal((await submit()).documentStatus, "pending_review");
   assert.equal(write.mock.callCount(), 2);
+  document.expiresAt = new Date(0);
+  assert.equal((await submit()).documentStatus, "queued");
+  assert.equal(write.mock.callCount(), 3);
+  assert.ok(write.mock.calls[2].arguments[1].$set.expiresAt > new Date());
 });
 
 test("admin KYC assets load from an isolated backend and match source when the admin checkout is available", async (t) => {

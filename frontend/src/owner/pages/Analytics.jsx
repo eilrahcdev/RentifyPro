@@ -1,3 +1,5 @@
+import useResponsiveList from "../../hooks/useResponsiveList";
+import ListRevealControls from "../../components/ListRevealControls";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight,
@@ -92,6 +94,7 @@ export default function Analytics() {
 
   const vehiclePerformance = analytics?.vehiclePerformance || [];
   const summary = analytics?.summary || {};
+  const visibleRankings = useResponsiveList(vehiclePerformance, period);
   const bookingTrend = useMemo(
     () => (analytics?.bookingTrend || []).slice(-6),
     [analytics?.bookingTrend]
@@ -170,6 +173,28 @@ export default function Analytics() {
         <AnalyticsContentSkeleton />
       ) : analytics ? (
         <>
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Monthly trends">
+            <TrendPanel
+              title="Booking activity"
+              description="Booking requests created in the latest six recorded months."
+              rows={bookingTrend}
+              maxValue={maxMonthlyBookings}
+              emptyText="No booking history yet."
+              getValue={(item) => Number(item.totalBookings || 0)}
+              formatValue={(value) => pluralize(value, "request")}
+              tone="blue"
+            />
+            <TrendPanel
+              title="Completed-booking earnings"
+              description="Recorded earnings from completed bookings by month."
+              rows={earningsTrend}
+              maxValue={maxMonthlyEarnings}
+              emptyText="No completed-booking earnings yet."
+              getValue={(item) => Number(item.totalEarnings || 0)}
+              formatValue={money}
+              tone="green"
+            />
+          </section>
           {vehiclePerformance.length > 0 && (
             <BookingDemandChart vehicles={vehiclePerformance} periodLabel={selectedPeriodLabel} />
           )}
@@ -198,7 +223,7 @@ export default function Analytics() {
               <EmptyFleet />
             ) : (
               <div role="list" className="divide-y divide-slate-100">
-                {vehiclePerformance.map((vehicle) => (
+                {visibleRankings.items.map((vehicle) => (
                   <VehiclePerformanceRow
                     key={vehicle.vehicleId}
                     vehicle={vehicle}
@@ -209,35 +234,13 @@ export default function Analytics() {
               </div>
             )}
 
+            <ListRevealControls list={visibleRankings} label="vehicle rankings" />
             <div className="flex gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5 text-xs leading-5 text-slate-600 sm:px-5">
               <Info size={17} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
               <p>
                 Frequent means at least 25% above your fleet average; infrequent means more than 25% below it. Listings under 14 days are marked new. Past days when a vehicle was manually unavailable are not recorded, so availability history is not included.
               </p>
             </div>
-          </section>
-
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Monthly trends">
-            <TrendPanel
-              title="Booking activity"
-              description="Booking requests created in the latest six recorded months."
-              rows={bookingTrend}
-              maxValue={maxMonthlyBookings}
-              emptyText="No booking history yet."
-              getValue={(item) => Number(item.totalBookings || 0)}
-              formatValue={(value) => pluralize(value, "request")}
-              tone="blue"
-            />
-            <TrendPanel
-              title="Completed-booking earnings"
-              description="Recorded earnings from completed bookings by month."
-              rows={earningsTrend}
-              maxValue={maxMonthlyEarnings}
-              emptyText="No completed-booking earnings yet."
-              getValue={(item) => Number(item.totalEarnings || 0)}
-              formatValue={money}
-              tone="green"
-            />
           </section>
         </>
       ) : null}

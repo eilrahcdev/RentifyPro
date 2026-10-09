@@ -114,6 +114,7 @@ tmp/
 
 # QA artifacts
 qa/
+docs/reports/
 playwright-report/
 test-results/
 blob-report/

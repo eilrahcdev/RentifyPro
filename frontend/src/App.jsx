@@ -1393,7 +1393,12 @@ const App = () => {
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToAccountSettings={() => setCurrentPage("account-settings")}
           onNavigateToReports={() => setCurrentPage("reports")}
-          onNavigateToVehicleOwnerProceed={() => setCurrentPage("vehicle-owner-proceed")}
+          onOpenOwnerDashboard={() => {
+            localStorage.setItem("isNewOwner", "true");
+            setIsOwnerLoggedIn(true);
+            setIsLoggedIn(false);
+            setCurrentPage("owner-dashboard");
+          }}
           onNavigateToAbout={navigateToAbout}
           onLogout={requestLogout}
         />

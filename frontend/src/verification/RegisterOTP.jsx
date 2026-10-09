@@ -155,7 +155,7 @@ export default function RegisterOTP({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#f6f9ff] to-[#eaf3ff]">
+    <div className="rp-auth-page rp-otp-page min-h-screen bg-gradient-to-br from-slate-50 via-[#f6f9ff] to-[#eaf3ff]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
         <div className="hidden lg:flex lg:w-[44%] relative flex-shrink-0 overflow-hidden rounded-r-3xl">
           <img
@@ -185,7 +185,7 @@ export default function RegisterOTP({
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+        <div className="flex min-w-0 flex-1 items-center justify-center p-4 sm:p-8">
           <div className="w-full max-w-lg">
             <div className="rounded-3xl border border-white/80 bg-white/95 p-6 shadow-[0_24px_70px_rgba(2,40,96,0.14)] backdrop-blur-sm sm:p-8">
               <div className="mb-6 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">
@@ -234,10 +234,12 @@ export default function RegisterOTP({
                 }}
                 className="mt-6 space-y-4"
               >
-                <div className="flex justify-center gap-2.5 sm:gap-3" onPaste={handlePaste}>
+                <div className="rp-otp-fields" onPaste={handlePaste}>
                   {otp.map((digit, i) => (
                     <input
                       key={i}
+                      aria-label={`Code digit ${i + 1}`}
+                      autoComplete={i === 0 ? "one-time-code" : "off"}
                       ref={(el) => (inputsRef.current[i] = el)}
                       type="text"
                       inputMode="numeric"
@@ -252,7 +254,7 @@ export default function RegisterOTP({
                         }
                       }}
                       disabled={isVerifying || isSuccess}
-                      className={`h-14 w-11 rounded-xl border-2 text-center text-xl font-bold outline-none transition sm:h-16 sm:w-14 ${
+                      className={`h-14 min-w-0 w-full rounded-xl border-2 text-center text-xl font-bold outline-none transition sm:h-16 ${
                         error
                           ? "border-red-300 bg-red-50 text-red-700 focus:border-red-500"
                           : digit
