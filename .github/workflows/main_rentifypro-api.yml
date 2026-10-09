@@ -22,9 +22,6 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # Match the environment created by Azure Deployment Center.
-    environment: Production
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
