@@ -25,6 +25,7 @@ import {
   preKycUploadIpLimiter,
   preKycAttemptLimiter,
   preKycStatusLimiter,
+  preKycStatusIpLimiter,
 } from "../middleware/security.middleware.js";
 import { requirePreKycSession } from "../middleware/preKycSession.middleware.js";
 import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
@@ -52,7 +53,7 @@ router.post("/pre/session", preKycLimiter, createPreKycSession);
 router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preRegisterIdFace);
 router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preSelfieVerify);
 router.post("/pre/supporting-doc/verify", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preVerifySupportingDocument);
-router.get("/pre/status", preKycStatusLimiter, requirePreKycSession, getPreKycStatus);
+router.get("/pre/status", preKycStatusIpLimiter, requirePreKycSession, preKycStatusLimiter, getPreKycStatus);
 
 // Internal callback from the Python service
 router.patch("/internal/update-status", internalUpdateStatus);

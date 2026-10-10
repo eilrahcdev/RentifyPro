@@ -12,6 +12,7 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
 from fastapi import FastAPI
+from service_security import InternalServiceAuthMiddleware
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -1585,6 +1586,7 @@ embedder = SentenceTransformer(MODEL_NAME)
 ) = build_indexes(intent_items)
 
 app = FastAPI(title="RentifyPro Chatbot Service (Deterministic Multilingual)")
+app.add_middleware(InternalServiceAuthMiddleware)
 
 
 @app.get("/")
@@ -1605,6 +1607,7 @@ def root() -> Dict[str, Any]:
 
 
 @app.get("/health")
+@app.head("/health", include_in_schema=False)
 def health() -> Dict[str, str]:
     return {"status": "ok"}
 

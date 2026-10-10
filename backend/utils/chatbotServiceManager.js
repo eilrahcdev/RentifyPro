@@ -73,13 +73,13 @@ const chatbotServicePort = () => {
   }
 };
 
-const healthCheck = async () => {
+export const isChatbotServiceHealthy = async (url = CHATBOT_URL) => {
   try {
-    await axios.get(`${chatbotServiceRootUrl()}/`, {
+    const { status, data } = await axios.get(`${String(url).trim().replace(/\/+$/, "")}/health`, {
       timeout: HEALTH_TIMEOUT_MS,
-      validateStatus: (status) => status >= 200 && status < 500,
+      maxRedirects: 0,
     });
-    return true;
+    return status === 200 && data?.status === "ok";
   } catch {
     return false;
   }
@@ -133,7 +133,7 @@ const spawnCandidate = (candidate) =>
 const waitUntilHealthy = async () => {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await healthCheck()) return true;
+    if (await isChatbotServiceHealthy()) return true;
     if (chatbotServiceProcess && chatbotServiceProcess.exitCode !== null) return false;
     await sleep(HEALTH_POLL_INTERVAL_MS);
   }
@@ -194,7 +194,7 @@ const startChatbotService = async () => {
 };
 
 export const ensureChatbotServiceReady = async () => {
-  if (await healthCheck()) return true;
+  if (await isChatbotServiceHealthy()) return true;
   if (!CHATBOT_SERVICE_AUTOSTART) return false;
   if (!isLocalUrl(CHATBOT_URL)) return false;
 

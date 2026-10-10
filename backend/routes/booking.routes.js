@@ -21,6 +21,7 @@ import { requireModerationCapability } from "../middleware/moderation.middleware
 import {
   bookingCreateLimiter,
   paymentVerifyLimiter,
+  paymentCreateLimiter,
 } from "../middleware/security.middleware.js";
 
 const router = express.Router();
@@ -53,7 +54,7 @@ router.post(
   proceedBookingLateReturn
 );
 router.patch("/:id/review", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), addBookingReview);
-router.post("/:id/pay", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), createBookingPayment);
+router.post("/:id/pay", protect, authorize("user", "owner", "admin"), validateObjectIdParam("id"), paymentCreateLimiter, createBookingPayment);
 router.post(
   "/:id/pay/balance-method",
   protect,

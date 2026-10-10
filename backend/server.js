@@ -15,8 +15,9 @@ import connectDB from "./config/db.js";
 // Security middleware
 import {
   generalLimiter,
+  earlyIpLimiter,
+  healthReadLimiter,
   authLimiter,
-  kycLimiter,
   securityHeaders,
   noSqlSanitize,
   xssProtection,
@@ -110,12 +111,19 @@ console.log(
   `CORS allowlist loaded (${allowedOrigins.length} exact origins, preview wildcard enabled: ${allowVercelPreviewOrigins}).`
 );
 
+// Reject abusive API traffic before parsing JSON or uploads. The signed webhook
+// above retains its independent budget and original request bytes.
+app.use("/api/", earlyIpLimiter);
+app.use("/api/", healthReadLimiter);
+app.use(cookieParser());
+app.use("/api/", generalLimiter);
+app.get("/api/health", getHealth);
+
 // Body parsing
 // KYC includes a bounded image payload; every other endpoint gets the much smaller default.
 app.use("/api/kyc", express.json({ limit: process.env.KYC_JSON_BODY_LIMIT || "8mb" }));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || "1mb" }));
-app.use(cookieParser());
 // Only public vehicle and avatar media are exposed. Private KYC files are never static.
 app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(backendUploadsDir, "vehicles")));
 app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(getAvatarUploadDir()));
@@ -132,15 +140,13 @@ app.use(noSqlSanitize);
 app.use(xssProtection);
 app.use(parameterPollution);
 
-// General API rate limit
-app.use("/api/", generalLimiter);
-
 // Request logging
 app.use(requestLogger);
 
 // App routes
 app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/kyc", kycLimiter, kycRoutes);
+// Verification attempts are limited on their routes; status reads have polling budgets.
+app.use("/api/kyc", kycRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/vehicle-photos", vehiclePhotoRoutes);
 app.use("/api/owner", ownerRoutes);
@@ -161,8 +167,6 @@ if (!serveFrontendDist) {
     });
   });
 }
-
-app.get("/api/health", getHealth);
 
 app.get("/api/face-service-health", async (_req, res) => {
   try {

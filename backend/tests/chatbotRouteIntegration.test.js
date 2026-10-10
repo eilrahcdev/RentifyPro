@@ -4,6 +4,12 @@ import express from "express";
 import Vehicle from "../models/Vehicle.js";
 import Booking from "../models/Booking.js";
 
+const serviceKey = "chatbot-integration-fixture-secret-32-chars";
+process.env.INTERNAL_API_KEY = serviceKey;
+process.env.CHATBOT_INTERNAL_API_KEY = serviceKey;
+const requireServiceKey = (req, res, next) => req.get("x-internal-key") === serviceKey
+  ? next() : res.status(403).json({ detail: "Service access denied." });
+
 const listen = async (app) => {
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -29,8 +35,9 @@ test("compound vehicle questions use current records once and validate follow-up
   };
   Booking.distinct = async () => [];
   const classifier = express();
+  classifier.use("/chat", requireServiceKey);
   classifier.use(express.json());
-  classifier.get("/", (_req, res) => res.json({ status: "ok" }));
+  classifier.get("/health", (_req, res) => res.json({ status: "ok" }));
   classifier.post("/chat", (req, res) => {
     seen.push(req.body);
     res.json({ intent: "rental_rate", confidence: 0.99, language: "en",
@@ -87,8 +94,9 @@ test("compound vehicle questions use current records once and validate follow-up
 test("chat route preserves a missing-unit clarification and fulfills its short follow-up", async () => {
   const seen = [];
   const classifier = express();
+  classifier.use("/chat", requireServiceKey);
   classifier.use(express.json());
-  classifier.get("/", (_req, res) => res.json({ status: "ok" }));
+  classifier.get("/health", (_req, res) => res.json({ status: "ok" }));
   classifier.post("/chat", (req, res) => {
     seen.push(req.body);
     const hasUnit = req.body.message === "per day";
@@ -182,8 +190,9 @@ test("chat route checks public unavailable status and booking locks without reco
     return ["everest"];
   };
   const classifier = express();
+  classifier.use("/chat", requireServiceKey);
   classifier.use(express.json());
-  classifier.get("/", (_req, res) => res.json({ status: "ok" }));
+  classifier.get("/health", (_req, res) => res.json({ status: "ok" }));
   const cases = {
     "Why are unavailable cars hidden?": { intent: "vehicle_unavailability" },
     "Show unavailable cars": { topic: "vehicles", conditions: { vehicle_status_overview: true,

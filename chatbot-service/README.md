@@ -14,15 +14,29 @@ The `topics` map in `chatbot_config.json` assigns all 59 intents to one of eight
 
 Searches honor supported vehicle category, transmission, passenger count, budget unit, location text, and explicitly excluded brands. Location matching uses the listing's public location text. A date phrase is preserved as a request, not interpreted as confirmed future availability. Users must select pickup and return dates and times on the vehicle page; existing booking checks remain authoritative. Unavailable units may be checked for public status but remain excluded from recommendations.
 
+## Service access and local startup
+
+Python requires `x-internal-key` on every HTTP endpoint except `GET /health` (and health HEAD probes). Node adds this header; guest website users can continue chatting through `/api/chat` without signing in. Missing/wrong keys are rejected before body parsing or inference. Metadata `/`, documentation `/docs`, and `/openapi.json` require service authentication too.
+
+Set the same private `CHATBOT_INTERNAL_API_KEY` on Node and Python, or leave it blank in both to use their matching `INTERNAL_API_KEY`. The selected key must be at least 32 characters. A dedicated chatbot key preserves Face/OCR credentials. Keep keys out of frontend code and image builds; supply them through the service environment.
+
+Node autostart inherits the backend environment. If you run Python manually, start from this directory with:
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn app:app --env-file ../backend/.env --host 127.0.0.1 --port 8001
+```
+
+Restart existing Node and Python processes after changing code or keys. Hosted deployments need matching service environment settings: deploy Node's header support before enforcing Python authentication. Keep `/health` as the hosting probe. `npm.cmd run services:check` from `backend/` also verifies authenticated metadata access and denial of unauthenticated metadata requests. Rate-limit defaults, proxy setup, and deployment boundaries are in [backend/ENVIRONMENT.md](../backend/ENVIRONMENT.md#api-request-budgets-and-chatbot-service-access).
+
 From the repository root in PowerShell, run:
 
 ```powershell
 cd .\chatbot-service
-.\venv\Scripts\python.exe -B -m unittest test_chatbot
+.\venv\Scripts\python.exe -B -m unittest test_chatbot test_service_security
 .\venv\Scripts\python.exe -B evaluate_chatbot.py --json
 .\venv\Scripts\python.exe -B evaluate_chatbot_holdout.py --json
 cd ..\backend
-node --test tests/chatbotDataset.test.js tests/chatbotRouteIntegration.test.js tests/chatbotRenterStatus.test.js tests/chatbotRateLimit.test.js
+node --test tests/chatbotDataset.test.js tests/chatbotRouteIntegration.test.js tests/chatbotRenterStatus.test.js tests/chatbotRateLimit.test.js tests/apiRateLimit.test.js tests/chatbotServiceSecurity.test.js
 ```
 
 For a machine with the model already cached, set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` to avoid a model-download check during offline tests. First-time setup still needs the model download described in the project guide.
@@ -33,7 +47,7 @@ To check rendered conversations as well, start Vite on port 4176 and an isolated
 
 ```powershell
 $env:CHATBOT_CLASSIFIER_URL = 'http://127.0.0.1:8001'
-node --experimental-websocket scripts/chatbot-focus-browser-check.mjs
+node --env-file=backend/.env --experimental-websocket scripts/chatbot-focus-browser-check.mjs
 ```
 
 The optional URL enables actual Python routing and Node public vehicle fixtures for every conversation in the coverage set. Without it, the script runs the original focus, draft, budget, date, and reset checks using its predefined responses. Browser fixtures do not access live renter records.

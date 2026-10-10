@@ -12,7 +12,7 @@ Production startup calls `assertProductionConfiguration()` in [server.js](server
 | --- | --- |
 | Runtime | `NODE_ENV=production`; the server respects the supplied `PORT`, with 5000 as its local fallback. |
 | Database | At least one of `MONGO_URI` / `MONGO_URI_DIRECT`; `MONGO_AUTO_INDEX=false`. The direct URI takes precedence. |
-| Authentication / internal service access | Private random `JWT_SECRET` and `INTERNAL_API_KEY`, each at least 32 characters. Match the internal key to the Face Service. |
+| Authentication / internal service access | Private random `JWT_SECRET` and `INTERNAL_API_KEY`, each at least 32 characters. Match the internal key to the Face Service. Python chatbot access uses the matching `CHATBOT_INTERNAL_API_KEY` when supplied, otherwise `INTERNAL_API_KEY`. |
 | Public URLs / CORS | `BACKEND_PUBLIC_URL`, `FACE_SERVICE_URL`, and `CHATBOT_URL` must be public HTTPS service URLs. `FRONTEND_URL` must contain exact owned HTTPS origins; `ALLOW_VERCEL_PREVIEW_ORIGINS` must stay false. |
 | External services | `FACE_SERVICE_AUTOSTART=false` and `CHATBOT_SERVICE_AUTOSTART=false`. |
 | Persistent storage | Absolute mounted `STORAGE_ROOT`; `STORAGE_DURABILITY_CONFIRMED=true`. Public and private upload directories must remain separate inside that root. |
@@ -117,9 +117,42 @@ The sync command validates both source JSON files before copying them. The check
 
 Synchronization is a development/release step and does not run at App Service startup. The deployed backend needs only its own copies, not the Python application or its source directory. `CHATBOT_URL` and `CHATBOT_SERVICE_AUTOSTART` retain their existing behavior; Azure should continue using the external HTTPS classifier URL and `CHATBOT_SERVICE_AUTOSTART=false`. No new environment variables are required or introduced, and the old `CHATBOT_DATASET_PATH` override remains ignored.
 
+## API request budgets and chatbot service access
+
+Production always enables rate limiting. Development uses `ENABLE_RATE_LIMIT=true` to exercise the same controls. Counters currently belong to one Node process and reset on restart; configure a shared store before scaling to multiple backend instances. Provider/CDN traffic filtering and a correctly configured trusted proxy remain deployment tasks.
+
+| Budget | Default | Optional override |
+| --- | --- | --- |
+| API requests per IP, before body parsing | 1,000 per minute, including signed-in callers | `RATE_LIMIT_IP_MAX` |
+| General guest API requests per IP | 100 per 5 minutes | `RATE_LIMIT_GUEST_MAX` |
+| General signed-session API requests per account | 600 per 5 minutes | `RATE_LIMIT_USER_MAX` |
+| Payment checkout creation per account | 10 per 5 minutes | `RATE_LIMIT_PAYMENT_CREATE_MAX` |
+| Vehicle creation/editing per account, before multipart processing | 30 per 5 minutes, shared across create/edit | `RATE_LIMIT_VEHICLE_WRITE_MAX` |
+| Message sends per account | 30 per minute | `RATE_LIMIT_MESSAGE_MAX` |
+| Pre-KYC status checks per IP | 1,200 per 5 minutes | `RATE_LIMIT_KYC_STATUS_IP_MAX` |
+| Pre-KYC status checks per verified pre-KYC session | 600 per 5 minutes | `RATE_LIMIT_KYC_STATUS_MAX` |
+
+Overrides must be positive safe integers; missing, empty, zero, negative, or invalid values retain the defaults. Restart Node after changing them. These starting budgets allow existing 1.25-second verification polling in two tabs; tune against ordinary hosted usage and server capacity. Only the exact status-read route gets the separate polling budgets. Its token validation and private response handling remain in place. KYC attempts retain their route-level limits without the previous duplicate router-wide attempt counter. Existing login/OTP, chatbot, verification, booking, report, payment-verification, and photo-upload controls retain their existing policies.
+
+`GET /api/health` has a separate 120-per-minute IP budget, so exhausting a caller's ordinary API budget does not itself turn health checks into failures. The signed PayMongo webhook remains before the other API gates, with its independent 120-per-minute limit and raw request bytes. HTTP budgets do not constitute provider-level DDoS protection or limits on every Socket.IO event.
+
+`TRUST_PROXY_HOPS` must match the real proxy chain. Use `0` for direct connections with no trusted proxy; the existing default is `1`. At the hosted deployment, confirm that different visitors produce different `req.ip` values and that untrusted forwarding headers cannot change the observed client identity. Do not change it to unconditional `true`. Restrict origin access to the trusted ingress when the host permits it.
+
+Node sends `x-internal-key` to Python. Both services choose a nonblank `CHATBOT_INTERNAL_API_KEY` first and otherwise use `INTERNAL_API_KEY`; the chosen chatbot key must contain at least 32 characters. A dedicated chatbot key allows existing Face/OCR credentials to remain unchanged. Store it privately in both hosting environments; no service key belongs in frontend code. Missing/weak configuration rejects chat with HTTP 503; missing/wrong request keys receive HTTP 403 before body validation or classification. Python's `/`, `/docs`, and `/openapi.json` require the key too. `/health` remains a public minimal readiness response. Service-key failures return a generic temporary chatbot-unavailable response to the browser and never ask the user to log in.
+
+Local Node autostart passes its environment to Python. For a manually started local service, run this from `chatbot-service/`:
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn app:app --env-file ../backend/.env --host 127.0.0.1 --port 8001
+```
+
+Restart an already-running Python service as well as Node after applying this change. Autostart can reuse an existing service and cannot update that process's code/environment. For hosted rollout, first set the matching key in both services, deploy Node's header support, then deploy Python's enforcement. Keep the existing production URL/autostart checks. Internal Container Apps ingress is optional and requires verified backend network access before switching it on.
+
+`npm.cmd run services:check` checks public chatbot health, authenticated metadata access, and denial of metadata access without the key. Run it against the intended configured deployment after both services restart. Automated coverage uses synthetic keys and isolated handlers; it does not establish hosted proxy behavior, production load capacity, or external provider availability.
+
 ## Variables added to the example
 
-The original example had 38 variables. All 38 remain documented; the following 69 were added. Defaults, secret placeholders, inheritance rules, units, and optional overrides are recorded beside their assignments in `.env.example`.
+The original example had 38 variables. Those remain documented alongside the additional groups below. Defaults, secret placeholders, inheritance rules, units, and optional overrides are recorded beside their assignments in `.env.example`. Request-budget overrides and the optional dedicated chatbot key are described above.
 
 | Group / primary readers | Added variables |
 | --- | --- |

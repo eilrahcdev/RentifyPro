@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { fulfillHoldoutRequests } from "../backend/scripts/chatbot-holdout-fulfill.mjs";
 import coverage from "../chatbot-service/chatbot_coverage.json" with { type: "json" };
+import { getChatbotServiceHeaders } from "../backend/utils/chatbotServiceAuth.js";
 
 const base = "http://127.0.0.1:4176";
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -48,7 +49,8 @@ const handleRequest = async ({ requestId, request }) => {
       sentMessages.push(body);
       if (realRouting) {
         const response = await fetch(`${process.env.CHATBOT_CLASSIFIER_URL}/chat`, {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST", headers: { "content-type": "application/json", ...getChatbotServiceHeaders() },
+          redirect: "error",
           body: JSON.stringify({ message: body.message, language: body.language,
             previous_language: body.previousLanguage, previous_context: body.conversationContext || body.pendingSearch }),
         });

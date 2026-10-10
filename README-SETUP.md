@@ -215,7 +215,7 @@ Terminal 3 (chatbot-service):
 ```powershell
 cd .\chatbot-service
 .\venv\Scripts\Activate.ps1
-python -m uvicorn app:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn app:app --env-file ../backend/.env --host 127.0.0.1 --port 8001 --reload
 ```
 
 Terminal 4 (frontend):

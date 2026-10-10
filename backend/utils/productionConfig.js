@@ -19,6 +19,10 @@ export function getProductionConfigurationErrors(env = process.env) {
     if (String(env[key] || "").length < 32 || /changeme|example|<|>/i.test(env[key])) errors.push(`${key} must contain a private, random secret of at least 32 characters.`);
   }
   if (env.PASSWORD_RESET_TOKEN_SECRET && String(env.PASSWORD_RESET_TOKEN_SECRET).length < 32) errors.push("PASSWORD_RESET_TOKEN_SECRET must be at least 32 characters.");
+  const chatbotKey = String(env.CHATBOT_INTERNAL_API_KEY || "").trim();
+  if (chatbotKey && (chatbotKey.length < 32 || /changeme|example|<|>/i.test(chatbotKey))) {
+    errors.push("CHATBOT_INTERNAL_API_KEY must be a private random secret of at least 32 characters when supplied.");
+  }
   if (!env.MONGO_URI && !env.MONGO_URI_DIRECT) errors.push("A MongoDB connection URI is required.");
   if (env.MONGO_AUTO_INDEX !== "false") errors.push("MONGO_AUTO_INDEX must be false; use the explicit migrations.");
   for (const key of ["BACKEND_PUBLIC_URL", "FACE_SERVICE_URL", "CHATBOT_URL"]) {

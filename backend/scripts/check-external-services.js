@@ -1,5 +1,6 @@
 import "dotenv/config";
 import axios from "axios";
+import { getChatbotServiceHeaders } from "../utils/chatbotServiceAuth.js";
 
 const normalizeBaseUrl = (value = "") => String(value || "").trim().replace(/\/+$/, "");
 
@@ -17,6 +18,18 @@ const checks = [
     url: `${chatbotUrl}/health`,
     enabled: Boolean(chatbotUrl),
   },
+  {
+    name: "chatbot-service-authenticated-access",
+    url: `${chatbotUrl}/`,
+    enabled: Boolean(chatbotUrl),
+    getHeaders: getChatbotServiceHeaders,
+  },
+  {
+    name: "chatbot-service-rejects-direct-access",
+    url: `${chatbotUrl}/`,
+    enabled: Boolean(chatbotUrl),
+    expectedStatus: 403,
+  },
 ];
 
 let hasError = false;
@@ -28,7 +41,12 @@ for (const check of checks) {
   }
 
   try {
-    const response = await axios.get(check.url, { timeout: 10000 });
+    const response = await axios.get(check.url, {
+      timeout: 10000,
+      maxRedirects: 0,
+      headers: check.getHeaders?.(),
+      ...(check.expectedStatus ? { validateStatus: (status) => status === check.expectedStatus } : {}),
+    });
     console.log(`[OK] ${check.name}: ${response.status} ${check.url}`);
   } catch (error) {
     hasError = true;

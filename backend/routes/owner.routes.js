@@ -36,7 +36,7 @@ import {
   reviewOwnerWalkInPaymentRequest,
   confirmOwnerWalkInPayment,
 } from "../controllers/ownerDashboard.controller.js";
-import { otpLimiter } from "../middleware/security.middleware.js";
+import { otpLimiter, vehicleWriteLimiter } from "../middleware/security.middleware.js";
 import { requireModerationCapability } from "../middleware/moderation.middleware.js";
 
 const router = express.Router();
@@ -51,6 +51,7 @@ router.post(
   authorize("owner"),
   requireKyc,
   requireModerationCapability("listing"),
+  vehicleWriteLimiter,
   parseVehicleListing,
   validateVehicleCreate,
   prepareApprovedVehicleImages,
@@ -62,6 +63,7 @@ router.put(
   authorize("owner"),
   validateObjectIdParam("id"),
   requireModerationCapability("listing"),
+  vehicleWriteLimiter,
   parseVehicleListing,
   validateVehicleUpdate,
   prepareApprovedVehicleImages,

@@ -69,6 +69,16 @@ test("production configuration reports missing requirements without exposing sec
   assert.ok(getProductionConfigurationErrors({ ...validConfiguration(), KYC_UPLOAD_DIR: path.join(validConfiguration().STORAGE_ROOT, "uploads", "kyc") }).some((error) => /separate/.test(error)));
 });
 
+test("production validates optional dedicated chatbot keys without changing shared-key requirements", () => {
+  assert.deepEqual(getProductionConfigurationErrors({ ...validConfiguration(), CHATBOT_INTERNAL_API_KEY: "" }), []);
+  assert.deepEqual(getProductionConfigurationErrors({ ...validConfiguration(), CHATBOT_INTERNAL_API_KEY: "random-chatbot-fixture-secret-32-chars" }), []);
+  const errors = getProductionConfigurationErrors({ ...validConfiguration(), CHATBOT_INTERNAL_API_KEY: "short" });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /CHATBOT_INTERNAL_API_KEY/);
+  assert.ok(getProductionConfigurationErrors({ ...validConfiguration(), CHATBOT_INTERNAL_API_KEY: "random-chatbot-fixture-secret-32-chars",
+    INTERNAL_API_KEY: "short" }).some((error) => error.includes("INTERNAL_API_KEY must contain")));
+});
+
 test("production accepts manual KYC without a Gemini key and still validates explicit opt-in", (t) => {
   const manual = { ...validConfiguration(), GEMINI_SENSITIVE_DATA_APPROVED: "false", GEMINI_API_KEY: undefined };
   assert.deepEqual(getProductionConfigurationErrors(manual), []);

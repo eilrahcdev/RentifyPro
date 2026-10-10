@@ -17,7 +17,7 @@ import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
 import { requireModerationCapability } from "../middleware/moderation.middleware.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
-import { chatbotConcurrencyGuard, chatbotLimiter } from "../middleware/security.middleware.js";
+import { chatbotConcurrencyGuard, chatbotLimiter, messageSendLimiter } from "../middleware/security.middleware.js";
 import Booking from "../models/Booking.js";
 import Vehicle from "../models/Vehicle.js";
 import {
@@ -26,6 +26,7 @@ import {
   renterBookingSignInReply,
 } from "../services/chatbotBookingStatus.service.js";
 import { ensureChatbotServiceReady } from "../utils/chatbotServiceManager.js";
+import { getChatbotServiceHeaders } from "../utils/chatbotServiceAuth.js";
 import { censorProfanityInText } from "../utils/chatModeration.js";
 import {
   applyChatbotGuardrails,
@@ -80,6 +81,7 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
     if (!chatbotBaseUrl) {
       return res.status(503).json({ message: "CHATBOT_URL is not configured in production." });
     }
+    const serviceHeaders = getChatbotServiceHeaders();
     await ensureChatbotServiceReady();
 
     const payload = buildChatbotPayload(message, language);
@@ -92,7 +94,7 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
         previous_language: previousLanguage,
         previous_context: previousContext,
       },
-      { timeout: 15000 }
+      { timeout: 15000, headers: serviceHeaders, maxRedirects: 0 }
     );
 
     const chatbotResponse = normalizeChatbotResponse(classifierResponse, payload.selectedLanguage);
@@ -184,6 +186,11 @@ router.post("/", chatbotLimiter, chatbotConcurrencyGuard, async (req, res, next)
 
     return res.json(finalResponse);
   } catch (error) {
+    if (error.code === "CHATBOT_SERVICE_KEY_MISSING" ||
+        (axios.isAxiosError(error) && [401, 403, 503].includes(error.response?.status))) {
+      auditLog.error("CHATBOT", "Chatbot service access failed; check the matching internal key and service configuration.");
+      return res.status(503).json({ message: "Chatbot service is temporarily unavailable. Please try again later." });
+    }
     if (axios.isAxiosError(error)) {
       if (error.response) {
         return res.status(error.response.status).json(
@@ -209,7 +216,7 @@ router.patch("/owner/renters/:renterId/pin", protect, authorize("owner", "admin"
 router.delete("/conversations/:userId", protect, authorize("user", "owner", "admin"), deleteConversation);
 router.patch("/conversations/:userId/archive", protect, authorize("user", "owner", "admin"), updateConversationArchive);
 router.get("/messages/:userId", protect, authorize("user", "owner", "admin"), getMessagesWithUser);
-router.post("/messages/:userId", protect, authorize("user", "owner", "admin"), requireModerationCapability("chat"), sendMessageToUser);
+router.post("/messages/:userId", protect, authorize("user", "owner", "admin"), requireModerationCapability("chat"), messageSendLimiter, sendMessageToUser);
 router.patch("/messages/:userId/read", protect, authorize("user", "owner", "admin"), markMessagesAsRead);
 router.patch("/messages/:messageId", protect, authorize("user", "owner", "admin"), editMessage);
 router.delete("/messages/:messageId", protect, authorize("user", "owner", "admin"), deleteMessage);

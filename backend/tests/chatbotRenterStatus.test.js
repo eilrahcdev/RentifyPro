@@ -8,6 +8,10 @@ import User from "../models/User.js";
 import RevokedSession from "../models/RevokedSession.js";
 import { summarizeRenterBookingStatus } from "../services/chatbotBookingStatus.service.js";
 
+const serviceKey = "chatbot-private-status-fixture-secret-32-chars";
+process.env.INTERNAL_API_KEY = serviceKey;
+process.env.CHATBOT_INTERNAL_API_KEY = serviceKey;
+
 const at = new Date("2030-01-01T12:00:00Z");
 const fixture = (overrides = {}) => ({
   _id: "booking-1", status: "confirmed", returnAt: new Date("2030-01-01T14:00:00Z"),
@@ -55,8 +59,10 @@ test("chatbot reads only the authenticated renter's bookings and denies guests, 
     revokedExists: RevokedSession.exists,
   };
   const classifier = express();
+  classifier.use("/chat", (req, res, next) => req.get("x-internal-key") === serviceKey
+    ? next() : res.status(403).json({ detail: "Service access denied." }));
   classifier.use(express.json());
-  classifier.get("/", (_req, res) => res.json({ status: "ok" }));
+  classifier.get("/health", (_req, res) => res.json({ status: "ok" }));
   classifier.post("/chat", (req, res) => {
     const intents = {
       active: "my_active_bookings", overdue: "my_overdue_return",

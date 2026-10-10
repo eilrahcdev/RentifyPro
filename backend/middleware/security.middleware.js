@@ -30,6 +30,16 @@ const keyByEmailOrIp = (req) => {
   return `ip:${ipKeyGenerator(req.ip)}`;
 };
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const configuredLimit = (name, fallback) => {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+};
+const guestRequestLimit = configuredLimit("RATE_LIMIT_GUEST_MAX", 100);
+const userRequestLimit = configuredLimit("RATE_LIMIT_USER_MAX", 600);
+const apiPath = (req) => String(req.path || "").toLowerCase().replace(/\/+$/, "");
+const isHealthRead = (req) => ["GET", "HEAD"].includes(req.method) && apiPath(req) === "/health";
+const isPreKycStatusRead = (req) =>
+  ["GET", "HEAD"].includes(req.method) && apiPath(req) === "/kyc/pre/status";
 const CHATBOT_RATE_LIMIT_MAX = 20;
 const CHATBOT_IN_FLIGHT_TTL_MS = 30 * 1000;
 const activeChatbotRequests = new Map();
@@ -111,11 +121,28 @@ const createLimiter = ({
     handler: buildRateLimitHandler(messagePrefix),
   });
 
-// General API limit
+// Run before body parsing; signed sessions still share this network budget.
+export const earlyIpLimiter = createLimiter({
+  max: configuredLimit("RATE_LIMIT_IP_MAX", 1000),
+  windowMs: 60 * 1000,
+  messagePrefix: "Too many requests from this network.",
+  skipCondition: (req) => req.method === "OPTIONS" || isHealthRead(req),
+});
+
+// Hosting probes have a separate budget so an API flood does not mask readiness.
+export const healthReadLimiter = createLimiter({
+  max: 120,
+  windowMs: 60 * 1000,
+  messagePrefix: "Too many health checks.",
+  skipCondition: (req) => !isHealthRead(req),
+});
+
+// Status polling has separate IP and verified-session budgets on the KYC route.
 export const generalLimiter = createLimiter({
-  max: 100,
+  max: (req) => getVerifiedSessionUserId(req) ? userRequestLimit : guestRequestLimit,
   messagePrefix: "Too many requests.",
-  skipCondition: skipForSignedIn,
+  keyGenerator: keyByVerifiedSessionOrIp,
+  skipCondition: (req) => req.method === "OPTIONS" || isHealthRead(req) || isPreKycStatusRead(req),
 });
 
 // Chatbot requests are computationally expensive and may also query live vehicle data.
@@ -236,11 +263,16 @@ export const preKycAttemptLimiter = createLimiter({
   keyGenerator: (req) => `session:${req.preKyc.sessionId}`,
 });
 
-// Status reads are lightweight and poll only while a signed pre-KYC session is active.
+export const preKycStatusIpLimiter = createLimiter({
+  max: configuredLimit("RATE_LIMIT_KYC_STATUS_IP_MAX", 1200),
+  messagePrefix: "Too many verification status checks from this network.",
+});
+
+// Allow the existing 1.25-second polling cadence, including two open tabs.
 export const preKycStatusLimiter = createLimiter({
-  max: 120,
+  max: configuredLimit("RATE_LIMIT_KYC_STATUS_MAX", 600),
   messagePrefix: "Too many verification status checks.",
-  skipCondition: skipForSignedIn,
+  keyGenerator: (req) => `session:${req.preKyc.sessionId}`,
 });
 
 // Booking create limit
@@ -260,6 +292,25 @@ export const reportCreateLimiter = createLimiter({
 export const paymentVerifyLimiter = createLimiter({
   max: 20,
   messagePrefix: "Too many payment verification requests.",
+  keyGenerator: keyByUserOrIp,
+});
+
+export const paymentCreateLimiter = createLimiter({
+  max: configuredLimit("RATE_LIMIT_PAYMENT_CREATE_MAX", 10),
+  messagePrefix: "Too many payment checkout requests.",
+  keyGenerator: keyByUserOrIp,
+});
+
+export const messageSendLimiter = createLimiter({
+  max: configuredLimit("RATE_LIMIT_MESSAGE_MAX", 30),
+  windowMs: 60 * 1000,
+  messagePrefix: "Too many messages.",
+  keyGenerator: keyByUserOrIp,
+});
+
+export const vehicleWriteLimiter = createLimiter({
+  max: configuredLimit("RATE_LIMIT_VEHICLE_WRITE_MAX", 30),
+  messagePrefix: "Too many vehicle listing changes.",
   keyGenerator: keyByUserOrIp,
 });
 
