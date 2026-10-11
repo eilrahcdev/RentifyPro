@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { showActionToast } from "../utils/actionToast";
 
 export default function useReportSubmission() {
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +32,10 @@ export default function useReportSubmission() {
       return;
     }
     // A response from a closed or replaced form must not close the current draft.
-    if (mounted.current) onSuccess(response.report);
+    if (mounted.current) {
+      showActionToast("Report Submitted", { id: "report-submitted" });
+      onSuccess(response.report);
+    }
   };
 
   return { submitting, error, existingReport, submit };

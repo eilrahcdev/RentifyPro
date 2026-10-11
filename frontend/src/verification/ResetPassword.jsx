@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Loader, ArrowLeft, CircleCheck } from "lucide-react";
+import { Loader, CircleCheck } from "lucide-react";
 import PasswordInput from "../components/PasswordInput";
 import API from "../utils/api";
 
@@ -124,7 +124,7 @@ export default function ResetPassword({ onSuccess, onBack, email, token: resetTo
                 disabled={isLoading || isSuccess}
                 className="w-full py-3 rounded-xl font-semibold border border-gray-200 text-gray-900 hover:bg-gray-50 transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <ArrowLeft size={18} /> Cancel
+                Cancel
               </button>
             </div>
           </div>

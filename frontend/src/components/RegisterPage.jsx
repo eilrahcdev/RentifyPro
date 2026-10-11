@@ -21,7 +21,7 @@ import {
 
 import {
   Mail, Phone, User, Loader, Upload, CircleCheck,
-  ArrowLeft, ArrowRight, ShieldCheck, CarFront, Check, Calendar, MapPin,
+  ShieldCheck, Check, Calendar, MapPin,
 } from "lucide-react";
 
 import FormInput from "./FormInput";
@@ -980,7 +980,7 @@ function RegisterForm({
             {!file ? (
               <button type="button" onClick={() => inputRef?.current?.click()} disabled={isLoading}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
-                <Upload size={18} /> Upload
+                Upload
               </button>
             ) : (
               <>
@@ -1122,13 +1122,11 @@ function RegisterForm({
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 text-xs ${accountType === "user" ? "border-[#017FE6] bg-[#017FE6] text-white" : "border-gray-300"}`}>
                             {accountType === "user" && <Check size={16} strokeWidth={2} aria-hidden="true" />}
                           </div>
-                          <User size={18} className="text-gray-600" />
                           <div className="min-w-0 text-left"><p className="font-semibold text-gray-800 text-sm">Renter</p><p className="text-xs text-gray-500">Rent vehicles</p></div>
                         </button>
                         <button type="button" onClick={() => handleAccountSelect("owner")}
                           className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-[#017FE6] transition">
                           <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0" />
-                          <CarFront size={18} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
                           <div className="min-w-0 text-left"><p className="font-semibold text-gray-800 text-sm">Vehicle Owner</p><p className="text-xs text-gray-500">List vehicles after verification</p></div>
                         </button>
                       </div>
@@ -1420,7 +1418,7 @@ function RegisterForm({
                 <RegistrationActions spaceRef={actionsSpaceRef}>
                   <button type="button" onClick={goBack} disabled={step === 1 || isFormLocked}
                     className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                    <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : "Back"}
+                    {step === 4 && showingSelfie ? "Back to ID" : "Back"}
                   </button>
                   {step < TOTAL_STEPS ? (
                     <button type="button" onClick={goNext} disabled={isFormLocked}
@@ -1431,7 +1429,7 @@ function RegisterForm({
                         <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</>
                       ) : (
                         <>
-                          Next <ArrowRight size={18} />
+                          Next
                         </>
                       )}
                     </button>

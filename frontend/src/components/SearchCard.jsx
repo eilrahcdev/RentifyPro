@@ -1,5 +1,4 @@
 import React from "react";
-import { Search } from "lucide-react";
 
 export default function SearchCard({
   vehicleType,
@@ -35,7 +34,6 @@ export default function SearchCard({
 
         <div className="flex justify-center">
           <button onClick={onSearch} className="flex items-center gap-3 bg-[#017FE6] text-white px-10 py-3 rounded-xl font-semibold text-lg hover:bg-[#0165B8] transition-all duration-300 hover:shadow-xl hover:scale-105">
-            <Search size={24} strokeWidth={2} aria-hidden="true" />
             Search Available Vehicles
           </button>
         </div>

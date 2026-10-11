@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, MessageCirclePlus, Send, X } from "lucide-react";
+import { LoaderCircle, Send, X } from "lucide-react";
 import API from "../utils/api";
 import { getSessionUser, SESSION_USER_UPDATED_EVENT } from "../utils/sessionStore";
 import { formatVehicleType } from "../utils/vehicleText";
@@ -588,11 +588,10 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
               type="button"
               onClick={startNewConversation}
               disabled={isSending || messages.length === 1}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-white/10 px-3 text-xs font-semibold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-3 text-xs font-semibold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Start a new chatbot conversation"
               title="Start a new chat"
             >
-              <MessageCirclePlus size={18} strokeWidth={2} aria-hidden="true" />
               <span className="rp-ai-chat-new-label">New chat</span>
             </button>
             <button

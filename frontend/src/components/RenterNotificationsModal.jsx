@@ -141,7 +141,7 @@ export default function RenterNotificationsModal({
     <div className="rp-modal-layer">
       <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close notifications dialog" />
       <div
-        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]"
+        className="rp-modal-panel relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white px-5 py-4">
@@ -160,7 +160,7 @@ export default function RenterNotificationsModal({
           </button>
         </div>
 
-        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
+        <div className="rp-modal-scroll min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
           {notificationsError && <p className="text-sm text-rose-600 mb-3">{notificationsError}</p>}
           {!notificationsLoading && !notificationsError && dailyNotifications.length === 0 && (
             <p className="text-sm text-slate-600">

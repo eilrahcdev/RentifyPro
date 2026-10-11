@@ -1,5 +1,5 @@
 import React from "react";
-import { CarFront, LogIn, UserPlus, X } from "lucide-react";
+import { X } from "lucide-react";
 import ModalPortal from "./ModalPortal";
 
 export default function BookingAccessModal({
@@ -19,6 +19,7 @@ export default function BookingAccessModal({
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
         <div className="px-6 pt-5 pb-4 sm:px-7 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white">
           <button
+            type="button"
             onClick={onClose}
             className="rp-icon-button absolute right-2 top-2"
             aria-label="Close"
@@ -33,24 +34,23 @@ export default function BookingAccessModal({
 
         <div className="px-6 py-5 sm:px-7">
           <div className="space-y-3">
-            <button onClick={onSignIn} className="rp-btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2">
-              <LogIn size={18} />
+            <button type="button" onClick={onSignIn} className="rp-btn-primary w-full py-2.5 text-sm">
               Sign In
             </button>
 
             <button
+              type="button"
               onClick={onRegister}
-              className="rp-btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+              className="rp-btn-secondary w-full py-2.5 text-sm"
             >
-              <UserPlus size={18} />
               Register
             </button>
 
             <button
+              type="button"
               onClick={onBrowseVehicles}
-              className="rp-btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+              className="rp-btn-secondary w-full py-2.5 text-sm"
             >
-              <CarFront size={18} strokeWidth={2} aria-hidden="true" />
               Continue Browsing Vehicles
             </button>
           </div>

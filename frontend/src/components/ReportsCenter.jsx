@@ -2,17 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TriangleAlert,
   ArrowLeft,
-  FileUp,
   FileWarning,
   LoaderCircle,
-  RefreshCw,
-  Send,
 } from "lucide-react";
 import API from "../utils/api";
 import EvidenceFilePicker from "./EvidenceFilePicker";
 import AutoResizeTextarea from "./AutoResizeTextarea";
 import { validateReportEvidenceFiles } from "../utils/fileValidation";
 import OwnerPageHeader from "../owner/components/OwnerPageHeader";
+import RefreshButton from "./RefreshButton";
 
 const titleCase = (value) =>
   String(value || "")
@@ -129,9 +127,7 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
             title="Reports and Appeals"
             description="Track reports you submitted and moderation decisions involving your account."
             actions={(
-              <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                <RefreshCw size={18} strokeWidth={2} className={loading ? "animate-spin" : ""} aria-hidden="true" />Refresh
-              </button>
+              <RefreshButton onClick={() => void load()} disabled={loading} refreshing={loading} busyLabel="Refresh" aria-label="Refresh reports" />
             )}
           />
         ) : (
@@ -147,9 +143,7 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
               <p className="mt-1 text-sm text-slate-500">Track reports you submitted and moderation decisions involving your account.</p>
             </div>
           </div>
-          <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            <RefreshCw size={18} strokeWidth={2} className={loading ? "animate-spin" : ""} aria-hidden="true" />Refresh
-          </button>
+          <RefreshButton onClick={() => void load()} disabled={loading} refreshing={loading} busyLabel="Refresh" aria-label="Refresh reports" />
         </header>
         )}
 
@@ -242,8 +236,8 @@ export default function ReportsCenter({ onBack, embedded = false, ownerHeader = 
                         <AutoResizeTextarea value={appealText} onChange={(event) => setAppealText(event.target.value.slice(0, 2000))} minRows={2} maxRows={6} aria-label="Appeal explanation" placeholder="Explain why this decision should be reconsidered." className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setAppealingId("")} disabled={submitting} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold">Cancel</button>
-                          <button type="button" onClick={() => void submitAppeal(report)} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                            {submitting ? <LoaderCircle size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" /> : <Send size={18} strokeWidth={2} aria-hidden="true" />}Submit appeal
+                          <button type="button" onClick={() => void submitAppeal(report)} disabled={submitting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                            {submitting && <LoaderCircle size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" />}Submit appeal
                           </button>
                         </div>
                       </div>
@@ -270,8 +264,8 @@ function InformationForm({ open, text, files, submitting, onOpen, onCancel, onTe
           <EvidenceFilePicker files={files} onChange={onFilesChange} onError={onFileError} disabled={submitting} />
           <div className="flex gap-2">
             <button type="button" onClick={onCancel} disabled={submitting} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Cancel</button>
-            <button type="button" onClick={onSubmit} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-              {submitting ? <LoaderCircle size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" /> : <FileUp size={18} strokeWidth={2} aria-hidden="true" />}Submit information
+            <button type="button" onClick={onSubmit} disabled={submitting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {submitting && <LoaderCircle size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" />}Submit information
             </button>
           </div>
         </div>

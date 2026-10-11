@@ -4,10 +4,7 @@ import useRegistrationNavigation from "../hooks/useRegistrationNavigation";
 import PreKycReviewNotice from "../components/PreKycReviewNotice";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
   Building2,
-  Check,
   CircleCheck,
   Eye,
   EyeOff,
@@ -1421,11 +1418,10 @@ function RegisterOwnerForm({
                 <p className="text-sm text-gray-500 mb-3">Choose if you are registering as an individual or business owner.</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {[
-                    { type: "individual", label: "Individual", sub: "Personal lessor", icon: User },
-                    { type: "business", label: "Business", sub: "Company lessor", icon: Building2 },
-                  ].map(({ type, label, sub, icon: Icon }) => (
+                    { type: "individual", label: "Individual", sub: "Personal lessor" },
+                    { type: "business", label: "Business", sub: "Company lessor" },
+                  ].map(({ type, label, sub }) => (
                     <button key={type} type="button" onClick={() => handleOwnerTypeSelect(type)} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${form.ownerType === type ? "border-[#017FE6] bg-blue-50" : "border-gray-200 hover:border-[#017FE6]"}`}>
-                      <Icon size={18} className="text-gray-600" />
                       <div className="text-left">
                         <p className="text-sm font-semibold text-gray-800">{label}</p>
                         <p className="text-xs text-gray-500">{sub}</p>
@@ -1593,7 +1589,7 @@ function RegisterOwnerForm({
 
                   {!kyc.idCardFile ? (
                     <button type="button" onClick={() => idInputRef.current?.click()} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
-                      <Upload size={18} /> Upload
+                      Upload
                     </button>
                   ) : (
                     <>
@@ -1698,11 +1694,11 @@ function RegisterOwnerForm({
 
           <RegistrationActions spaceRef={actionsSpaceRef}>
             <button type="button" onClick={step === 1 ? onBack : goBack} disabled={isLoading} className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-              <ArrowLeft size={18} /> {step === 4 && showingSelfie ? "Back to ID" : step === 1 ? "Register as Renter" : "Back"}
+              {step === 4 && showingSelfie ? "Back to ID" : step === 1 ? "Register as Renter" : "Back"}
             </button>
             {step < TOTAL_STEPS ? (
               <button type="button" onClick={goNext} disabled={isLoading} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : <>Next <ArrowRight size={18} /></>}
+                {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : "Next"}
               </button>
             ) : (
               <button type="submit" form={formId} disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">

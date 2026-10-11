@@ -3,7 +3,6 @@
 // This file is only kept as a reference.
 
 import React from "react";
-import { ArrowLeft } from "lucide-react";
 
 export default function VehicleOwnerVerification({ onBack }) {
   return (
@@ -17,7 +16,7 @@ export default function VehicleOwnerVerification({ onBack }) {
           onClick={onBack}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold border border-gray-200 text-gray-900 hover:bg-gray-50 transition"
         >
-          <ArrowLeft size={18} /> Go Back
+          Go Back
         </button>
       </div>
     </div>

@@ -7,10 +7,10 @@ import {
   BarChart3,
   CarFront,
   Info,
-  RefreshCw,
 } from "lucide-react";
 import API from "../../utils/api";
 import OwnerPageHeader from "../components/OwnerPageHeader";
+import RefreshButton from "../../components/RefreshButton";
 import { AnalyticsContentSkeleton } from "../../components/LoadingSkeletons";
 
 const PERIOD_OPTIONS = [
@@ -142,16 +142,13 @@ export default function Analytics() {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
+            <RefreshButton
               onClick={() => setRefreshKey((value) => value + 1)}
               disabled={loading}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-[#017FE6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 disabled:cursor-wait disabled:opacity-60"
+              refreshing={loading}
+              busyLabel="Refresh"
               aria-label="Refresh vehicle analytics"
-            >
-              <RefreshCw size={17} className={loading ? "animate-spin" : ""} aria-hidden="true" />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
+            />
           </div>
         }
       />

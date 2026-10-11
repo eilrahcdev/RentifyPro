@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleCheck, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
+import { Camera, CircleCheck, LoaderCircle, ShieldCheck } from "lucide-react";
 import {
   captureBase64FromStream,
   startCamera,
@@ -221,7 +221,6 @@ export default function SelfieCapture({
             disabled={busy}
             className="rp-btn-secondary order-2 min-h-11 w-full px-4 py-3 disabled:cursor-not-allowed disabled:opacity-50 sm:order-1"
           >
-            <RefreshCw size={17} aria-hidden="true" />
             Retake
           </button>
         )}
@@ -231,10 +230,8 @@ export default function SelfieCapture({
           disabled={busy || (hasPreview && !onSubmit)}
           className="rp-btn-primary order-1 min-h-11 w-full px-4 py-3 disabled:cursor-not-allowed disabled:opacity-50 sm:order-2"
         >
-          {busy && (submitting || cameraState === "opening" || cameraState === "capturing") ? (
+          {busy && (submitting || cameraState === "opening" || cameraState === "capturing") && (
             <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Camera size={17} aria-hidden="true" />
           )}
           {primaryLabel}
         </button>

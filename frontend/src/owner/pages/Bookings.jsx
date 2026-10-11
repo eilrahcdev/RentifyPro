@@ -2,7 +2,7 @@ import VehicleThumbnail from "../../components/VehicleThumbnail";
 import BookingDetails, { BookingInfo as Info } from "../../components/BookingDetails";
 import BookingActionRail from "../../components/BookingActionRail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, CarFront, Clock3, CreditCard, Flag, MapPin, RefreshCw, Users } from "lucide-react";
+import { CalendarDays, CarFront, Clock3, CreditCard, MapPin, Users } from "lucide-react";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { getTransactionFee } from "../../utils/fees";
@@ -11,6 +11,7 @@ import ReportIssueModal from "../../components/ReportIssueModal";
 import PaymentSuccessToast from "../../components/PaymentSuccessToast";
 import { showActionToast } from "../../utils/actionToast";
 import OwnerPageHeader from "../components/OwnerPageHeader";
+import RefreshButton from "../../components/RefreshButton";
 import ReturnReviewModal from "../components/ReturnReviewModal";
 import HelpLink from "../../components/HelpLink";
 import RequestFeedback from "../../components/RequestFeedback";
@@ -214,7 +215,6 @@ export default function Bookings() {
   const [bookingPage, setBookingPage] = useState({ hasMore: false, nextCursor: null });
   const [loadingMore, setLoadingMore] = useState(false);
   const [reportBooking, setReportBooking] = useState(null);
-  const [reportNotice, setReportNotice] = useState("");
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
   const [returnReview, setReturnReview] = useState(null);
   const [returnReviewNote, setReturnReviewNote] = useState("");
@@ -292,7 +292,6 @@ export default function Bookings() {
     actionLocks.current.add(bookingId);
     setBookingActions((previous) => ({ ...previous, [bookingId]: label }));
     setActionErrors((previous) => ({ ...previous, [bookingId]: "" }));
-    setReportNotice("");
     try {
       const response = await action();
       if (response?.success === false) throw new Error(response.message || "The update could not be completed.");
@@ -381,7 +380,12 @@ export default function Bookings() {
             <span className="xl:hidden">Need help?</span>
             <span className="hidden xl:inline">Need help with booking requests?</span>
           </HelpLink>
-          <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => loadBookings({ background: true })} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50"><RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing..." : "Refresh"}</button>
+          <RefreshButton
+            disabled={loading || refreshing || loadingMore}
+            refreshing={refreshing}
+            onClick={() => loadBookings({ background: true })}
+            aria-label={refreshing ? "Refreshing bookings" : "Refresh bookings"}
+          />
         </>}
       />
 
@@ -405,7 +409,6 @@ export default function Bookings() {
 
       <RequestFeedback loading={refreshing} label="Refreshing bookings..." error={error} onRetry={() => loadBookings({ background: bookings.length > 0 })} />
       {loading && <BookingListSkeleton />}
-      {reportNotice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{reportNotice}</p>}
       {!loading && !error && !filteredBookings.length && (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-[#017FE6]"><CarFront size={24} strokeWidth={2} aria-hidden="true" /></div>
@@ -660,7 +663,7 @@ export default function Bookings() {
                       Confirm Walk-in Received
                     </button>
                   )}
-                <button type="button" onClick={() => setReportBooking(booking)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"><Flag size={18} strokeWidth={2} aria-hidden="true" />Report renter</button>
+                <button type="button" onClick={() => setReportBooking(booking)} className="inline-flex min-h-11 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">Report renter</button>
               </BookingActionRail>
 
               <div className="flex flex-col gap-2 md:items-end">
@@ -728,7 +731,7 @@ export default function Bookings() {
           </button>
         </div>
       )}
-      <ReportIssueModal booking={reportBooking} perspective="owner" onClose={() => setReportBooking(null)} onSubmitted={(report) => setReportNotice(`Report ${report.caseReference} was submitted for administrator review.`)} />
+      <ReportIssueModal booking={reportBooking} perspective="owner" onClose={() => setReportBooking(null)} />
       <PaymentSuccessToast notice={paymentSuccessToast} />
       <ReturnReviewModal
         review={returnReview}

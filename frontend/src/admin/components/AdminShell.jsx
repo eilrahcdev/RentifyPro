@@ -1,16 +1,16 @@
-import { CalendarDays, CarFront, FileText, LayoutDashboard, LogOut, Menu, ReceiptText, ShieldAlert, User, Users, X } from "lucide-react";
+import { Menu, User, X } from "lucide-react";
 
 const groups = [
-  { label: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }] },
+  { label: "Overview", items: [{ id: "dashboard", label: "Dashboard" }] },
   { label: "Operations", items: [
-    { id: "bookings", label: "Bookings", icon: CalendarDays },
-    { id: "transactions", label: "Transaction Records", icon: ReceiptText },
+    { id: "bookings", label: "Bookings" },
+    { id: "transactions", label: "Transaction Records" },
   ] },
-  { label: "Fleet", items: [{ id: "vehicles", label: "Vehicles", icon: CarFront }] },
+  { label: "Fleet", items: [{ id: "vehicles", label: "Vehicles" }] },
   { label: "Customers", items: [
-    { id: "customers", label: "Customers", icon: Users },
-    { id: "documents", label: "Documents", icon: FileText },
-    { id: "reports", label: "Reports", icon: ShieldAlert },
+    { id: "customers", label: "Customers" },
+    { id: "documents", label: "Documents" },
+    { id: "reports", label: "Reports" },
   ] },
 ];
 
@@ -37,9 +37,9 @@ export function AdminSidebar({ activeView, displayName, displayEmail, mobileOpen
                 <div key={group.label}>
                   <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{group.label}</p>
                   <div className="space-y-1">
-                    {group.items.map(({ id, label, icon: Icon }) => {
+                    {group.items.map(({ id, label }) => {
                       const active = activeView === id;
-                      return <button key={id} type="button" aria-current={active ? "page" : undefined} onClick={() => onSelect(id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${active ? "bg-blue-600 text-white shadow-lg shadow-blue-950/25" : "text-slate-300 hover:bg-white/[0.07] hover:text-white"}`}><Icon size={20} strokeWidth={2} aria-hidden="true" /><span>{label}</span></button>;
+                      return <button key={id} type="button" aria-current={active ? "page" : undefined} onClick={() => onSelect(id)} className={`flex w-full items-center rounded-xl px-3 py-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${active ? "bg-blue-600 text-white shadow-lg shadow-blue-950/25" : "text-slate-300 hover:bg-white/[0.07] hover:text-white"}`}><span>{label}</span></button>;
                     })}
                   </div>
                 </div>
@@ -48,7 +48,7 @@ export function AdminSidebar({ activeView, displayName, displayEmail, mobileOpen
           </nav>
 
           <div className="border-t border-white/10 p-3">
-            <button type="button" onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-300 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><LogOut size={20} strokeWidth={2} aria-hidden="true" />Sign Out</button>
+            <button type="button" onClick={onLogout} className="flex w-full items-center rounded-xl px-3 py-3 text-sm font-semibold text-slate-300 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Sign Out</button>
           </div>
         </div>
       </aside>

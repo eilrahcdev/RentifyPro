@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   CalendarDays,
   CarFront,
-  ChevronRight,
   Clock3,
   FileText,
   User,
@@ -227,7 +226,7 @@ function DashboardKpiCard({ label, value, actionLabel, onAction, icon: Icon, ton
           <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tones[tone] || tones.blue}`}><Icon size={20} aria-hidden="true" /></div>
           <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><p className="mt-1 text-3xl font-bold tracking-[-0.035em] text-slate-950">{value}</p></div>
         </div>
-        <button type="button" onClick={onAction} className="group mt-auto flex w-full items-center justify-between border-t border-slate-100 pt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{actionLabel}</span><ChevronRight size={16} strokeWidth={2} className="transition group-hover:translate-x-0.5" aria-hidden="true" /></button>
+        <button type="button" onClick={onAction} className="mt-auto flex min-h-11 w-full items-center border-t border-slate-100 pt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{actionLabel}</span></button>
       </div>
     </article>
   );
@@ -238,10 +237,10 @@ function DashboardCard({ title, description, children, footerLabel, onFooterClic
     <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div><h2 className="text-base font-bold text-slate-950">{title}</h2>{description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}</div>
-        {headerActionLabel ? <button type="button" onClick={onHeaderAction} className="group mt-0.5 inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{headerActionLabel}</span><ChevronRight size={18} strokeWidth={2} className="transition group-hover:translate-x-0.5" aria-hidden="true" /></button> : null}
+        {headerActionLabel ? <button type="button" onClick={onHeaderAction} className="mt-0.5 inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{headerActionLabel}</span></button> : null}
       </div>
       {children}
-      {footerLabel ? <button type="button" onClick={onFooterClick} className="mt-4 flex w-full items-center justify-between border-t border-slate-100 pt-4 text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{footerLabel}</span><ChevronRight size={18} strokeWidth={2} aria-hidden="true" /></button> : null}
+      {footerLabel ? <button type="button" onClick={onFooterClick} className="mt-4 flex min-h-11 w-full items-center border-t border-slate-100 pt-4 text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{footerLabel}</span></button> : null}
     </article>
   );
 }

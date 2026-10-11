@@ -1323,7 +1323,6 @@ export default function Dashboard() {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
               >
                 Open Bookings
-                <ArrowRight size={18} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
 
@@ -1377,7 +1376,6 @@ export default function Dashboard() {
                                   onClick={() => reviewExtensionRequest(booking, "approve")}
                                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                                 >
-                                  <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
                                   Approve Extension
                                 </button>
                                 <button
@@ -1386,7 +1384,6 @@ export default function Dashboard() {
                                   onClick={() => reviewExtensionRequest(booking, "reject")}
                                   className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
                                 >
-                                  <CircleX size={18} strokeWidth={2} aria-hidden="true" />
                                   Decline Extension
                                 </button>
                               </div>
@@ -1407,7 +1404,6 @@ export default function Dashboard() {
                                 onClick={() => updateBookingStatus(booking._id, "confirmed")}
                                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                               >
-                                <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
                                 Approve Booking
                               </button>
                               <button
@@ -1416,7 +1412,6 @@ export default function Dashboard() {
                                 onClick={() => updateBookingStatus(booking._id, "rejected")}
                                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
                               >
-                                <CircleX size={18} strokeWidth={2} aria-hidden="true" />
                                 Decline Booking
                               </button>
                             </div>
@@ -1469,7 +1464,6 @@ export default function Dashboard() {
                 onClick={() => reviewExtensionRequest(extensionReviewBooking, "approve")}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
               >
-                <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
                 Approve Extension
               </button>
               <button
@@ -1478,7 +1472,6 @@ export default function Dashboard() {
                 onClick={() => reviewExtensionRequest(extensionReviewBooking, "reject")}
                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
               >
-                <CircleX size={18} strokeWidth={2} aria-hidden="true" />
                 Decline Extension
               </button>
             </div>
@@ -1529,7 +1522,6 @@ export default function Dashboard() {
                 onClick={() => reviewRenterRequest(renterRequestReview, "approve")}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
               >
-                <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
                 {renterRequestReview.type === "booking"
                   ? "Approve Booking"
                   : renterRequestReview.type === "cancellation"
@@ -1553,7 +1545,6 @@ export default function Dashboard() {
                 }}
                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
               >
-                <CircleX size={18} strokeWidth={2} aria-hidden="true" />
                 {renterRequestReview.type === "booking"
                   ? "Decline Booking"
                   : renterRequestReview.type === "cancellation"
@@ -1639,7 +1630,6 @@ function SummaryCard({
               aria-label={subtitle}
             >
               {subtitle}
-              <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -1657,7 +1647,6 @@ function SectionViewAllFooter({ label, onClick, pushToBottom = false }) {
         className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 text-sm font-semibold text-[#017FE6] transition hover:text-[#0168be]"
       >
         {label}
-        <ArrowRight size={18} strokeWidth={2} aria-hidden="true" />
       </button>
     </div>
   );
@@ -1701,7 +1690,6 @@ function DashboardActionRow({
           {actionLabel}
         </span>
       )}
-      <ChevronRight size={16} className="shrink-0 text-slate-500" />
     </button>
   );
 }
@@ -1790,7 +1778,7 @@ function Modal({ title, description = "Simple, readable booking details.", child
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)]"
+        className="rp-modal-panel relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)]"
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
@@ -1806,7 +1794,7 @@ function Modal({ title, description = "Simple, readable booking details.", child
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-[calc(92vh-76px)] overflow-y-auto p-5 sm:p-6">{children}</div>
+        <div className="rp-modal-scroll max-h-[calc(92vh-76px)] overflow-y-auto p-5 sm:p-6">{children}</div>
       </div>
     </div>
     </ModalPortal>
@@ -1939,7 +1927,6 @@ function ViewAllDashboardModal({
           className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-[#017FE6] transition hover:border-blue-200 hover:bg-blue-50"
         >
           {details.actionLabel}
-          <ArrowRight size={18} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
     </Modal>
@@ -2039,7 +2026,6 @@ function DashboardRequestCard({ request, onReviewRequest }) {
         </p>
       </div>
       <span className="shrink-0 text-sm font-semibold text-[#017FE6]">Review</span>
-      <ChevronRight size={16} className="shrink-0 text-slate-400" />
     </button>
   );
 }

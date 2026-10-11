@@ -1,5 +1,4 @@
 import React from "react";
-import { ArrowRight } from "lucide-react";
 
 export default function HeroSection({ onNavigateToVehicles }) {
   return (
@@ -18,7 +17,7 @@ export default function HeroSection({ onNavigateToVehicles }) {
 
         <div className="flex gap-4 animate-slideUp">
           <button onClick={onNavigateToVehicles} className="bg-white text-black px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center gap-2">
-            Browse Vehicles <ArrowRight size={20} />
+            Browse Vehicles
           </button>
 
           <button className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-full font-semibold hover:bg-white hover:text-gray-900 transition-all duration-300 hover:shadow-xl">

@@ -1,4 +1,4 @@
-import { Eye, FileImage, FileText, RotateCcw } from "lucide-react";
+import { FileImage, FileText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
 
@@ -37,7 +37,7 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
           <SearchField label="Search Documents" value={search} onChange={setSearch} placeholder="Search by customer, filename, or document type..." />
           <FilterSelect label="Approval Status" value={status} onChange={setStatus} options={["All Statuses", "Queued", "Screening", "Retrying", "Pending Review", "Needs Re-upload", "Rejected"]} />
           <FilterSelect label="Document Type" value={type} onChange={setType} options={["All Document Types", ...documentTypes]} />
-          <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><RotateCcw size={18} strokeWidth={2} aria-hidden="true" />Clear Filters</button>
+          <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Clear Filters</button>
         </div>
 
         <div className="overflow-x-auto">
@@ -56,7 +56,7 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
                     <td className="max-w-[260px] px-4 py-3.5"><button type="button" title={document.fileName} onClick={() => onView(document)} className="flex max-w-full items-center gap-2 rounded-lg text-left text-sm font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><DocumentIcon size={16} /></span><span className="truncate">{document.fileName}</span></button></td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm tabular-nums text-slate-600"><time dateTime={document.submitted}>{document.submitted}</time></td>
                     <td className="px-4 py-3.5"><StatusBadge value={normalizedStatus(document.approval)} /></td>
-                    <td className="px-4 py-3.5"><button type="button" onClick={() => readyForReview ? onReview(document) : onView(document)} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${readyForReview ? "bg-blue-600 text-white hover:bg-blue-700" : "border border-slate-300 text-slate-700 hover:bg-slate-50"}`}><Eye size={18} strokeWidth={2} aria-hidden="true" />{readyForReview ? "Review" : "View"}</button></td>
+                    <td className="px-4 py-3.5"><button type="button" onClick={() => readyForReview ? onReview(document) : onView(document)} className={`inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${readyForReview ? "bg-blue-600 text-white hover:bg-blue-700" : "border border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{readyForReview ? "Review" : "View"}</button></td>
                   </tr>
                 );
               })}

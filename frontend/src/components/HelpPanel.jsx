@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronLeft, X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import HelpGuide from "./HelpGuide";
 import { getHelpGuide, getHelpGuidesForAudience } from "../data/helpContent";
 
@@ -111,7 +111,7 @@ export default function HelpPanel({ guideSlug, audience, onClose, onAskAI }) {
           ) : selectedAudience ? (
             <>
               {!audience && (
-                <button type="button" onClick={() => chooseAudience("")} className="mb-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-blue-800 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"><ArrowLeft size={17} aria-hidden="true" />Choose another manual</button>
+                <button type="button" onClick={() => chooseAudience("")} className="mb-5 inline-flex min-h-11 items-center text-sm font-semibold text-blue-800 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">Choose another manual</button>
               )}
               <p className="text-sm leading-6 text-slate-700">Choose a task for step-by-step instructions.</p>
               <ul className="mt-5 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200">

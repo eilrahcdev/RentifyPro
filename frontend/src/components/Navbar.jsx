@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CalendarDays, CircleHelp, Flag, LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
+import { Bell, CircleHelp, Menu, MessageCircle, X } from "lucide-react";
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
 import { LIVE_COUNTERS_REFRESH_EVENT } from "../utils/liveCounters";
@@ -509,27 +509,27 @@ function ProfileMenu({
             onClick={onAccountSettings}
             className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#017FE6]/10"
           >
-            <Settings size={18} /> Account Settings
+            Account Settings
           </button>
           <button
             onClick={onBookingHistory}
             className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#017FE6]/10"
           >
-            <CalendarDays size={18} strokeWidth={2} aria-hidden="true" /> My Bookings
+            My Bookings
           </button>
           {onReports && (
             <button
               onClick={onReports}
               className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#017FE6]/10"
             >
-              <Flag size={18} /> My Reports
+              My Reports
             </button>
           )}
           <button
             onClick={onLogout}
             className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
           >
-            <LogOut size={18} strokeWidth={2} aria-hidden="true" /> Sign Out
+            Sign Out
           </button>
         </div>
       )}

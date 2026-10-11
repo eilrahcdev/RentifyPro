@@ -4,19 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  LayoutDashboard,
-  CarFront,
-  CalendarDays,
-  MessageCircle,
-  Star,
-  Wallet,
-  BarChart3,
-  ShieldAlert,
-  LogOut,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { X } from "lucide-react";
 import { getOwnerProfileFromStorage } from "../utils/ownerProfile";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
@@ -145,14 +133,14 @@ function Sidebar({
   const displayEmail = owner.email || "Manage your profile";
 
   const menuItems = [
-    { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "Vehicles", label: "My Vehicles", icon: CarFront },
-    { id: "Bookings", label: "Bookings", icon: CalendarDays },
-    { id: "Messages", label: "Messages", icon: MessageCircle, badge: unreadMessages },
-    { id: "Reviews", label: "Reviews", icon: Star },
-    { id: "Earnings", label: "Earnings", icon: Wallet },
-    { id: "Analytics", label: "Analytics", icon: BarChart3 },
-    { id: "Reports", label: "Reports", icon: ShieldAlert },
+    { id: "Dashboard", label: "Dashboard" },
+    { id: "Vehicles", label: "My Vehicles" },
+    { id: "Bookings", label: "Bookings" },
+    { id: "Messages", label: "Messages", badge: unreadMessages },
+    { id: "Reviews", label: "Reviews" },
+    { id: "Earnings", label: "Earnings" },
+    { id: "Analytics", label: "Analytics" },
+    { id: "Reports", label: "Reports" },
   ];
   const menuGroups = [
     { label: "Workspace", items: menuItems.slice(0, 4) },
@@ -215,7 +203,6 @@ function Sidebar({
               <span className="rp-owner-sidebar__profile-email" title={owner.email || undefined}>{displayEmail}</span>
               <span className="rp-owner-sidebar__profile-action">Edit profile</span>
             </span>
-            <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -235,7 +222,6 @@ function Sidebar({
                       className="rp-owner-sidebar__link"
                       aria-current={activePage === item.id ? "page" : undefined}
                     >
-                      <span className="rp-owner-sidebar__icon"><item.icon size={19} strokeWidth={1.8} aria-hidden="true" /></span>
                       <span className="rp-owner-sidebar__link-label">{item.label}</span>
                       {item.badge > 0 && (
                         <span
@@ -259,7 +245,6 @@ function Sidebar({
             onClick={openLogoutModal}
             className="rp-owner-sidebar__logout"
           >
-            <LogOut size={19} strokeWidth={1.8} aria-hidden="true" />
             <span>Sign Out</span>
           </button>
         </div>

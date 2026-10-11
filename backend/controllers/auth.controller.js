@@ -1116,7 +1116,7 @@ export const changePassword = async (req, res) => {
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Current password is incorrect." });
+      return res.status(400).json({ success: false, code: "CURRENT_PASSWORD_INCORRECT", message: "Current password is incorrect.", errors: { currentPassword: "Current password is incorrect." } });
     }
 
     const passwordMessage = validatePasswordStrength(newPassword);
@@ -1294,6 +1294,10 @@ export const getMe = async (req, res) => {
 };
 
 export const updateProfile = async (req, res) => {
+  let previousAvatar = "";
+  let stagedAvatar = "";
+  let avatarChanged = false;
+  let profileSaved = false;
   try {
     const user = await User.findById(req.user._id).select("+password");
     if (!user) {
@@ -1306,6 +1310,36 @@ export const updateProfile = async (req, res) => {
     const computedName = toText(`${firstName} ${lastName}`);
 
     const nextName = explicitName || computedName;
+    if (user.role === "owner") {
+      const protectedFields = ["ownerType", "businessName", "permitNumber", "licenseNumber"];
+      const changedFields = protectedFields.filter((field) =>
+        Object.prototype.hasOwnProperty.call(req.body, field) && toText(req.body[field]) !== toText(user[field]));
+      if ((["name", "firstName", "lastName"].some((field) => Object.prototype.hasOwnProperty.call(req.body, field)))
+        && nextName !== toText(user.name)) changedFields.push("name");
+      if (changedFields.length) {
+        return res.status(409).json({
+          success: false,
+          code: "OWNER_VERIFICATION_DETAILS_LOCKED",
+          message: "Registered owner names and business details cannot be changed in Account Settings because they are tied to document verification.",
+          errors: Object.fromEntries(changedFields.map((field) => [field, "This registered detail is protected by document verification."])),
+        });
+      }
+      const locationFields = ["address", "region", "province", "city", "barangay"];
+      if (locationFields.some((field) => Object.prototype.hasOwnProperty.call(req.body, field))) {
+        const location = Object.fromEntries(locationFields.map((field) => [field,
+          Object.prototype.hasOwnProperty.call(req.body, field) ? toText(req.body[field]) : toText(user[field])]));
+        const errors = {};
+        for (const [field, label] of [["address", "Full address"], ["region", "Region"], ["city", "City / municipality"], ["barangay", "Barangay"]]) {
+          if (!location[field]) errors[field] = `${label} is required.`;
+        }
+        for (const field of locationFields) {
+          const limit = field === "address" ? 255 : 50;
+          if (location[field].length > limit) errors[field] = `Use no more than ${limit} characters.`;
+          if (Object.prototype.hasOwnProperty.call(req.body, field) && typeof req.body[field] !== "string") errors[field] = "Enter a valid text value.";
+        }
+        if (Object.keys(errors).length) return res.status(400).json({ success: false, message: "Complete your location details before saving.", errors });
+      }
+    }
     if (nextName) {
       user.name = nextName;
     }
@@ -1361,6 +1395,7 @@ export const updateProfile = async (req, res) => {
         return res.status(400).json({
           success: false,
           message: "Phone number must be exactly 10 digits and start with 9.",
+          errors: { phone: "Phone number must be exactly 10 digits and start with 9." },
         });
       }
 
@@ -1373,6 +1408,7 @@ export const updateProfile = async (req, res) => {
         return res.status(409).json({
           success: false,
           message: "This phone number is already registered.",
+          errors: { phone: "This phone number is already registered." },
         });
       }
 
@@ -1437,19 +1473,20 @@ export const updateProfile = async (req, res) => {
 
     if (Object.prototype.hasOwnProperty.call(req.body, "avatar")) {
       try {
+        previousAvatar = user.avatar || "";
+        avatarChanged = true;
         const avatarInput = toText(req.body.avatar);
         if (!avatarInput) {
-          await removeLocalAvatarIfExists(user.avatar);
           user.avatar = "";
         } else {
           const avatarPayload = extractAvatarPayload(avatarInput);
           if (avatarPayload) {
-            await removeLocalAvatarIfExists(user.avatar);
             const stored = await saveAvatarBase64({
               base64: avatarPayload.base64,
               mimeType: avatarPayload.mimeType,
               req,
             });
+            stagedAvatar = `uploads/avatars/${stored.fileName}`;
             user.avatar = stored.publicUrl;
           } else {
             const localAvatarKey = normalizeAvatarKey(avatarInput);
@@ -1480,6 +1517,10 @@ export const updateProfile = async (req, res) => {
     });
 
     await user.save();
+    profileSaved = true;
+    if (avatarChanged && normalizeAvatarKey(previousAvatar) !== normalizeAvatarKey(user.avatar)) {
+      await removeLocalAvatarIfExists(previousAvatar);
+    }
 
     const safeUser = await User.findById(user._id).select("-password");
     return res.json({
@@ -1488,6 +1529,7 @@ export const updateProfile = async (req, res) => {
       user: buildSafeUserResponse(safeUser),
     });
   } catch (error) {
+    if (stagedAvatar && !profileSaved) await removeLocalAvatarIfExists(stagedAvatar);
     if (error?.code === 11000) {
       return res.status(409).json({
         success: false,

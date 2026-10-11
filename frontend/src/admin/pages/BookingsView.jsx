@@ -1,5 +1,5 @@
 import { bookingStatusLabel } from "../../utils/workflowStatus";
-import { CalendarDays, CircleCheck, Clock3, Eye } from "lucide-react";
+import { CalendarDays, CircleCheck, Clock3 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
 
@@ -53,7 +53,7 @@ export default function BookingsView({ bookings, initialStatus = "All Statuses",
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600"><time dateTime={booking.returnAt}>{formatDateTime(booking.returnAt)}</time></td>
                   <td className="px-4 py-3.5 text-sm text-slate-600">{booking.driverSelected ? "Selected" : "Not selected"}</td>
                   <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1"><StatusBadge value={bookingStatusLabel(booking.status)} />{booking.isOverdue ? <StatusBadge value="Overdue" /> : booking.isActive ? <StatusBadge value="Active" /> : null}</div></td>
-                  <td className="px-4 py-3.5"><button type="button" onClick={() => onView(booking)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><Eye size={18} strokeWidth={2} aria-hidden="true" />View</button></td>
+                  <td className="px-4 py-3.5"><button type="button" onClick={() => onView(booking)} className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">View</button></td>
                 </tr>
               ))}
             </tbody>

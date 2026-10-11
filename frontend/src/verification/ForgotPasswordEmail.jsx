@@ -2,7 +2,7 @@
 // Keep responses generic so the email is not exposed
 
 import React, { useState } from "react";
-import { Mail, Loader, ArrowLeft, ShieldCheck, CircleCheck } from "lucide-react";
+import { Mail, Loader, ShieldCheck, CircleCheck } from "lucide-react";
 import API from "../utils/api";
 
 const EMAIL_REGEX = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
@@ -174,7 +174,7 @@ export default function ForgotPasswordEmail({ onNavigateToOTP, onNavigateToSignI
                 disabled={isLoading}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-slate-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ArrowLeft size={18} strokeWidth={2} aria-hidden="true" /> Back to Sign In
+                Back to Sign In
               </button>
             </div>
 

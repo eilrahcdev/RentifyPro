@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BadgeCheck, MapPin, MessageCircle, Star, X } from "lucide-react";
+import { BadgeCheck, MapPin, Star, X } from "lucide-react";
 import { getInitialsFromName } from "../utils/dateUtils";
 import { resolveAssetUrl } from "../utils/media";
 import VehicleCover from "./VehicleCover";
@@ -44,13 +44,27 @@ export default function VehiclePreviewModal({
   const reviewCount = Number.isFinite(Number(vehicle.reviewCount)) ? Number(vehicle.reviewCount) : 0;
   const isBookable = vehicle.available !== false;
   const location = String(vehicle.location || "").trim();
+  const bookingAction = (
+    <button
+      type="button"
+      onClick={onBookNow}
+      disabled={!isBookable}
+      className={`min-h-11 w-full py-2.5 rounded-xl text-sm sm:text-base font-semibold transition ${
+        isBookable
+          ? "rp-btn-primary"
+          : "bg-slate-200 text-slate-500 cursor-not-allowed"
+      }`}
+    >
+      {isBookable ? "Book Now" : "Unavailable"}
+    </button>
+  );
 
   return (
     <ModalPortal lockScroll={false}>
     <div className="rp-modal-layer">
       <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close vehicle preview" />
 
-      <div className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
+      <div className="rp-modal-panel relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
         <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-[#0B75E7]/10 via-white to-white px-5 py-4 sm:px-6">
           <button
             type="button"
@@ -68,12 +82,12 @@ export default function VehiclePreviewModal({
           </p>
         </div>
 
-        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6 sm:py-6">
+        <div className="rp-modal-scroll min-h-0 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6 sm:py-6">
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.05fr_1fr]">
             <VehicleCover
               vehicle={vehicle}
               alt={vehicle.name}
-              className="min-h-[230px]"
+              className="rp-vehicle-preview-cover min-h-[230px]"
               contentClassName="p-5 sm:p-7"
             />
 
@@ -135,27 +149,16 @@ export default function VehiclePreviewModal({
                     disabled={disableChat}
                     className="rp-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs sm:text-sm disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <MessageCircle size={18} strokeWidth={2} aria-hidden="true" />
                     Chat Owner
                   </button>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={onBookNow}
-                disabled={!isBookable}
-                className={`w-full py-2.5 rounded-xl text-sm sm:text-base font-semibold transition ${
-                  isBookable
-                    ? "rp-btn-primary"
-                    : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                }`}
-              >
-                {isBookable ? "Book Now" : "Unavailable"}
-              </button>
+              <div className="rp-vehicle-preview-inline-action">{bookingAction}</div>
             </div>
           </div>
         </div>
+        <div className="rp-vehicle-preview-mobile-action">{bookingAction}</div>
       </div>
     </div>
     </ModalPortal>

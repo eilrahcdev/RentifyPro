@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const base = "http://127.0.0.1:4184";
+const base = process.env.MESSAGING_CHECK_BASE || "http://127.0.0.1:4184";
+const cdpPort = process.env.MESSAGING_CHECK_CDP_PORT || "9245";
 const frontend = fileURLToPath(new URL("../frontend/", import.meta.url));
 const fixtureName = `messaging-inbox-check-${process.pid}`;
 const fixturePaths = [
@@ -19,8 +20,9 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import RealtimeChatPage from "../src/pages/RealtimeChatPage";
 import OwnerMessages from "../src/owner/pages/Messages";
+import ActionToastHost from "../src/components/ActionToast";
 import API from "../src/utils/api";
-import { setSessionUser } from "../src/utils/sessionStore";
+import { getSessionUser, setSessionUser } from "../src/utils/sessionStore";
 import "../src/index.css";
 
 const ownerOne = { _id: "507f1f77bcf86cd799439011", name: "Alex Owner", email: "alex@example.test" };
@@ -42,7 +44,37 @@ window.fixtureCalls = [];
 const call = (kind, id) => window.fixtureCalls.push({ kind, id });
 API.getConversations = async () => ({ conversations });
 API.getOwnerRenterThreads = async () => ({ renters: threads });
-API.getMessagesWithUser = async (id) => { call("messages", id); return { messages: id === ownerTwo._id ? [conversations[1].lastMessage] : id === renter._id ? [threads[0].lastMessage] : [] }; };
+const ownMessages = {
+  [ownerTwo._id]: message("renter-own", renter, ownerTwo, "My outgoing renter message"),
+  [renter._id]: message("owner-own", ownerOne, renter, "My outgoing owner message"),
+};
+window.fixtureResetActionMessages = () => {
+  conversations[1].lastMessage = message("m2", ownerTwo, renter, "Secret pickup code two");
+  threads[0].lastMessage = message("m3", renter, ownerOne, "Private renter message");
+  for (const outgoing of Object.values(ownMessages)) { outgoing.isDeleted = false; outgoing.text = "My outgoing message"; }
+};
+window.fixturePendingUnsend = [];
+window.fixtureFinishUnsend = (fail = false) => {
+  const pending = window.fixturePendingUnsend.shift();
+  if (fail) pending.reject(new Error("Fixture unsend failed. Try again."));
+  else {
+    pending.message.text = "This message was deleted.";
+    pending.message.isDeleted = true;
+    pending.resolve({ message: { ...pending.message } });
+  }
+};
+API.getMessagesWithUser = async (id) => {
+  call("messages", id);
+  const incoming = id === ownerTwo._id ? conversations[1].lastMessage : id === renter._id ? threads[0].lastMessage : null;
+  return { messages: incoming ? [incoming, ownMessages[id], { ...incoming, _id: "deleted-" + id, text: "This message was deleted.", isDeleted: true }] : [] };
+};
+API.deleteChatMessage = async (id) => {
+  call("unsend", id);
+  const outgoing = Object.values(ownMessages).find(item => item._id === id);
+  if (!outgoing || outgoing.sender._id !== getSessionUser()._id) throw new Error("Sender permission failed");
+  return new Promise((resolve, reject) => window.fixturePendingUnsend.push({ resolve, reject, message: outgoing }));
+};
+API.reportChatMessage = async (id, category) => { window.fixtureCalls.push({ kind: "report", id, category }); return { report: { caseReference: "RPT-FIXTURE" } }; };
 API.markMessagesAsRead = async (id) => { call("read", id); return { success: true }; };
 API.openOwnerRenterThread = async (id) => { call("open", id); return { success: true }; };
 API.setOwnerRenterThreadPin = async (id, pinned) => { call("pin", id); return { pinned, pinnedAt: new Date().toISOString() }; };
@@ -58,9 +90,9 @@ function App() {
     setDirectContext(nextMode === "direct" ? { partnerId: directOwner._id, partnerName: directOwner.name, partnerEmail: directOwner.email, vehicleId: "507f1f77bcf86cd799439015" } : null);
     setMode(nextMode);
   };
-  return mode === "owner"
+  return <><ActionToastHost />{mode === "owner"
     ? <OwnerMessages key="owner" />
-    : <RealtimeChatPage key={mode} isLoggedIn user={renter} initialChatContext={directContext} onChatContextHandled={() => setDirectContext(null)} />;
+    : <RealtimeChatPage key={mode} isLoggedIn user={renter} initialChatContext={directContext} onChatContextHandled={() => setDirectContext(null)} />}</>;
 }
 createRoot(document.getElementById("root")).render(<App />);
 `;
@@ -91,12 +123,85 @@ const screenshot = async (name) => {
   await fs.writeFile(path.join(screenshotDirectory, `${name}.png`), Buffer.from(data, "base64"));
 };
 const setViewport = (width, height) => send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 768 });
+const key = async (name) => {
+  const keyCode = { Enter: 13, Escape: 27, Tab: 9, " ": 32 }[name];
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: name, code: name === " " ? "Space" : name, windowsVirtualKeyCode: keyCode, ...(name === "Enter" ? { text: "\r" } : {}) });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name === " " ? "Space" : name, windowsVirtualKeyCode: keyCode });
+};
+const tap = async (selector) => {
+  const position = await evaluate(`(() => { const button = document.querySelector(${JSON.stringify(selector)}); button.scrollIntoView({ block: 'center' }); const rect = button.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }; })()`);
+  await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [position] });
+  await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+};
+const checkMessageActions = async (mode, incomingText, outgoingId) => {
+  await wait(`document.querySelector('button[aria-label="Report this message"]')`);
+  assert.equal(await evaluate(`document.querySelectorAll('button[aria-label="Report this message"]').length`), 1);
+  assert.equal(await evaluate(`document.querySelectorAll('button[aria-label="Unsend this message"]').length`), 1);
+  assert.equal(await evaluate(`document.querySelectorAll('.rp-message-bubble-action:disabled').length`), 1);
+  assert.equal(await evaluate(`document.body.innerText.includes('Click to report')`), true);
+  assert.equal(await evaluate(`document.querySelector('button[aria-label="Report this message"] svg') === null`), true);
+  assert.equal(await evaluate(`(() => {
+    const bubbles = [...document.querySelectorAll('.rp-message-bubble-action')];
+    return bubbles.every(bubble => {
+      const time = bubble.querySelector('time');
+      if (!time || time.dateTime !== '2026-09-30T09:00:00.000Z') return false;
+      const bounds = bubble.getBoundingClientRect(), stamp = time.getBoundingClientRect();
+      return stamp.left >= bounds.left && stamp.right <= bounds.right && stamp.bottom <= bounds.bottom;
+    });
+  })()`), true, `${mode} timestamps stay inside their bubbles`);
+  const bubbleStyles = await evaluate(`(() => { const button = document.querySelector('button[aria-label="Report this message"]'); button.focus(); const style = getComputedStyle(button); return { height: button.getBoundingClientRect().height, outline: style.outlineStyle, cursor: style.cursor }; })()`);
+  assert.ok(bubbleStyles.height >= 44);
+  assert.equal(bubbleStyles.cursor, "pointer");
+  await key("Enter");
+  await wait("document.querySelector('dialog[open]')");
+  assert.equal(await evaluate("document.querySelector('dialog blockquote').textContent"), incomingText);
+  assert.equal(await evaluate("document.body.innerText.includes('Review report')"), false);
+  await key("Escape");
+  await wait("!document.querySelector('dialog')");
+  assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Report this message");
+  await key(" ");
+  await wait("document.querySelector('dialog[open]')");
+  await evaluate(`document.querySelector('dialog [aria-haspopup="listbox"]').click()`);
+  await wait(`document.querySelector('[role="option"]')`);
+  await evaluate(`document.querySelector('[role="option"]').click()`);
+  await evaluate(`document.querySelector('dialog button[type="submit"]').click()`);
+  await wait("!document.querySelector('dialog') && document.querySelector('.rp-floating-alert')?.textContent === 'Report Submitted'");
+  const reports = await evaluate("window.fixtureCalls.filter(call => call.kind === 'report')");
+  assert.equal(reports.at(-1).category, "harassment");
+  assert.notEqual(reports.at(-1).id, outgoingId);
+
+  await evaluate(`document.querySelector('button[aria-label="Unsend this message"]').focus()`);
+  await key("Enter");
+  await wait("document.querySelector('dialog[role=alertdialog]')");
+  assert.equal(await evaluate("document.querySelector('dialog').innerText.includes('Unsend message?')"), true);
+  assert.equal(await evaluate("document.querySelector('dialog').innerText.includes('Edit')"), false);
+  await key("Escape");
+  await wait("!document.querySelector('dialog')");
+  assert.equal(await evaluate("window.fixtureCalls.filter(call => call.kind === 'unsend').length"), mode === "renter" ? 0 : 2);
+  await key("Enter");
+  await wait("document.querySelector('dialog[role=alertdialog]')");
+  const confirm = `(() => { const button = [...document.querySelectorAll('dialog button')].find(button => button.textContent.trim() === 'Unsend'); button.click(); button.click(); })()`;
+  await evaluate(confirm);
+  await wait("window.fixturePendingUnsend.length === 1");
+  assert.equal(await evaluate("[...document.querySelectorAll('dialog button')].every(button => button.disabled)"), true);
+  await key("Escape");
+  assert.equal(await evaluate("Boolean(document.querySelector('dialog[open]'))"), true);
+  await evaluate("window.fixtureFinishUnsend(true)");
+  await wait("document.querySelector('dialog [role=alert]')?.textContent.includes('Fixture unsend failed')");
+  await evaluate(confirm);
+  await wait("window.fixturePendingUnsend.length === 1");
+  await evaluate("window.fixtureFinishUnsend()");
+  await wait("!document.querySelector('dialog') && !document.querySelector('button[aria-label=\"Unsend this message\"]')");
+  assert.deepEqual(await evaluate(`window.fixtureCalls.filter(call => call.kind === 'unsend').slice(-2).map(call => call.id)`), [outgoingId, outgoingId]);
+  assert.equal(await evaluate("document.querySelectorAll('.rp-message-bubble-action:disabled').length"), 2);
+  await screenshot(`${mode}-message-actions`);
+};
 
 try {
   await fs.mkdir(path.dirname(fixturePaths[0]), { recursive: true });
   await fs.writeFile(fixturePaths[0], `<html><head><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body><div id="root"></div><script type="module" src="/.vite/${fixtureName}.jsx"></script></body></html>`);
   await fs.writeFile(fixturePaths[1], fixture);
-  const target = await (await fetch("http://127.0.0.1:9245/json/new?about:blank", { method: "PUT" })).json();
+  const target = await (await fetch(`http://127.0.0.1:${cdpPort}/json/new?about:blank`, { method: "PUT" })).json();
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   ws.onmessage = (event) => {
@@ -136,6 +241,7 @@ try {
     { kind: "messages", id: "507f1f77bcf86cd799439012" },
     { kind: "read", id: "507f1f77bcf86cd799439012" },
   ]);
+  await checkMessageActions("renter", "Secret pickup code two", "renter-own");
   await evaluate("document.querySelector('button[aria-label=\"Show chat details\"]').click()");
   await wait("document.querySelector('.rp-chat-details-pane') !== null");
   assert.equal(await evaluate("document.querySelector('.rp-chat-details-pane').innerText.includes('blair@example.test')"), true);
@@ -197,6 +303,7 @@ try {
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   await wait("document.body.innerText.includes('Private renter message')");
+  await checkMessageActions("owner", "Private renter message", "owner-own");
   assert.equal(await evaluate("document.querySelectorAll('.owner-messages-thread-header .rp-chat-more-button').length"), 1);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.owner-messages-composer textarea')).textAlign"), "start");
   assert.equal(await evaluate("document.querySelector('.owner-messages-composer textarea').maxLength"), 2000);
@@ -316,8 +423,35 @@ try {
   await wait("window.fixtureCalls.some(call => call.kind === 'messages' && call.id === '507f1f77bcf86cd799439013')");
   assert.equal(await evaluate("document.querySelector('.rp-chat-conversation-select[aria-current=true]')?.innerText.includes('Direct Owner')"), true);
   await wait("document.activeElement === document.querySelector('.rp-chat-back-button')");
+  await evaluate("window.fixtureResetActionMessages()");
+  for (const mode of ["owner", "renter"]) {
+    await setViewport(320, 568);
+    await send("Emulation.setTouchEmulationEnabled", { enabled: true });
+    await evaluate(`window.fixtureShow(${JSON.stringify(mode)})`);
+    const threadSelector = mode === "owner" ? ".owner-renter-card-select" : ".rp-chat-conversation-select";
+    await wait(`document.querySelector(${JSON.stringify(threadSelector)})`);
+    await evaluate(`document.querySelectorAll(${JSON.stringify(threadSelector)})[${mode === "owner" ? 0 : 1}].click()`);
+    await wait(`document.querySelector('button[aria-label="Report this message"]')`);
+    for (const width of [320, 390]) {
+      await setViewport(width, 568);
+      assert.equal(await evaluate("document.body.scrollWidth <= innerWidth"), true);
+      assert.equal(await evaluate("[...document.querySelectorAll('.rp-message-bubble-action')].every(b => b.querySelector('time') && b.scrollWidth <= b.clientWidth)"), true);
+      await tap('button[aria-label="Report this message"]');
+      await wait("document.querySelector('dialog blockquote')");
+      assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= innerWidth"), true);
+      await screenshot(`${mode}-report-${width}`);
+      await key("Escape");
+      await wait("!document.querySelector('dialog')");
+      await tap('button[aria-label="Unsend this message"]');
+      await wait("document.querySelector('dialog[role=alertdialog]')");
+      assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= innerWidth"), true);
+      await screenshot(`${mode}-unsend-${width}`);
+      await key("Escape");
+      await wait("!document.querySelector('dialog')");
+    }
+  }
   assert.deepEqual(errors, []);
-  console.log(`Messaging inbox browser check passed. Screenshots: ${screenshotDirectory}`);
+  console.log(`Messaging inbox browser check passed, including renter/owner report and unsend actions, retries, keyboard, and touch at 320/390px. Screenshots: ${screenshotDirectory}`);
 } finally {
   if (ws?.readyState === WebSocket.OPEN) ws.close();
   await Promise.all(fixturePaths.map((file) => fs.rm(file, { force: true })));

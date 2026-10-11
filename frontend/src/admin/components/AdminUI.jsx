@@ -1,6 +1,5 @@
 import {
   CircleCheck,
-  CircleX,
   FileText,
   LoaderCircle,
   Search,
@@ -202,8 +201,8 @@ export function DocumentReviewDialog({ document, onClose, onApprove, onReject })
           <button type="button" onClick={() => {
             if (rejectionReason.trim().length < 10) { setReasonError("Explain what is wrong and how the applicant can correct it."); return; }
             onReject(rejectionReason.trim());
-          }} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"><CircleX size={ICON_SIZE.control} strokeWidth={2} aria-hidden="true" />Reject</button>
-          {document.canApprove && <button type="button" onClick={onApprove} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><CircleCheck size={ICON_SIZE.control} strokeWidth={2} aria-hidden="true" />Approve Document</button>}
+          }} className="inline-flex h-11 items-center justify-center rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100">Reject</button>
+          {document.canApprove && <button type="button" onClick={onApprove} className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Approve Document</button>}
         </div>
       </div>
     </div>

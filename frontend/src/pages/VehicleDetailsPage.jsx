@@ -1,12 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   BadgeCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   MapPin,
-  MessageCircle,
   Star,
 } from "lucide-react";
 import API from "../utils/api";
@@ -451,7 +449,7 @@ export default function VehicleDetailsPage({
 
       <main className="rp-renter-main mx-auto max-w-[1380px] px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
         <button type="button" onClick={onBack} aria-label="Go back" className="rp-detail-back">
-          <ArrowLeft size={18} aria-hidden="true" />Back to vehicles
+          Back to vehicles
         </button>
         <div className="rp-vehicle-details-layout">
             <section className="rp-detail-gallery rp-surface p-4" aria-labelledby="vehicle-detail-name">
@@ -731,7 +729,7 @@ export default function VehicleDetailsPage({
                       </div>
                     </div>
                     <button type="button" onClick={handleChatOwner} disabled={isOwnVehicle} className="rp-btn-secondary inline-flex min-h-11 shrink-0 items-center gap-2 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60">
-                      <MessageCircle size={18} strokeWidth={2} aria-hidden="true" />Chat Owner
+                      Chat Owner
                     </button>
                   </div>
                 {chatOwnerError && <p className="mt-3 text-sm text-red-600">{chatOwnerError}</p>}

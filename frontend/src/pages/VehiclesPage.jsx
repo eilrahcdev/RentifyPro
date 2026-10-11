@@ -3,13 +3,13 @@ import ListRevealControls from "../components/ListRevealControls";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CarFront,
-  RefreshCw,
   X,
 } from "lucide-react";
 import API from "../utils/api";
 import Navbar from "../components/Navbar";
 import ChatWidget from "../components/ChatWidget";
 import HelpLink from "../components/HelpLink";
+import RefreshButton from "../components/RefreshButton";
 import BookingAccessModal from "../components/BookingAccessModal";
 import VehiclePreviewModal from "../components/VehiclePreviewModal";
 import { sanitizeBookingRange } from "../utils/dateUtils";
@@ -338,16 +338,13 @@ export default function VehiclesPage({
                   <div className="rp-bookings-page-header__help">
                     <HelpLink guide="request-booking">Need help choosing?</HelpLink>
                   </div>
-                  <button
-                    type="button"
+                  <RefreshButton
                     disabled={loading || refreshing}
+                    refreshing={refreshing}
                     onClick={() => setReloadSignal((value) => value + 1)}
-                    className="rp-bookings-page-header__refresh inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50"
+                    className="rp-bookings-page-header__refresh"
                     aria-label={refreshing ? "Refreshing vehicles" : "Refresh vehicles"}
-                  >
-                    <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-                    <span className="rp-bookings-page-header__refresh-label">{refreshing ? "Refreshing..." : "Refresh"}</span>
-                  </button>
+                  />
               </header>
 
               <div className="rp-results-toolbar">

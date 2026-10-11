@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { X } from "lucide-react";
 import "./ChatLauncher.css";
 
 const INVITATION_STORAGE_KEY = "rentifypro:ai-launcher-seen:v1";
@@ -109,7 +109,6 @@ export default function ChatLauncher({ isOpen, onOpen }) {
 export function ChatHelpLink({ onOpen, children = "Have a question? Ask Rentify AI." }) {
   return (
     <button type="button" className="rp-ai-help-link" aria-haspopup="dialog" onClick={onOpen}>
-      <MessageCircle size={16} aria-hidden="true" />
       <span>{children}</span>
     </button>
   );

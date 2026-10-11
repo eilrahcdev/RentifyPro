@@ -1,6 +1,6 @@
 import VehicleThumbnail from "../../components/VehicleThumbnail";
 import VehiclePhotoReviews from "../../components/VehiclePhotoReviews";
-import { CarFront, Eye, SlidersHorizontal, Tags, Wrench } from "lucide-react";
+import { CarFront, Tags, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
 
@@ -41,7 +41,7 @@ export default function VehiclesView({ vehicles, onView }) {
           <SearchField value={search} onChange={setSearch} placeholder="Search by vehicle, plate number, vehicle owner, or location..." />
           <FilterSelect value={status} onChange={setStatus} options={["All Statuses", "Available", "Unavailable"]} />
           <FilterSelect value={type} onChange={setType} options={["All Types", ...types]} />
-          <button type="button" aria-expanded={moreFilters} onClick={() => setMoreFilters((current) => !current)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />More Filters</button>
+          <button type="button" aria-expanded={moreFilters} onClick={() => setMoreFilters((current) => !current)} className="inline-flex h-11 items-center justify-center rounded-xl border border-blue-200 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">More Filters</button>
         </div>
         {moreFilters ? <div className="border-b border-slate-200 bg-slate-50/60 p-4"><div className="max-w-xs"><FilterSelect label="Category" value={category} onChange={setCategory} options={["All Categories", ...categories]} /></div></div> : null}
 
@@ -59,7 +59,7 @@ export default function VehiclesView({ vehicles, onView }) {
                   <td className="px-4 py-3.5 text-sm text-slate-600">{vehicle.location}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-slate-800">{vehicle.rentalRate}</td>
                   <td className="px-4 py-3.5"><StatusBadge value={vehicle.status} /></td>
-                  <td className="px-4 py-3.5"><button type="button" onClick={() => onView(vehicle)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><Eye size={18} strokeWidth={2} aria-hidden="true" />View</button></td>
+                  <td className="px-4 py-3.5"><button type="button" onClick={() => onView(vehicle)} className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">View</button></td>
                 </tr>
               ))}
             </tbody>

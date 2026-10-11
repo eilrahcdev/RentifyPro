@@ -209,8 +209,8 @@ export default function AdminLayout({ user, onLogout }) {
         title={syncedAt ? `Last synced ${new Date(syncedAt).toLocaleString()}` : "Refresh dashboard data"}
         className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
       >
-        <RefreshCw size={18} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-        <span className="hidden sm:inline">Refresh</span>
+        {refreshing && <RefreshCw size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" />}
+        <span>Refresh</span>
       </button>
     </div>
   );
@@ -270,7 +270,7 @@ function DataErrorState({ message, onRetry, onLogout }) {
         <h2 className="mt-5 text-xl font-bold text-slate-950">Could not load the shared database</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-          <button type="button" onClick={onRetry} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><RefreshCw size={18} strokeWidth={2} aria-hidden="true" />Try Again</button>
+          <button type="button" onClick={onRetry} className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Try Again</button>
           <button type="button" onClick={onLogout} className="h-11 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Return to Login</button>
         </div>
         <p className="mt-5 inline-flex items-start gap-2 text-left text-xs leading-5 text-slate-500"><TriangleAlert size={16} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />The admin uses the same MongoDB database as the main RentifyPro website. It does not keep a separate copy.</p>

@@ -71,7 +71,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
         aria-labelledby="notification-details-title"
       >
         <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close notification details" />
-        <section className="relative z-10 flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:max-h-[90dvh] sm:rounded-3xl">
+        <section className="rp-modal-panel relative z-10 flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:max-h-[90dvh] sm:rounded-3xl">
           <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
@@ -101,7 +101,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50 p-4 sm:p-6">
+          <div className="rp-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50 p-4 sm:p-6">
             {isLateReturn && (
               <div className={`rounded-2xl border px-4 py-3 text-sm ${isFinalFee ? "border-blue-200 bg-blue-50 text-blue-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
                 {isFinalFee

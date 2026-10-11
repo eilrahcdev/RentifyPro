@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
 import API from "../../utils/api";
 import { getDurationHoursFromMinutes, getDurationMinutesBetween } from "../../utils/dateUtils";
 import OwnerPageHeader from "../components/OwnerPageHeader";
@@ -122,7 +121,6 @@ export default function Earnings() {
             aria-label={isEarningsVisible ? "Hide earnings amounts" : "Show earnings amounts"}
             aria-pressed={isEarningsVisible}
           >
-            {isEarningsVisible ? <EyeOff size={18} /> : <Eye size={18} />}
             {isEarningsVisible ? "Hide amounts" : "Show amounts"}
           </button>
         )}

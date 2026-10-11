@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 
 const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }) => {
   return (
@@ -13,8 +13,7 @@ const ProceedVehicleOwner = ({ onBack, onProceed, onDoLater, onNavigateToHome, }
             onClick={onBack}
             className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition"
           >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Back</span>
+            <span>Back</span>
           </button>
 
           {/* logo */}

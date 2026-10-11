@@ -3,13 +3,7 @@ import BecomeVehicleOwner from "../components/BecomeVehicleOwner";
 import useCompactLayout from "../hooks/useCompactLayout";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  CarFront,
-  ShieldCheck,
-  User,
-  Lock,
-  BellRing,
   BadgeCheck,
-  Shield,
   Camera,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
@@ -931,13 +925,13 @@ const AccountSettings = ({
             </label>
             <div className="rp-account-navigation rp-minimal-card space-y-1 p-5">
               {[
-                { label: "Profile Settings", icon: User },
-                { label: "Change Password", icon: Lock },
-                { label: "Notifications Settings", icon: BellRing },
-                { label: "Verification", icon: ShieldCheck },
-                { label: "Recent sign-ins", icon: Shield },
-                { label: "Become a Vehicle Owner", icon: CarFront },
-              ].map(({ label, icon: Icon }) => (
+                { label: "Profile Settings" },
+                { label: "Change Password" },
+                { label: "Notifications Settings" },
+                { label: "Verification" },
+                { label: "Recent sign-ins" },
+                { label: "Become a Vehicle Owner" },
+              ].map(({ label }) => (
                 <button
                   key={label}
                   onClick={() => setActiveTab(label)}
@@ -947,7 +941,6 @@ const AccountSettings = ({
                       : "hover:bg-gray-100 text-gray-700"
                   }`}
                 >
-                  <Icon size={18} />
                   {label}
                 </button>
               ))}

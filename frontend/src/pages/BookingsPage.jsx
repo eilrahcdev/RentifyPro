@@ -2,6 +2,7 @@ import VehicleThumbnail from "../components/VehicleThumbnail";
 import BookingDetails, { BookingInfo as Info } from "../components/BookingDetails";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RequestFeedback from "../components/RequestFeedback";
+import RefreshButton from "../components/RefreshButton";
 import { BookingListSkeleton } from "../components/LoadingSkeletons";
 import { bookingStatusLabel, bookingGuidance } from "../utils/workflowStatus";
 import {
@@ -14,8 +15,6 @@ import {
   MapPin,
   MessageCircle,
   EllipsisVertical,
-  Pencil,
-  RefreshCw,
   Send,
   Star,
   Trash2,
@@ -390,7 +389,6 @@ export default function BookingsPage({
   const seenReviewPromptKeys = useRef(new Set());
   const autoReviewPromptShownForUser = useRef("");
   const [reportBooking, setReportBooking] = useState(null);
-  const [reportNotice, setReportNotice] = useState("");
   const [chatReportMessage, setChatReportMessage] = useState(null);
   const [chatBooking, setChatBooking] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -1212,10 +1210,13 @@ export default function BookingsPage({
           <div className="rp-bookings-page-header__help rp-ai-booking-help">
             <HelpLink guide="booking-payments">Need help with payments?</HelpLink>
           </div>
-          <button type="button" disabled={loading || refreshing || loadingMore} onClick={() => load({ background: true })} className="rp-bookings-page-header__refresh inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-50" aria-label={refreshing ? "Refreshing bookings" : "Refresh bookings"}>
-            <RefreshCw size={16} strokeWidth={2} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-            <span className="rp-bookings-page-header__refresh-label">{refreshing ? "Refreshing..." : "Refresh"}</span>
-          </button>
+          <RefreshButton
+            disabled={loading || refreshing || loadingMore}
+            refreshing={refreshing}
+            onClick={() => load({ background: true })}
+            className="rp-bookings-page-header__refresh"
+            aria-label={refreshing ? "Refreshing bookings" : "Refresh bookings"}
+          />
         </div>
 
         <div
@@ -1254,7 +1255,6 @@ export default function BookingsPage({
         <RequestFeedback loading={refreshing} label="Refreshing bookings..." error={loadError} onRetry={() => load({ background: bookings.length > 0 })} />
         {loading && <BookingListSkeleton />}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {reportNotice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{reportNotice}</p>}
 
         {!loading && !loadError && filteredBookings.length === 0 && (
           <div className="rp-minimal-card border-dashed p-10 text-center">
@@ -1427,9 +1427,9 @@ export default function BookingsPage({
                     onClick={() => openChat(booking)}
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
                   >
-                    <MessageCircle size={18} strokeWidth={2} aria-hidden="true" /> Chat owner
+                    Chat owner
                   </button>
-                  <button type="button" onClick={() => setReportBooking(booking)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100"><Flag size={18} strokeWidth={2} aria-hidden="true" />Report issue</button>
+                  <button type="button" onClick={() => setReportBooking(booking)} className="inline-flex min-h-11 shrink-0 items-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100">Report issue</button>
                 </div>
 
                 {["unpaid", "partial"].includes(String(booking.paymentStatus || "").toLowerCase()) &&
@@ -1507,7 +1507,7 @@ export default function BookingsPage({
                     onClick={() => { markReviewPromptSeen(booking._id); setReviewPromptBooking(booking); }}
                     className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#017FE6] px-4 text-sm font-semibold text-white hover:bg-[#006cc3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
                   >
-                    <Star size={17} strokeWidth={2} aria-hidden="true" /> Rate this rental
+                    Rate this rental
                   </button>
                 )}
 
@@ -1702,9 +1702,8 @@ export default function BookingsPage({
                                 event.stopPropagation();
                                 startEditChatMessage(message);
                               }}
-                              className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-1 transition hover:bg-white/30"
+                              className="inline-flex min-h-11 items-center rounded-full bg-white/20 px-3 py-1 transition hover:bg-white/30"
                             >
-                              <Pencil size={16} strokeWidth={2} aria-hidden="true" />
                               Edit
                             </button>
                             <button
@@ -1716,9 +1715,8 @@ export default function BookingsPage({
                               disabled={
                                 deletingChatMessageId === message._id || Boolean(confirmDeleteChatMessageId)
                               }
-                              className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-1 transition hover:bg-white/30 disabled:opacity-60"
+                              className="inline-flex min-h-11 items-center rounded-full bg-white/20 px-3 py-1 transition hover:bg-white/30 disabled:opacity-60"
                             >
-                              <Trash2 size={16} strokeWidth={2} aria-hidden="true" />
                               {deletingChatMessageId === message._id ? "Deleting..." : "Delete"}
                             </button>
                           </div>
@@ -1892,7 +1890,7 @@ export default function BookingsPage({
               onClick={payingBookingId ? undefined : () => setPaymentConfirmBooking(null)}
               aria-label="Close payment confirmation"
             />
-            <section className="rp-payment-dialog relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:rounded-3xl">
+            <section className="rp-modal-panel rp-payment-dialog relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:rounded-3xl">
               <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
@@ -1925,7 +1923,7 @@ export default function BookingsPage({
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50 p-4 sm:p-6">
+              <div className="rp-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50 p-4 sm:p-6">
                 <div className={`rounded-2xl border px-4 py-3 text-sm ${confirmHasLateReturnFee ? "border-amber-200 bg-amber-50 text-amber-900" : "border-blue-200 bg-blue-50 text-blue-900"}`}>
                   {confirmHasLateReturnFee
                     ? "The owner confirmed receipt and finalized this fee. Pay online below, or choose Request Walk-in Payment to ask the owner to accept the remaining balance in person."
@@ -2241,12 +2239,11 @@ export default function BookingsPage({
           }}
         />
       )}
-      <ReportIssueModal booking={reportBooking} perspective="renter" onClose={() => setReportBooking(null)} onSubmitted={(report) => setReportNotice(`Report ${report.caseReference} was submitted for administrator review.`)} />
+      <ReportIssueModal booking={reportBooking} perspective="renter" onClose={() => setReportBooking(null)} />
       <MessageReportModal
         message={chatReportMessage}
         senderName={chatBooking ? getOwnerDisplayName(chatBooking) : "this owner"}
         onClose={() => setChatReportMessage(null)}
-        onReported={(report) => setReportNotice(`Message reported as ${report.caseReference}. Only that message was included.`)}
       />
     </div>
   );

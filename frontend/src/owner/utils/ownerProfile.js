@@ -24,8 +24,10 @@ export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
 
   const srcName = toText(src.name);
   const fbName = toText(fb.name);
-  const first = toText(src.firstName) || toText(fb.firstName);
-  const last = toText(src.lastName) || toText(fb.lastName);
+  const parsedSourceName = splitName(srcName);
+  const field = (key) => Object.prototype.hasOwnProperty.call(src, key) ? toText(src[key]) : toText(fb[key]);
+  const first = srcName ? parsedSourceName.firstName : field("firstName");
+  const last = srcName ? parsedSourceName.lastName : field("lastName");
 
   let firstName = first;
   let lastName = last;
@@ -44,16 +46,16 @@ export const normalizeOwnerProfile = (source = {}, fallback = {}) => {
     name: fullName,
     email: toText(src.email) || toText(fb.email),
     avatar: hasSourceAvatar ? toText(src.avatar) : toText(fb.avatar),
-    phone: toText(src.phone) || toText(fb.phone),
-    address: toText(src.address) || toText(fb.address),
-    region: toText(src.region) || toText(fb.region),
-    province: toText(src.province) || toText(fb.province),
-    city: toText(src.city) || toText(fb.city),
-    barangay: toText(src.barangay) || toText(fb.barangay),
+    phone: field("phone"),
+    address: field("address"),
+    region: field("region"),
+    province: field("province"),
+    city: field("city"),
+    barangay: field("barangay"),
     ownerType: toText(src.ownerType) || toText(fb.ownerType) || "individual",
-    businessName: toText(src.businessName) || toText(fb.businessName),
-    permitNumber: toText(src.permitNumber) || toText(fb.permitNumber),
-    licenseNumber: toText(src.licenseNumber) || toText(fb.licenseNumber),
+    businessName: field("businessName"),
+    permitNumber: field("permitNumber"),
+    licenseNumber: field("licenseNumber"),
     kycStatus: toText(src.kycStatus) || toText(fb.kycStatus) || "not_started",
   };
 };
@@ -77,6 +79,7 @@ export const persistOwnerProfile = (profile) => {
 
   const mergedUser = {
     ...currentUser,
+    ...normalized,
     name: normalized.name || currentUser.name,
     email: normalized.email || currentUser.email,
     avatar: hasProfileAvatar ? normalized.avatar : normalized.avatar || currentUser.avatar || "",

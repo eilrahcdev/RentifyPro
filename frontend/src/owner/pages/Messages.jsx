@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Archive,
-  Flag,
   Info,
   MessageCircle,
   Pin,
@@ -15,12 +14,9 @@ import { getSocket } from "../../utils/socket";
 import { formatDisplayName, getInitialsFromName } from "../../utils/dateUtils";
 import { resolveAssetUrl } from "../../utils/media";
 import { getSessionUser } from "../../utils/sessionStore";
-import {
-  REALTIME_CHAT_INPUT_MAX_LENGTH,
-  sanitizeRealtimeChatInput,
-} from "../../utils/realtimeChatInput";
 import ModalPortal from "../../components/ModalPortal";
 import MessageReportModal from "../../components/MessageReportModal";
+import ConfirmationModal from "../../components/ConfirmationModal";
 import ChatMessageInput from "../../components/ChatMessageInput";
 import { ChatFolderNav, ChatParticipantDetails, ChatSearchField, ConversationActionMenu } from "../../components/MessagingWorkspaceControls";
 import { readRecentChatPeople, rememberRecentChatPerson } from "../../utils/recentChatPeople";
@@ -164,12 +160,9 @@ export default function Messages() {
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState("");
-  const [editingMessageId, setEditingMessageId] = useState("");
-  const [editingText, setEditingText] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState("");
+  const deletingMessageRef = useRef(false);
   const [confirmDeleteMessageId, setConfirmDeleteMessageId] = useState("");
-  const [activeMessageActionId, setActiveMessageActionId] = useState("");
   const [showDeleteConversationConfirm, setShowDeleteConversationConfirm] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
@@ -182,7 +175,6 @@ export default function Messages() {
   const [showDetails, setShowDetails] = useState(false);
   const [detailsModal, setDetailsModal] = useState(() => window.innerWidth < 1600);
   const [reportMessage, setReportMessage] = useState(null);
-  const [reportNotice, setReportNotice] = useState("");
   const lastSelectedRenterRef = useRef(null);
   const renterListHeadingRef = useRef(null);
   const threadBackButtonRef = useRef(null);
@@ -293,10 +285,8 @@ export default function Messages() {
   }, [isMobileView, showConversationList, activeRenterId]);
 
   useEffect(() => {
-    setEditingMessageId("");
-    setEditingText("");
     setConfirmDeleteMessageId("");
-    setActiveMessageActionId("");
+    setReportMessage(null);
   }, [activeRenterId]);
 
   useEffect(() => {
@@ -367,7 +357,6 @@ export default function Messages() {
 
       setMessages((prev) => replaceMessageById(prev, message));
       if (message.isDeleted) {
-        setActiveMessageActionId((prev) => (prev === String(message._id) ? "" : prev));
         setConfirmDeleteMessageId((prev) => (prev === String(message._id) ? "" : prev));
       }
     };
@@ -380,10 +369,7 @@ export default function Messages() {
       if (activeRenterId !== partnerId) return;
 
       setMessages([]);
-      setEditingMessageId("");
-      setEditingText("");
       setConfirmDeleteMessageId("");
-      setActiveMessageActionId("");
       loadMessages(partnerId);
     };
 
@@ -495,56 +481,16 @@ export default function Messages() {
     }
   };
 
-  const startEditMessage = (message) => {
-    if (!message?._id || message.isDeleted) return;
-    setEditingMessageId(message._id);
-    setEditingText(sanitizeRealtimeChatInput(message.text));
-    setActiveMessageActionId("");
-  };
-
-  const cancelEditMessage = () => {
-    setEditingMessageId("");
-    setEditingText("");
-  };
-
-  const saveEditedMessage = async () => {
-    if (!editingMessageId) return;
-    const nextText = editingText.trim();
-    if (!nextText) {
-      setError("Message text is required.");
-      return;
-    }
-
-    try {
-      setSavingEdit(true);
-      setError("");
-      const response = await API.editChatMessage(editingMessageId, { text: nextText });
-      const updated = response.message;
-      setMessages((prev) => replaceMessageById(prev, updated));
-      setRenterThreads((prev) =>
-        prev.map((thread) =>
-          getId(thread.lastMessage) === String(updated._id)
-            ? { ...thread, lastMessage: toMessagePreview(updated) }
-            : thread
-        )
-      );
-      cancelEditMessage();
-    } catch (err) {
-      setError(err.message || "Failed to edit message.");
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
   const openDeleteMessageConfirm = (message) => {
-    if (!message?._id || deletingMessageId) return;
+    if (!message?._id || message.isDeleted || deletingMessageId || getId(message.sender) !== String(currentUserId)) return;
+    setError("");
     setConfirmDeleteMessageId(String(message._id));
-    setActiveMessageActionId("");
   };
 
   const deleteOwnMessage = async () => {
     const messageId = String(confirmDeleteMessageId || "");
-    if (!messageId || deletingMessageId) return;
+    if (!messageId || deletingMessageRef.current) return;
+    deletingMessageRef.current = true;
 
     try {
       setDeletingMessageId(messageId);
@@ -559,14 +505,11 @@ export default function Messages() {
             : thread
         )
       );
-      if (editingMessageId === messageId) {
-        cancelEditMessage();
-      }
-      setActiveMessageActionId((prev) => (prev === messageId ? "" : prev));
       setConfirmDeleteMessageId("");
     } catch (err) {
-      setError(err.message || "Failed to delete message.");
+      setError(err.message || "Failed to unsend message.");
     } finally {
+      deletingMessageRef.current = false;
       setDeletingMessageId("");
     }
   };
@@ -583,7 +526,6 @@ export default function Messages() {
         setMessages([]);
         if (isMobileView) returnToRenters();
         else setActiveRenterId("");
-        cancelEditMessage();
       }
       setShowDeleteConversationConfirm(false);
       setDeleteTargetId("");
@@ -642,7 +584,6 @@ export default function Messages() {
         description="Keep renter conversations, booking questions, and vehicle updates in one place."
         actions={<span className="rp-owner-page-header__status">Real-time messaging</span>}
       />
-      {reportNotice && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">{reportNotice}</div>}
 
       <div className={`owner-messages-shell ${isMobileView && !showConversationList ? "is-thread-open" : ""}`}>
       <ChatFolderNav folder={folder} onChange={(next) => { setFolder(next); setSearching(false); setThreadQuery(""); setOpenActionMenu(""); }} />
@@ -734,7 +675,7 @@ export default function Messages() {
               </div>
             </div>
 
-            <div className="owner-messages-chat-body" onClick={() => setActiveMessageActionId("")}>
+            <div className="owner-messages-chat-body">
               {loadingMessages && <MessageThreadSkeleton label="Loading renter messages" />}
               {error && (
                 <div className="mb-4 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
@@ -751,24 +692,9 @@ export default function Messages() {
                   <MessageBubble
                     key={message._id}
                     message={message}
-                    renterId={activeThread.partner._id}
                     currentUserId={currentUserId}
                     renter={activeThread.partner}
-                    isEditing={editingMessageId === message._id}
-                    editingText={editingText}
-                    savingEdit={savingEdit}
                     deletingMessageId={deletingMessageId}
-                    confirmDeleteMessageId={confirmDeleteMessageId}
-                    showActions={activeMessageActionId === String(message._id)}
-                    onToggleActions={() =>
-                      setActiveMessageActionId((prev) =>
-                        prev === String(message._id) ? "" : String(message._id)
-                      )
-                    }
-                    onStartEdit={() => startEditMessage(message)}
-                    onCancelEdit={cancelEditMessage}
-                    onSaveEdit={saveEditedMessage}
-                    onEditingTextChange={setEditingText}
                     onDelete={() => openDeleteMessageConfirm(message)}
                     onReport={() => setReportMessage(message)}
                   />
@@ -833,12 +759,13 @@ export default function Messages() {
       )}
 
       {confirmDeleteMessageId && (
-        <ConfirmModal
-          title="Delete Message"
-          message="Are you sure you want to delete this message?"
-          cancelLabel="No"
-          confirmLabel={deletingMessageId ? "Deleting..." : "Yes"}
-          confirming={Boolean(deletingMessageId)}
+        <ConfirmationModal
+          title="Unsend message?"
+          message="This message will be removed for everyone."
+          confirmLabel="Unsend"
+          busyLabel="Unsending..."
+          busy={Boolean(deletingMessageId)}
+          error={error}
           onCancel={() => setConfirmDeleteMessageId("")}
           onConfirm={deleteOwnMessage}
         />
@@ -848,7 +775,6 @@ export default function Messages() {
         message={reportMessage}
         senderName={activeThread?.partner?.name || "this renter"}
         onClose={() => setReportMessage(null)}
-        onReported={(report) => setReportNotice(`Message reported as ${report.caseReference}. Only that message was included.`)}
       />
       </div>
     </div>
@@ -902,25 +828,14 @@ function RenterCard({ thread, currentUserId, selected, onSelect, menuOpen, onTog
 
 function MessageBubble({
   message,
-  renterId,
   currentUserId,
   renter,
-  isEditing,
-  editingText,
-  savingEdit,
   deletingMessageId,
-  confirmDeleteMessageId,
-  showActions,
-  onToggleActions,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onEditingTextChange,
   onDelete,
   onReport,
 }) {
   const senderId = getId(message.sender);
-  const isOwner = currentUserId ? senderId === String(currentUserId) : senderId !== renterId;
+  const isOwner = senderId === String(currentUserId);
 
   return (
     <div className={`flex items-start gap-3 ${isOwner ? "justify-end" : "justify-start"}`}>
@@ -929,94 +844,30 @@ function MessageBubble({
       )}
 
       <div
-        className={`group flex max-w-[82%] flex-col sm:max-w-[70%] ${isOwner ? "items-end text-right" : "items-start text-left"
+        className={`group flex min-w-0 max-w-[82%] flex-col sm:max-w-[70%] ${isOwner ? "items-end text-right" : "items-start text-left"
           }`}
       >
-        <div
+        <button
+          type="button"
           title={formatDateTime(message.createdAt)}
-          className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${isOwner
-              ? "rounded-br-md bg-gradient-to-br from-[#0B75E7] to-[#045FC3] text-white shadow-[0_10px_24px_rgba(11,117,231,0.18)]"
+          className={`rp-message-bubble-action max-w-full rounded-2xl px-4 py-3 shadow-sm ${isOwner
+              ? "rounded-br-md bg-gradient-to-br from-[#0B70DF] to-[#045FC3] text-white shadow-[0_10px_24px_rgba(11,117,231,0.18)]"
               : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-[0_8px_20px_rgba(15,23,42,0.05)]"
             }`}
-          onClick={(event) => {
-            if (!isOwner || isEditing || message.isDeleted) return;
-            event.stopPropagation();
-            onToggleActions();
-          }}
+          disabled={message.isDeleted || Boolean(deletingMessageId)}
+          aria-label={message.isDeleted ? undefined : isOwner ? "Unsend this message" : "Report this message"}
+          aria-describedby={message.isDeleted ? undefined : `owner-message-${message._id}`}
+          onClick={isOwner ? onDelete : onReport}
         >
-          {isEditing ? (
-            <div className="space-y-2 text-left">
-              <input
-                value={editingText}
-                onChange={(event) =>
-                  onEditingTextChange(sanitizeRealtimeChatInput(event.target.value))
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    onSaveEdit();
-                  }
-                }}
-                onClick={(event) => event.stopPropagation()}
-                maxLength={REALTIME_CHAT_INPUT_MAX_LENGTH}
-                className="w-full rounded-md border border-white/30 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none"
-              />
-              <div className="flex justify-end gap-2 text-[11px] font-medium">
-                <button
-                  type="button"
-                  onClick={onCancelEdit}
-                  className="rounded bg-white/20 px-2 py-1"
-                  disabled={savingEdit}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={onSaveEdit}
-                  className="rounded bg-white px-2 py-1 text-[#017FE6]"
-                  disabled={savingEdit}
-                >
-                  {savingEdit ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className={`max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${message.isDeleted ? "italic opacity-80" : ""}`}>{message.text}</p>
-          )}
-        </div>
-
-        <div className={`mt-1 flex w-full items-center gap-2 px-1 ${isOwner ? "justify-end" : "justify-between"}`}>
-          <span className="text-[10px] font-medium text-slate-400">
+          <span id={`owner-message-${message._id}`} className={`block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${message.isDeleted ? "italic opacity-80" : ""}`}>{message.text}</span>
+          <time dateTime={message.createdAt} className={isOwner ? "text-right text-white" : "text-slate-600"}>
             {formatDateTime(message.createdAt)}
             {message.isEdited && !message.isDeleted ? " · edited" : ""}
-          </span>
-          {!isOwner && !message.isDeleted && (
-            <button
-              type="button"
-              onClick={onReport}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
-              aria-label="Report this message"
-              title="Report message"
-            >
-              <Flag size={16} strokeWidth={2} />
-            </button>
-          )}
-        </div>
+          </time>
+        </button>
 
-        {showActions && isOwner && !isEditing && !message.isDeleted && (
-          <div className="mt-2 flex justify-end gap-2 text-[11px] font-medium text-slate-500">
-            <button type="button" onClick={onStartEdit} className="hover:text-[#017FE6]">
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={deletingMessageId === message._id || Boolean(confirmDeleteMessageId)}
-              className="hover:text-rose-600 disabled:opacity-50"
-            >
-              {deletingMessageId === message._id ? "Deleting..." : "Delete"}
-            </button>
-          </div>
+        {!isOwner && !message.isDeleted && (
+          <span className="mt-1 px-1 text-xs text-slate-600">Click to report</span>
         )}
       </div>
     </div>

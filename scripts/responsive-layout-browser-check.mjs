@@ -11,6 +11,7 @@ const target = await (await fetch(`${cdp}/json/new?about:blank`, { method: "PUT"
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
 const pending = new Map(), errors = [], failures = [], checks = [];
+const readCalls = new Map();
 let sequence = 0, role = "user";
 const send = (method, params = {}) => new Promise((resolve, reject) => {
   const id = ++sequence;
@@ -42,12 +43,14 @@ async function route({ requestId, request }) {
   if (url.pathname.includes("/api/")) {
     if (request.method === "OPTIONS") return fulfill(requestId, {});
     const endpoint = url.pathname.slice(url.pathname.indexOf("/api/") + 4);
+    if (request.method === "GET") readCalls.set(endpoint, (readCalls.get(endpoint) || 0) + 1);
     if (endpoint === "/auth/me" || endpoint === "/auth/profile") return role === "guest" ? fulfill(requestId, { message: "Not signed in" }, 401) : fulfill(requestId, { user: role === "owner" ? owner : renter });
     if (endpoint === "/vehicles" || endpoint === "/owner/vehicles") return fulfill(requestId, { vehicles: Array.from({ length: 4 }, (_, i) => ({ ...vehicle, _id: i === 0 ? vehicle._id : `507f1f77bcf86cd79943903${i + 1}` })), page: { hasMore: false } });
     if (endpoint === `/vehicles/${vehicle._id}`) return fulfill(requestId, { vehicle });
     if (endpoint === "/bookings/eligibility") return fulfill(requestId, { eligibility: { eligible: true, counts: { open: 2, pending: 1 }, limits: { open: 3, pending: 2 }, reasons: [] } });
     if (endpoint === "/bookings/me" || endpoint === "/owner/bookings") return fulfill(requestId, { bookings: [booking, overdue], page: { hasMore: false } });
     if (endpoint.includes("dashboard")) return fulfill(requestId, { stats, summary: stats, recentBookings: [booking], bookings: [booking], vehicles: [vehicle] });
+    if (endpoint === "/owner/analytics") return fulfill(requestId, { period: { key: url.searchParams.get("period") }, summary: {}, vehiclePerformance: [], bookingTrend: [], monthlyEarningsTrend: [] });
     if (endpoint === "/notifications") return fulfill(requestId, { notifications: [{ _id: "notification-fixture", title: "Your vehicle booking and pickup arrangements are ready to review", message: "The owner approved your booking. Review your pickup dates, payment choices, and remaining balance in Bookings.", createdAt: future(-1) }] });
     if (endpoint === "/reports/mine") return fulfill(requestId, { reports: [{ _id: "report-fixture", caseReference: "RPT-2026-123456", perspective: "submitted", category: "vehicle_condition", status: "open", booking: booking._id, createdAt: future(-2), description: `Please review the pickup condition and the attached evidence. ${"LongBookingReference".repeat(10)}` }] });
     if (endpoint.includes("login-challenge")) return fulfill(requestId, { challengeId: "fixture", question: "2 + 3" });
@@ -128,7 +131,17 @@ try {
     { name: "owner-messages", url: "/owner-dashboard?tab=Messages", role: "owner", ready: "document.body.innerText.includes('Messages') && document.querySelector('.rp-owner-workspace main')" },
     { name: "renter-registration", url: "/register", role: "guest", ready: "document.querySelector('.rp-auth-page input')" },
     { name: "owner-registration", url: "/register-owner", role: "guest", ready: "document.querySelector('.rp-auth-page input')" },
+    { name: "owner-analytics", url: "/owner-dashboard?tab=Analytics", role: "owner", ready: "document.querySelector('button[aria-label=\"Refresh vehicle analytics\"]:not(:disabled)')" },
+    { name: "owner-reports", url: "/owner-dashboard?tab=Reports", role: "owner", ready: "document.querySelector('.rp-reports-page article')" },
   ];
+  const refreshPages = {
+    "renter-bookings": { label: "Refresh bookings", endpoint: "/bookings/me" },
+    "owner-bookings": { label: "Refresh bookings", endpoint: "/owner/bookings" },
+    browse: { label: "Refresh vehicles", endpoint: "/vehicles" },
+    reports: { label: "Refresh reports", endpoint: "/reports/mine" },
+    "owner-reports": { label: "Refresh reports", endpoint: "/reports/mine" },
+    "owner-analytics": { label: "Refresh vehicle analytics", endpoint: "/owner/analytics" },
+  };
   const selectedPages = process.env.RESPONSIVE_PAGES?.split(",");
   for (const page of pages.filter(page => !selectedPages || selectedPages.includes(page.name))) {
     await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -143,6 +156,28 @@ try {
         expect(result.fields.every(f => f.font >= 16 && f.h >= 43.5), `${page.name}: unreadable fields at ${width}`);
         expect(result.smallButtons.length === 0, `${page.name}: small buttons at ${width}: ${JSON.stringify(result.smallButtons)}`);
       }
+      if (refreshPages[page.name]) {
+        const action = await evaluate(`(() => {
+          const b = document.querySelector('button[aria-label="${refreshPages[page.name].label}"]');
+          if (!b) return null;
+          const r = b.getBoundingClientRect();
+          return { text: b.innerText.trim(), width: r.width, height: r.height,
+            icons: [...b.querySelectorAll('svg')].filter(s => s.getBoundingClientRect().width > 0).length,
+            fits: r.left >= 0 && r.right <= innerWidth, disabled: b.disabled };
+        })()`);
+        expect(action && !action.disabled && action.fits && action.height >= 44, `${page.name}: refresh action unavailable at ${width}`);
+        expect(action?.text === (width < 768 ? "" : "Refresh") && action?.icons === (width < 768 ? 1 : 0), `${page.name}: incorrect refresh presentation at ${width}`);
+        if (width < 768) expect(action?.width === 44, `${page.name}: mobile refresh width is not 44px at ${width}`);
+      }
+      if (page.role === "owner") {
+        const header = await evaluate(`(() => {
+          const h = document.querySelector('.rp-owner-topbar');
+          const r = [...h.querySelectorAll('button')].filter(b => b.getClientRects().length).map(b => b.getBoundingClientRect());
+          return { fits: r.every(b => b.left >= 0 && b.right <= innerWidth && b.width >= 44 && b.height >= 44),
+            singleRow: Math.max(...r.map(b => b.y + b.height / 2)) - Math.min(...r.map(b => b.y + b.height / 2)) < 1 };
+        })()`);
+        expect(header.fits && header.singleRow, `${page.name}: owner header controls wrap or overflow at ${width}`);
+      }
       if (page.name === "booking-form") {
         expect(width >= 1024 ? result.bookingPanel.y < 450 : result.bookingPanel.y < 1100, `Booking form too far down at ${width}`);
         expect(await evaluate("document.querySelector('#booking-form').compareDocumentPosition(document.querySelector('.rp-detail-information')) & Node.DOCUMENT_POSITION_FOLLOWING"), "Booking form keyboard order does not precede additional information");
@@ -150,6 +185,15 @@ try {
       if (width === 390 && ["renter-bookings", "owner-bookings", "booking-form", "settings", "owner-dashboard", "owner-registration"].includes(page.name)) result.screenshot = await screenshot(`${page.name}-${width}`);
       checks.push(result);
       console.log(JSON.stringify({ page: page.name, width, outside: result.outside.length, smallButtons: result.smallButtons.length, panelY: result.bookingPanel?.y, cardHeight: result.cards[0]?.h }));
+    }
+    if (refreshPages[page.name]) {
+      const { label, endpoint } = refreshPages[page.name];
+      await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      const before = readCalls.get(endpoint) || 0;
+      await evaluate(`document.querySelector('button[aria-label="${label}"]').click()`);
+      for (let i = 0; i < 100 && (readCalls.get(endpoint) || 0) === before; i++) await pause(50);
+      await wait(`document.querySelector('button[aria-label="${label}"]:not(:disabled)')`);
+      expect(readCalls.get(endpoint) === before + 1, `${page.name}: refresh must make one request to ${endpoint}`);
     }
   }
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });

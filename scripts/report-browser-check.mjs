@@ -18,9 +18,12 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReportIssueModal from "../src/components/ReportIssueModal";
 import MessageReportModal from "../src/components/MessageReportModal";
+import ActionToastHost from "../src/components/ActionToast";
+import { removeFloatingAlert } from "../src/utils/actionToast";
 import API from "../src/utils/api";
 import "../src/index.css";
 window.reportCalls = []; window.reportSuccesses = []; window.pendingReports = [];
+window.clearReportToast = () => removeFloatingAlert("report-submitted");
 const request = (kind, payload) => {
   window.reportCalls.push({ kind, payload });
   return new Promise((resolve, reject) => window.pendingReports.push({ resolve, reject }));
@@ -37,7 +40,7 @@ const message = { _id: "507f1f77bcf86cd799439019", text: "This is the exact repo
 function App() {
   const [open, setOpen] = useState(""); const [version, setVersion] = useState(0);
   window.replaceReportTarget = () => setVersion(v => v + 1);
-  return <><button id="open-booking" onClick={() => setOpen("booking")}>Open booking report</button>
+  return <><ActionToastHost /><button id="open-booking" onClick={() => setOpen("booking")}>Open booking report</button>
     <button id="open-owner" onClick={() => setOpen("owner")}>Open owner report</button>
     <button id="open-message" onClick={() => setOpen("message")}>Open message report</button>
     <ReportIssueModal booking={open === "booking" || open === "owner" ? { ...booking, _id: booking._id + version } : null} perspective={open === "owner" ? "owner" : "renter"} onClose={() => setOpen("")} onSubmitted={r => window.reportSuccesses.push(r)} />
@@ -121,7 +124,6 @@ try {
     await wait(`document.querySelector('dialog[open]')`);
   };
   const body = () => evaluate("document.body.innerText");
-  const review = async () => { await click("Review report"); await wait(`document.body.innerText.includes('Submit this report?')`); };
   const count = () => evaluate("window.reportCalls.length");
   const assertCompact = async (view, width) => {
     const size = await evaluate(`(() => { const dialog = document.querySelector('dialog'); const form = dialog.querySelector('form'); return { height: Math.ceil(form.getBoundingClientRect().height), scrollHeight: dialog.scrollHeight, viewportHeight: innerHeight }; })()`);
@@ -132,14 +134,16 @@ try {
   await send("Page.navigate", { url: `${base}/.vite/${fixtureName}.html` });
   await wait(`document.querySelector('#open-booking')`);
   await open("#open-booking");
-  await click("Review report");
+  assert.equal(await evaluate("document.querySelector('dialog button[type=submit] svg') === null"), true);
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('dialog button[type=submit]')).backgroundImage.includes('rgb(11, 112, 223)')"), true);
+  await click("Submit report");
   assert.equal(await count(), 0);
   assert.equal(await evaluate(`document.activeElement.getAttribute('aria-haspopup')`), "listbox");
   assert.ok((await body()).includes("at least 20 characters"));
   await selectCategory();
-  await fill("                  "); await click("Review report");
+  await fill("                  "); await click("Submit report");
   assert.equal(await evaluate("document.activeElement.tagName"), "TEXTAREA");
-  await fill("x".repeat(3001)); await click("Review report");
+  await fill("x".repeat(3001)); await click("Submit report");
   assert.ok((await body()).includes("within 3,000"));
   const description = "  The vehicle had a broken headlight when I arrived.  ";
   await fill(description);
@@ -148,7 +152,7 @@ try {
   const valid = { name: "booking-evidence.pdf", type: "application/pdf", size: 100 };
   await attach([valid]);
   for (const invalid of [[{ name: "bad.exe", type: "application/octet-stream", size: 100 }], [{ ...valid, size: 0 }], [{ ...valid, size: 5 * 1024 * 1024 + 1 }], Array(6).fill(valid)]) {
-    await attach(invalid); await click("Review report");
+    await attach(invalid); await click("Submit report");
     assert.ok((await body()).includes("Your previous attachments have been kept."));
     assert.ok((await body()).includes("booking-evidence.pdf"));
     assert.equal(await evaluate("document.activeElement.textContent.trim()"), "Choose files");
@@ -157,122 +161,117 @@ try {
   await attach([]);
   assert.ok((await body()).includes("Dismiss attachment error"));
   await click("Dismiss attachment error");
-  await review();
   assert.equal(await count(), 0);
-  assert.ok((await body()).includes(description.trim()));
-  assert.ok((await body()).includes("booking-evidence.pdf"));
-  await click("Back to edit");
   assert.equal(await evaluate("document.querySelector('textarea').value"), description);
   assert.ok((await body()).includes("booking-evidence.pdf"));
-  checks.push("Invalid evidence is rejected without losing valid attachments; unresolved errors block review");
+  checks.push("Invalid evidence is rejected without losing valid attachments; unresolved errors block submission");
 
   await evaluate(`document.querySelector('[aria-haspopup="listbox"]').focus()`); await key("ArrowDown");
   assert.equal(await evaluate("document.activeElement.getAttribute('role')"), "option");
   await key("ArrowDown"); await key("Escape");
   assert.equal(await evaluate("Boolean(document.querySelector('dialog[open]'))"), true);
   assert.equal(await evaluate("Boolean(document.querySelector('[role=listbox]'))"), false);
-  await review(); await key("Escape");
-  assert.equal(await evaluate("document.querySelector('textarea').value"), description);
-  await review();
   await evaluate(`document.querySelector('#open-booking').focus()`);
   assert.equal(await evaluate("document.querySelector('dialog').contains(document.activeElement)"), true);
-  await evaluate(`[...document.querySelectorAll('dialog button')].find(e => e.textContent.trim() === 'Confirm and submit').focus()`); await key("Tab");
-  assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Back to edit report");
+  await evaluate(`document.querySelector('dialog button[type=submit]').focus()`); await key("Tab");
+  assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Close report form");
   await key("Tab", 8);
-  assert.equal(await evaluate("document.activeElement.textContent.trim()"), "Confirm and submit");
+  assert.equal(await evaluate("document.activeElement.textContent.trim()"), "Submit report");
   await evaluate(`document.querySelector('dialog h2').focus()`); await key("Enter");
   assert.equal(await count(), 0);
-  checks.push("Category keyboard navigation, Escape back to edit, modal focus containment, and no implicit confirmation");
+  checks.push("Category keyboard navigation, Escape closes the menu, and modal focus containment");
 
-  for (const width of [1440, 1024, 768, 430, 390, 360]) {
+  for (const width of [1440, 1024, 768, 430, 390, 360, 320]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 640, deviceScaleFactor: 1, mobile: false });
     await send("Emulation.setTouchEmulationEnabled", { enabled: width < 768 });
-    assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `review width ${width}`);
-    await assertCompact("Booking review", width);
-    await click("Back to edit");
     assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `edit width ${width}`);
     await assertCompact("Booking edit", width);
     await evaluate(`document.querySelector('[aria-haspopup="listbox"]').click()`);
     await assertCompact("Booking category menu", width);
     await key("Escape");
-    await review();
   }
-  await click("Back to edit");
   await attach(Array.from({ length: 5 }, (_, index) => ({ ...valid, name: `evidence-${index}.pdf` })));
   await fill("Detailed incident description. ".repeat(100).slice(0, 3000));
-  await assertCompact("Booking edit with five files", 360);
-  await fs.writeFile(path.join(os.tmpdir(), "rentifypro-report-edit-360.png"), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
-  await review();
-  await assertCompact("Booking review with long details and five files", 360);
-  await click("Back to edit"); await attach([valid]); await fill(description); await review();
-  await fs.writeFile(path.join(os.tmpdir(), "rentifypro-report-confirmation-360.png"), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
-  checks.push("Booking edit and review views fit 1440, 1024, 768, 430, 390, and 360px");
+  assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= innerWidth"), true);
+  await evaluate("document.querySelector('dialog').scrollTo(0, document.querySelector('dialog').scrollHeight)");
+  assert.equal(await evaluate("document.querySelector('dialog button[type=submit]').getBoundingClientRect().bottom <= innerHeight"), true);
+  await fs.writeFile(path.join(os.tmpdir(), "rentifypro-report-direct-320.png"), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+  await send("Emulation.setDeviceMetricsOverride", { width: 360, height: 640, deviceScaleFactor: 1, mobile: false });
+  await assertCompact("Booking form with five files", 360);
+  await attach([valid]); await fill(description);
+  checks.push("Booking form and category menu fit seven viewport widths from 320 to 1440px");
 
-  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Confirm and submit'); button.click(); button.click(); document.querySelector('form').requestSubmit(); })()`);
+  await evaluate(`(() => { const button = document.querySelector('dialog button[type=submit]'); button.click(); button.click(); document.querySelector('form').requestSubmit(); })()`);
   await wait("window.reportCalls.length === 1");
   assert.equal(await count(), 1);
   assert.equal(await evaluate("[...document.querySelectorAll('dialog button')].every(e => e.disabled)"), true);
   await key("Escape"); assert.equal(await evaluate("Boolean(document.querySelector('dialog[open]'))"), true);
   await evaluate(`window.finishReport('error')`); await wait(`document.body.innerText.includes('Fixture connection failed')`);
-  await click("Back to edit");
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
   assert.equal(await evaluate("document.querySelector('textarea').value"), description);
   assert.ok((await body()).includes("booking-evidence.pdf"));
-  await review(); await click("Confirm and submit");
+  await click("Submit report");
   await evaluate(`window.finishReport('duplicate')`); await wait(`document.body.innerText.includes('View existing report')`);
   assert.ok((await evaluate(`document.querySelector('dialog a').getAttribute('href')`)).endsWith("#report-existing-fixture"));
-  await click("Confirm and submit"); await evaluate(`window.finishReport()`);
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
+  await click("Submit report"); await evaluate(`window.finishReport()`);
   await wait("!document.querySelector('dialog')");
   assert.equal(await evaluate("document.activeElement.id"), "open-booking");
+  await wait("document.querySelector('.rp-floating-alert')?.textContent === 'Report Submitted'");
+  assert.equal(await evaluate("document.querySelector('.rp-floating-alert').getAttribute('role')"), "status");
+  await evaluate("window.clearReportToast()");
   const payload = await evaluate("window.reportCalls[0].payload");
   assert.ok(payload.some(([name, value]) => name === "description" && value === description.trim()));
   assert.ok(payload.some(([name, value]) => name === "evidence" && value === valid.name));
-  checks.push("One request per confirmation, busy controls, retry draft retention, duplicate link, success, and focus restoration");
+  checks.push("Direct submission, one in-flight request, busy controls, retries, duplicate link, success-only alert, and focus restoration");
 
   await open("#open-owner");
   assert.equal(await evaluate("document.querySelector('textarea').value"), "");
   assert.ok((await body()).includes("Fixture Renter"));
-  await selectCategory(); await fill(description); await review(); await click("Confirm and submit");
+  await selectCategory(); await fill(description); await click("Submit report");
   const successes = await evaluate("window.reportSuccesses.length");
   await evaluate("window.replaceReportTarget()"); await wait("document.querySelector('textarea')");
   await evaluate("window.finishReport()"); await pause(50);
   assert.equal(await evaluate("window.reportSuccesses.length"), successes);
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
   assert.equal(await evaluate("Boolean(document.querySelector('dialog[open]'))"), true);
   await click("Cancel");
   checks.push("Owner perspective, fresh drafts on reopen, and stale response protection when the target changes");
 
   const beforeMessage = await count();
-  await open("#open-message"); await click("Review report");
+  await open("#open-message"); await click("Submit report");
   assert.equal(await count(), beforeMessage);
   assert.equal(await evaluate("document.activeElement.getAttribute('aria-haspopup')"), "listbox");
-  await selectCategory(); await review();
+  await selectCategory();
   assert.equal(await count(), beforeMessage);
   assert.ok((await body()).includes("This is the exact reported message."));
-  for (const width of [1440, 1024, 768, 430, 390, 360]) {
+  for (const width of [1440, 1024, 768, 430, 390, 360, 320]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 640, deviceScaleFactor: 1, mobile: false });
     await send("Emulation.setTouchEmulationEnabled", { enabled: width < 768 });
-    assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `message review width ${width}`);
-    await assertCompact("Message review", width);
-    await click("Back to edit");
     assert.equal(await evaluate("document.querySelector('dialog').scrollWidth <= window.innerWidth"), true, `message edit width ${width}`);
     await assertCompact("Message edit", width);
     await evaluate(`document.querySelector('[aria-haspopup="listbox"]').click()`);
     await assertCompact("Message category menu", width);
     await key("Escape");
-    await review();
   }
-  checks.push("Message edit and review views fit all six viewport widths");
-  await click("Back to edit");
+  checks.push("Message form and category menu fit all seven viewport widths");
   assert.equal(await evaluate(`document.querySelector('[aria-haspopup="listbox"]').getAttribute('aria-invalid')`), "false");
-  await review();
-  await evaluate(`[...document.querySelectorAll('dialog button')].find(e => e.textContent.trim() === 'Confirm and submit').focus()`);
+  assert.equal((await body()).includes("Confirm and submit"), false);
+  assert.equal((await body()).includes("Review report"), false);
+  await evaluate(`document.querySelector('dialog button[type=submit]').focus()`);
   await key("Enter");
   await wait("window.pendingReports.length > 0");
   await evaluate("window.finishReport('error')"); await wait(`document.body.innerText.includes('Fixture connection failed')`);
-  await click("Confirm and submit"); await evaluate("window.finishReport()"); await wait("!document.querySelector('dialog')");
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
+  await click("Submit report"); await evaluate("window.finishReport()"); await wait("!document.querySelector('dialog')");
+  await wait("document.querySelector('.rp-floating-alert')?.textContent === 'Report Submitted'");
+  await pause(3500);
+  await wait("!document.querySelector('.rp-floating-alert')");
+  assert.equal(await evaluate("Boolean(document.querySelector('.rp-floating-alert'))"), false);
   assert.deepEqual(await evaluate("window.reportCalls.at(-1).payload"), { id: "507f1f77bcf86cd799439019", category: "harassment" });
-  checks.push("Message validation, exact message review, preserved category, explicit confirmation, retry, and success");
+  checks.push("Message validation, exact selected message, category retention, direct keyboard submit, retry, and timed success alert");
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: checks.length, checks, modalSizes, screenshot: path.join(os.tmpdir(), "rentifypro-report-confirmation-360.png") }, null, 2));
+  console.log(JSON.stringify({ passed: checks.length, checks, modalSizes, screenshot: path.join(os.tmpdir(), "rentifypro-report-direct-320.png") }, null, 2));
 } finally {
   if (send && ws?.readyState === WebSocket.OPEN) { await send("Page.close"); ws.close(); }
   await Promise.all(fixturePaths.map(file => fs.rm(file, { force: true })));

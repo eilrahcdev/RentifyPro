@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Loader, ArrowLeft, CircleCheck, ShieldCheck, RefreshCw, Clock3 } from "lucide-react";
+import { Loader, CircleCheck, ShieldCheck, Clock3 } from "lucide-react";
 import API from "../utils/api";
 import { setSessionUser } from "../utils/sessionStore";
 import { normalizeOwnerProfile, persistOwnerProfile } from "../owner/utils/ownerProfile";
@@ -204,7 +204,7 @@ export default function RegisterOTP({
                     disabled={isVerifying || isSuccess}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-[#0165B8] hover:underline disabled:opacity-50"
                   >
-                    <RefreshCw size={16} strokeWidth={2} aria-hidden="true" /> Resend
+                    Resend
                   </button>
                 )}
               </div>
@@ -302,7 +302,7 @@ export default function RegisterOTP({
                 disabled={isVerifying || isSuccess}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-slate-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ArrowLeft size={18} strokeWidth={2} aria-hidden="true" /> Back to Register
+                Back to Register
               </button>
             </div>
 

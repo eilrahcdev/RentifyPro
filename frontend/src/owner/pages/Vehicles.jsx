@@ -303,7 +303,7 @@ function VehicleModal({
           }));
           onSubmit();
           }}
-          className="rp-vehicle-editor relative flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:rounded-3xl"
+          className="rp-modal-panel rp-modal-panel--editor rp-vehicle-editor relative flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:rounded-3xl"
         >
           <fieldset disabled={loading} className="contents">
           <div className="border-b border-slate-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
@@ -343,7 +343,7 @@ function VehicleModal({
               }}>{label}</button>
             ))}
           </nav>
-          <div id="owner-vehicle-form-scroll-region" className="rp-vehicle-editor-scroll grid min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fc] xl:grid-cols-[minmax(0,1.75fr)_minmax(300px,0.75fr)]">
+          <div id="owner-vehicle-form-scroll-region" className="rp-modal-scroll rp-vehicle-editor-scroll grid min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fc] xl:grid-cols-[minmax(0,1.75fr)_minmax(300px,0.75fr)]">
             <div className="min-w-0 space-y-5 p-4 sm:p-6">
             <section id="vehicle-editor-section-1" tabIndex={-1} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] sm:p-5">
               <VehicleFormSectionHeader

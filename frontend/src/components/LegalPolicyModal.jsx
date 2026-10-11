@@ -170,7 +170,7 @@ export default function LegalPolicyModal({
     <div className="rp-modal-layer" role="dialog" aria-modal="true" aria-label={heading}>
       <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close legal policy dialog" />
       <div
-        className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl shadow-[0_25px_80px_rgba(15,23,42,0.30)] overflow-hidden"
+        className="rp-modal-panel rp-modal-panel--policy flex w-full max-w-3xl flex-col bg-white border border-slate-200 rounded-2xl shadow-[0_25px_80px_rgba(15,23,42,0.30)] overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="px-4 sm:px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
@@ -213,7 +213,7 @@ export default function LegalPolicyModal({
           </button>
         </div>
 
-        <div className="px-4 sm:px-6 py-4 sm:py-5 max-h-[70vh] overflow-y-auto space-y-5">
+        <div className="rp-modal-scroll px-4 sm:px-6 py-4 sm:py-5 max-h-[70vh] overflow-y-auto space-y-5">
           <p className="text-xs sm:text-sm text-slate-700 leading-6">{description}</p>
           {sections.map((section) => (
             <LegalSection

@@ -157,7 +157,7 @@
     padding-left: max(var(--rp-mobile-gutter, 1rem), env(safe-area-inset-left));
     padding-right: max(var(--rp-mobile-gutter, 1rem), env(safe-area-inset-right));
   }
-  .rp-owner-topbar { height: 4rem; }
+  .rp-owner-topbar { height: auto; }
   .rp-page-header,
   .rp-owner-page-header { padding: 1rem; }
   .rp-page-header h1 { font-size: clamp(1.5rem, 5vw, 1.875rem); line-height: 1.2; }

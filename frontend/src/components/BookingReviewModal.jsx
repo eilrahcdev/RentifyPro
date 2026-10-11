@@ -86,8 +86,8 @@ export default function BookingReviewModal({ booking, onClose, onSubmitted }) {
         onCancel={(event) => { event.preventDefault(); close(); }}
         className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto bg-transparent p-0 text-slate-900 backdrop:bg-slate-950/60"
       >
-        <div className="flex min-h-full items-end justify-center sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-          <div className="my-auto w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="rp-native-modal-frame" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+          <div className="rp-modal-panel my-auto flex w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex items-start gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
               <VehicleThumbnail vehicle={booking.vehicle} className="h-14 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:w-20" />
               <div className="min-w-0 flex-1">
@@ -103,9 +103,9 @@ export default function BookingReviewModal({ booking, onClose, onSubmitted }) {
               </button>
             </div>
 
-            <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto px-4 py-4 sm:px-5">
+            <div className="rp-modal-scroll flex flex-col">
               {saved ? (
-                <div className="py-7 text-center" role="status">
+                <div className="px-4 py-11 text-center sm:px-5" role="status">
                   <CheckCircle2 size={40} strokeWidth={1.8} className="mx-auto text-emerald-600" aria-hidden="true" />
                   <p className="mt-3 font-semibold text-slate-900">You rated this rental {rating} out of 5 stars.</p>
                   <p className="mt-1 text-sm text-slate-600">You can see your rating in booking history.</p>
@@ -114,7 +114,8 @@ export default function BookingReviewModal({ booking, onClose, onSubmitted }) {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={submit} noValidate className="space-y-4">
+                <form onSubmit={submit} noValidate className="flex min-h-0 flex-col">
+                  <div className="rp-modal-scroll space-y-4 px-4 py-4 sm:px-5">
                   <fieldset aria-describedby={fieldErrors.rating ? "booking-rating-error" : undefined}>
                     <legend className="text-sm font-semibold text-slate-900">Your rating <span className="text-rose-600">*</span></legend>
                     <div className="mt-2 flex flex-wrap gap-1" aria-label="Rate this rental from 1 to 5 stars">
@@ -163,7 +164,8 @@ export default function BookingReviewModal({ booking, onClose, onSubmitted }) {
 
                   <p className="text-xs leading-5 text-slate-600">Your rating and review will appear on this vehicle's listing with your renter name.</p>
                   {submissionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{submissionError}</p>}
-                  <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-4 sm:px-5">
                     <button type="button" onClick={close} disabled={submitting} className="min-h-11 rounded-xl px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">Not now</button>
                     <button type="submit" disabled={submitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#017FE6] px-5 text-sm font-semibold text-white hover:bg-[#006cc3] disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
                       {submitting && <LoaderCircle size={18} strokeWidth={2} className="animate-spin" aria-hidden="true" />}

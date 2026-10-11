@@ -450,7 +450,6 @@ export default function RentifyPro({
               type="submit"
               className="rp-btn-primary md:mt-[30px] min-h-12 w-full justify-center px-6 py-3 text-sm sm:text-base flex items-center gap-2 md:w-auto"
             >
-              <Search size={18} aria-hidden="true" />
               Find vehicles
             </button>
           </div>
@@ -496,7 +495,6 @@ export default function RentifyPro({
               </h2>
               <button type="button" onClick={onNavigateToVehicles} className="rp-btn-secondary max-w-[46%] shrink-0 px-3 py-2.5 text-sm sm:max-w-none sm:px-4">
                 <span>View all vehicles</span>
-                <ArrowRight size={16} className="shrink-0" aria-hidden="true" />
               </button>
             </div>
             <p className="mt-3 max-w-2xl text-slate-600">A small selection of verified listings ready to book.</p>

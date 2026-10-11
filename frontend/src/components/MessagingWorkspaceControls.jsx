@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowLeft, Mail, MessageCircle, MoreHorizontal, Search, X } from "lucide-react";
+import { ArrowLeft, Mail, MoreHorizontal, Search, X } from "lucide-react";
 import { getInitialsFromName } from "../utils/dateUtils";
 
 export function ChatFolderNav({ folder, onChange }) {
   return (
     <nav className="rp-chat-folder-nav" aria-label="Message folders">
       <button type="button" className={folder === "inbox" ? "is-active" : ""} aria-current={folder === "inbox" ? "page" : undefined} onClick={() => onChange("inbox")}>
-        <MessageCircle size={20} aria-hidden="true" /><span>Chats</span>
+        <span>Chats</span>
       </button>
       <button type="button" className={folder === "archived" ? "is-active" : ""} aria-current={folder === "archived" ? "page" : undefined} onClick={() => onChange("archived")}>
-        <Archive size={20} aria-hidden="true" /><span>Archived</span>
+        <span>Archived</span>
       </button>
     </nav>
   );
@@ -96,9 +96,9 @@ export function ConversationActionMenu({ label, open, onToggle, onClose, actions
       </button>
       {open && position && createPortal(
         <div ref={menuRef} className="rp-chat-action-menu" role="menu" aria-label={label} style={position} onKeyDown={handleMenuKeyDown}>
-          {actions.map(({ label: actionLabel, icon: Icon, onClick, danger, disabled }) => (
+          {actions.map(({ label: actionLabel, onClick, danger, disabled }) => (
             <button key={actionLabel} type="button" role="menuitem" disabled={disabled} className={danger ? "is-danger" : ""} onClick={() => { onClose(); triggerRef.current?.focus({ preventScroll: true }); onClick(); }}>
-              <Icon size={17} aria-hidden="true" /><span>{actionLabel}</span>
+              <span>{actionLabel}</span>
             </button>
           ))}
         </div>, document.body

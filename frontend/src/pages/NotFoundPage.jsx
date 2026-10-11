@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, CarFront } from "lucide-react";
+import { CarFront } from "lucide-react";
 
 export default function NotFoundPage({ onNavigateToHome, onNavigateToVehicles }) {
   return (
@@ -15,7 +15,6 @@ export default function NotFoundPage({ onNavigateToHome, onNavigateToVehicles })
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <button type="button" onClick={onNavigateToHome} className="rp-btn-secondary inline-flex items-center justify-center gap-2 px-5 py-3">
-            <ArrowLeft size={18} strokeWidth={2} aria-hidden="true" />
             Return home
           </button>
           <button type="button" onClick={onNavigateToVehicles} className="rp-btn-primary px-5 py-3">

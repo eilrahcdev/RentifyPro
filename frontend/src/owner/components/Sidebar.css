@@ -118,13 +118,10 @@
   transition: color 160ms, background-color 160ms;
 }
 
-.rp-owner-sidebar__icon { display: inline-flex; flex-shrink: 0; color: #74859b; }
 .rp-owner-sidebar__link-label { flex: 1; font-size: 13px; font-weight: 500; }
 .rp-owner-sidebar__link:hover { color: #183d67; background: #f4f7fb; }
-.rp-owner-sidebar__link:hover .rp-owner-sidebar__icon { color: #3973ac; }
 .rp-owner-sidebar__link[aria-current="page"] { background: #eaf4ff; color: #086dc3; }
 .rp-owner-sidebar__link[aria-current="page"] .rp-owner-sidebar__link-label { font-weight: 700; }
-.rp-owner-sidebar__link[aria-current="page"] .rp-owner-sidebar__icon { color: #017fe6; }
 .rp-owner-sidebar__link[aria-current="page"]::before {
   content: "";
   position: absolute;
