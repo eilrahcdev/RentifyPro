@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard, PhilippinePeso, ReceiptText, Search, WalletCards } from "lucide-react";
 import { adminDataApi } from "../adminDataApi";
 import { percentage } from "../adminAnalytics";
+import { currentMonthKey, monthLabel, monthOptions } from "../analyticsPeriods";
 import { AnalyticsPanel, DistributionList, MetricTile, ProgressRing, TrendBars } from "../components/AdminAnalytics";
-import { StatCard } from "../components/AdminUI";
+import { FilterSelect, StatCard } from "../components/AdminUI";
 
 const EMPTY_PAGE = { hasMore: false, nextCursor: null };
 const EMPTY_SUMMARY = {
@@ -81,6 +82,11 @@ export default function TransactionRecords({ refreshSignal = 0, onRefreshStateCh
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [cashFlowPeriod, setCashFlowPeriod] = useState(currentMonthKey);
+  const [cashFlow, setCashFlow] = useState({ period: "", monthlyTrend: [], trendStartMonth: null });
+  const [cashFlowLoading, setCashFlowLoading] = useState(true);
+  const [cashFlowError, setCashFlowError] = useState("");
+  const cashFlowRequestSequence = useRef(0);
   const requestSequence = useRef(0);
   const handledRefreshSignal = useRef(refreshSignal);
 
@@ -139,11 +145,52 @@ export default function TransactionRecords({ refreshSignal = 0, onRefreshStateCh
     void loadRecords({ refresh: true });
   }, [loadRecords, refreshSignal]);
 
+  const loadCashFlow = useCallback(async () => {
+    const sequence = ++cashFlowRequestSequence.current;
+    setCashFlowLoading(true);
+    setCashFlowError("");
+    try {
+      const response = await adminDataApi.getTransactions({ trendEndMonth: cashFlowPeriod, limit: 1 });
+      if (sequence !== cashFlowRequestSequence.current) return;
+      const trend = response?.summary?.monthlyTrend;
+      if (!Array.isArray(trend) || trend.length !== 6 || trend.at(-1)?.key !== cashFlowPeriod) {
+        throw new Error("Cash-flow data is unavailable for the selected month. Please try again.");
+      }
+      setCashFlow({ period: cashFlowPeriod, monthlyTrend: trend, trendStartMonth: response.summary.trendStartMonth || null });
+    } catch (err) {
+      if (sequence === cashFlowRequestSequence.current) setCashFlowError(err?.message || "Failed to load cash-flow analytics.");
+    } finally {
+      if (sequence === cashFlowRequestSequence.current) setCashFlowLoading(false);
+    }
+  }, [cashFlowPeriod]);
+
   useEffect(() => {
-    onRefreshStateChange?.(loading || refreshing);
-  }, [loading, onRefreshStateChange, refreshing]);
+    const timer = window.setTimeout(() => void loadCashFlow(), 0);
+    return () => {
+      window.clearTimeout(timer);
+      cashFlowRequestSequence.current += 1;
+    };
+  }, [loadCashFlow, refreshSignal]);
+
+  useEffect(() => {
+    onRefreshStateChange?.(loading || refreshing || cashFlowLoading);
+  }, [cashFlowLoading, loading, onRefreshStateChange, refreshing]);
 
   useEffect(() => () => onRefreshStateChange?.(false), [onRefreshStateChange]);
+
+  const cashFlowOptions = monthOptions([cashFlow.trendStartMonth, summary.trendStartMonth, cashFlowPeriod].filter(Boolean).map((month) => `${month}-01T12:00:00`));
+  const cashFlowTrend = cashFlow.period === cashFlowPeriod ? cashFlow.monthlyTrend.map((month) => ({
+    ...month,
+    label: new Date(`${month.key}-01T12:00:00`).toLocaleDateString("en-PH", { month: "short" }),
+    tooltipLabel: monthLabel(month.key),
+  })) : [];
+  const cashFlowPending = cashFlowLoading || (!cashFlowError && cashFlow.period !== cashFlowPeriod);
+  const selectCashFlowPeriod = (period) => {
+    cashFlowRequestSequence.current += 1;
+    setCashFlowPeriod(period);
+    setCashFlowLoading(true);
+    setCashFlowError("");
+  };
 
   return (
     <div className="space-y-5">
@@ -155,9 +202,11 @@ export default function TransactionRecords({ refreshSignal = 0, onRefreshStateCh
       </section>
 
       <section aria-label="Payment performance" className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(350px,.75fr)]">
-        <AnalyticsPanel eyebrow="Payment tracker" title="Cash-flow overview" description="Collected payments and remaining balances for bookings created during the last six months." icon={PhilippinePeso}>
-          <TrendBars data={summary.monthlyTrend || []} primaryKey="collected" secondaryKey="outstanding" primaryLabel="Collected (PHP)" secondaryLabel="Outstanding (PHP)" emptyLabel="Payment activity will appear here when bookings are recorded." />
-          <div className="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5"><MetricTile label="Total payable" value={money(summary.totalPayable)} tone="blue" /><MetricTile label="Still outstanding" value={money(summary.totalOutstanding)} tone={summary.totalOutstanding ? "amber" : "slate"} /></div>
+        <AnalyticsPanel eyebrow="Payment tracker" title="Cash-flow overview" description={`Collected payments and remaining balances for bookings created in the six months ending ${monthLabel(cashFlowPeriod)}.`} icon={PhilippinePeso} action={<FilterSelect label="Month / Year" aria-label="Cash-flow reporting month and year" value={cashFlowPeriod} onChange={selectCashFlowPeriod} options={cashFlowOptions} className="w-full sm:w-48" />}>
+          <div aria-busy={cashFlowPending}>
+            {cashFlowPending ? <p role="status" className="flex min-h-44 items-center justify-center text-sm text-slate-500">Loading cash-flow analytics...</p> : cashFlowError ? <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center"><p className="text-sm text-rose-700">{cashFlowError}</p><button type="button" onClick={() => void loadCashFlow()} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Retry cash-flow analytics</button></div> : <TrendBars data={cashFlowTrend} primaryKey="collected" secondaryKey="outstanding" primaryLabel="Collected (PHP)" secondaryLabel="Outstanding (PHP)" formatValue={money} emptyLabel="No financial activity for bookings created in this six-month period." />}
+          </div>
+          <div className="mt-5 border-t border-slate-100 pt-5"><p className="mb-3 text-xs font-medium text-slate-500">Current totals across all transaction records</p><div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))]"><MetricTile label="Total payable" value={money(summary.totalPayable)} tone="blue" /><MetricTile label="Still outstanding" value={money(summary.totalOutstanding)} tone={summary.totalOutstanding ? "amber" : "slate"} /></div></div>
         </AnalyticsPanel>
         <AnalyticsPanel eyebrow="Payment health" title="Collection and status mix" description="A platform-wide view of completed and unresolved payment records." icon={WalletCards}>
           <ProgressRing value={percentage(summary.totalCollected, summary.totalPayable)} label="Collected" detail={`${money(summary.totalCollected)} received from ${money(summary.totalPayable)} payable.`} tone={percentage(summary.totalCollected, summary.totalPayable) >= 75 ? "emerald" : "amber"} />

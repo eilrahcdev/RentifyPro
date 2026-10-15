@@ -46,6 +46,10 @@ The exact dependency versions are in `frontend/package.json`, `backend/package.j
 | `MONGO_DB_NAME` | The website's database name, normally `rentifypro`. Set this explicitly when the Atlas URI has no database path so the admin reads the application's records. |
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | Connection timeout in milliseconds; defaults to `15000`. |
 | `WEBSITE_BACKEND_DIR` | The absolute path to the main website's `backend` folder. Replace the example's machine-specific path. This provides upload previews and lets the admin API read missing email settings from the website's `.env`. Use forward slashes or escaped backslashes in a Windows path. |
+| `STORAGE_ROOT` | Optional mount of the website's shared persistent storage, matching Charlie's backend configuration. Admin reads `uploads/vehicles` and `private_uploads/kyc` beneath this root. |
+| `PUBLIC_UPLOAD_DIR` | Optional public uploads root; vehicle files are read from its `vehicles` subdirectory. Overrides the public directory beneath `STORAGE_ROOT`. |
+| `KYC_UPLOAD_DIR` | Optional mounted private KYC directory. Overrides the private directory beneath `STORAGE_ROOT`. Keep this storage private and accessible only to authorized backend services. |
+| `WEBSITE_PUBLIC_URL` | Optional deployed website base URL for published vehicle media. Admin redirects vehicle image requests to its existing `/uploads/vehicles/` endpoint. This setting is never used for private documents. |
 | `PORT` | `5001` for the included Vite proxy. If changed, also change the proxy target in `frontend/vite.config.js`. |
 | `CLIENT_ORIGIN` | `http://localhost:5174` for the included Vite configuration. Set the actual frontend origin when hosting elsewhere. |
 | `ADMIN_NAME`, `ADMIN_EMAIL` | Initial Super Admin display name and an email address you can receive codes at. The accepted email domains are Gmail, Yahoo, Outlook, and Hotmail. |
@@ -86,6 +90,20 @@ The credential check compares the configured values with the stored system-admin
 ## Admin data
 
 The dashboard reads `users`, `vehicles`, `bookings`, and `prekycdocuments` from the shared database. Customer changes, account restrictions, privacy-preserving archives, and document decisions are written back to that same database. Archiving anonymizes personal data while preserving linked booking history.
+
+### Uploaded file previews
+
+The inspected Charlie remote commit `8018210eb7ad1fd70f23902c5be62786c9c10b64` stores upload keys and metadata in MongoDB, with actual image/document bytes on filesystem storage. KYC uploads arrive as Base64, are decoded, and are written to private files. That implementation does not use GridFS or persist uploaded Base64 content. A deployed version with different storage needs its own verified retrieval contract.
+
+Admin keeps retrieval behind its existing session-protected endpoints:
+
+- `GET /api/admin/vehicles/:id/image?index=N` reads an ordered, deduplicated gallery from `vehicles.imageUrl` and `vehicles.images`. Omitting `index` retrieves the cover. Published vehicle URLs can use the configured website origin.
+- `GET /api/admin/documents/:id/file` reads `prekycdocuments.fileKey` from private storage. JPG/JPEG, PNG, WEBP, and PDF previews use authenticated requests with temporary browser object URLs that are revoked when the preview changes or closes. Private responses use `Cache-Control: private, no-store`.
+- `GET /api/admin/data` supplies booking details independently of files. Customer verification attachments prefer the user ID in authenticated KYC/reverification sessions, with the existing email relationship for pre-registration documents.
+
+All teammates must use the same application database and have access to the same stored bytes. Pulling the Admin branch alone does not copy uploads. Use a shared persistent storage mount for private documents; published vehicle media may instead use `WEBSITE_PUBLIC_URL`. Do not copy sensitive uploads into the repository or publish private KYC files. The website's private review endpoint uses a separate website admin session, so remote-only private access needs an agreed authenticated integration with Charlie.
+
+Missing files and records with no `fileKey` cannot be reconstructed from MongoDB metadata. Legacy path-only records need a separately reviewed recovery plan. These changes do not migrate files, run cleanup jobs, or change retention.
 
 ## Admin authentication and recovery
 

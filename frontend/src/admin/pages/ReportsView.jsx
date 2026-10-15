@@ -6,7 +6,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminDataApi } from "../adminDataApi";
 import { DashboardKpiCard as ReportKpiCard } from "./DashboardView";
-import { EmptyState, SearchField } from "../components/AdminUI";
+import { EmptyState, FilterSelect, SearchField } from "../components/AdminUI";
 
 const ACTIVE_STATUSES = new Set(["open", "investigating", "awaiting_information", "appealed"]);
 const DURATION_ACTIONS = new Set(["booking_restriction", "listing_restriction", "chat_restriction", "temporary_suspension"]);
@@ -286,7 +286,7 @@ function DecisionTextArea({ label, hint, value, onChange, maxLength, placeholder
 }
 
 function FieldSelect({ label, value, onChange, options, disabled }) {
-  return <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-800">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>;
+  return <FilterSelect label={label} value={value} onChange={onChange} disabled={disabled} options={options.map(([value, label]) => ({ value, label }))} />;
 }
 
 function DecisionSummary({ decision }) {
@@ -299,7 +299,7 @@ function PersonPanel({ label, person, role, danger = false }) {
 
 function PersonCell({ person, fallbackRole }) { return <div className="min-w-0"><p className="max-w-[170px] truncate text-sm font-semibold text-slate-900">{person?.name || "Deleted account"}</p><p className="mt-0.5 max-w-[170px] truncate text-xs text-slate-500">{person?.email || titleCase(fallbackRole)}</p></div>; }
 function DetailRow({ label, value }) { return <div><dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</dt><dd className="mt-1 text-sm font-medium leading-5 text-slate-800">{value || "—"}</dd></div>; }
-function ReportSelect({ label, value, onChange, options, disabled = false, compact = false }) { return <label className={`block ${compact ? "w-44" : "min-w-0"}`}><span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className={`${compact ? "h-10" : "h-11"} w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:opacity-60`}>{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>; }
+function ReportSelect({ label, value, onChange, options, disabled = false, compact = false }) { return <FilterSelect label={label} value={value} onChange={onChange} disabled={disabled} className={compact ? "w-44 max-w-full" : ""} options={options.map(([value, label]) => ({ value, label }))} />; }
 
 function ReportStatusBadge({ value }) {
   const tones = { open: "bg-amber-50 text-amber-700", investigating: "bg-blue-50 text-blue-700", awaiting_information: "bg-orange-50 text-orange-700", appealed: "bg-violet-50 text-violet-700", actioned: "bg-emerald-50 text-emerald-700", dismissed: "bg-slate-100 text-slate-700", closed: "bg-slate-100 text-slate-600" };

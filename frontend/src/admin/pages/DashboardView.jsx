@@ -160,10 +160,10 @@ function ChartSummary({ label, value, tone }) {
 function ActionCenter({ alerts, pendingDocuments, overdueRentals, unavailable, onSelect }) {
   const [filter, setFilter] = useState("all");
   const filters = [
-    { id: "all", label: "All" },
-    { id: "critical", label: "Urgent" },
-    { id: "warning", label: "Attention" },
-    { id: "info", label: "Routine" },
+    { id: "all", label: "All", icon: Activity, tone: "bg-blue-50 text-blue-700", active: "border-blue-500 bg-blue-50/60 ring-1 ring-blue-500" },
+    { id: "critical", label: "Urgent", icon: AlertTriangle, tone: "bg-rose-50 text-rose-700", active: "border-rose-500 bg-rose-50/60 ring-1 ring-rose-500" },
+    { id: "warning", label: "Attention", icon: Clock3, tone: "bg-amber-50 text-amber-700", active: "border-amber-500 bg-amber-50/60 ring-1 ring-amber-500" },
+    { id: "info", label: "Routine", icon: CheckCircle2, tone: "bg-slate-100 text-slate-600", active: "border-slate-500 bg-slate-50 ring-1 ring-slate-500" },
   ];
   const visibleAlerts = filter === "all" ? alerts : alerts.filter((alert) => alert.severity === filter);
   const countFor = (id) => id === "all" ? alerts.length : alerts.filter((alert) => alert.severity === id).length;
@@ -176,13 +176,22 @@ function ActionCenter({ alerts, pendingDocuments, overdueRentals, unavailable, o
 
   return (
     <DashboardCard title="Action center" description="Review the items that need your attention.">
-      <div role="group" aria-label="Filter operational alerts" className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 min-[400px]:grid-cols-4">
-        {filters.map((item) => {
-          const selected = filter === item.id;
-          return <button key={item.id} type="button" aria-pressed={selected} onClick={() => setFilter(item.id)} className={`min-h-11 rounded-lg px-1.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${selected ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}><span>{item.label}</span><span className={`ml-1 rounded-full px-1.5 py-0.5 tabular-nums ${selected ? "bg-blue-50 text-blue-700" : "bg-slate-200/80 text-slate-600"}`}>{countFor(item.id)}</span></button>;
+      <div role="group" aria-label="Filter operational alerts" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {filters.map(({ id, label, icon: Icon, tone, active }) => {
+          const selected = filter === id;
+          const count = countFor(id);
+          return (
+            <button key={id} type="button" aria-label={`${label}: ${count} action items`} aria-pressed={selected} onClick={() => setFilter(id)} className={`min-w-0 rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${selected ? active : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}>
+              <span className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone}`}><Icon size={15} aria-hidden="true" /></span>
+                <strong className="text-2xl font-bold leading-none tabular-nums text-slate-900">{count}</strong>
+              </span>
+              <span className="mt-2 block text-xs font-semibold text-slate-700">{label}</span>
+            </button>
+          );
         })}
       </div>
-      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200" aria-live="polite">
+      <div className="mt-3 max-h-80 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100" role="region" aria-label="Action items" tabIndex={0} aria-live="polite">
         {visibleAlerts.length ? <div className="divide-y divide-slate-100">{visibleAlerts.map((alert) => <AlertRow key={alert.id} alert={alert} onSelect={onSelect} />)}</div> : (
           <div className="flex min-h-[212px] flex-col items-center justify-center px-6 text-center">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={21} /></span>

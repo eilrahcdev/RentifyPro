@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, BadgeCheck, Eye, LoaderCircle, MoreVertical, P
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { percentage } from "../adminAnalytics";
+import { currentMonthKey, monthLabel, monthOptions } from "../analyticsPeriods";
 import { AnalyticsPanel, DistributionList, MetricTile, ProgressRing, TrendBars } from "../components/AdminAnalytics";
 import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
 
@@ -21,6 +22,7 @@ export default function CustomersView({
   const [role, setRole] = useState(initialRole);
   const [status, setStatus] = useState(initialStatus);
   const [joined, setJoined] = useState("");
+  const [growthPeriod, setGrowthPeriod] = useState(currentMonthKey);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [actionMenu, setActionMenu] = useState(null);
   const visibleCustomers = useMemo(
@@ -30,7 +32,8 @@ export default function CustomersView({
   const active = visibleCustomers.filter((customer) => customer.status === "Active").length;
   const pending = visibleCustomers.filter((customer) => customer.status === "Pending Verification").length;
   const inactive = visibleCustomers.filter((customer) => ["Inactive", "Suspended"].includes(customer.status)).length;
-  const growthTrend = buildCustomerTrend(visibleCustomers);
+  const growthPeriodOptions = monthOptions(visibleCustomers.map((customer) => customer.createdAt || customer.created));
+  const growthTrend = buildCustomerTrend(visibleCustomers, growthPeriod);
   const renters = visibleCustomers.filter((customer) => customer.role === "Renter").length;
   const operators = visibleCustomers.filter((customer) => customer.role === "Operator").length;
   const activationRate = percentage(active, visibleCustomers.length);
@@ -117,9 +120,12 @@ export default function CustomersView({
       </section>
 
       <section aria-label="Customer growth insights" className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
-        <AnalyticsPanel eyebrow="Customer growth tracker" title="New account momentum" description="Monthly renter and operator registrations across the last six months." icon={Activity}>
-          <TrendBars data={growthTrend} primaryKey="renters" secondaryKey="operators" primaryLabel="Renters" secondaryLabel="Operators" />
-          <div className="mt-5 grid grid-cols-3 gap-2 border-t border-slate-100 pt-5"><MetricTile label="Renters" value={renters} tone="blue" /><MetricTile label="Operators" value={operators} tone="violet" /><MetricTile label="Pending" value={pending} tone={pending ? "amber" : "slate"} /></div>
+        <AnalyticsPanel eyebrow="Customer growth tracker" title="New account momentum" description={`Monthly renter and operator registrations for the six months ending ${monthLabel(growthPeriod)}.`} icon={Activity} action={<FilterSelect label="Month / Year" aria-label="Customer registration month and year" value={growthPeriod} onChange={setGrowthPeriod} options={growthPeriodOptions} className="w-full sm:w-48" />}>
+          <TrendBars data={growthTrend} primaryKey="renters" secondaryKey="operators" primaryLabel="Renters" secondaryLabel="Operators" emptyLabel="No account registrations in this six-month period." />
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <p className="text-xs text-slate-500">Current totals across all customer accounts</p>
+            <div className="mt-3 grid grid-cols-3 gap-2"><MetricTile label="Renters" value={renters} tone="blue" /><MetricTile label="Operators" value={operators} tone="violet" /><MetricTile label="Pending" value={pending} tone={pending ? "amber" : "slate"} /></div>
+          </div>
         </AnalyticsPanel>
         <AnalyticsPanel eyebrow="Activation health" title="Account readiness" description="How many customer accounts are verified, active, and ready to use RentifyPro." icon={BadgeCheck}>
           <ProgressRing value={activationRate} label="Active" detail={`${active} of ${visibleCustomers.length} customer accounts are currently active.`} tone={activationRate >= 75 ? "emerald" : activationRate >= 50 ? "amber" : "rose"} />
@@ -264,7 +270,7 @@ function CustomerEditForm({ customer, onClose, onSave }) {
           <EditField label="Full name" value={form.name} onChange={update("name")} maxLength={100} />
           <EditField label="Email address" type="email" value={form.email} onChange={update("email")} maxLength={254} />
           <EditField label="Phone number" value={form.phone} onChange={update("phone")} maxLength={32} placeholder="Optional" />
-          <label className="block"><span className="mb-1.5 block text-xs font-semibold text-slate-700">Role</span><select value={form.role} onChange={update("role")} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option>Renter</option><option>Operator</option></select></label>
+          <FilterSelect label="Role" value={form.role} onChange={(value) => setForm((current) => ({ ...current, role: value }))} options={["Renter", "Operator"]} />
           {changes.length ? <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-600">Changes to be recorded</p><div className="mt-2 space-y-2">{changes.map(([field, before, after]) => <div key={field} className="grid grid-cols-[72px_1fr_18px_1fr] items-center gap-2 text-xs"><span className="font-semibold text-slate-600">{field}</span><span className="truncate rounded bg-white px-2 py-1.5 text-slate-600">{before || "—"}</span><span className="text-center text-slate-400">→</span><span className="truncate rounded bg-blue-50 px-2 py-1.5 font-semibold text-blue-800">{after || "—"}</span></div>)}</div></div> : null}
           {sensitiveChange ? <div className="sm:col-span-2 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><AlertTriangle size={17} className="mt-0.5 shrink-0" /><span>Email changes revoke sessions and require verification. Role changes require the applicable owner verification and must not conflict with existing records.</span></div> : null}
           <label className="block sm:col-span-2"><span className="mb-1.5 block text-xs font-semibold text-slate-700">Administrative reason</span><textarea value={form.reason} onChange={update("reason")} required maxLength={500} rows={3} placeholder="Explain why this correction is necessary" className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /><span className="mt-1 block text-xs text-slate-500">{form.reason.trim().length}/500 characters</span></label>
@@ -286,12 +292,12 @@ function EditField({ label, type = "text", value, onChange, maxLength, placehold
 
 function initials(name) { return String(name || "?").split(" ").filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase(); }
 
-function buildCustomerTrend(customers) {
+function buildCustomerTrend(customers, period) {
   const months = [];
-  const now = new Date();
+  const [year, month] = period.split("-").map(Number);
   for (let offset = 5; offset >= 0; offset -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-    months.push({ key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, label: date.toLocaleDateString("en-PH", { month: "short" }), renters: 0, operators: 0 });
+    const date = new Date(year, month - 1 - offset, 1);
+    months.push({ key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, label: date.toLocaleDateString("en-PH", { month: "short", year: "2-digit" }), renters: 0, operators: 0 });
   }
   const byKey = new Map(months.map((month) => [month.key, month]));
   customers.forEach((customer) => {

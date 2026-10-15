@@ -17,7 +17,11 @@ const normalizeDocument = (document) => ({
 const normalizeOverview = (payload) => ({
   ...payload,
   vehicles: Array.isArray(payload?.vehicles)
-    ? payload.vehicles.map((vehicle) => ({ ...vehicle, image: resolveMediaUrl(vehicle.image) }))
+    ? payload.vehicles.map((vehicle) => ({
+      ...vehicle,
+      image: resolveMediaUrl(vehicle.image),
+      images: Array.isArray(vehicle.images) ? vehicle.images.map(resolveMediaUrl).filter(Boolean) : [],
+    }))
     : [],
   documents: Array.isArray(payload?.documents) ? payload.documents.map(normalizeDocument) : [],
 });
@@ -28,6 +32,38 @@ const normalizeReport = (report) => ({
     ? report.evidence.map((item) => ({ ...item, url: resolveMediaUrl(item.url) }))
     : [],
 });
+
+const previewMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
+async function getMediaBlob(value, { signal } = {}) {
+  const apiUrl = new URL(apiBaseUrl, window.location.href);
+  const mediaUrl = new URL(value, window.location.href);
+  const adminPath = `${apiUrl.pathname.replace(/\/$/, "")}/admin/`;
+  const mediaPath = mediaUrl.pathname.slice(adminPath.length);
+  const allowedPath = /^(?:documents\/[a-f0-9]{24}\/file|reports\/[a-f0-9]{24}\/evidence\/[a-f0-9]{24})$/i.test(mediaPath);
+  if (mediaUrl.origin !== apiUrl.origin || mediaUrl.username || mediaUrl.password
+    || !mediaUrl.pathname.startsWith(adminPath) || !allowedPath) {
+    throw new Error("This file does not use an authorized admin preview endpoint.");
+  }
+
+  let response;
+  try {
+    response = await fetch(mediaUrl.href, { credentials: "include", cache: "no-store", redirect: "error", signal });
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw new Error("The file could not be loaded. Check your connection and try again.");
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("Your admin session cannot access this file. Sign in again and retry.");
+    if (response.status === 404) throw new Error("The uploaded file is unavailable in the configured storage.");
+    throw new Error("The server could not load this file. Try again.");
+  }
+  const mimeType = String(response.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  if (!previewMimeTypes.has(mimeType)) throw new Error("This file format cannot be previewed. Open the original file to inspect it.");
+  const blob = await response.blob();
+  if (!blob.size) throw new Error("The uploaded file is empty.");
+  return blob;
+}
 
 async function request(path, options = {}) {
   let response;
@@ -74,6 +110,7 @@ const buildQueryString = (params = {}) => {
 };
 
 export const adminDataApi = {
+  getMediaBlob,
   getOverview: async () => normalizeOverview(await request(ADMIN_API_ROUTES.overview)),
   getTransactions: (params = {}) => request(`${ADMIN_API_ROUTES.transactions}${buildQueryString(params)}`),
   getAuditLogs: (params = {}) => request(`${ADMIN_API_ROUTES.auditLogs}${buildQueryString(params)}`),

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, ChevronDown, Database, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarDays, Database, LoaderCircle, RefreshCw } from "lucide-react";
 import { AdminPageHeader, AdminSidebar } from "./src/admin/components/AdminShell";
 import {
   ConfirmationDialog,
   DocumentReviewDialog,
+  FilterSelect,
   Toast,
   ViewerDialog,
 } from "./src/admin/components/AdminUI";
+import { monthOptions } from "./src/admin/analyticsPeriods";
 import { adminDataApi } from "./src/admin/adminDataApi";
 import BookingsView from "./src/admin/pages/BookingsView";
 import CustomersView from "./src/admin/pages/CustomersView";
@@ -85,17 +87,17 @@ export default function AdminAccountPage({ user, onLogout }) {
   const displayName = user?.name || "Admin";
   const displayEmail = user?.email || "admin@example.com";
   const dashboardPeriodOptions = useMemo(() => {
-    const months = new Set([monthKey(new Date())]);
-    bookings.forEach((booking) => {
-      const key = monthKey(booking.pickupAt || booking.createdAt);
-      if (key) months.add(key);
+    const dates = bookings.map((booking) => booking.pickupAt || booking.createdAt);
+    const options = monthOptions(dates);
+    // Recorded future pickups remain available in the scheduling calendar.
+    dates.forEach((date) => {
+      const value = monthKey(date);
+      if (value > monthKey(new Date()) && !options.some((option) => option.value === value)) {
+        const [year, month] = value.split("-").map(Number);
+        options.push({ value, label: new Date(year, month - 1, 1).toLocaleDateString("en-PH", { month: "long", year: "numeric" }) });
+      }
     });
-    for (let offset = 1; months.size < 6; offset += 1) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - offset);
-      months.add(monthKey(date));
-    }
-    return [...months].filter(Boolean).sort().reverse().slice(0, 12);
+    return options.sort((first, second) => second.value.localeCompare(first.value));
   }, [bookings]);
 
   const showFeedback = useCallback((message) => {
@@ -194,7 +196,9 @@ export default function AdminAccountPage({ user, onLogout }) {
   const viewCustomer = (customer) => {
     const customerEmail = String(customer.email || "").trim().toLowerCase();
     const customerDocuments = documents.filter(
-      (document) => String(document.email || "").trim().toLowerCase() === customerEmail,
+      (document) => document.customerId
+        ? String(document.customerId) === String(customer.id)
+        : Boolean(customerEmail) && String(document.email || "").trim().toLowerCase() === customerEmail,
     );
 
     setViewerItem({
@@ -257,7 +261,7 @@ export default function AdminAccountPage({ user, onLogout }) {
   const viewBooking = (booking) => setViewerItem({
     type: "Booking operations",
     title: `Booking #${booking.reference}`,
-    subtitle: `${booking.renter} booked ${booking.vehicle}, operated by ${booking.operator}, from ${formatAdminDate(booking.pickupAt)} to ${formatAdminDate(booking.returnAt)}. Status: ${booking.isOverdue ? "Overdue" : booking.status}. Driver option: ${booking.driverSelected ? "Selected" : "Not selected"}.`,
+    booking,
   });
 
   const requestDocumentDecision = (document, approval) => {
@@ -393,14 +397,7 @@ function DataErrorState({ message, onRetry, onLogout }) {
 
 function DashboardPeriodSelect({ value, options, onChange }) {
   return (
-    <label className="relative inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white pl-10 pr-8 text-base font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 focus-within:ring-4 focus-within:ring-blue-100 sm:text-sm">
-      <CalendarDays aria-hidden="true" size={18} className="pointer-events-none absolute left-3 text-slate-500" />
-      <span className="sr-only">Dashboard reporting month and year</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-full appearance-none bg-transparent pr-2 text-base font-semibold text-slate-700 outline-none sm:text-sm">
-        {options.map((option) => <option key={option} value={option}>{periodLabel(option)}</option>)}
-      </select>
-      <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 text-slate-500" />
-    </label>
+    <FilterSelect aria-label="Dashboard reporting month and year" icon={CalendarDays} value={value} options={options} onChange={onChange} className="w-full sm:w-56" />
   );
 }
 
@@ -414,18 +411,4 @@ function monthKey(value) {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function periodLabel(value) {
-  const [year, month] = String(value).split("-").map(Number);
-  const date = new Date(year, month - 1, 1);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric" }).format(date);
-}
-
-function formatAdminDate(value) {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return "an unavailable date";
-  return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
 }

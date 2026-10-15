@@ -1,5 +1,5 @@
 import path from "node:path";
-import { unlink } from "node:fs/promises";
+import { realpath, stat, unlink } from "node:fs/promises";
 import { randomBytes, randomInt } from "node:crypto";
 import express from "express";
 import mongoose from "mongoose";
@@ -85,14 +85,16 @@ const mapVehicle = (vehicle, ownerNames) => {
   const rawRate = Number(vehicle.dailyRentalRate);
   const pricingUnit = vehicle.pricingUnit === "daily" ? "day" : "hour";
   const rate = Number.isFinite(rawRate) ? rawRate.toLocaleString("en-PH") : "0";
-  const imageReference = asText(vehicle.imageUrl) || (Array.isArray(vehicle.images) ? asText(vehicle.images[0]) : "");
+  const imageReferences = getVehicleImageReferences(vehicle);
+  const imageEndpoint = `/api/admin/vehicles/${vehicle._id.toString()}/image`;
 
   return {
     id: vehicle._id.toString(),
     name: asText(vehicle.name, "Unnamed vehicle"),
     description: asText(vehicle.description),
     coverDisplayMode: ["photo", "cutout"].includes(vehicle.coverDisplayMode) ? vehicle.coverDisplayMode : "auto",
-    image: imageReference ? `/api/admin/vehicles/${vehicle._id.toString()}/image` : "",
+    image: imageReferences.length ? imageEndpoint : "",
+    images: imageReferences.map((_reference, index) => `${imageEndpoint}?index=${index}`),
     plateNumber: asText(specs.plateNumber, "—"),
     type: asText(specs.type, "Vehicle"),
     category: asText(specs.subType, asText(specs.type, "Uncategorized")),
@@ -104,17 +106,23 @@ const mapVehicle = (vehicle, ownerNames) => {
     rentalRate: `PHP ${rate}/${pricingUnit}`,
     driverOption: vehicle.driverOptionEnabled ? "Available" : "Not available",
     status: vehicle.availabilityStatus === "available" ? "Available" : "Unavailable",
+    availabilityHoldReason: ["manual", "inspection"].includes(vehicle.availabilityHoldReason) ? vehicle.availabilityHoldReason : "none",
     createdAt: asTimestamp(vehicle.createdAt),
   };
 };
 
-const mapDocument = (document, usersByEmail) => {
+const mapDocument = (document, usersByEmail, usersById = new Map()) => {
   const email = asText(document.email).toLowerCase();
-  const matchedUser = usersByEmail.get(email);
+  const sessionUserId = getDocumentUserId(document);
+  const emailUser = usersByEmail.get(email);
+  const matchedUser = sessionUserId
+    ? usersById.get(sessionUserId) || (emailUser?._id?.toString() === sessionUserId ? emailUser : undefined)
+    : emailUser;
   const fallbackType = document.docType === "supporting" ? "Supporting Document" : "Government ID";
 
   return {
     id: document._id.toString(),
+    customerId: sessionUserId || matchedUser?._id?.toString() || "",
     customer: matchedUser?.name || email || "Unknown customer",
     email,
     role: mapRole(matchedUser?.role || document.role),
@@ -126,7 +134,7 @@ const mapDocument = (document, usersByEmail) => {
     processingStage: asText(document.status, "pending_review"),
     processingAttempts: Number(document.processingAttempts || 0),
     nextAttemptAt: asTimestamp(document.nextAttemptAt),
-    mimeType: asText(document.mimeType, "application/octet-stream"),
+    mimeType: documentMimeType(document),
     reason: asText(document.reason),
     confidence: Number.isFinite(Number(document.confidence)) ? Number(document.confidence) : null,
     detailsMatched: document.detailsMatched === true,
@@ -249,8 +257,8 @@ const mapTransaction = (booking, usersById, vehiclesById) => {
   };
 };
 
-const transactionMonthlyTrend = (transactions, monthCount = 6) => {
-  const now = new Date();
+const transactionMonthlyTrend = (transactions, monthCount = 6, endMonth) => {
+  const now = endMonth ? new Date(`${endMonth}-01T00:00:00.000Z`) : new Date();
   const months = [];
   for (let offset = monthCount - 1; offset >= 0; offset -= 1) {
     const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1));
@@ -395,9 +403,20 @@ const safeFileFromKey = (directory, key, allowedExtensions) => {
   return path.dirname(target) === root ? target : "";
 };
 
+const resolvePreviewFile = async (directory, filePath) => {
+  try {
+    const [root, target] = await Promise.all([realpath(directory), realpath(filePath)]);
+    if (path.dirname(target) !== root || !(await stat(target)).isFile()) return "";
+    return target;
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR", "EACCES"].includes(error.code)) return "";
+    throw error;
+  }
+};
+
 const normalizeVehicleReference = (value) => {
   const raw = asText(value).replace(/\\/g, "/");
-  if (!raw) return { kind: "none" };
+  if (!raw || raw.length > 2048) return { kind: "none" };
 
   try {
     const url = new URL(raw);
@@ -416,13 +435,48 @@ const normalizeVehicleReference = (value) => {
     : { kind: "none" };
 };
 
+const getVehicleImageReferences = (vehicle) => {
+  const seen = new Set();
+  return [vehicle.imageUrl, ...(Array.isArray(vehicle.images) ? vehicle.images : [])]
+    .map(normalizeVehicleReference)
+    .filter((reference) => {
+      if (reference.kind === "none") return false;
+      if (reference.kind === "local" && !VEHICLE_EXTENSIONS.has(path.extname(reference.value).toLowerCase())) return false;
+      const key = `${reference.kind}:${reference.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+const getDocumentUserId = (document) => {
+  const session = asText(document.sessionId);
+  const match = /^(?:user:([a-f0-9]{24})|reverify:([a-f0-9]{24}):[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/i.exec(session);
+  return (match?.[1] || match?.[2] || "").toLowerCase();
+};
+
+const documentMimeType = (document) => ({
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".pdf": "application/pdf",
+})[path.extname(asText(document.fileKey) || asText(document.fileName)).toLowerCase()] || asText(document.mimeType, "application/octet-stream");
+
 export function createAdminDataRouter({ requireAdminSession }) {
   const router = express.Router();
   const websiteBackendDirectory = path.resolve(
     process.env.WEBSITE_BACKEND_DIR || path.join(process.cwd(), "..", "rentifypro", "backend"),
   );
-  const kycDirectory = path.resolve(process.env.KYC_UPLOAD_DIR || path.join(websiteBackendDirectory, "private_uploads", "kyc"));
-  const vehicleDirectory = path.resolve(websiteBackendDirectory, "uploads", "vehicles");
+  const storageRoot = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : websiteBackendDirectory;
+  const kycDirectory = path.resolve(process.env.KYC_UPLOAD_DIR || path.join(storageRoot, "private_uploads", "kyc"));
+  const publicUploadsDirectory = path.resolve(process.env.PUBLIC_UPLOAD_DIR || path.join(storageRoot, "uploads"));
+  const vehicleDirectory = path.join(publicUploadsDirectory, "vehicles");
+  const websitePublicUrl = asText(process.env.WEBSITE_PUBLIC_URL);
+  let publicVehicleBase;
+  if (websitePublicUrl) {
+    const base = new URL(websitePublicUrl);
+    if (!["https:", "http:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+      throw new Error("WEBSITE_PUBLIC_URL must be an HTTP(S) website URL without credentials, a query, or a fragment.");
+    }
+    publicVehicleBase = new URL("uploads/vehicles/", `${base.toString().replace(/\/$/, "")}/`);
+  }
   const reportEvidenceDirectory = path.resolve(process.env.REPORT_EVIDENCE_DIR || path.join(websiteBackendDirectory, "private_uploads", "reports"));
 
   router.use((_request, response, next) => {
@@ -495,6 +549,18 @@ export function createAdminDataRouter({ requireAdminSession }) {
         return response.status(400).json({ message: "Invalid payment status filter." });
       }
 
+      const trendEndMonth = request.query.trendEndMonth;
+      if (trendEndMonth !== undefined) {
+        if (typeof trendEndMonth !== "string" || trendEndMonth.length !== 7 || !/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(trendEndMonth)) {
+          return response.status(400).json({ message: "Invalid trend ending month." });
+        }
+        const currentParts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+        const currentMonth = `${currentParts.find((part) => part.type === "year").value}-${currentParts.find((part) => part.type === "month").value}`;
+        if (trendEndMonth > currentMonth) {
+          return response.status(400).json({ message: "The trend ending month cannot be in the future." });
+        }
+      }
+
       const parsedLimit = Number.parseInt(String(request.query.limit || ""), 10);
       const limit = Number.isInteger(parsedLimit) && parsedLimit > 0
         ? Math.min(parsedLimit, MAX_TRANSACTION_LIMIT)
@@ -542,7 +608,8 @@ export function createAdminDataRouter({ requireAdminSession }) {
           totalOutstanding: roundCurrency(allTransactions.reduce((sum, item) => sum + item.paymentAmountDue, 0)),
           totalPayable: roundCurrency(allTransactions.reduce((sum, item) => sum + item.amountPayable, 0)),
           totalTransactionFees: roundCurrency(allTransactions.reduce((sum, item) => sum + item.transactionFee, 0)),
-          monthlyTrend: transactionMonthlyTrend(allTransactions),
+          monthlyTrend: transactionMonthlyTrend(allTransactions, 6, trendEndMonth),
+          trendStartMonth: allTransactions.reduce((earliest, item) => item.createdAt && (!earliest || item.createdAt.slice(0, 7) < earliest) ? item.createdAt.slice(0, 7) : earliest, null),
         },
         page: {
           hasMore: nextOffset < filteredTransactions.length,
@@ -864,10 +931,10 @@ export function createAdminDataRouter({ requireAdminSession }) {
           projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, isDisabled: 1, isArchived: 1, disabledAt: 1, disabledReason: 1, kycStatus: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("vehicles").find({}, {
-          projection: { owner: 1, name: 1, description: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
+          projection: { owner: 1, name: 1, description: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, availabilityHoldReason: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("prekycdocuments").find({}, {
-          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, confidence: 1, reason: 1, detailsMatched: 1, mismatchFields: 1, suspectedTampering: 1, processingAttempts: 1, nextAttemptAt: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, reviewVersion: 1, fileHash: 1, provider: 1, privateScreening: 1, manualComparison: 1, validationChecks: 1 },
+          projection: { email: 1, sessionId: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, confidence: 1, reason: 1, detailsMatched: 1, mismatchFields: 1, suspectedTampering: 1, processingAttempts: 1, nextAttemptAt: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, reviewVersion: 1, fileHash: 1, provider: 1, privateScreening: 1, manualComparison: 1, validationChecks: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("bookings").find({}, {
           projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, status: 1, paymentStatus: 1, paymentAmountDue: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
@@ -887,7 +954,7 @@ export function createAdminDataRouter({ requireAdminSession }) {
 
       const mappedCustomers = users.filter((user) => !user.isArchived).map(mapUser);
       const mappedVehicles = vehicles.map((vehicle) => mapVehicle(vehicle, ownerNames));
-      const mappedDocuments = documents.map((document) => mapDocument(document, usersByEmail));
+      const mappedDocuments = documents.map((document) => mapDocument(document, usersByEmail, usersById));
       const mappedBookings = bookings.map((booking) => mapBooking(booking, usersById, vehiclesById));
       const overdueCount = mappedBookings.filter((booking) => booking.isOverdue).length;
       const pendingDocumentCount = mappedDocuments.filter((document) => document.approval === "Pending").length;
@@ -928,10 +995,14 @@ export function createAdminDataRouter({ requireAdminSession }) {
 
       const filePath = safeFileFromKey(kycDirectory, document.fileKey, DOCUMENT_EXTENSIONS);
       if (!filePath) return response.status(400).json({ message: "Invalid document file reference." });
+      const previewFile = await resolvePreviewFile(kycDirectory, filePath);
+      if (!previewFile) return response.status(404).json({ message: "Document file is unavailable in the configured private storage." });
 
       response.setHeader("Cache-Control", "private, no-store");
-      response.type(document.mimeType || "application/octet-stream");
-      return response.sendFile(filePath, (error) => {
+      response.setHeader("Content-Disposition", "inline");
+      response.setHeader("X-Content-Type-Options", "nosniff");
+      response.type(documentMimeType(document));
+      return response.sendFile(previewFile, (error) => {
         if (!error) return;
         if (error.code === "ENOENT") return response.status(404).json({ message: "Document file is missing from storage." });
         return next(error);
@@ -950,14 +1021,20 @@ export function createAdminDataRouter({ requireAdminSession }) {
       );
       if (!vehicle) return response.status(404).json({ message: "Vehicle not found." });
 
-      const reference = normalizeVehicleReference(asText(vehicle.imageUrl) || (Array.isArray(vehicle.images) ? vehicle.images[0] : ""));
+      const rawIndex = String(request.query.index ?? "0");
+      if (!/^\d{1,3}$/.test(rawIndex)) return response.status(400).json({ message: "Invalid vehicle image index." });
+      const reference = getVehicleImageReferences(vehicle)[Number(rawIndex)];
+      if (!reference) return response.status(404).json({ message: "Vehicle image not found." });
       if (reference.kind === "remote") return response.redirect(reference.value);
       if (reference.kind !== "local") return response.status(404).json({ message: "Vehicle image not found." });
 
       const imagePath = safeFileFromKey(vehicleDirectory, reference.value, VEHICLE_EXTENSIONS);
       if (!imagePath) return response.status(400).json({ message: "Invalid vehicle image reference." });
+      if (publicVehicleBase) return response.redirect(new URL(encodeURIComponent(reference.value), publicVehicleBase).toString());
+      const previewFile = await resolvePreviewFile(vehicleDirectory, imagePath);
+      if (!previewFile) return response.status(404).json({ message: "Vehicle image is unavailable in the configured storage." });
       response.setHeader("Cache-Control", "private, max-age=3600");
-      return response.sendFile(imagePath, (error) => {
+      return response.sendFile(previewFile, (error) => {
         if (!error) return;
         if (error.code === "ENOENT") return response.status(404).json({ message: "Vehicle image is missing from storage." });
         return next(error);

@@ -1,0 +1,706 @@
+﻿{
+    "mode":  "project-local, explicit manual reviews only",
+    "sources":  [
+                    {
+                        "repository":  "https://github.com/pbakaus/impeccable",
+                        "revision":  "0d6b47ea19b63afe15e3f93a44d5d9fbbc6fd275",
+                        "source_path":  ".agents/skills/impeccable",
+                        "destination":  ".agents/skills/impeccable"
+                    },
+                    {
+                        "repository":  "https://github.com/ch040602/anti-ai-slop",
+                        "revision":  "171db9c7daa0e4507cd22f5ad4e8771343f79e72",
+                        "source_path":  ".",
+                        "destination":  ".agents/skills/anti-ai-slop"
+                    }
+                ],
+    "setup_files":  [
+                        "AGENTS.md",
+                        "PRODUCT.md",
+                        "DESIGN.md",
+                        "SKILLS-SETUP.md",
+                        "skill-installation.json"
+                    ],
+    "installed_files":  [
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.agents/skills/coherence-reviewer/agents/openai.yaml",
+                                "sha256":  "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.agents/skills/coherence-reviewer/SKILL.md",
+                                "sha256":  "62bf2889ac79cfbe19efce96c3e9a640146fd4f74d68927147b2b1fc12672c62"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.agents/skills/spec-first-anti-slop/agents/openai.yaml",
+                                "sha256":  "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.agents/skills/spec-first-anti-slop/SKILL.md",
+                                "sha256":  "8c1f3cb4f93aa0ae6445ac21936bb5cb382249a343d2fce7c1cf43cb5b92a9d2"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.gitattributes",
+                                "sha256":  "92bd0682487140d39a8f20afcfdb2aefc8243e51553f7e1ba105a2a2f476329f"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/codeql.yml",
+                                "sha256":  "d2deb40198402e50df02341720fe17b7ee6ce751a0b29c15432219b790a60fef"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/gitleaks.yml",
+                                "sha256":  "ba4b39fcc7a8348bec471bf05001e67f9db759b89a5a9eea03868ef7b325e204"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/no-ai-slop.yml",
+                                "sha256":  "3f4ee57ae684d93d1ce32e92984773ff48d392a52d6869c753aba406ebcdfc51"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/osv-scanner.yml",
+                                "sha256":  "c29d430d962be283be951275b571898e0d0b4b69f14410d48faa492a03838eef"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/semgrep.yml",
+                                "sha256":  "6692afa6d0565df6a806e0401c207466616a7f62159c09feb9215258acbe7b55"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.github/workflows/spec-coherence.yml",
+                                "sha256":  "6fafa324660ce46f87a784b961f3f20f88363f53b02fe032844dd5e16290eef5"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.gitignore",
+                                "sha256":  "45b36dc319bd3aa8b448c1e2c90235e343383bb10eb51d077554e9e484d7fb98"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/memory/architecture-principles.md",
+                                "sha256":  "9c8c4eaf0d32f848e9f1aa3e640fe83f500ae1300d523d19a3906e6eaa9ea2e9"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/memory/constitution.md",
+                                "sha256":  "d80de6a3b91c4bdb72a6553c852ccde08de148c31e0665830a4769edf7203304"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/memory/glossary.md",
+                                "sha256":  "b80d1955b075d0a08ec52101bd48c3229180bf6036d2642bb83c48d52e25d128"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/memory/product-principles.md",
+                                "sha256":  "d983d1a483680d3847982fe22f1ae28bf641aef37eb76914063f4044f17a550c"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/templates/overrides/checklist-template.md",
+                                "sha256":  "775f4182a92756c82d779f4daf61d8bcb2021659e0451d5d61000268bdbb4fdd"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/templates/overrides/plan-template.md",
+                                "sha256":  "5f09ed4f96bf05c784438e30a43da2972b952cf5bc5de92ceeeb4cab6d8e1244"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/templates/overrides/spec-template.md",
+                                "sha256":  "97befb9269535b88e855dccf6a4b65e253177d138fffd9b4c18b3871b3d0b72a"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/.specify/templates/overrides/tasks-template.md",
+                                "sha256":  "1b7982ec96a9ee5d319c4d84ba25a60e3432d54b69c08ed25766bb787587bcca"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/AGENTS.md",
+                                "sha256":  "a3971b2b6bbf5b8b3662946f439b73aea7d53408a07e70f8425e133f34c3fd3b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/agents/openai.yaml",
+                                "sha256":  "18a9651d78002d1536b30c36213ca56d23d24584b1adc7d02eeffc19529af6c6"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/assets/workflow.svg",
+                                "sha256":  "8bef34bd36f0a4c6fb77091eb9b101cd7cc5522317bbc97badb90eb349a128c8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/CHANGELOG.md",
+                                "sha256":  "87903df7c23df462bbd3c0f10fdbe0fdcd265de3de5f152c21d8b1628940c1e2"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/ai-slop.md",
+                                "sha256":  "0e535c4932ba2be313ddbff2b1ee7cae001d5975be8c3c3fe0cbfff84aeab104"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/coherence.md",
+                                "sha256":  "5c780d4dd7cbb3e26f45ec4b8e8590fabcbf4834f78b12c11188537326efd684"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/dependency.md",
+                                "sha256":  "f6d561c0cc78ea8d69f18152d18c67105429f5880a3891705461ae4d73cb1fa8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/global_ai_smell_checklist.md",
+                                "sha256":  "c12949d407cba3c889926a5be322bf96e9869ee750bb0b817e5658208101584d"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/output_design_addendum.md",
+                                "sha256":  "5472cb3adb46669e4c8faaccce2835234911b10557117d822b4a1c1660c63d6c"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/pr-review.md",
+                                "sha256":  "8ae6774ee64110de0848ecccc9a0d70ef54c4e3488863e66986d4bbbee092eb9"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/release.md",
+                                "sha256":  "f57fda4af4a69b18dced6f733e789b82830899faa592aeed01bef6c6d92f3081"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/remediation_patterns.md",
+                                "sha256":  "b1827514becf5598049ebbbfb1c596de68d6f72dd66034d7df106e6713bd0405"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/requirements.md",
+                                "sha256":  "57a01412a507133f3a12169cae25b36d2050a5b56551209274fa8dfa3954bc8d"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/checklists/security.md",
+                                "sha256":  "90ed84e2fad54a34e8976ad5872bc09e995174e16cd6928d127946800b2ea101"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/CLAUDE.md",
+                                "sha256":  "8f83300b5f5dc6d149a69b3c1fd61c986aa4d43390cf36c21e811284edd64cd1"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/codex/prompts/00-apply-pack-to-existing-repo.md",
+                                "sha256":  "a2b93f8decebf1937f8d2f5d5acbc02524bd1996730d245d98c7d4c312c9b0aa"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/codex/prompts/01-run-coherence-check.md",
+                                "sha256":  "b721b6450cc6b9a8a6778d3bf617c2fe79bb8daf2044c7c2fbf98a4e98f9f6e7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/codex/prompts/02-pr-review.md",
+                                "sha256":  "edb5e7b2aba55211e3b5f9d14d064059be8ba6cb2ed4ac6d372daae6e559964a"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dependency-baseline.json",
+                                "sha256":  "e0d02c265d5aed756067703a8ded6462aa450eb44d22d3cd19534c3b43ec46d9"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/academic_reporting.md",
+                                "sha256":  "dfcf2ecc0bbfb07d03637d2535dbebd8acfcc0627ce995c9566e589f8ad42f09"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/code_developer_outputs.md",
+                                "sha256":  "0dac5ee2120665dfd6b50c7b34f6444fc4fbe2d21006f0460665f82e6644b4ec"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/data_charts_dashboards.md",
+                                "sha256":  "2f318165d380c8790c216b1959726d285b671d5a3af9cc05c627804547f0a7dc"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/emotional_social.md",
+                                "sha256":  "02515ce48e9f97206e922cbe6895eae9908b090203f91ebc01fbadaa827851c8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/images_visuals.md",
+                                "sha256":  "9307f9ab0ad4aba5adf5f63203be665c0d56ec845fe28b71824ac452ee959964"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/localization_register.md",
+                                "sha256":  "0f568bf8115cd67e79075c685b8e311c1c6d5684677a8261a811212bb8612580"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/marketing_brand.md",
+                                "sha256":  "758eed6ab9028b512a8395c1a105d53f1ea47c93245f751cb3bdfe5ecabd7996"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/operational_plans.md",
+                                "sha256":  "fcaf69ec30d018d5da9b9ddbbbb3f4c29b907cc99e20f09af03434b6e8a3e9a8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/presentation_decks.md",
+                                "sha256":  "abb9ee38e95c6a21059606d218ecabab1034f06c660b17f83a0c075d92b700e6"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/web_ui_design.md",
+                                "sha256":  "d55c3f26537b15ed546dbfae65553725ff933ab2aebc8672e459347161d4ece7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/dimensions/writing_information.md",
+                                "sha256":  "399c856e74d6dd9a0c0ea3f05a3428a1774b6228321f5ed05624685fd8181c0e"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/assets/readme-teaser.svg",
+                                "sha256":  "64fabf6cf15035600a0c7d904291b6fcdd2242321e7abbbd9b7a1d39f0540b47"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-readme/accessibility-review.json",
+                                "sha256":  "c22ef0d8f48889517a1000b7a6aab414e68d679a66671197499daba4eb2713a3"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-readme/citation-review.json",
+                                "sha256":  "c4d6dd198ff35f3bf58705a5a0813be64fa6355691ef56e8da2725176aeb7462"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-readme/evidence-ledger.json",
+                                "sha256":  "b3c6f0392b170f130c41f2cb943019034b5f4c0f988cbef81ee5e7444573e6d7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-readme/narrative-review.json",
+                                "sha256":  "26b039a92cf2ceb9b2b8e23f01936aa9246b6a77cf4f536e79c3ebadea751ef3"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/accessibility-review.json",
+                                "sha256":  "2464908d987f3f8eaf86feb4e468d4a44864252d46e5a5d1f718858d26bef5de"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/citation-review.json",
+                                "sha256":  "c4d6dd198ff35f3bf58705a5a0813be64fa6355691ef56e8da2725176aeb7462"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/evidence-ledger.json",
+                                "sha256":  "b3c6f0392b170f130c41f2cb943019034b5f4c0f988cbef81ee5e7444573e6d7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/narrative-review.json",
+                                "sha256":  "4bc4e56a933d16369420f139a5d1298afba0d9627301a84a4dd898149e28db23"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/teaser.md",
+                                "sha256":  "663044e3e9e10f36d56e54bcd5ccc401660ec0309d686d919ec1d523f62cc26b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/mdpr-teaser/teaser-spec.json",
+                                "sha256":  "19237aced4945ef8043765c222b4826965c056b44246bfdef92ecd838f28c961"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/process/codex-workflows.md",
+                                "sha256":  "8c5f750a9fa958db862dc065c6b44b8c96104e90c7bf00043e0e03b4bfe330e7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/process/implementation-stages.md",
+                                "sha256":  "02c319dfc66de20fb32be222dd1eb7ef20a71a03334287d4fdd18b54c578d2c0"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/process/migration-guide.md",
+                                "sha256":  "1ec941a15e08919a2eb7e99d15ac6535c0ee4f47dee37845b300f0b0bd94c399"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/process/validation-ladder.md",
+                                "sha256":  "1e1b3d449b65da07b160cc1495b454721af282dd6f81b2a8608010ab01e3ef4b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/references/resource-catalog.yaml",
+                                "sha256":  "323ca5bdd3332f8520d3426ba16bc8fa58e8c62bb919c19a1fefb63f2722a3c6"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/docs/references/source-catalog.md",
+                                "sha256":  "36af8cde1cbd37b6a8326c93091e2858849e813097982efe271e335a7c2d44c8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/examples/before_after_patterns.md",
+                                "sha256":  "607ef1e0a4ee8e629f71f3b937bfc5f35b8b3a1c7239978a6c8e46f01f5429a7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/manifest.txt",
+                                "sha256":  "b66e81bf998b9d03504c4bda6e4f661b02fc4549ba7eaefaa9a172730d865866"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/PROMPTS.md",
+                                "sha256":  "06705f117c4cf846ac624cb379f1b06a9ffeeca7fd181a3be8358f0da40ae8f2"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/protocols/finding_format.md",
+                                "sha256":  "c13c459c083e4974b6631c69aba9004db6712713824a63f2e20e0f6b02aa4632"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/protocols/output_design_review_gate.md",
+                                "sha256":  "9c38334247f198d5d4d181edc7f6ad74d82290e4b52a65d16c919cdeb395bdde"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/protocols/review_workflow.md",
+                                "sha256":  "9ea7094f59b1743e5ecfecb6f40c26c937dca31bb913561b48a3f871c0b8c495"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/README.md",
+                                "sha256":  "c4df61ddcc573f31cfd33cd63c96699d143d07a67f1dd6962299cd22f57c00c6"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/research/field_reported_ai_smell_patterns.md",
+                                "sha256":  "2957fc79cd8ed14ddb720ee05363af938771cd916d967dc067de6afd955ca018"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/SKILL.md",
+                                "sha256":  "49683b3742b32cd3d70ee0901222db4ef8088d105a5232cef682f7c162efa158"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/_meta/coherence-latest.md",
+                                "sha256":  "a3ef54b74999780d9336dc2c25f602e6a21e226f738e66ccd095d652c6557e3c"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/_meta/evidence/existing-code-scan.md",
+                                "sha256":  "af7c72714a246296b64e77b2fa49b34e3bca1287343b67d65072f0a7d5fa5e98"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/000-anti-ai-slop-control-plane/adrs/0001-stdlib-validator-control-plane.md",
+                                "sha256":  "7c649e1df966e3c9738655798154c0b2fdec0d1e949471f3c5905c6c0f20a94d"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/000-anti-ai-slop-control-plane/plan.md",
+                                "sha256":  "709cc435fbcd84094754d0e8ccfee8c14b95c1d18df13b21f85bbb61594397f7"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/000-anti-ai-slop-control-plane/spec.md",
+                                "sha256":  "ddbbfc401631f0790e2af217e5f3ec0817526a94be812bc59385186d3b3c051f"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/specs/000-anti-ai-slop-control-plane/tasks.md",
+                                "sha256":  "80a66eb2004e694e88f45a9b042ad7f1efa126afecefd9e0cb49ae05bd9c3584"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/taxonomies/task_purpose_matrix.md",
+                                "sha256":  "f087a1f8351138677cc5664e4663593b47e5f3f62e9841076e6a490207bb953b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/templates/design_review_addendum.md",
+                                "sha256":  "9db80ef3efc967a772528484c584b814ca1b684e0bf7b055671b96539bb9d3be"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/templates/review_report_template.md",
+                                "sha256":  "b59fa42f35133fa36330aa628048e1cff386f414116573464ecb5e3adec4ddd8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/templates/rewrite_brief_template.md",
+                                "sha256":  "f718251d3c7350f74f5a477e43c3106371af1a21b9da30f21ec0cdaf9c6db6ea"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tests/test_catalog_freshness.py",
+                                "sha256":  "f31ab0fe0dd91374ce4c7ef4d10b0c244cf2d0c4c9abe4149307032988493c5f"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tests/test_helper_tools.py",
+                                "sha256":  "eb55aa7b8d854450c3b37529db5a3ac81d20bed638adf3de2e24623b929f08b5"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tests/test_test_layout.py",
+                                "sha256":  "e0b3b04ba407607fabfaf23b8818b4f2765c9c05f42c9aede10f9d6a88be72b8"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tests/test_validator_core.py",
+                                "sha256":  "92ddb1aa9cbf27d72d74619a08e40991580c57da4453a46ea3f09d1acaf2c930"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tests/test_workflow_examples.py",
+                                "sha256":  "aeec7cfcf1b77024f21007b6915b24da9fbe6916a590f2e7e1e338083d003c98"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/apply_guardrails.py",
+                                "sha256":  "28b56fca82450890a8cc91bdfe934b8a1220bcd583c30a9a22dd8f2337edc68b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/bootstrap_feature.py",
+                                "sha256":  "71842df1d68b3a3623b8c5ec04f4dd68e8829514edb53ee6eaa4aa7503c31a2f"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/repo_inventory.py",
+                                "sha256":  "873b3d3b0ffb43bb3fe31b19954db33820c63912935c230bd7508fc904dc51ab"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/resource_catalog_freshness.py",
+                                "sha256":  "023f72bfdbf78fce290a93864afae808594a0f38f4bdd4e7d94442fcbd768279"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_all.py",
+                                "sha256":  "ab44bde51f0041f1b66597c0e395eed7591767d1f71d8e39a30d2bed20358506"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_architecture_boundaries.py",
+                                "sha256":  "d26aa9c08020618d8185f52e6e114f80205978fc547f27f20cb15043641bc736"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_config_integrity.py",
+                                "sha256":  "753cb26999b9fe1cf67f0f31f7e3ed425697487d9ecbf1012ad7919b5abdd499"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_dependency_justification.py",
+                                "sha256":  "4710674917c98cc7b51de272bb388e264a2782b8802481ef9a8d22659e9d1af9"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_evidence_links.py",
+                                "sha256":  "fd6570698e73d0fb1b3ce61a39f0196447ecad78a9797136e1e6d3fcb982fd1b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_glossary_terms.py",
+                                "sha256":  "49d673b1f8587c709489cda61915676884dc4a0e5ec6ffcdc299f85b64977407"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_manifest_integrity.py",
+                                "sha256":  "fcbb16bb1181ba30cd6d2bee5a7b5225866b145cb0b05c58d5d98f3534099a80"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_placeholders.py",
+                                "sha256":  "4bf64c66e1fa966eef61d4257f411ba1886868b834776a30d72771b067314f8f"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_resource_catalog_freshness.py",
+                                "sha256":  "694d6c123618cc8ae7f0fc350c7440cdb8c644068f28e671a045cbeab979456b"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_spec_coverage.py",
+                                "sha256":  "3f0fad6ee6012afe431c3c0ddc45b67823ad72dd9461789560825616bea07ba5"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_task_traceability.py",
+                                "sha256":  "55e19cf45485d5fd9d0e998f280812304a3a3b8b688d353564efb8a36f165137"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_template_tokens.py",
+                                "sha256":  "39562566befc03258398179dfd713697292adfce5b136320fa737cf0cbe12a62"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_vague_language.py",
+                                "sha256":  "9f013aa0db8c093fd3a30e6a1c32341c8a66fcec57cfa3bc923a118b9fe65562"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/check_workflow_integrity.py",
+                                "sha256":  "674d1219f9fd3617aa93f8b0a885c6bca74f116a8c6eb6c6abd42edad190e4e6"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/tools/validators/common.py",
+                                "sha256":  "a42e32003f24ba80ff937dfd0bb0ab3950d104eaec3a208b15255d4cb3440456"
+                            },
+                            {
+                                "path":  ".agents/skills/anti-ai-slop/VERSION",
+                                "sha256":  "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/agents/impeccable_asset_producer.toml",
+                                "sha256":  "d6a51f4df6d76f16b95ab81268a689f4c5936d505c5bb25c80ad7423f927bbc6"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/agents/impeccable_documenter.toml",
+                                "sha256":  "2feb3768125ba6469c92a50d516727e6d42f44579165ddfd33409948e2a3803d"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/agents/impeccable_finish_reviewer.toml",
+                                "sha256":  "d57c3e0453f601ad688911fca4471057c7b46b561fcd42a1e12a581101c5186c"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/agents/impeccable_manual_edit_applier.toml",
+                                "sha256":  "6c9ce3e27ec4520ead001da3aad2a2ebba481c4e5cd22873db8890259ee579fe"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/agents/openai.yaml",
+                                "sha256":  "fc5c0f8d750bb2f7d0c766cef17a48ad1b1feb29f55f81de9ba7015b15196d82"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/adapt.md",
+                                "sha256":  "871a8e4d749b807c693ebabd83defbd6c76e1bd2a0f53a28a460cb1308ba8634"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/adapt.native.md",
+                                "sha256":  "6acc0bf221a4ddc6e5c6438348920b2ca2393b29c4314dbde2cdc23f2b1a9639"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/android.md",
+                                "sha256":  "058f81f256134841875fd3183e06b37a023de0c877fd2b9eecd97011640791fe"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/animate.md",
+                                "sha256":  "d658c48ffbe0031e8e3b318996cad6ceafe29e40aa50d5bb25e4bf1d6839dc7c"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/audit.md",
+                                "sha256":  "d5f83912eda93d42f93522bb74aeff0ea04d9c559577ec52fcccc130dd03166d"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/audit.native.md",
+                                "sha256":  "960cb922bc934adbf9192e9428ff6bec1f382038166f02a785939c93b7391067"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/bolder.md",
+                                "sha256":  "f964506c0fae87b3c2c1db7016ddc9be9ef970bbcf5548d684b997b5d5991586"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/clarify.md",
+                                "sha256":  "173dd66abe65633910dcb04a51f40d6ff2a793f87088f022a02fc4cad24dd133"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/colorize.md",
+                                "sha256":  "bc5f71f1129d0f2c310d913d07c8dc609a1d25644121bd78c308f42d52a0b9e9"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/component-review.md",
+                                "sha256":  "e5e9d28a28d7313f65b5aa8e2f3a990bb825d8df8f1f853620e233e73af5f691"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/craft.md",
+                                "sha256":  "9205e222bc6565b37fb504ceec93233c2d2a456802b69d16e6b1c44723907c4c"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/craft-floor.md",
+                                "sha256":  "e802e4f7bdc89050a9c0f2ca506e1d493a2316e6e810c0336c57aa073717ef3e"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/critique.md",
+                                "sha256":  "cb8caddbb3919e5bf7f252143b519fb16db28a244642d937b186cb89962d9201"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/degraded/asset-producer.md",
+                                "sha256":  "b13ab14c1e2fee94a6c8b32361f400a0319a76537ee16fecbda79d5d1b26b681"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/degraded/documenter.md",
+                                "sha256":  "bcc05ea92faebb5c74037a9d4263a5ce9a56f5ab07c8ab3c59ee704d8cade745"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/degraded/finish-reviewer.md",
+                                "sha256":  "275dd1b6e63bbd30d2713227c4f79b880a8bc4e01cc48d392068bb86939d3afa"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/degraded/manual-edit-applier.md",
+                                "sha256":  "5fae7f8a2fc3ddd49ad0a413446dc44daedef5b6b7de5eb935bd2fbfad646d58"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/delight.md",
+                                "sha256":  "098a891028ce59c212b747d3c70468dd750aff7053a703d1336045ed31e0da7c"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/distill.md",
+                                "sha256":  "ea8432c90c30ecb0426662a681ead5c0941113079704e1a766cda09e85b15b4f"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/doctor.md",
+                                "sha256":  "a98b397cedeeaa1da57f3395b3d9b6c1fc477f4247fb9dc13e4da3da588283ff"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/document.md",
+                                "sha256":  "3673248740bcdd1122ccc610093ba2fe52f3943a61ce0b7170b74dc49e5b6098"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/extract.md",
+                                "sha256":  "31b90048c0b540daec46762a10c2b6b6434737a89af005054d8b848d829d003b"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/generate.md",
+                                "sha256":  "53628d05b7eff0d4f48b95e48fad40266452fe1b42f398bd88dd9328353e0dd8"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/harden.md",
+                                "sha256":  "16ba7fca1973c5faf53dd2ca523559129c0fe9e5f8d50b645f527afa78186cd2"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/hooks.md",
+                                "sha256":  "56cc1bba51e6805de370160ce4a9399fef3740571204f13c3c751725870305e5"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/init.md",
+                                "sha256":  "bb069b43c09109d7031b0374e31955749fec657b252d39782f11e8985aca2b51"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/ios.md",
+                                "sha256":  "40c87038b5f75147a5952a96237acf312a327bf70c1bcd8e0a5f064625ae9668"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/layout.md",
+                                "sha256":  "0bc7d7971b3edf2acd0580e847458dc6d84129d90715b452799ace3bed815c7c"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/live.md",
+                                "sha256":  "68c5636a7858dd0b5137a9229c15e25fdc2ee40a0f8a4e9d809f78e809256262"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/live-setup.md",
+                                "sha256":  "2b5b2fbf5f658f34ea1997fb1aeebe01604d05187f75c6a4f1f55a5bc78520a4"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/new-work.md",
+                                "sha256":  "34b493a34672033c6f9b8aec8dd11b9151246319120cd16a1d897be548ab4e47"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/onboard.md",
+                                "sha256":  "ef2dde00030580ed2765cbf7be9b2ea4a6f64cb915b804fd6f6abcf38051c7b9"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/operate.md",
+                                "sha256":  "a9d2203acd45ca33a13d5c68b02b23ed512425ac15f0e8438318ed124b43729d"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/optimize.md",
+                                "sha256":  "f672ef8251a3ed4051a053d30819664951b17540b2899acd27d20e500c234abc"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/overdrive.md",
+                                "sha256":  "fce6688138d2ceb1e3d2cde5231f54b1d8dc8748b4c95a7919aa83b6f924cf96"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/polish.md",
+                                "sha256":  "81666fc7f783b4e3514db6554e713dc0479bd9cdedb06e93d15f8b579aae869a"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/quieter.md",
+                                "sha256":  "190a4e642ca362d7499f3c3ab123e21f18f75457d11f072b545a183f296e6495"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/region-map.md",
+                                "sha256":  "778cedc9199b407d3e23fa1041e38d548b00b1101a33517aa2a2eb299f9d0edc"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/routing.md",
+                                "sha256":  "77ae09542fbc10aa4e8b119d6fd19359908a47c13c30068d6a150bfdb50e3e10"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/shape.md",
+                                "sha256":  "a55f016c046cb6a27c55bd7f346375aeb506a755c4fbca19a5f92dbd42309c23"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/typeset.md",
+                                "sha256":  "442749aed338f51c1a3ccfb182c6ade9b74b90590b67984062ac94a5b100e914"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/reference/visualize.md",
+                                "sha256":  "80a052179f864136209eb530811d6a16e53a590c4db19a3a74fa9845d6432d33"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/command-metadata.json",
+                                "sha256":  "e8720f3aa41135211cc58cc299a39eeda86c75651f4279cc1ede8db10dcc0584"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/data/font-index.json",
+                                "sha256":  "47edbdfaf27073c47033d1ac7dfee881be49e2dcbda7671d1157300481dde6da"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/data/font-index-failures.json",
+                                "sha256":  "835f19a0a3812f3652dd6979a2ce5597f654fd01f26e1b420b92d5f42b997ce4"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/impeccable",
+                                "sha256":  "39d9600489073e227e4f4d55c451ce4252a6632ed7ae37923efbbcbc91f16d07"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/impeccable.cmd",
+                                "sha256":  "759bab1d8adc071fdde2efcf6e2157aa4026f3c2b4f3c342a8070bf328011616"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/live-browser.js",
+                                "sha256":  "f68a3d68ac92606e91aa8878e003d9432ddd09aa97ca01c6b3ce46c937dca316"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/live-browser-dom.js",
+                                "sha256":  "de1b7404f4cdfd7b515196afb17b74b1980f0bc88cb8681ae93a76ca48ec7bdb"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/live-browser-ignores.js",
+                                "sha256":  "c1cb6877ca99a0c1b38ba0c7d59f32702d3022f6821d8045f7133f7c40b6362f"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/live-browser-session.js",
+                                "sha256":  "edddeb3fad88adec9a055b1bf9d5c75418cbe97a13b1a7f6765e73249e482563"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/modern-screenshot.umd.js",
+                                "sha256":  "bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/scripts/VERSION",
+                                "sha256":  "76f81f64ece28d0bcfe39dd35f6d14f3c87fe000b77aee11561e18d1919f607e"
+                            },
+                            {
+                                "path":  ".agents/skills/impeccable/SKILL.md",
+                                "sha256":  "6eeec6ef2028388a17de9f17a56c9cb7dbc7c8e7e1a8c15b831b0ba3e42168ac"
+                            }
+                        ]
+}

@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from "react";
 import VehicleImage from "./VehicleImage";
 import ManualDocumentComparison from "./ManualDocumentComparison";
 import { presentVehicle } from "../vehiclePresentation";
+import { adminDataApi } from "../adminDataApi";
+import AdminSelect from "./AdminSelect";
 
 export function StatusBadge({ value }) {
   const status = String(value || "").toLowerCase();
@@ -89,19 +91,8 @@ export function SearchField({ label, value, onChange, placeholder }) {
   );
 }
 
-export function FilterSelect({ label, value, onChange, options }) {
-  return (
-    <label className="block min-w-0">
-      {label ? <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{label}</span> : null}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 outline-none transition hover:border-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-      >
-        {options.map((option) => <option key={option}>{option}</option>)}
-      </select>
-    </label>
-  );
+export function FilterSelect(props) {
+  return <AdminSelect {...props} />;
 }
 
 export function EmptyState({ icon: Icon = FileText, title, description }) {
@@ -170,6 +161,7 @@ export function ViewerDialog({ item, onClose }) {
   if (!item) return null;
   if (item.type === "Customer profile") return <CustomerProfileDialog item={item} onClose={onClose} />;
   if (item.type === "Vehicle details") return <VehicleDetailsDialog key={item.vehicle?.id || item.title} item={item} onClose={onClose} />;
+  if (item.type === "Booking operations") return <BookingDetailsDialog item={item} onClose={onClose} />;
   return <DefaultViewerDialog item={item} onClose={onClose} />;
 }
 
@@ -192,9 +184,54 @@ function DefaultViewerDialog({ item, onClose }) {
   );
 }
 
+function BookingDetailsDialog({ item, onClose }) {
+  const dialogRef = useDialogFocus();
+  const booking = item.booking || {};
+  const status = booking.isOverdue ? "Overdue" : booking.isActive ? "Active" : booking.status;
+  const details = [
+    ["Renter", booking.renter],
+    ["Vehicle", booking.vehicle],
+    ["Operator", booking.operator],
+    ["Pickup", formatBookingDateTime(booking.pickupAt)],
+    ["Return", formatBookingDateTime(booking.returnAt)],
+    ["Booked on", formatBookingDateTime(booking.createdAt)],
+    ["Booking status", booking.status],
+    ["Driver option", booking.driverSelected ? "Selected" : "Not selected"],
+  ];
+  const hasRating = Number(booking.reviewRating) >= 1 && Number(booking.reviewRating) <= 5;
+  const hasReview = hasRating || Boolean(booking.reviewComment);
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()} onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="booking-details-title" className="flex max-h-[min(720px,calc(100dvh-3rem))] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600">Booking details</p><h3 id="booking-details-title" className="mt-1 break-words text-xl font-bold text-slate-950">{item.title}</h3></div>
+          <button data-dialog-initial type="button" onClick={onClose} aria-label="Close booking details" className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><X size={19} /></button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
+          {status ? <StatusBadge value={status} /> : null}
+          <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {details.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "Not provided"}</dd></div>)}
+          </dl>
+          {hasReview ? <section aria-labelledby="booking-review-title" className="mt-5 border-t border-slate-200 pt-4"><h4 id="booking-review-title" className="text-sm font-bold text-slate-900">Renter review</h4>{hasRating ? <p className="mt-2 text-sm font-semibold text-slate-700">Rating: {booking.reviewRating} / 5</p> : null}{booking.reviewComment ? <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{booking.reviewComment}</p> : null}{booking.reviewCreatedAt ? <p className="mt-2 text-xs text-slate-500">Submitted {formatBookingDateTime(booking.reviewCreatedAt)}</p> : null}</section> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatBookingDateTime(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Not provided";
+  return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+}
+
 function VehicleDetailsDialog({ item, onClose }) {
   const dialogRef = useDialogFocus();
   const vehicle = presentVehicle(item.vehicle || {});
+  const images = vehicle.images?.length ? vehicle.images : vehicle.image ? [vehicle.image] : [];
+  const [imageIndex, setImageIndex] = useState(0);
+  const selectedIndex = Math.min(imageIndex, Math.max(0, images.length - 1));
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()} onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="vehicle-details-title" className="flex max-h-[min(720px,calc(100dvh-3rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -203,7 +240,17 @@ function VehicleDetailsDialog({ item, onClose }) {
           <button data-dialog-initial type="button" onClick={onClose} aria-label="Close vehicle details" className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><X size={19} /></button>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
-          <VehicleImage vehicle={vehicle} />
+          <VehicleImage vehicle={{ ...vehicle, image: images[selectedIndex] || "" }} />
+          {images.length > 1 ? <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setImageIndex(selectedIndex - 1)} disabled={selectedIndex === 0} aria-label="Previous vehicle image" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={18} /></button>
+              <p aria-live="polite" className="text-xs font-semibold text-slate-600">Image {selectedIndex + 1} of {images.length}</p>
+              <button type="button" onClick={() => setImageIndex(selectedIndex + 1)} disabled={selectedIndex === images.length - 1} aria-label="Next vehicle image" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight size={18} /></button>
+            </div>
+            <div aria-label="Vehicle image gallery" className="flex gap-2 overflow-x-auto pb-1">
+              {images.map((image, index) => <button type="button" key={image} onClick={() => setImageIndex(index)} aria-label={`Show vehicle image ${index + 1}`} aria-pressed={index === selectedIndex} className={`shrink-0 overflow-hidden rounded-lg border-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${index === selectedIndex ? "border-blue-600" : "border-transparent hover:border-blue-200"}`}><VehicleImage vehicle={{ ...vehicle, image }} className="w-16" thumbnail /></button>)}
+            </div>
+          </div> : null}
           <div className="mt-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-3">
             <div className="min-w-0 flex-1"><p className="text-xs font-semibold tracking-wide text-blue-700">{[vehicle.type, vehicle.category].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Vehicle"}</p><p className="mt-1 break-words text-sm text-slate-600">{vehicle.location || "Location not provided"}</p></div>
             {vehicle.status ? <StatusBadge value={vehicle.status} /> : null}
@@ -353,7 +400,7 @@ export function DocumentReviewDialog({ document, onClose, onApprove, onReject, o
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5">
           <div className="grid items-start gap-4 sm:grid-cols-[200px_minmax(0,1fr)]">
           <div><PreviewPane item={document} className="h-56 sm:h-64" compact />
-            {document.canCompareManually && document.previewUrl ? <a href={document.previewUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600">Open original document</a> : null}
+            {document.previewUrl ? <a href={document.previewUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600">Open original document</a> : null}
           </div>
           <dl className="min-w-0 divide-y divide-slate-100 rounded-xl border border-slate-200 px-3 [overflow-wrap:anywhere]">
             {[
@@ -428,22 +475,42 @@ function useDialogFocus(active = true) {
 }
 
 function PreviewPane({ item, className = "", compact = false }) {
-  const previewUrl = item?.previewUrl;
-  const mimeType = String(item?.mimeType || "").toLowerCase();
-  const imagePreview = mimeType.startsWith("image/") || mimeType === "image/*";
+  const previewUrl = String(item?.previewUrl || "").trim();
+  const [retryCount, setRetryCount] = useState(0);
+  const [preview, setPreview] = useState(null);
+  const currentPreview = preview?.source === previewUrl && preview?.attempt === retryCount ? preview : null;
+  const title = item?.title || item?.fileName || "document";
 
-  if (previewUrl && imagePreview) {
-    return (
-      <div className={`overflow-hidden rounded-xl border border-slate-200 bg-slate-50 ${className}`}>
-        <img src={previewUrl} alt={`Preview of ${item.title || item.fileName || "file"}`} className="h-full max-h-[480px] w-full object-contain" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!previewUrl) return undefined;
+    const controller = new AbortController();
+    let active = true;
+    let objectUrl = "";
+    adminDataApi.getMediaBlob(previewUrl, { signal: controller.signal })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreview({ source: previewUrl, attempt: retryCount, objectUrl, mimeType: blob.type, error: "" });
+      })
+      .catch((error) => {
+        if (!active || error.name === "AbortError") return;
+        setPreview({ source: previewUrl, attempt: retryCount, error: error.message || "The file could not be loaded." });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [previewUrl, retryCount]);
 
   if (previewUrl) {
+    const handleDisplayError = () => setPreview((current) => ({ ...current, error: "The uploaded file could not be displayed. Open the original file to inspect it." }));
     return (
-      <div className={`overflow-hidden rounded-xl border border-slate-200 bg-slate-50 ${className}`}>
-        <iframe src={previewUrl} title={`Preview of ${item.title || item.fileName || "document"}`} className={`${compact ? "h-full" : "h-[420px]"} w-full bg-white`} />
+      <div aria-busy={!currentPreview} className={`overflow-hidden rounded-xl border border-slate-200 bg-slate-50 ${className}`}>
+        {!currentPreview ? <div role="status" className="flex h-full min-h-40 items-center justify-center gap-2 p-3 text-sm text-slate-600"><LoaderCircle size={18} className="shrink-0 animate-spin" />Loading uploaded file...</div>
+          : currentPreview.error ? <div role="alert" className="flex h-full min-h-40 items-center justify-center p-3 text-center"><div><AlertTriangle size={25} className="mx-auto text-amber-600" /><p className="mt-2 text-sm font-semibold text-slate-800">File preview unavailable</p><p className="mt-1 text-xs leading-5 text-slate-600">{currentPreview.error}</p><div className="mt-2 flex flex-wrap items-center justify-center gap-3"><button type="button" onClick={() => setRetryCount((count) => count + 1)} className="min-h-11 rounded-lg px-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Retry preview</button><a href={previewUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Open original file<ExternalLink size={13} /></a></div></div></div>
+            : currentPreview.mimeType.startsWith("image/") ? <img src={currentPreview.objectUrl} alt={`Preview of ${title}`} onError={handleDisplayError} className="h-full max-h-[480px] w-full object-contain" />
+              : <object data={currentPreview.objectUrl} type="application/pdf" aria-label={`Preview of ${title}`} onError={handleDisplayError} className={`${compact ? "h-full" : "h-[420px]"} w-full bg-white`}><div className="flex h-full items-center justify-center p-4 text-center"><p className="text-sm text-slate-600">Your browser cannot display this PDF. <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Open the original file</a> to inspect it.</p></div></object>}
       </div>
     );
   }
@@ -452,8 +519,8 @@ function PreviewPane({ item, className = "", compact = false }) {
     <div className={`flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center ${className}`}>
       <div>
         <FileText size={30} className="mx-auto text-slate-400" />
-        <p className="mt-3 text-sm font-semibold text-slate-800">No stored preview</p>
-        <p className="mt-1 text-xs text-slate-500">This database record does not have an uploaded file reference.</p>
+        <p className="mt-3 text-sm font-semibold text-slate-800">No uploaded file reference</p>
+        <p className="mt-1 text-xs text-slate-500">This document record does not have an uploaded file reference.</p>
       </div>
     </div>
   );
