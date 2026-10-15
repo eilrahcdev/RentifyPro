@@ -6,6 +6,7 @@ import path from "node:path";
 import axios from "axios";
 import PreKycDocument from "../models/PreKycDocument.js";
 import KycVerification from "../models/KycVerification.js";
+import User from "../models/User.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
 function environment(t, values) {
@@ -38,10 +39,18 @@ async function fixture(t, approved, existing = null) {
   const writes = [], files = new Map(), cases = [];
   t.mock.method(fs, "mkdir", async () => {});
   t.mock.method(fs, "writeFile", async (file, contents) => files.set(file, contents));
+  t.mock.method(fs, "unlink", async file => files.delete(file));
+  t.mock.method(PreKycDocument, "exists", async filter => Boolean(filter.reviewVersion));
   t.mock.method(PreKycDocument, "findOne", () => ({ select: async () => existing }));
   t.mock.method(PreKycDocument, "findOneAndUpdate", async (_filter, update) => { writes.push(update.$set); return update.$set; });
   t.mock.method(KycVerification, "findOneAndUpdate", async (_filter, update) => { cases.push(update); return update; });
-  t.mock.method(KycVerification, "findOne", () => ({ select: async () => null }));
+  t.mock.method(KycVerification, "findOne", () => ({ select: async () => null, then(resolve) { return Promise.resolve(null).then(resolve); } }));
+  t.mock.method(KycVerification, "updateOne", async (_filter, update) => {
+    if (update.$set.idRegisteredAt) assert.ok(update.$set.idRegisteredAt instanceof Date);
+    else { assert.equal(update.$set.status, "id_uploaded"); assert.equal(update.$set.challengePassedAt, null); }
+    return { matchedCount: 1 };
+  });
+  t.mock.method(User, "updateOne", async (_filter, update) => { assert.equal(update.$set.kycStatus, "id_uploaded"); return { matchedCount: 1 }; });
   t.mock.method(auditLog, "info", () => {});
   t.mock.method(auditLog, "error", () => {});
   const face = t.mock.method(axios, "post", async () => ({ data: { success: true }, status: 200 }));
@@ -78,7 +87,9 @@ test("production document uploads retain private evidence for review with automa
         assert.equal(document.fileHash, crypto.createHash("sha256").update(buffer).digest("hex"));
         assert.equal(document.fileSize, buffer.length);
         assert.equal(document.filePath, "");
-        assert.ok(document.expiresAt > new Date());
+        if (flow === "registerIdFace") {
+          assert.equal(document.registeredUser, req.user._id); assert.equal(document.expiresAt, undefined);
+        } else assert.ok(document.expiresAt > new Date());
         assert.equal(document.profileSnapshot.full_name, profile.full_name);
         assert.equal(files.size, 1);
         assert.ok([...files.values()][0].equals(buffer));

@@ -1,5 +1,22 @@
 import mongoose from "mongoose";
 
+const extensionHistorySchema = new mongoose.Schema({
+  status: { type: String, enum: ["requested", "approved", "rejected", "withdrawn", "expired"], required: true },
+  requestedAt: { type: Date, required: true },
+  requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  currentReturnAt: { type: Date, required: true },
+  requestedReturnAt: { type: Date, required: true },
+  billingStartAt: { type: Date, required: true },
+  durationMinutes: { type: Number, min: 0, required: true },
+  baseAmount: { type: Number, min: 0, required: true },
+  driverAmount: { type: Number, min: 0, required: true },
+  totalAmount: { type: Number, min: 0, required: true },
+  requestNote: { type: String, maxlength: 500, default: "" },
+  reviewedAt: { type: Date, default: null },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  reviewNote: { type: String, maxlength: 500, default: "" },
+}, { _id: false });
+
 const bookingSchema = new mongoose.Schema(
   {
     vehicle: {
@@ -28,6 +45,11 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    // Existing agreements keep version 1; creation explicitly opts into version 2.
+    bookingPolicyVersion: { type: Number, enum: [1, 2], default: 1, immutable: true },
+    originalReturnAt: { type: Date, default: null, immutable: true, required() { return this.bookingPolicyVersion === 2; } },
+    extensionHistory: { type: [extensionHistorySchema], default: [] },
+    bookingWorkflowRevision: { type: Number, default: 0 },
     vehicleDailyRate: {
       type: Number,
       required: true,
@@ -132,6 +154,7 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    returnReportedHandoverAt: { type: Date, default: null },
     returnRequestedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -200,7 +223,7 @@ const bookingSchema = new mongoose.Schema(
     },
     extensionStatus: {
       type: String,
-      enum: ["none", "requested", "approved", "rejected"],
+      enum: ["none", "requested", "approved", "rejected", "withdrawn", "expired"],
       default: "none",
       index: true,
     },
@@ -238,7 +261,7 @@ const bookingSchema = new mongoose.Schema(
     },
     extensionReviewAction: {
       type: String,
-      enum: ["", "approve", "reject"],
+      enum: ["", "approve", "reject", "withdraw", "expire"],
       default: "",
     },
     extensionReviewNote: {
@@ -449,7 +472,7 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true, skipVersioning: { extensionHistory: true } }
 );
 
 // A checkout/return loaded before an owner's manual correction must not save
@@ -457,9 +480,20 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.post("init", function (booking) {
   booking.$locals.manualPaymentRevisionOnRead = Number(booking.manualPaymentRevision || 0);
   booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
+  booking.$locals.bookingWorkflowRevisionOnRead = Number(booking.bookingWorkflowRevision || 0);
 });
 bookingSchema.pre("save", function () {
   if (this.isNew) return;
+  const workflowFields = [
+    "status", "returnAt", "actualReturnAt", "returnStatus", "returnReportedHandoverAt",
+    "extensionStatus", "extensionHistory", "lateReturnIsOverdue", "lateReturnOverdueMinutes",
+    "lateReturnDetectedAt", "lateReturnNotifiedAt", "lateReturnPenaltyFee",
+  ];
+  if (workflowFields.some((field) => this.isModified(field))) {
+    const revision = this.$locals.bookingWorkflowRevisionOnRead ?? Number(this.bookingWorkflowRevision || 0);
+    this.$where = { ...this.$where, bookingWorkflowRevision: revision === 0 ? { $in: [0, null] } : revision };
+    this.$inc("bookingWorkflowRevision", 1);
+  }
   const paymentFields = [
     "paymentStatus", "paymentAmountPaid", "paymentAmountDue", "paymentCheckoutAmount",
     "paymentMethod", "balancePaymentMethod", "walkInPaymentStatus", "totalAmount", "lateReturnPenaltyFee",
@@ -473,6 +507,7 @@ bookingSchema.pre("save", function () {
 });
 bookingSchema.post("save", function (booking) {
   booking.$locals.paymentRevisionOnRead = Number(booking.paymentRevision || 0);
+  booking.$locals.bookingWorkflowRevisionOnRead = Number(booking.bookingWorkflowRevision || 0);
 });
 
 bookingSchema.index({ vehicle: 1, pickupAt: 1, returnAt: 1 });

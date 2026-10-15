@@ -59,6 +59,7 @@ import {
 } from "./jobs/kycFileCleanup.job.js";
 import { startLogRetentionJob, stopLogRetentionJob } from "./jobs/logRetention.job.js";
 import { startNotificationDeliveryJob, stopNotificationDeliveryJob } from "./jobs/notificationDelivery.job.js";
+import { startVerificationNotificationJob, stopVerificationNotificationJob } from "./jobs/verificationNotification.job.js";
 import {
   startKycDocumentProcessingJob,
   stopKycDocumentProcessingJob,
@@ -104,7 +105,8 @@ app.use(cors({
   origin: corsOriginHandler,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-internal-key", "x-pre-kyc-token"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-internal-key", "x-pre-kyc-token", "x-registration-draft"],
+  exposedHeaders: ["Retry-After", "RateLimit", "RateLimit-Policy"],
   maxAge: 86400,
 }));
 console.log(
@@ -233,6 +235,7 @@ const startServer = async () => {
   startKycDocumentProcessingJob();
   startLogRetentionJob();
   startNotificationDeliveryJob();
+  startVerificationNotificationJob();
 };
 
 startServer().catch((error) => {
@@ -251,6 +254,7 @@ process.on("unhandledRejection", (err) => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopVerificationNotificationJob();
   stopPrivateOcrService();
   if (!server) {
     process.exit(1);
@@ -268,6 +272,7 @@ process.on("SIGTERM", () => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopVerificationNotificationJob();
   stopPrivateOcrService();
   if (!server) {
     process.exit(0);
@@ -285,6 +290,7 @@ process.on("SIGINT", () => {
   stopKycDocumentProcessingJob();
   stopLogRetentionJob();
   stopNotificationDeliveryJob();
+  stopVerificationNotificationJob();
   stopPrivateOcrService();
   if (!server) {
     process.exit(0);

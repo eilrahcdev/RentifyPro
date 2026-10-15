@@ -13,6 +13,7 @@ import InfoModal from "../components/InfoModal";
 import API from "../utils/api";
 import { reconnectSocket } from "../utils/socket";
 import VerificationStepper from "../verification/VerificationStepper";
+import AccountVerificationDocuments from "../components/AccountVerificationDocuments";
 import { describeLoginDevice } from "../utils/loginDevice";
 import {
   getStoredUser,
@@ -301,7 +302,7 @@ const AccountSettings = ({
   const [showAI, setShowAI] = useState(false);
   const compact = useCompactLayout();
   const [activeTab, setActiveTab] = useState(() =>
-    isLoggedIn && user?.role !== "admin" && user?.kycStatus !== "approved"
+    window.location.hash === "#verification-status" || (isLoggedIn && user?.role !== "admin" && user?.kycStatus !== "approved")
       ? "Verification"
       : "Profile Settings"
   );
@@ -355,6 +356,9 @@ const AccountSettings = ({
   const [verificationError, setVerificationError] = useState("");
   const [kycStatus, setKycStatus] = useState("");
   const [kycRemarks, setKycRemarks] = useState("");
+  const [accountVerification, setAccountVerification] = useState(null);
+  const kycRequest = useRef(0);
+  const [kycInitialStep, setKycInitialStep] = useState(1);
   const [kycError, setKycError] = useState("");
   const [kycLoading, setKycLoading] = useState(false);
   const [showKycStepper, setShowKycStepper] = useState(false);
@@ -723,19 +727,24 @@ const AccountSettings = ({
   };
 
   const loadKycStatus = async () => {
+    const requestId = ++kycRequest.current;
     setKycLoading(true);
     setKycError("");
     try {
       const response = await API.kycGetStatus();
+      if (requestId !== kycRequest.current) return;
+      if (typeof response?.status !== "string") throw new Error("Verification status was not confirmed. Refresh Status to retry; saved progress is preserved.");
       const nextStatus = response?.status || "not_started";
       setKycStatus(nextStatus);
       setKycRemarks(response?.remarks || "");
+      setAccountVerification(response?.verification || null);
       setFaceReverification(response?.reverification || null);
       setLastFaceReverifiedAt(response?.lastFaceReverifiedAt || null);
 
       if (nextStatus === "approved") {
         try {
           const profileResponse = await API.getProfile();
+          if (requestId !== kycRequest.current) return;
           if (profileResponse?.user) {
             const normalized = persistUserProfile(profileResponse.user);
             setProfile((previous) => ({ ...previous, ...normalized }));
@@ -745,9 +754,9 @@ const AccountSettings = ({
         }
       }
     } catch (error) {
-      setKycError(error.message || "Could not refresh verification. Try Refresh Status again.");
+      if (requestId === kycRequest.current) setKycError(error.message || "Could not refresh verification. Try Refresh Status again.");
     } finally {
-      setKycLoading(false);
+      if (requestId === kycRequest.current) setKycLoading(false);
     }
   };
 
@@ -1516,9 +1525,9 @@ const AccountSettings = ({
                 <div className="rp-settings-card space-y-4 p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
-                      <h3 className="font-semibold text-lg">ID & Selfie Verification</h3>
+                      <h3 className="font-semibold text-lg">Verification Status</h3>
                       <p className="text-sm text-gray-500">
-                        Verify your ID and selfie before requesting a rental.
+                        Check your email, saved documents, selfie, and booking eligibility.
                       </p>
                     </div>
                     <span
@@ -1536,16 +1545,16 @@ const AccountSettings = ({
 
                   <div className="flex flex-wrap gap-3">
                     {kycStatus === "approved" && (
-                      <button type="button" onClick={() => { setKycStepperMode("reverify"); setShowKycStepper(true); }}
+                      <button type="button" onClick={() => { setKycInitialStep(1); setKycStepperMode("reverify"); setShowKycStepper(true); }}
                         disabled={showKycStepper || kycLoading}
                         className="rp-btn-primary min-h-11 px-4 py-2 text-sm disabled:opacity-60">
                         Reverify face
                       </button>
                     )}
-                    {!['approved', 'challenge_passed'].includes(kycStatus) && (
+                    {!accountVerification?.documents?.length && !['approved', 'challenge_passed'].includes(kycStatus) && (
                       <button
                         type="button"
-                        onClick={() => { setKycStepperMode("verify"); setShowKycStepper((prev) => !prev); }}
+                        onClick={() => { setKycInitialStep(1); setKycStepperMode("verify"); setShowKycStepper((prev) => !prev); }}
                         className="px-4 py-2 rounded-lg bg-[#017FE6] text-sm font-semibold text-white hover:bg-[#0165B8]"
                       >
                         {showKycStepper ? "Hide verification" : kycStatus === "rejected" ? "Resubmit verification" : "Verify now"}
@@ -1563,6 +1572,8 @@ const AccountSettings = ({
 
                   {kycError && <p role="alert" className="text-sm text-rose-700">{kycError}</p>}
                   {kycRemarks && <p role="status" className="text-sm text-slate-600">{kycRemarks}</p>}
+                  <AccountVerificationDocuments verification={accountVerification} onRefresh={loadKycStatus} disabled={kycLoading} stale={Boolean(kycError)}
+                    onSelfie={() => { setKycInitialStep(2); setKycStepperMode("verify"); setShowKycStepper(true); }} />
                   {kycStatus === "challenge_passed" && <p className="text-sm text-amber-700">Your selfie passed. Document approval is still pending. Refresh your status after review.</p>}
                   {kycStatus === "approved" && faceReverification?.status === "selfie_matched" && (
                     <p role="status" className="text-sm text-amber-800">Your new selfie matched. ID review for this reverification is pending. Your existing approval remains active.</p>
@@ -1575,7 +1586,7 @@ const AccountSettings = ({
                   )}
                   {showKycStepper && (
                     <div className="pt-2">
-                      <VerificationStepper mode={kycStepperMode}
+                      <VerificationStepper key={`${kycStepperMode}-${kycInitialStep}`} initialStep={kycInitialStep} mode={kycStepperMode}
                         reverification={faceReverification} onVerificationComplete={loadKycStatus}
                         onCancel={() => { setShowKycStepper(false); void loadKycStatus(); }} />
                     </div>

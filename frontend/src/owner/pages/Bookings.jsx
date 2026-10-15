@@ -13,6 +13,8 @@ import { showActionToast } from "../../utils/actionToast";
 import OwnerPageHeader from "../components/OwnerPageHeader";
 import RefreshButton from "../../components/RefreshButton";
 import ReturnReviewModal from "../components/ReturnReviewModal";
+import BookingPolicyDetails from "../../components/BookingPolicyDetails";
+import { getBookingLateReturnInfo as getLateReturnInfo } from "../../utils/bookingPolicy";
 import HelpLink from "../../components/HelpLink";
 import RequestFeedback from "../../components/RequestFeedback";
 import { BookingListSkeleton } from "../../components/LoadingSkeletons";
@@ -61,11 +63,12 @@ const latestBooking = (current, incoming) => {
 const ACTIVE_BOOKING_STATUSES = ["confirmed", "extended"];
 const PAST_BOOKING_STATUSES = ["completed", "cancelled", "rejected"];
 const bookingNeedsOwnerAction = (booking) => {
-  const status = String(booking?.status || "").toLowerCase();
+  const status = String(booking?.status || "").trim().toLowerCase();
+  if (!["pending", "confirmed", "extended"].includes(status)) return false;
   return (
     status === "pending" ||
-    String(booking?.extensionStatus || booking?.extension_request?.status || "").toLowerCase() === "requested" ||
-    String(booking?.cancellationStatus || booking?.cancellation_request?.status || "").toLowerCase() === "requested" ||
+    String(booking?.extensionStatus || booking?.extensionRequest?.status || booking?.extension_request?.status || "").toLowerCase() === "requested" ||
+    String(booking?.cancellationStatus || booking?.cancellationRequest?.status || booking?.cancellation_request?.status || "").toLowerCase() === "requested" ||
     String(booking?.returnStatus || booking?.returnRequest?.status || booking?.return_request?.status || "").toLowerCase() === "requested" ||
     getWalkInStatus(booking) === "requested" ||
     (Boolean(booking?.lateReturn?.isOverdue || booking?.late_return?.isOverdue) &&
@@ -83,41 +86,6 @@ const getWalkInStatus = (booking) =>
   String(booking?.walkInPayment?.status || booking?.walk_in_payment?.status || "none")
     .trim()
     .toLowerCase();
-
-const getLateReturnInfo = (booking, currentTimeMs = Date.now()) => {
-  const lateReturn = booking?.lateReturn || booking?.late_return || {};
-  const storedOverdueMinutes = Number(lateReturn?.overdueMinutes || 0);
-  const returnAtMs = booking?.returnAt ? new Date(booking.returnAt).getTime() : Number.NaN;
-  const graceMinutes = Number(lateReturn?.graceMinutes ?? booking?.lateReturnPolicy?.graceMinutes ?? 0);
-  const isFinal =
-    String(lateReturn?.action || "").toLowerCase() === "return_confirmed" ||
-    String(booking?.status || "").toLowerCase() === "completed" ||
-    String(booking?.returnRequest?.status || booking?.return_request?.status || "").toLowerCase() === "confirmed";
-  const liveOverdueMinutes =
-    Boolean(lateReturn?.isOverdue) && !isFinal && Number.isFinite(returnAtMs)
-      ? Math.max(0, Math.round((currentTimeMs - returnAtMs - Math.max(0, graceMinutes) * 60000) / 60000))
-      : 0;
-  const overdueMinutes = Math.max(
-    Number.isFinite(storedOverdueMinutes) ? storedOverdueMinutes : 0,
-    liveOverdueMinutes
-  );
-  const penaltyFee = Number(lateReturn?.penaltyFee || booking?.lateReturnPenaltyFee || 0);
-  const penaltyRatePerHour = Number(lateReturn?.penaltyRatePerHour || booking?.lateReturnPenaltyRatePerHour || 0);
-  const providedEstimate = Number(lateReturn?.estimatedPenaltyFee);
-  const estimatedPenaltyFee =
-    !isFinal && penaltyRatePerHour > 0
-      ? penaltyRatePerHour * (Math.max(0, overdueMinutes) / 60)
-      : Number.isFinite(providedEstimate) && providedEstimate >= 0
-      ? providedEstimate
-      : penaltyRatePerHour * (Math.max(0, overdueMinutes) / 60);
-  return {
-    isOverdue: Boolean(lateReturn?.isOverdue),
-    overdueMinutes: Number.isFinite(overdueMinutes) && overdueMinutes > 0 ? Math.round(overdueMinutes) : 0,
-    penaltyFee: Number.isFinite(penaltyFee) && penaltyFee > 0 ? penaltyFee : 0,
-    estimatedPenaltyFee: Number.isFinite(estimatedPenaltyFee) && estimatedPenaltyFee > 0 ? estimatedPenaltyFee : 0,
-    penaltyRatePerHour: Number.isFinite(penaltyRatePerHour) && penaltyRatePerHour > 0 ? penaltyRatePerHour : 0,
-  };
-};
 
 const getExtensionRequestInfo = (booking) => {
   const extension = booking?.extensionRequest || booking?.extension_request || {};
@@ -141,6 +109,7 @@ const getCancellationRequestInfo = (booking) => {
   const cancellation = booking?.cancellationRequest || booking?.cancellation_request || {};
   return {
     status: String(cancellation?.status || "none").trim().toLowerCase(),
+    requestedAt: cancellation?.requestedAt || null,
     requestNote: String(cancellation?.requestNote || "").trim(),
     reviewNote: String(cancellation?.reviewNote || "").trim(),
   };
@@ -334,10 +303,10 @@ export default function Bookings() {
   };
 
   const reviewExtensionRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerBookingExtensionRequest(id, action), "Reviewing extension...", action === "approve" ? "Extension approved." : "Extension declined.");
+    () => API.reviewOwnerBookingExtensionRequest(id, action, { expectedRequestedAt: (bookings.find((booking) => booking._id === id)?.extensionRequest || {})?.requestedAt }), "Reviewing extension...", action === "approve" ? "Extension approved." : "Extension declined.");
 
   const reviewCancellationRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerBookingCancellationRequest(id, action), "Reviewing cancellation...", action === "approve" ? "Cancellation approved. Booking cancelled." : "Cancellation declined. Booking remains active.");
+    () => API.reviewOwnerBookingCancellationRequest(id, action, { expectedRequestedAt: getCancellationRequestInfo(bookings.find((booking) => booking._id === id)).requestedAt }), "Reviewing cancellation...", action === "approve" ? "Cancellation approved. Booking cancelled." : "Cancellation declined. Booking remains active.");
 
   const reviewWalkInRequest = (id, action) => runBookingAction(id,
     () => API.reviewOwnerWalkInPaymentRequest(id, action), "Reviewing walk-in payment...", action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.");
@@ -360,12 +329,12 @@ export default function Bookings() {
     setReturnReviewNote("");
   };
 
-  const reviewVehicleReturn = async () => {
+  const reviewVehicleReturn = async (details = {}) => {
     const bookingId = returnReview?.booking?._id;
     const action = returnReview?.action;
     if (!bookingId || !["confirm", "decline"].includes(action)) return;
     const saved = await runBookingAction(bookingId,
-      () => API.reviewOwnerVehicleReturnRequest(bookingId, action, { note: returnReviewNote }),
+      () => API.reviewOwnerVehicleReturnRequest(bookingId, action, { note: returnReviewNote, ...details }),
       "Saving return decision...", action === "confirm" ? "Vehicle return confirmed." : "Return request declined. Booking remains active.");
     if (saved) { setReturnReview(null); setReturnReviewNote(""); }
   };
@@ -428,6 +397,7 @@ export default function Bookings() {
           const extensionInfo = getExtensionRequestInfo(booking);
           const returnRequestInfo = getReturnRequestInfo(booking);
           const cancellationInfo = getCancellationRequestInfo(booking);
+          const canReviewRequests = ["pending", "confirmed", "extended"].includes(String(booking.status || "").trim().toLowerCase());
 
           return (
           <article key={booking._id} className="rp-booking-card group overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -527,6 +497,10 @@ export default function Bookings() {
               />
             </BookingDetails>
 
+            <BookingPolicyDetails booking={booking} onReport={() => setReportBooking(booking)} />
+            {lateReturnInfo.accruedOverdueMinutes > 0 && !lateReturnInfo.isOverdue && (
+              <p className="mt-3 text-sm text-amber-900">Earlier late time: {formatDurationMinutes(lateReturnInfo.accruedOverdueMinutes)}. Estimated late charge: {money(lateReturnInfo.estimatedPenaltyFee)}, pending verified handover.</p>
+            )}
             {lateReturnInfo.isOverdue && (
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 Overdue return notice: renter has not returned the vehicle on time (overdue by{" "}
@@ -571,11 +545,11 @@ export default function Bookings() {
                     </button>
                   </>
                 )}
-                {returnRequestInfo.status === "requested" && (
+                {canReviewRequests && returnRequestInfo.status === "requested" && (
                   <>
                     <button
                       onClick={() => openReturnReview(booking, "confirm")}
-                      disabled={Boolean(bookingActions[booking._id]) || extensionInfo.status === "requested"}
+                      disabled={Boolean(bookingActions[booking._id])}
                       className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Confirm Vehicle Received
@@ -598,7 +572,7 @@ export default function Bookings() {
                     Cancel
                   </button>
                 )}
-                {extensionInfo.status === "requested" && (
+                {canReviewRequests && extensionInfo.status === "requested" && (
                   <>
                     <button
                       onClick={() => reviewExtensionRequest(booking._id, "approve")}
@@ -616,7 +590,7 @@ export default function Bookings() {
                     </button>
                   </>
                 )}
-                {cancellationInfo.status === "requested" && (
+                {canReviewRequests && cancellationInfo.status === "requested" && (
                   <>
                     <button
                       onClick={() => reviewCancellationRequest(booking._id, "approve")}
@@ -635,7 +609,7 @@ export default function Bookings() {
                   </>
                 )}
 
-                {getWalkInStatus(booking) === "requested" && (
+                {canReviewRequests && getWalkInStatus(booking) === "requested" && (
                   <>
                     <button
                       onClick={() => reviewWalkInRequest(booking._id, "approve")}

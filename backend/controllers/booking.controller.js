@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import {
   getBookingLatePenaltyFee,
   getEffectiveTransactionFee,
@@ -9,6 +10,7 @@ import Booking from "../models/Booking.js";
 import { getBookingHorizonEnd, BOOKING_HORIZON_MESSAGE } from "../utils/bookingDatePolicy.js";
 import Vehicle from "../models/Vehicle.js";
 import { findRenterScheduleConflict, getRenterBookingEligibility } from "../services/bookingEligibility.service.js";
+import { assertAccountEligibility, getAccountVerification } from "../services/accountVerification.service.js";
 import { acquireBookingMutationLock, BookingPolicyError } from "../utils/bookingMutationLock.js";
 import eventBus from "../events/eventBus.js";
 import { NOTIFICATION_EVENTS } from "../events/notification.events.js";
@@ -32,6 +34,13 @@ import {
   getBookingLateReturnPenaltyRatePerHour as getBookingLatePenaltyRatePerHour,
   getBookingLateReturnPolicy,
   getEstimatedLateReturnPenaltyFee,
+  BOOKING_POLICY_VERSION,
+  calculateBookingLateReturn,
+  expireBookingExtensionRequest,
+  finishBookingExtensionRequest,
+  quoteBookingExtension,
+  serializeBookingPolicy,
+  updateBookingLateReturnState,
 } from "../utils/lateReturnPolicy.js";
 import {
   HOURLY_RATE_UNIT,
@@ -141,7 +150,7 @@ const ACTIVE_WALK_IN_SETTLEMENT_STATUSES = new Set(["requested", "approved"]);
 const ACTIVE_BOOKING_STATUSES = new Set(["confirmed", "extended"]);
 const ACTIVE_OVERLAP_STATUSES = ["pending", "confirmed", "extended"];
 const PAYMENT_ALLOWED_STATUSES = new Set(["confirmed", "extended", "completed"]);
-const EXTENSION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
+const EXTENSION_STATUSES = new Set(["none", "requested", "approved", "rejected", "withdrawn", "expired"]);
 const CANCELLATION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
 const RETURN_STATUSES = new Set(["none", "requested", "confirmed", "declined"]);
 const LATE_RETURN_ACTIONS = new Set(["none", "extend_requested", "proceed_late_return", "return_confirmed"]);
@@ -178,22 +187,6 @@ const logPayMongoError = (context, error) => {
     statusCode: error?.statusCode,
     stack: error?.stack,
   });
-};
-
-const getBookingReturnBoundaryWithGrace = (booking, graceMinutes = 0) => {
-  const returnAt = toDate(booking?.returnAt);
-  if (!returnAt) return null;
-  const grace = Math.max(0, Math.floor(Number(graceMinutes || 0)));
-  if (grace <= 0) return returnAt;
-  return new Date(returnAt.getTime() + grace * 60 * 1000);
-};
-
-const getBookingOverdueMinutes = (booking, now = new Date(), graceMinutes = 0) => {
-  const boundaryAt = getBookingReturnBoundaryWithGrace(booking, graceMinutes);
-  const current = toDate(now);
-  if (!boundaryAt || !current) return 0;
-  if (current.getTime() <= boundaryAt.getTime()) return 0;
-  return Math.max(0, getDurationMinutes(boundaryAt, current));
 };
 
 const recalculateBookingAmountsForRange = (booking, nextReturnAt) => {
@@ -354,7 +347,8 @@ const serializeLateReturn = (booking) => {
   const policy = getBookingLateReturnPolicy(booking);
   const penaltyFee = roundCurrency(Number(booking?.lateReturnPenaltyFee || 0));
   return {
-    isOverdue: Boolean(booking?.lateReturnIsOverdue),
+    ...calculateBookingLateReturn(booking),
+    isOverdue: !["cancelled", "rejected"].includes(String(booking?.status || "").trim().toLowerCase()) && Boolean(booking?.lateReturnIsOverdue),
     overdueMinutes,
     detectedAt: booking?.lateReturnDetectedAt || null,
     notifiedAt: booking?.lateReturnNotifiedAt || null,
@@ -374,6 +368,8 @@ const serializeReturnRequest = (booking) => ({
   status: normalizeReturnStatus(booking?.returnStatus, "none"),
   requestedAt: booking?.returnRequestedAt || null,
   requestedBy: toIdString(booking?.returnRequestedBy),
+  reportedHandoverAt: booking?.returnReportedHandoverAt || null,
+  actualReturnAt: booking?.actualReturnAt || null,
   confirmedAt: booking?.returnConfirmedAt || booking?.actualReturnAt || null,
   confirmedBy: toIdString(booking?.returnConfirmedBy),
   reviewedAt: booking?.returnReviewedAt || null,
@@ -388,6 +384,8 @@ const serializeExtensionRequest = (booking) => ({
   requestedBy: toIdString(booking?.extensionRequestedBy),
   currentReturnAt: booking?.extensionCurrentReturnAt || null,
   requestedReturnAt: booking?.extensionRequestedReturnAt || null,
+  expiresAt: booking?.extensionRequestedReturnAt || null,
+  quote: quoteBookingExtension(booking, booking?.extensionRequestedReturnAt, booking?.extensionRequestedAt),
   requestNote: toOptionalText(booking?.extensionRequestNote),
   reviewedAt: booking?.extensionReviewedAt || null,
   reviewedBy: toIdString(booking?.extensionReviewedBy),
@@ -437,6 +435,8 @@ const serializeBooking = (req, booking) => {
     _id: booking._id,
     pickupAt: booking.pickupAt,
     returnAt: booking.returnAt,
+    bookingPolicy: serializeBookingPolicy(booking),
+    bookingWorkflowRevision: Number(booking.bookingWorkflowRevision || 0),
     bookingDays: booking.bookingDays,
     bookingDurationMinutes,
     bookingDurationHours,
@@ -642,6 +642,7 @@ const buildBookingListDefinition = ({ role, status, view }) => {
   if (role === "owner" && normalizedView === "action") {
     return {
       filter: {
+        status: { $in: ["pending", "confirmed", "extended"] },
         $or: [
           { status: "pending" },
           { extensionStatus: "requested" },
@@ -701,9 +702,13 @@ export const createBooking = async (req, res) => {
   let renterLock;
   let lockAcquired = false;
   let lockedVehicleId = null;
-  const releaseVehicleLock = async () => {
+  let reservationId = null;
+  let bookingWriteStarted = false;
+  const releaseVehicleLock = async ({ allowMissingReservationRelease = !bookingWriteStarted } = {}) => {
     if (!lockAcquired || !lockedVehicleId) return;
-    await syncVehicleAvailabilityByBookingState(lockedVehicleId);
+    await syncVehicleAvailabilityByBookingState(lockedVehicleId, {
+      releaseReservationId: allowMissingReservationRelease ? reservationId : null,
+    });
     lockAcquired = false;
   };
 
@@ -751,6 +756,7 @@ export const createBooking = async (req, res) => {
       });
     }
 
+    if (req.user.role !== "admin") await assertAccountEligibility(req.user._id);
     renterLock = await acquireBookingMutationLock(req.user._id);
     const eligibility = await getRenterBookingEligibility(req.user._id, { pickupAt, returnAt });
     if (!eligibility.eligible) {
@@ -764,16 +770,23 @@ export const createBooking = async (req, res) => {
     if (!vehicle) {
       return res.status(404).json({ success: false, message: "Vehicle not found." });
     }
+    await assertAccountEligibility(vehicle.owner, "listing", { exposeDetails: false });
 
     if (String(vehicle.owner) === String(req.user._id)) {
       return res.status(400).json({ success: false, message: "Owners cannot book their own vehicle." });
     }
 
-    // Lock this vehicle so two requests cannot book it at the same time.
+    reservationId = new mongoose.Types.ObjectId();
+    // The reservation survives availability refreshes until this booking ends.
     const lockedVehicle = await Vehicle.findOneAndUpdate(
-      { _id: vehicle._id, availabilityStatus: "available" },
-      { $set: { availabilityStatus: "unavailable" } },
-      { new: true }
+      {
+        _id: vehicle._id,
+        availabilityStatus: "available",
+        availabilityHoldReason: { $in: [null, "none"] },
+        bookingReservationId: null,
+      },
+      { $set: { availabilityStatus: "unavailable", bookingReservationId: reservationId } },
+      { returnDocument: "after" }
     );
     if (!lockedVehicle) {
       return res.status(409).json({ success: false, message: "Vehicle is currently unavailable." });
@@ -841,12 +854,18 @@ export const createBooking = async (req, res) => {
 
     let booking;
     await renterLock.renew();
+    if (req.user.role !== "admin") await assertAccountEligibility(req.user._id);
+    await assertAccountEligibility(lockedVehicle.owner, "listing", { exposeDetails: false });
+    bookingWriteStarted = true;
     booking = await Booking.create({
+      _id: reservationId,
       vehicle: lockedVehicle._id,
       renter: req.user._id,
       owner: lockedVehicle.owner,
       pickupAt,
       returnAt,
+      bookingPolicyVersion: BOOKING_POLICY_VERSION,
+      originalReturnAt: returnAt,
       bookingDays,
       bookingDurationMinutes,
       bookingDurationHours,
@@ -917,13 +936,20 @@ export const createBooking = async (req, res) => {
     });
   } catch (error) {
     try {
-      await releaseVehicleLock();
+      // A network error can leave the insert outcome unknown. Keep its reservation
+      // rather than admitting another booking while that write may still commit.
+      await releaseVehicleLock({
+        allowMissingReservationRelease: !bookingWriteStarted ||
+          error instanceof mongoose.Error.ValidationError ||
+          error instanceof mongoose.Error.CastError || error?.code === 11000,
+      });
     } catch {
       // Do not hide the original booking error.
     }
     if (error instanceof BookingPolicyError) {
       return res.status(409).json({ success: false, code: error.code, message: error.message });
     }
+    if (error.status === 403) return res.status(403).json({ success: false, code: error.code, message: error.message, verification: error.verification });
     res.status(500).json({ success: false, message: "Failed to create booking." });
   } finally {
     await renterLock?.release();
@@ -945,6 +971,12 @@ export const getMyBookingEligibility = async (req, res) => {
       return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
     }
     const eligibility = await getRenterBookingEligibility(req.user._id, { pickupAt, returnAt });
+    const verification = await getAccountVerification(req.user);
+    if (!verification.bookingEligible && req.user.role !== "admin") {
+      eligibility.eligible = false;
+      eligibility.reasons.unshift({ code: "IDENTITY_VERIFICATION_REQUIRED", message: "All required identity and document approvals must be complete before booking." });
+    }
+    eligibility.verification = verification;
     return res.json({ success: true, eligibility });
   } catch {
     return res.status(500).json({ success: false, message: "Unable to check booking eligibility. Please try again." });
@@ -1085,12 +1117,19 @@ export const cancelMyBooking = async (req, res) => {
 };
 
 export const requestBookingExtension = async (req, res) => {
+  let renterLock;
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    const requestedReturnAt = parseBookingDateTime(req.body?.newReturnAt);
+    if (!requestedReturnAt) return res.status(400).json({ success: false, message: "Please provide a valid new return date and time." });
+    if (requestedReturnAt > getBookingHorizonEnd()) return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
+    let booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
 
+    renterLock = await acquireBookingMutationLock(req.user._id);
+    booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
     await syncBookingLifecycleState(req, booking, { emitUpdate: false });
 
     const normalizedStatus = String(booking.status || "").trim().toLowerCase();
@@ -1122,17 +1161,7 @@ export const requestBookingExtension = async (req, res) => {
       });
     }
 
-    const requestedReturnAt = parseBookingDateTime(req.body?.newReturnAt);
-    if (!requestedReturnAt) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid new return date and time.",
-      });
-    }
-    if (requestedReturnAt > getBookingHorizonEnd()) {
-      return res.status(400).json({ success: false, message: BOOKING_HORIZON_MESSAGE });
-    }
-
+    const now = new Date();
     const currentReturnAt = toDate(booking.returnAt);
     if (!currentReturnAt || requestedReturnAt.getTime() <= currentReturnAt.getTime()) {
       return res.status(400).json({
@@ -1140,6 +1169,8 @@ export const requestBookingExtension = async (req, res) => {
         message: "New return date/time must be later than the current return schedule.",
       });
     }
+    const quote = quoteBookingExtension(booking, requestedReturnAt, now);
+    if (!quote) return res.status(400).json({ success: false, message: "Choose a return time later than now and the current return deadline." });
 
     const vehicleId = booking.vehicle?._id || booking.vehicle;
     const conflictingBooking = await Booking.findOne({
@@ -1165,7 +1196,7 @@ export const requestBookingExtension = async (req, res) => {
     }
 
     const requestNote = toOptionalText(req.body?.note, 500);
-    const now = new Date();
+    if (requestedReturnAt <= new Date()) return res.status(400).json({ success: false, message: "That return time has passed. Choose a later time." });
     booking.extensionStatus = "requested";
     booking.extensionRequestedAt = now;
     booking.extensionRequestedBy = req.user._id;
@@ -1176,8 +1207,14 @@ export const requestBookingExtension = async (req, res) => {
     booking.extensionReviewedBy = null;
     booking.extensionReviewAction = "";
     booking.extensionReviewNote = "";
+    booking.extensionHistory ||= [];
+    booking.extensionHistory.push({
+      status: "requested", requestedAt: now, requestedBy: req.user._id,
+      currentReturnAt, requestedReturnAt, ...quote, requestNote,
+    });
     booking.lateReturnAction = "extend_requested";
     booking.paymentUpdatedAt = now;
+    await renterLock.renew();
     await booking.save();
 
     eventBus.emit(NOTIFICATION_EVENTS.EXTENSION_REQUESTED, {
@@ -1197,18 +1234,55 @@ export const requestBookingExtension = async (req, res) => {
       message: "Extension request submitted. Waiting for owner approval.",
       booking: payload,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof BookingPolicyError) return res.status(409).json({ success: false, code: error.code, message: error.message });
+    if (error?.name === "DocumentNotFoundError") return res.status(409).json({ success: false, message: "This booking changed. Refresh it before requesting an extension." });
     return res.status(500).json({ success: false, message: "Failed to request extension." });
+  } finally {
+    await renterLock?.release();
+  }
+};
+
+export const withdrawBookingExtension = async (req, res) => {
+  let renterLock;
+  try {
+    let booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
+    renterLock = await acquireBookingMutationLock(req.user._id);
+    booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
+    await syncBookingLifecycleState(req, booking);
+    if (!ACTIVE_BOOKING_STATUSES.has(booking.status) || booking.extensionStatus !== "requested") {
+      return res.status(409).json({ success: false, message: "Only a pending extension can be withdrawn.", booking: serializeBooking(req, booking) });
+    }
+    if (req.body?.expectedRequestedAt && parseBookingDateTime(req.body.expectedRequestedAt)?.getTime() !== toDate(booking.extensionRequestedAt)?.getTime()) {
+      return res.status(409).json({ success: false, message: "The extension request changed. Refresh this booking first." });
+    }
+    finishBookingExtensionRequest(booking, "withdrawn", new Date(), req.user._id);
+    await renterLock.renew();
+    await booking.save();
+    emitBookingUpdateToParties(req, booking);
+    return res.json({ success: true, message: "Extension request withdrawn. Your current return deadline still applies.", booking: serializeBooking(req, booking) });
+  } catch (error) {
+    if (error instanceof BookingPolicyError) return res.status(409).json({ success: false, code: error.code, message: error.message });
+    if (error?.name === "DocumentNotFoundError") return res.status(409).json({ success: false, message: "This booking changed. Refresh it and try again." });
+    return res.status(500).json({ success: false, message: "Failed to withdraw extension." });
+  } finally {
+    await renterLock?.release();
   }
 };
 
 export const requestBookingReturn = async (req, res) => {
+  let renterLock;
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    let booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
 
+    renterLock = await acquireBookingMutationLock(req.user._id);
+    booking = await Booking.findOne({ _id: req.params.id, renter: req.user._id }).populate(bookingPopulate);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
     await syncBookingLifecycleState(req, booking, { emitUpdate: false });
 
     const normalizedStatus = String(booking.status || "").trim().toLowerCase();
@@ -1252,15 +1326,15 @@ export const requestBookingReturn = async (req, res) => {
       });
     }
 
-    if (normalizeExtensionStatus(booking.extensionStatus, "none") === "requested") {
-      return res.status(409).json({
-        success: false,
-        message: "An extension request is pending. Please wait for owner review first.",
-      });
+    const reportedHandoverAt = req.body?.reportedHandoverAt ? parseBookingDateTime(req.body.reportedHandoverAt) : null;
+    if (req.body?.reportedHandoverAt && (!reportedHandoverAt || reportedHandoverAt < pickupAt || reportedHandoverAt > now)) {
+      return res.status(400).json({ success: false, message: "Handover time must be between pickup and now." });
     }
+    if (booking.extensionStatus === "requested") finishBookingExtensionRequest(booking, "withdrawn", now, req.user._id, "Withdrawn when the renter requested return.");
 
     booking.returnStatus = "requested";
     booking.returnRequestedAt = now;
+    booking.returnReportedHandoverAt = reportedHandoverAt;
     booking.returnRequestedBy = req.user._id;
     booking.returnConfirmedAt = null;
     booking.returnConfirmedBy = null;
@@ -1269,6 +1343,7 @@ export const requestBookingReturn = async (req, res) => {
     booking.returnReviewAction = "";
     booking.returnReviewNote = "";
 
+    await renterLock.renew();
     await booking.save();
     await Vehicle.updateOne(
       { _id: booking.vehicle?._id || booking.vehicle },
@@ -1291,8 +1366,12 @@ export const requestBookingReturn = async (req, res) => {
       message: "Vehicle return requested. The vehicle remains unavailable until the owner confirms receipt and completes inspection.",
       booking: payload,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof BookingPolicyError) return res.status(409).json({ success: false, code: error.code, message: error.message });
+    if (error?.name === "DocumentNotFoundError") return res.status(409).json({ success: false, message: "This booking changed. Refresh it before requesting return." });
     return res.status(500).json({ success: false, message: "Failed to request vehicle return." });
+  } finally {
+    await renterLock?.release();
   }
 };
 
@@ -1607,7 +1686,6 @@ const syncBookingLifecycleState = async (req, booking, { emitUpdate = false } = 
   if (!booking?._id) return { updated: false };
 
   const now = new Date();
-  const lateReturnPolicy = getBookingLateReturnPolicy(booking);
   const normalizedStatus = String(booking?.status || "").trim().toLowerCase();
   const isActiveStatus = ACTIVE_BOOKING_STATUSES.has(normalizedStatus);
   const returnAt = toDate(booking?.returnAt);
@@ -1617,42 +1695,14 @@ const syncBookingLifecycleState = async (req, booking, { emitUpdate = false } = 
     return { updated: false };
   }
 
-  if (now.getTime() < returnAt.getTime()) {
+  const expired = expireBookingExtensionRequest(booking, now);
+  if (now.getTime() < returnAt.getTime() && !expired && !booking.lateReturnIsOverdue) {
     return { updated: false };
   }
 
-  const overdueMinutes = getBookingOverdueMinutes(booking, now, lateReturnPolicy.graceMinutes);
-  if (overdueMinutes <= 0) {
-    return { updated: false };
-  }
-  let changed = false;
+  const { changed, shouldNotify: shouldNotifyOverdue, overdueMinutes } = updateBookingLateReturnState(booking, now);
 
-  if (!booking.lateReturnIsOverdue) {
-    booking.lateReturnIsOverdue = true;
-    changed = true;
-  }
-  if (Number(booking.lateReturnOverdueMinutes || 0) !== overdueMinutes) {
-    booking.lateReturnOverdueMinutes = overdueMinutes;
-    changed = true;
-  }
-  if (!booking.lateReturnDetectedAt) {
-    booking.lateReturnDetectedAt = now;
-    changed = true;
-  }
-  const penaltyRatePerHour = getBookingLatePenaltyRatePerHour(booking);
-  if (roundCurrency(Number(booking.lateReturnPenaltyRatePerHour || 0)) !== penaltyRatePerHour) {
-    booking.lateReturnPenaltyRatePerHour = penaltyRatePerHour;
-    changed = true;
-  }
-
-  let shouldNotifyOverdue = false;
-  if (!booking.lateReturnNotifiedAt) {
-    booking.lateReturnNotifiedAt = now;
-    shouldNotifyOverdue = true;
-    changed = true;
-  }
-
-  if (changed) {
+  if (changed || expired) {
     await booking.save();
   }
 
@@ -1663,11 +1713,11 @@ const syncBookingLifecycleState = async (req, booking, { emitUpdate = false } = 
     });
   }
 
-  if ((changed || shouldNotifyOverdue) && emitUpdate) {
+  if ((changed || expired) && emitUpdate) {
     emitBookingUpdateToParties(req, booking);
   }
 
-  return { updated: changed || shouldNotifyOverdue, status: String(booking.status || "").toLowerCase() };
+  return { updated: changed || expired, status: String(booking.status || "").toLowerCase() };
 };
 
 const autoSyncBookingLifecycles = async (req, bookings = []) => {
@@ -1965,7 +2015,7 @@ export const addBookingReview = async (req, res) => {
     const booking = await Booking.findOneAndUpdate(
       { _id: req.params.id, renter: req.user._id, status: "completed", reviewRating: null },
       { $set: { reviewRating: numericRating, reviewComment, reviewCreatedAt: new Date() } },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
     if (!booking) {
       const current = await Booking.findOne({ _id: req.params.id, renter: req.user._id });

@@ -191,6 +191,8 @@
 .rp-registration-form:focus { outline: none; }
 .rp-registration-form fieldset { min-width: 0; }
 .rp-registration-form img { max-width: 100%; }
+.rp-auth-content:has(.rp-registration-card) { overflow-anchor: none; }
+.rp-registration-header h2:focus { outline: none; }
 .rp-registration-actions-space { display: none; }
 .rp-registration-signin button { min-height: 2.75rem; padding-inline: 0.25rem; color: #075eb9; }
 

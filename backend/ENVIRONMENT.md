@@ -29,6 +29,12 @@ Files, profile snapshots, and existing retention settings remain available to th
 
 ## Private document extraction
 
+The CPU reader enables MKL-DNN acceleration with a one-shape cache and the existing single-image recognition batch. It keeps the same local models, 1400-pixel image limit, field-confidence thresholds and manual approval policy. `KYC_OCR_ENABLE_MKLDNN=false` selects the previous CPU path when a host needs lower memory usage; an unsupported acceleration kernel also falls back during startup. The local launcher passes this optional setting from the backend environment to Python. Separately launched or hosted Python processes need it in their own environment. No new credential is required.
+
+The private queue waits for local model warmup before claiming work. Its default abandoned-claim recovery window is 60000 ms, with a minimum of the configured OCR HTTP timeout plus 30000 ms for result writes. Longer explicit `KYC_PROCESSING_LOCK_TIMEOUT_MS` values remain effective; Gemini retains its 600000 ms default. This recovers interrupted work after a restart without reclaiming a normal active request. File-hash, review-version and claim-time guards still reject stale writes.
+
+Restart Python and both Node backends after applying the optimization; an already running compatible Python process retains its old settings until restarted. These changes accelerate automated checking, not administrator approval. Local reading benchmarks and measured memory trade-offs are documented in [the OCR README](../kyc-ocr-service/README.md#performance-and-restart-recovery).
+
 `KYC_DOCUMENT_PROVIDER` accepts `gemini` (the backward-compatible default), `private_ocr`, or `manual`. Provider selection never falls back to Gemini. `private_ocr` works while `GEMINI_SENSITIVE_DATA_APPROVED=false`; `manual` disables automated document extraction. Invalid provider values fail production validation.
 
 Deploy [kyc-ocr-service](../kyc-ocr-service/README.md) separately from the Node App Service. The backend sends only document bytes, MIME type, and protocol version to its authenticated `/inspect` endpoint. Registration profiles stay in Node. The service uses local CPU PaddleOCR models, OpenCV image conversion, and bounded PDF rendering; it stores no document files and makes no model-download requests during inference. Production never autostarts this service. For local development, `npm.cmd run kyc:ocr:dev` explicitly launches one CPU worker using an existing isolated Python environment; the launcher rejects production use.
@@ -45,6 +51,7 @@ For private mode, configure:
 | `KYC_PRIVATE_INTERNAL_API_KEY` | Optional dedicated private 32+ character OCR key. Blank falls back to the existing `INTERNAL_API_KEY`. Set the chosen value as Python's `INTERNAL_API_KEY` and use the same OCR key on the admin backend. A dedicated key lets existing Face/Chatbot credentials remain unchanged. |
 | `KYC_DOCUMENT_FINGERPRINT_SECRET` | Explicit private 32+ character secret, identical on website and admin backends. Required for private-mode production and every manual comparison. |
 | `KYC_PRIVATE_REQUEST_TIMEOUT_MS` | Optional, default 30000; accepted range 1000–120000. No effect on Gemini timeout. |
+| `KYC_OCR_ENABLE_MKLDNN` | Optional Python reader setting, default true. False uses the baseline CPU reader. Local Node launchers pass it to Python; hosted Python requires its own setting. Restart Python after changing it. |
 
 Private extraction independently checks the OCR title and issuing-body text against the existing 10 ID and 7 supporting-document types before comparing registration details. A confidently detected wrong type, no recognized type, or conflicting types requires a new upload; matching personal/business details cannot override this result. Low-confidence type evidence remains for manual review. The selected type is never used as a detected-type fallback, and known mismatches cannot be overridden during comparison or final approval.
 
@@ -93,7 +100,7 @@ Use a complete SMTP credential pair from one provider. The existing implementati
 | `FACE_SERVICE_URL`, `CHATBOT_URL`, `INTERNAL_API_KEY` | Active service configuration; service managers, KYC controller, and chat route. Required in production. |
 | `EMAIL_USER`, `EMAIL_PASS` | Active SMTP compatibility aliases; [sendEmail.js](utils/sendEmail.js). Preserved. |
 | `PREKYC_DOC_TTL_HOURS`, `PREKYC_FACE_TTL_HOURS`, `PREKYC_CLEAR_ON_REGISTER` | Active optional retention/registration controls; KYC and auth controllers. Preserved. |
-| `PAYMONGO_SECRET_KEY`, `PAYMONGO_PAYMENT_METHODS`, `BOOKING_TRANSACTION_FEE` | Active payment/fee settings; [paymongo.js](utils/paymongo.js) and [fees.js](utils/fees.js). Method list and fee have defaults. |
+| `PAYMONGO_SECRET_KEY`, `PAYMONGO_PAYMENT_METHODS`, `BOOKING_TRANSACTION_FEE` | Active payment/fee settings; [paymongo.js](utils/paymongo.js) and [fees.js](utils/fees.js). The transaction fee defaults to PHP 100 per booking for every vehicle; existing bookings retain their stored fee. |
 | `GEMINI_API_KEY` | Active screening credential; Gemini document, KYC, face, and vehicle-photo code. Required for production Gemini KYC only when `GEMINI_SENSITIVE_DATA_APPROVED=true`; optional for startup in manual-review mode. |
 | `NOTIFICATION_EMAIL_ENABLED` | Active optional notification-email switch; notification service and delivery job. Default false; OTP mail is independent. |
 | `NOTIFICATION_ARCHIVE_RETENTION_DAYS`, `READ_NOTIFICATION_RETENTION_DAYS` | Active optional cleanup controls read dynamically by [notificationCleanup.job.js](jobs/notificationCleanup.job.js); defaults 90 and 30 days. |
@@ -115,11 +122,11 @@ npm.cmd run chatbot:assets:check
 
 The sync command validates both source JSON files before copying them. The check command is read-only and fails if either backend copy is missing or differs. The automated suite also checks synchronization when the full repository is available, and tests runtime loading in an isolated `wwwroot` directory without a sibling Python service.
 
-Synchronization is a development/release step and does not run at App Service startup. The deployed backend needs only its own copies, not the Python application or its source directory. `CHATBOT_URL` and `CHATBOT_SERVICE_AUTOSTART` retain their existing behavior; Azure should continue using the external HTTPS classifier URL and `CHATBOT_SERVICE_AUTOSTART=false`. No new environment variables are required or introduced, and the old `CHATBOT_DATASET_PATH` override remains ignored.
+Synchronization is a development/release step and does not run at App Service startup. The deployed backend needs only its own copies, not the Python application or its source directory. `CHATBOT_URL` and `CHATBOT_SERVICE_AUTOSTART` retain their existing behavior; Azure should continue using the external HTTPS classifier URL and `CHATBOT_SERVICE_AUTOSTART=false`. Asset synchronization requires no additional environment variables, and the old `CHATBOT_DATASET_PATH` override remains ignored.
 
 ## API request budgets and chatbot service access
 
-Production always enables rate limiting. Development uses `ENABLE_RATE_LIMIT=true` to exercise the same controls. Counters currently belong to one Node process and reset on restart; configure a shared store before scaling to multiple backend instances. Provider/CDN traffic filtering and a correctly configured trusted proxy remain deployment tasks.
+Production always enables rate limiting. Development uses `ENABLE_RATE_LIMIT=true` to exercise the same controls. General API counters belong to one Node process and reset on restart; configure a shared store before scaling to multiple backend instances. Dedicated chatbot shared storage is described below. Provider/CDN traffic filtering and a correctly configured trusted proxy remain deployment tasks.
 
 | Budget | Default | Optional override |
 | --- | --- | --- |
@@ -132,7 +139,7 @@ Production always enables rate limiting. Development uses `ENABLE_RATE_LIMIT=tru
 | Pre-KYC status checks per IP | 1,200 per 5 minutes | `RATE_LIMIT_KYC_STATUS_IP_MAX` |
 | Pre-KYC status checks per verified pre-KYC session | 600 per 5 minutes | `RATE_LIMIT_KYC_STATUS_MAX` |
 
-Overrides must be positive safe integers; missing, empty, zero, negative, or invalid values retain the defaults. Restart Node after changing them. These starting budgets allow existing 1.25-second verification polling in two tabs; tune against ordinary hosted usage and server capacity. Only the exact status-read route gets the separate polling budgets. Its token validation and private response handling remain in place. KYC attempts retain their route-level limits without the previous duplicate router-wide attempt counter. Existing login/OTP, chatbot, verification, booking, report, payment-verification, and photo-upload controls retain their existing policies.
+Overrides must be positive safe integers; missing, empty, zero, negative, or invalid values retain the defaults. Restart Node after changing them. These starting budgets allow existing 1.25-second verification polling in two tabs; tune against ordinary hosted usage and server capacity. Only the exact status-read route gets the separate polling budgets. Its token validation and private response handling remain in place. KYC attempts retain their route-level limits without the previous duplicate router-wide attempt counter. Existing login/OTP, verification, booking, report, payment-verification, and photo-upload controls retain their existing policies. Chatbot budgets are described separately below.
 
 `GET /api/health` has a separate 120-per-minute IP budget, so exhausting a caller's ordinary API budget does not itself turn health checks into failures. The signed PayMongo webhook remains before the other API gates, with its independent 120-per-minute limit and raw request bytes. HTTP budgets do not constitute provider-level DDoS protection or limits on every Socket.IO event.
 
@@ -149,6 +156,45 @@ Local Node autostart passes its environment to Python. For a manually started lo
 Restart an already-running Python service as well as Node after applying this change. Autostart can reuse an existing service and cannot update that process's code/environment. For hosted rollout, first set the matching key in both services, deploy Node's header support, then deploy Python's enforcement. Keep the existing production URL/autostart checks. Internal Container Apps ingress is optional and requires verified backend network access before switching it on.
 
 `npm.cmd run services:check` checks public chatbot health, authenticated metadata access, and denial of metadata access without the key. Run it against the intended configured deployment after both services restart. Automated coverage uses synthetic keys and isolated handlers; it does not establish hosted proxy behavior, production load capacity, or external provider availability.
+
+### Local chatbot development startup
+
+Keep `CHATBOT_URL=http://127.0.0.1:8001` in the ignored local `backend/.env`, with `NODE_ENV=development`. This persists across ordinary restarts. The earlier localhost mismatch came from an Azure URL saved in that local file; a terminal-only override corrected the running process but could not correct the next session. Do not copy the local URL into Azure configuration: production still uses its separately configured HTTPS service URL and `CHATBOT_SERVICE_AUTOSTART=false`.
+
+`npm.cmd run dev` uses `nodemon server.js`; Node loads `.env` from its working directory via `dotenv/config`. Existing process environment values take precedence over `.env`. Run backend commands from `backend/` and clear any old terminal `CHATBOT_URL` override before starting. The route and service manager use that resolved URL; neither switches to Azure when a configured local service is unavailable.
+
+Start in this order, using three PowerShell terminals from the repository root:
+
+1. Start Python with the existing virtual environment and matching private backend service key:
+
+   ```powershell
+   cd chatbot-service
+   .\venv\Scripts\python.exe -m uvicorn app:app --env-file ../backend/.env --host 127.0.0.1 --port 8001
+   ```
+
+   If the model is already cached and you need an offline session, set `$env:HF_HUB_OFFLINE="1"` and `$env:TRANSFORMERS_OFFLINE="1"` in this terminal before starting Python. These optional process settings do not change `CHATBOT_URL` or the model.
+
+2. Wait for Python startup, then verify its connection before starting Node:
+
+   ```powershell
+   cd backend
+   Remove-Item Env:CHATBOT_URL -ErrorAction SilentlyContinue
+   npm.cmd run services:check -- --chatbot-local
+   if ($LASTEXITCODE -eq 0) { npm.cmd run dev }
+   ```
+
+3. Start React:
+
+   ```powershell
+   cd frontend
+   npm.cmd run dev
+   ```
+
+The expected addresses are React `http://localhost:5173`, Node `http://localhost:5000`, and Python `http://127.0.0.1:8001`. Stop an existing instance before starting its replacement. Restart Python after Python source changes; Node autostart can reuse an old running Python process. This manual startup sequence does not require changing the existing autostart setting.
+
+`services:check -- --chatbot-local` checks only the configured local chatbot: health, authenticated metadata, and rejection of unauthenticated metadata access. It compares revision, intent count, and dataset/config SHA-256 hashes with the current local Python source. At this revision it must report `search-relevance-limits-2026-10-12`, `61 intents`, and matching hashes. A stale service, hosted URL, unreachable service, or incorrect private key fails the check with a nonzero exit code. It does not start services, change configuration, or fall back to another URL. The existing `services:check` command without the flag retains its general service checks.
+
+The check reports the effective configuration for a newly launched process. To confirm a running Node process, also inspect its startup `Chatbot:` URL and send a normal chat request after restarting it from that same terminal. `/health` alone does not identify the classifier version, and metadata keys must never be supplied to the browser.
 
 ## Variables added to the example
 
@@ -169,6 +215,34 @@ The original example had 38 variables. Those remain documented alongside the add
 | Notification delivery/cleanup and audit-log retention jobs | `NOTIFICATION_EMAIL_ENABLED`, `NOTIFICATION_DELIVERY_INTERVAL_MS`, `NOTIFICATION_CLEANUP_INTERVAL_MS`, `READ_NOTIFICATION_RETENTION_DAYS`, `NOTIFICATION_ARCHIVE_RETENTION_DAYS`, `AUDIT_LOG_RETENTION_DAYS` |
 | Booking fee, lifecycle job, late-return policy | `BOOKING_TRANSACTION_FEE`, `BOOKING_LIFECYCLE_INTERVAL_MS`, `BOOKING_OVERDUE_GRACE_MINUTES` |
 | Maintenance scripts only | `MONGO_LOCAL_URI`, `MONGO_LOCAL_DB_NAME`, `BIOMETRIC_TEMPLATE_TTL_HOURS`, `TEST_EMAIL_TO` |
+
+## Chatbot request budgets and shared storage
+
+Only `POST /api/chat` uses these dedicated budgets instead of the general API budget. The early IP budget still applies, as do existing route authentication and private-record checks. Other `/api/chat/...` messaging routes keep their existing limits. Production always enables protection; development can exercise it with `ENABLE_RATE_LIMIT=true`.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `CHATBOT_BURST_MAX` | 20 | Admitted messages per signed account or server-issued guest session |
+| `CHATBOT_BURST_WINDOW_MS` | 30000 | Burst window in milliseconds |
+| `CHATBOT_SUSTAINED_MAX` | 120 | Admitted messages per identity over the sustained window |
+| `CHATBOT_SUSTAINED_WINDOW_MS` | 600000 | Sustained window in milliseconds |
+| `CHATBOT_GUEST_IP_BURST_MAX` | 100 | Aggregate guest burst budget per observed IP/subnet |
+| `CHATBOT_GUEST_IP_SUSTAINED_MAX` | 600 | Aggregate guest sustained budget per observed IP/subnet |
+| `CHATBOT_MAX_CONCURRENT` | 4 | In-flight chatbot requests across the configured store |
+| `CHATBOT_GUEST_IP_CONCURRENT` | 2 | In-flight guest requests per IP/subnet |
+| `CHATBOT_IN_FLIGHT_TTL_MS` | 30000 | Crash-recovery lifetime for an in-flight lease |
+| `CHATBOT_RATE_LIMIT_STORE` | `memory` | `memory` for one process; `mongodb` for shared counters and leases |
+| `CHATBOT_BACKEND_INSTANCES` | 1 | Maximum backend process/replica count; also checks `WEB_CONCURRENCY` |
+
+Each identity permits one in-flight request. All applicable fixed-window budgets and concurrency capacity admit a message in one transaction. The two existing middleware exports share that admission and charge it once, including when their order is reversed. Blocked requests neither reserve capacity nor increment message counters or move reset deadlines. HTTP 429 includes `CHAT_RATE_LIMITED`, a layer, and bounded integer `Retry-After`. `retryAfterMs` preserves the exact remaining duration; `retryAfterAt` is its stable deadline, while the seconds/header round up. The retry covers every currently exhausted budget and capacity constraint, rather than whichever middleware runs first. Capacity timing uses lease expiry as its known recovery bound; processing may finish earlier. Store failures return HTTP 503 `CHAT_LIMITER_UNAVAILABLE` without classification. Admitted failed/cancelled requests still count once because work may have started; refunded failed requests would permit failure floods. Invalid nonempty overrides reject configuration: counts are 1–10000, windows 1–3600000 ms, concurrency 1–64, leases 1–300000 ms, and process count 1–256. The sustained window must cover the burst window. Keep the lease longer than expected request processing; the classifier's existing HTTP timeout is 15 seconds.
+
+Signed identities come from verified authentication cookies. Guests receive the separate signed, HttpOnly `rp_chat_guest` cookie, scoped to `/api/chat`, with a 24-hour lifetime. It conveys no authentication or role. Production uses Secure/SameSite=None; development uses SameSite=Lax. Missing, expired, forged, or browser-blocked guest cookies use an IP fallback and still share the guest IP guard. Clearing cookies cannot remove that guard. Keys are purpose-derived HMAC hashes; counters contain no chat text, raw IPs, raw user IDs, credentials, or private rental records. Keep `JWT_SECRET` consistent across replicas and follow the existing production secret requirements. Existing `TRUST_PROXY_HOPS` is unchanged and must match the actual ingress chain.
+
+Memory counters are bounded and reset on process restart. Set `CHATBOT_RATE_LIMIT_STORE=mongodb` and the actual `CHATBOT_BACKEND_INSTANCES` before using multiple processes or replicas; memory with a declared count above one fails startup. The application cannot infer an Azure replica count that the operator has not declared. Mongo uses the existing connection and a separate temporary `chatbot_limits` collection, snapshot/majority transactions, and an `expiresAt` TTL index. Use a transaction-capable replica set/Atlas deployment and grant access to that collection/index, or provision the index beforehand through the existing deployment process. TTL cleanup can lag; admission checks expiry directly. Unavailable stores fail closed. Business records are not used for quota storage. Other API limiters still have their existing process-local stores.
+
+Memory cleanup checks touched records immediately, amortizes full expiry sweeps to once per second of request activity, and sweeps early when capacity is full. Storage remains bounded to 10,000 records and has no background session timers. Expired records are reclaimed on activity, not by a running idle cleanup job.
+
+Restart Node after changing these settings. The frontend preserves rejected/pending drafts, including a second draft typed while waiting, within existing account-scoped session storage. It shows a countdown by the composer, removes expired rate notices, and permits manual retry; it never automatically resubmits. Navigation aborts the browser request and ignores late callbacks while the backend retains started work until it settles. The former 800 ms minimum response-display delay was removed. The limits remain starting defaults, not measured hosted capacity; lowering them to the suggested 12/minute and 60/15 minutes is optional and stricter. Local fake-clock tests and a transactional Mongo adapter fixture passed; no live multi-host Mongo or Azure scaling test was performed.
 
 ## Owner-configured late-return fees
 

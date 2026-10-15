@@ -14,7 +14,7 @@ function fixture(t, { userChanges = {}, documentChanges = {}, bodyChanges = {}, 
   const approvedAt = new Date("2026-08-25T16:49:11.832Z");
   const user = { _id: "507f1f77bcf86cd799439011", name: "Fixture Renter", email: "fixture@example.test", role: "user",
     isVerified: true, kycStatus: "approved", kycStatusUpdatedAt: approvedAt, ...userChanges };
-  const document = { status: "verified", docType: "supporting", selectedDocCategory: "DTI Business Name Registration", reviewVersion: "fixture-revision",
+  const document = { _id: "507f1f77bcf86cd799439012", status: "verified", docType: "supporting", selectedDocCategory: "DTI Business Name Registration", reviewVersion: "fixture-revision",
     expiresAt: new Date(Date.now() + 3600000), profileSnapshot: { full_name: user.name, business_name: "Fixture Motors", permit_number: "DTI-123" }, ...documentChanges };
   const writes = [];
   t.mock.method(User, "findById", async () => user);
@@ -22,7 +22,11 @@ function fixture(t, { userChanges = {}, documentChanges = {}, bodyChanges = {}, 
   t.mock.method(User, "findOneAndUpdate", async (filter, update, options) => {
     writes.push({ filter, update, options }); return accountChanged ? null : { ...user, ...update.$set };
   });
-  t.mock.method(KycVerification, "findOne", () => ({ select: async () => null }));
+  t.mock.method(KycVerification, "findOne", () => ({ select: async () => null, then(resolve) { return Promise.resolve(null).then(resolve); } }));
+  const pins = [];
+  t.mock.method(KycVerification, "updateOne", async (filter, update, options) => { pins.push({ filter, update, options }); return { matchedCount: 1 }; });
+  const links = [];
+  t.mock.method(PreKycDocument, "updateOne", async (filter, update) => { links.push({ filter, update }); return { matchedCount: 1 }; });
   t.mock.method(KycVerification, "findOneAndUpdate", async () => { throw new Error("Upgrade must not overwrite identity history"); });
   const lookups = [];
   t.mock.method(PreKycDocument, "findOne", (query) => { lookups.push(query); return { select: async () => documentMissing ? null : document }; });
@@ -30,7 +34,7 @@ function fixture(t, { userChanges = {}, documentChanges = {}, bodyChanges = {}, 
   const body = { preKycToken: session.token, ownerType: "individual", businessName: "Fixture Motors", permitNumber: "DTI-123",
     supportingDocType: document.selectedDocCategory, supportingDocRevision: "fixture-revision", ...bodyChanges };
   const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
-  return { user, approvedAt, document, writes, lookups, session, response, run: () => upgradeToOwner({ user: { _id: user._id }, body }, response) };
+  return { user, approvedAt, document, writes, lookups, session, response, pins, links, run: () => upgradeToOwner({ user: { _id: user._id }, body }, response) };
 }
 
 test("owner upgrade changes the role and preserves original identity approval and booking identity", async (t) => {
@@ -38,10 +42,15 @@ test("owner upgrade changes the role and preserves original identity approval an
   assert.equal(f.response.statusCode, 200); assert.equal(f.response.body.user.role, "owner");
   assert.equal(f.response.body.user._id, f.user._id); assert.equal(f.response.body.user.kycStatus, "approved");
   assert.equal(f.writes.length, 1); assert.equal(f.user.kycStatusUpdatedAt, f.approvedAt);
-  assert.deepEqual(Object.keys(f.writes[0].update.$set).sort(), ["businessName", "licenseNumber", "ownerType", "permitNumber", "role"]);
+  assert.deepEqual(Object.keys(f.writes[0].update.$set).sort(), ["businessName", "licenseNumber", "ownerDocumentVerificationRequired", "ownerType", "permitNumber", "role"]);
+  assert.equal(f.writes[0].update.$set.ownerDocumentVerificationRequired, true);
   assert.equal(f.writes[0].filter.kycStatusUpdatedAt, f.approvedAt);
   assert.equal(f.writes[0].filter.isDisabled.$ne, true); assert.equal(f.writes[0].options.runValidators, true);
   assert.deepEqual(f.lookups[0], { email: f.user.email, role: "owner", sessionId: f.session.sessionId, docType: "supporting" });
+  assert.equal(f.pins[0].update.$set["registrationDocumentVersions.supporting"], "fixture-revision");
+  assert.equal(f.pins[0].update.$set.legacyIdentityApprovedAt, f.approvedAt);
+  assert.equal(f.pins[0].update.$set.status, undefined); assert.equal(f.pins[0].update.$set.challengePassedAt, undefined);
+  assert.equal(f.links[0].update.$set.registeredUser, f.user._id); assert.ok(Object.hasOwn(f.links[0].update.$unset, "expiresAt"));
 });
 
 for (const [name, options, status] of [

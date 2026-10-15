@@ -3,8 +3,10 @@ import {
   verifyPreKycSession,
 } from "../utils/preKycSession.js";
 import { auditLog } from "./auditLogger.middleware.js";
+import { assertActiveRegistrationDraft, isDraftEmailVerified } from "../utils/registrationDraft.js";
+import User from "../models/User.js";
 
-export const requirePreKycSession = (req, res, next) => {
+export const requirePreKycSession = async (req, res, next) => {
   try {
     const requestBody = req.body && typeof req.body === "object" && !Array.isArray(req.body)
       ? req.body
@@ -13,7 +15,9 @@ export const requirePreKycSession = (req, res, next) => {
       email: requestBody.email,
       role: requestBody.role,
     });
-    req.preKyc = session;
+    const draft = session.draftId ? await assertActiveRegistrationDraft(session) : null;
+    req.registrationDraft = draft;
+    req.preKyc = { ...session, email: draft?.evidenceEmail || session.email };
     req.body = {
       ...requestBody,
       email: session.email,
@@ -35,4 +39,20 @@ export const requirePreKycSession = (req, res, next) => {
         : "We couldn't check your verification session right now. Please try again.",
     });
   }
+};
+
+export const requireRegistrationEmail = async (req, res, next) => {
+  if (!isDraftEmailVerified(req.registrationDraft)) return res.status(403).json({ success: false,
+    code: "EMAIL_VERIFICATION_REQUIRED", message: "Verify your email in Step 4 before uploading documents or taking your selfie." });
+  if (req.registrationDraft.registeredUser || req.registrationDraft.submissionDocuments || new Date(req.registrationDraft.submissionUntil || 0) > new Date())
+    return res.status(409).json({ success: false, message: "Account creation is in progress or complete. Recover your registration." });
+  try {
+    const emails = [req.registrationDraft.verifiedEmail, req.registrationDraft.evidenceEmail].filter(Boolean);
+    if (await User.exists({ email: { $in: emails } })) return res.status(409).json({ success: false,
+      message: "These registration details belong to an existing account. Sign in to manage its verification." });
+  } catch (error) {
+    auditLog.error("KYC", "Registration account check failed", { errorType: error.name });
+    return res.status(503).json({ success: false, message: "We couldn't check your registration right now. Please retry." });
+  }
+  next();
 };

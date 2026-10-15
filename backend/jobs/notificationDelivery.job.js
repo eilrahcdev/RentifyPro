@@ -19,7 +19,7 @@ const claimNextDelivery = async () => {
       $or: [{ status: "pending" }, { status: "failed" }, { status: "processing", lockedUntil: { $lte: now } }],
     },
     { $set: { status: "processing", lockedUntil: new Date(now.getTime() + LOCK_MS) }, $inc: { attempts: 1 } },
-    { new: true, sort: { nextAttemptAt: 1 } }
+    { returnDocument: "after", sort: { nextAttemptAt: 1 } }
   ).populate("notification user", "title message actionUrl category event email notificationSettings");
 };
 

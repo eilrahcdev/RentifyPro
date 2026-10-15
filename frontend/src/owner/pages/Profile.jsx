@@ -4,6 +4,7 @@ import { BadgeCheck, Camera, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck }
 import API from "../../utils/api";
 import { validateAvatarImageFile } from "../../utils/fileValidation";
 import VerificationStepper from "../../verification/VerificationStepper";
+import AccountVerificationDocuments from "../../components/AccountVerificationDocuments";
 import {
   getOwnerProfileFromStorage,
   getStoredUser,
@@ -185,6 +186,9 @@ export default function Profile() {
   });
   const [kycStatus, setKycStatus] = useState(() => String(getStoredUser().kycStatus || "not_started"));
   const [kycRemarks, setKycRemarks] = useState("");
+  const [accountVerification, setAccountVerification] = useState(null);
+  const kycRequest = useRef(0);
+  const [kycInitialStep, setKycInitialStep] = useState(1);
   const [kycError, setKycError] = useState("");
   const [kycLoading, setKycLoading] = useState(false);
   const [kycLastChecked, setKycLastChecked] = useState(null);
@@ -203,7 +207,7 @@ export default function Profile() {
   const initials =
     `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`.toUpperCase() || "O";
   const verification = KYC_STATUS_DETAILS[kycStatus] || KYC_STATUS_DETAILS.not_started;
-  const canStartVerification = !["approved", "challenge_passed"].includes(kycStatus);
+  const canStartVerification = !accountVerification?.documents?.length && !["approved", "challenge_passed"].includes(kycStatus);
 
   useEffect(() => {
     let mounted = true;
@@ -222,14 +226,17 @@ export default function Profile() {
         if (mounted) setProfileLoading(false);
       }
 
+      const requestId = ++kycRequest.current;
       try {
         const response = await API.kycGetStatus();
-        if (!mounted) return;
+        if (!mounted || requestId !== kycRequest.current) return;
+        if (typeof response?.status !== "string") throw new Error("Verification status was not confirmed. Refresh status to retry.");
         setKycStatus(String(response?.status || "not_started"));
         setKycRemarks(String(response?.remarks || ""));
+        setAccountVerification(response?.verification || null);
         setKycLastChecked(new Date());
       } catch (error) {
-        if (mounted) setKycError(error.message || "Could not load verification status. Try Refresh status.");
+        if (mounted && requestId === kycRequest.current) setKycError(error.message || "Could not load verification status. Try Refresh status.");
       }
     };
     syncFromApi();
@@ -391,16 +398,21 @@ export default function Profile() {
 
   const refreshKycStatus = async () => {
     if (saveInProgress.current || busy || editingSection) return;
+    const requestId = ++kycRequest.current;
     setKycLoading(true);
     setKycError("");
     try {
       const response = await API.kycGetStatus();
+      if (requestId !== kycRequest.current) return;
+      if (typeof response?.status !== "string") throw new Error("Verification status was not confirmed. Refresh status to retry; saved progress is preserved.");
       const nextStatus = String(response?.status || "not_started");
       setKycStatus(nextStatus);
       setKycRemarks(String(response?.remarks || ""));
+      setAccountVerification(response?.verification || null);
       setKycLastChecked(new Date());
 
       const profileResponse = await API.getProfile();
+      if (requestId !== kycRequest.current) return;
       if (profileResponse?.user) {
         const normalized = normalizeOwnerProfile(profileResponse.user, profileResponse.user);
         const persisted = persistOwnerProfile(normalized);
@@ -408,9 +420,9 @@ export default function Profile() {
         window.dispatchEvent(new Event("owner-profile-updated"));
       }
     } catch (error) {
-      setKycError(error.message || "Could not refresh verification status. Please try again.");
+      if (requestId === kycRequest.current) setKycError(error.message || "Could not refresh verification status. Please try again.");
     } finally {
-      setKycLoading(false);
+      if (requestId === kycRequest.current) setKycLoading(false);
     }
   };
 
@@ -542,13 +554,13 @@ export default function Profile() {
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 id="owner-verification" tabIndex={-1} className="font-semibold">Verification Status</h3>
-            <p className="mt-1 text-sm text-slate-500">Identity approval is required before you can add vehicles.</p>
+            <p className="mt-1 text-sm text-slate-600">Required ID, selfie, and business document approvals determine listing access.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {canStartVerification && (
               <button
                 type="button"
-                onClick={() => setShowKycStepper((current) => !current)}
+                onClick={() => { setKycInitialStep(1); setShowKycStepper((current) => !current); }}
                 disabled={busy || Boolean(editingSection)}
                 className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#075eb9] px-3 py-2 text-sm font-semibold text-white hover:bg-[#064e99] disabled:opacity-60"
               >
@@ -558,7 +570,7 @@ export default function Profile() {
             <button
               type="button"
               onClick={refreshKycStatus}
-              disabled={busy || Boolean(editingSection)}
+              disabled={busy || Boolean(editingSection) || kycLoading}
               className="inline-flex w-fit items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {kycLoading && <RefreshCw size={16} className="animate-spin" aria-hidden="true" />}
@@ -567,26 +579,28 @@ export default function Profile() {
           </div>
         </div>
 
-        <div className={`mb-4 flex items-start gap-3 rounded-xl border p-4 ${KYC_TONE_CLASSES[verification.tone]}`}>
+        {!accountVerification && <div className={`mb-4 flex items-start gap-3 rounded-xl border p-4 ${KYC_TONE_CLASSES[verification.tone]}`}>
           {kycStatus === "approved" ? <CheckCircle2 size={20} className="mt-0.5 shrink-0" /> : <CircleAlert size={20} className="mt-0.5 shrink-0" />}
           <div>
             <p className="font-semibold">{verification.label}</p>
             <p className="mt-1 text-sm">{verification.access}</p>
           </div>
-        </div>
+        </div>}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {!accountVerification && <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Status label="Government ID" status={verification.idStatus} />
           <Status label="Selfie Verification" status={verification.selfieStatus} />
           <Status label="Listing access" status={kycStatus === "approved" ? "Unlocked" : "Locked"} />
-        </div>
+        </div>}
+        <AccountVerificationDocuments verification={accountVerification} onRefresh={refreshKycStatus} disabled={busy || Boolean(editingSection) || kycLoading} stale={Boolean(kycError)}
+          onSelfie={() => { setKycInitialStep(2); setShowKycStepper(true); }} />
 
         {kycRemarks && <p className="mt-4 text-sm text-slate-600">{kycRemarks}</p>}
         {kycError && <p role="alert" className="mt-4 text-sm text-red-700">{kycError}</p>}
         <p className="mt-4 text-xs text-slate-500">Last checked: {formatLastChecked(kycLastChecked)}</p>
         {showKycStepper && (
           <div className="mt-6 border-t border-slate-200 pt-6">
-            <VerificationStepper onVerificationComplete={refreshKycStatus} />
+            <VerificationStepper key={kycInitialStep} initialStep={kycInitialStep} onVerificationComplete={refreshKycStatus} />
           </div>
         )}
       </div>

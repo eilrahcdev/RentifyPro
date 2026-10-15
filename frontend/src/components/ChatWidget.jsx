@@ -5,13 +5,15 @@ import { getSessionUser, SESSION_USER_UPDATED_EVENT } from "../utils/sessionStor
 import { formatVehicleType } from "../utils/vehicleText";
 import { HELP_ASK_AI_EVENT } from "../utils/helpNavigation";
 import AutoResizeTextarea from "./AutoResizeTextarea";
+import { chatbotRetryDelay, chatbotCooldownSeconds, formatChatbotCooldown,
+  chatbotCooldownStorageKey, readChatbotCooldown, saveChatbotCooldown,
+  chatbotFeedbackStyle, chatbotFeedbackText } from "../utils/chatbotCooldown";
 
 const CHAT_WIDGET_STORAGE_KEY_PREFIX = "rentifypro.chatWidget.v2";
 const LEGACY_CHAT_WIDGET_STORAGE_KEY = "rentifypro.chatWidget.v1";
 const CHAT_INPUT_MAX_LENGTH = 500;
 const MAX_STORED_MESSAGES = 40;
 const CONVERSATION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const MIN_THINKING_DISPLAY_MS = 800;
 const WELCOME_MESSAGE_ID_PREFIX = "welcome-";
 
 const BLOCKED_WORDS = [
@@ -104,10 +106,10 @@ const createWelcomeMessage = (language, date = new Date()) => ({
   showViewAvailableVehicles: false,
 });
 
-const formatRecommendationRate = (vehicle) => {
+const formatRecommendationRate = (vehicle, style) => {
   const amount = Number(vehicle.displayRate ?? vehicle.hourlyRate ?? vehicle.dailyRate ?? 0);
   const unit = vehicle.displayRateUnit === "day" ? "day" : "hour";
-  return `P${amount.toLocaleString()} / ${unit}`;
+  return `P${amount.toLocaleString("en-PH")} / ${style === "fil" ? unit === "day" ? "araw" : "oras" : unit}`;
 };
 
 const normalizeRecommendations = (recommendations) =>
@@ -238,6 +240,7 @@ const getDefaultChatState = (date = new Date()) => ({
     english: "",
     filipino: "",
   },
+  rejectedDraft: null,
 });
 
 const resolveStorageScope = () => {
@@ -278,6 +281,9 @@ const readStoredChatState = (scope, date = new Date()) => {
         english: limitDraftInput(parsed?.drafts?.english || ""),
         filipino: limitDraftInput(parsed?.drafts?.filipino || ""),
       },
+      rejectedDraft: ["english", "filipino"].includes(parsed?.rejectedDraft?.language)
+        && typeof parsed.rejectedDraft.text === "string" && parsed.rejectedDraft.text.trim()
+        ? { language: parsed.rejectedDraft.language, text: limitDraftInput(parsed.rejectedDraft.text) } : null,
     };
   } catch {
     return getDefaultChatState(date);
@@ -298,6 +304,7 @@ const removeLegacyChatStorage = () => {
 export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVehicles }) {
   const initialStorageScope = resolveStorageScope();
   const initialState = readStoredChatState(initialStorageScope);
+  const initialCooldown = readChatbotCooldown(initialStorageScope);
   const [storageScope, setStorageScope] = useState(initialStorageScope);
   const [language, setLanguage] = useState(initialState.language);
   const [conversation, setConversation] = useState(initialState.conversation);
@@ -305,6 +312,14 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
   const [messagesByLanguage, setMessagesByLanguage] = useState(initialState.conversations);
   const [draftByLanguage, setDraftByLanguage] = useState(initialState.drafts);
   const [isSending, setIsSending] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState(null);
+  const [feedback, setFeedback] = useState(initialCooldown ? { type: initialCooldown.type, layer: initialCooldown.layer } : null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(chatbotCooldownSeconds(initialCooldown?.until || 0, Date.now()));
+  const [rejectedDraft, setRejectedDraft] = useState(initialState.rejectedDraft || null);
+  const cooldownUntilRef = useRef(initialCooldown ? performance.now() + Math.max(0, initialCooldown.until - Date.now()) : 0);
+  const inFlightRef = useRef(null);
+  const draftsRef = useRef(draftByLanguage);
+  draftsRef.current = draftByLanguage;
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const conversationIdRef = useRef(initialState.conversation.id);
@@ -318,6 +333,50 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
 
   const messages = ensureConversation(messagesByLanguage[language], language);
   const draft = String(draftByLanguage[language] || "");
+  const lastReplyStyle = [...messages].reverse().find(message => message.replyStyle)?.replyStyle;
+  const feedbackStyle = feedback?.replyStyle || chatbotFeedbackStyle(draft, lastReplyStyle || (language === "filipino" ? "fil" : "en"));
+  const cooldownActive = cooldownSeconds > 0;
+
+  useEffect(() => {
+    if (!cooldownActive) return undefined;
+    const tick = () => {
+      const remaining = chatbotCooldownSeconds(cooldownUntilRef.current, performance.now());
+      setCooldownSeconds(remaining);
+      if (!remaining) {
+        cooldownUntilRef.current = 0;
+        readChatbotCooldown(storageScope);
+        setFeedback(current => ["rate", "busy"].includes(current?.type) ? null : current);
+      }
+    };
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [cooldownActive, storageScope]);
+
+  const restoreCooldown = useCallback((scope) => {
+    const stored = readChatbotCooldown(scope);
+    cooldownUntilRef.current = stored ? performance.now() + Math.max(0, stored.until - Date.now()) : 0;
+    setCooldownSeconds(chatbotCooldownSeconds(cooldownUntilRef.current, performance.now()));
+    setFeedback(current => stored ? { type: stored.type, layer: stored.layer }
+      : ["rate", "busy"].includes(current?.type) ? null : current);
+  }, []);
+
+  useEffect(() => {
+    const changed = event => {
+      if (event.key === chatbotCooldownStorageKey(storageScope)) restoreCooldown(storageScope);
+    };
+    const resumed = () => { if (document.visibilityState === "visible") restoreCooldown(storageScope); };
+    window.addEventListener("storage", changed);
+    document.addEventListener("visibilitychange", resumed);
+    return () => {
+      window.removeEventListener("storage", changed);
+      document.removeEventListener("visibilitychange", resumed);
+    };
+  }, [storageScope, restoreCooldown]);
+
+  useEffect(() => () => {
+    inFlightRef.current?.controller.abort();
+    inFlightRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -335,14 +394,21 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
           filipino: ensureConversation(messagesByLanguage.filipino, "filipino"),
         },
         drafts: {
-          english: String(draftByLanguage.english || ""),
-          filipino: String(draftByLanguage.filipino || ""),
+          english: String(draftByLanguage.english || (pendingMessage?.language === "english" ? pendingMessage.draft : "")),
+          filipino: String(draftByLanguage.filipino || (pendingMessage?.language === "filipino" ? pendingMessage.draft : "")),
         },
+        rejectedDraft: rejectedDraft || (pendingMessage && draftByLanguage[pendingMessage.language]?.trim()
+          ? { language: pendingMessage.language, text: pendingMessage.draft } : null),
       })
     );
-  }, [conversation, draftByLanguage, language, messagesByLanguage, storageScope, suggestedQuestions]);
+  }, [conversation, draftByLanguage, language, messagesByLanguage, pendingMessage, rejectedDraft, storageScope, suggestedQuestions]);
 
   const replaceChatState = useCallback((nextState) => {
+    inFlightRef.current?.controller.abort();
+    inFlightRef.current = null;
+    setPendingMessage(null);
+    setRejectedDraft(nextState.rejectedDraft || null);
+    setFeedback(current => ["rate", "busy"].includes(current?.type) ? current : null);
     conversationIdRef.current = nextState.conversation.id;
     setLanguage(nextState.language);
     setConversation(nextState.conversation);
@@ -374,6 +440,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       window.sessionStorage.removeItem(getStorageKey(storageScope));
       window.sessionStorage.removeItem(getStorageKey(nextScope));
       replaceChatState(getDefaultChatState());
+      restoreCooldown(nextScope);
       setStorageScope(nextScope);
     };
 
@@ -381,7 +448,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
     return () => {
       window.removeEventListener(SESSION_USER_UPDATED_EVENT, syncChatStateToCurrentSessionUser);
     };
-  }, [replaceChatState, storageScope]);
+  }, [replaceChatState, storageScope, restoreCooldown]);
 
   useEffect(() => {
     if (!isOpen || isSending) return undefined;
@@ -428,6 +495,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
   };
 
   const updateDraftForLanguage = (targetLanguage, value) => {
+    draftsRef.current = { ...draftsRef.current, [targetLanguage]: value };
     setDraftByLanguage((current) => ({
       ...current,
       [targetLanguage]: value,
@@ -456,7 +524,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
     }
 
     inputRef.current?.focus();
-    if (!message || isSending) return;
+    if (!message || inFlightRef.current || chatbotCooldownSeconds(cooldownUntilRef.current, performance.now()) > 0) return;
 
     const previousLanguage = [...(messagesByLanguage[activeLanguage] || [])]
       .reverse()
@@ -468,44 +536,31 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
     const conversationContext = lastBotMessage?.conversationContext || null;
 
     const requestConversationId = conversationIdRef.current;
-    const userMessageId = `user-${Date.now()}`;
-    updateMessagesForLanguage(activeLanguage, (current) => [
-      ...current,
-      {
-        id: userMessageId,
-        sender: "user",
-        text: censorBadWords(message),
-        recommendations: [],
-        showViewAvailableVehicles: false,
-      },
-    ]);
+    const requestToken = { controller: new AbortController() };
+    inFlightRef.current = requestToken;
+    const userMessageId = `user-${createConversationId()}`;
+    const userMessage = {
+      id: userMessageId,
+      sender: "user",
+      text: censorBadWords(message),
+      recommendations: [],
+      showViewAvailableVehicles: false,
+    };
+    setPendingMessage({ ...userMessage, language: activeLanguage, draft: limitedDraft });
+    setFeedback(null);
     updateDraftForLanguage(activeLanguage, "");
-    markConversationActive();
     setIsSending(true);
-    const thinkingStartedAt = Date.now();
 
     try {
-      const response = await API.chatWithBot({ message, language: "auto", previousLanguage, pendingSearch, conversationContext });
-      const remainingThinkingTime = Math.max(
-        0,
-        MIN_THINKING_DISPLAY_MS - (Date.now() - thinkingStartedAt)
-      );
-      if (remainingThinkingTime > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, remainingThinkingTime));
-      }
-      if (conversationIdRef.current !== requestConversationId) return;
+      const response = await API.chatWithBot({ message, language: "auto", previousLanguage, pendingSearch, conversationContext }, { signal: requestToken.controller.signal });
+      if (inFlightRef.current !== requestToken || conversationIdRef.current !== requestConversationId) return;
+      markConversationActive();
+      if (rejectedDraft?.language === activeLanguage && rejectedDraft.text.trim() === message) setRejectedDraft(null);
 
       updateMessagesForLanguage(activeLanguage, (current) => {
-        const updatedMessages = response.censoredMessage
-          ? current.map((item) =>
-              item.id === userMessageId
-                ? { ...item, text: String(response.censoredMessage) }
-                : item
-            )
-          : current;
-
         return [
-          ...updatedMessages,
+          ...current,
+          { ...userMessage, ...(response.censoredMessage ? { text: String(response.censoredMessage) } : {}) },
           {
             id: `bot-${Date.now()}`,
             sender: "bot",
@@ -529,25 +584,26 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
         ];
       });
     } catch (error) {
-      if (conversationIdRef.current !== requestConversationId) return;
-
-      updateMessagesForLanguage(activeLanguage, (current) => [
-        ...current,
-        {
-          id: `bot-error-${Date.now()}`,
-          sender: "bot",
-          text:
-            error.message ||
-            (activeLanguage === "filipino"
-              ? "Hindi maabot ang chatbot service sa ngayon. Pakisubukan muli mamaya."
-              : "The chatbot service is unavailable right now. Please try again later."),
-          recommendations: [],
-          showViewAvailableVehicles: false,
-        },
-      ]);
+      if (inFlightRef.current !== requestToken || conversationIdRef.current !== requestConversationId) return;
+      if (!draftsRef.current[activeLanguage]?.trim()) updateDraftForLanguage(activeLanguage, limitedDraft);
+      else setRejectedDraft({ language: activeLanguage, text: limitedDraft });
+      if (error.status === 429 || (error.status === 503 && error.code === "CHAT_SERVICE_BUSY")) {
+        const stored = saveChatbotCooldown(storageScope, chatbotRetryDelay(error), {
+          type: error.status === 429 ? "rate" : "busy", layer: error.details?.layer,
+        });
+        cooldownUntilRef.current = performance.now() + Math.max(0, stored.until - Date.now());
+        setCooldownSeconds(chatbotCooldownSeconds(cooldownUntilRef.current, performance.now()));
+        setFeedback({ type: stored.type, layer: stored.layer, replyStyle: chatbotFeedbackStyle(message, previousLanguage) });
+      } else {
+        setFeedback({ type: error.status === 0 ? "network" : "service", replyStyle: chatbotFeedbackStyle(message, previousLanguage) });
+      }
     } finally {
-      if (conversationIdRef.current === requestConversationId) {
-        setIsSending(false);
+      if (inFlightRef.current === requestToken) {
+        inFlightRef.current = null;
+        if (conversationIdRef.current === requestConversationId) {
+          setIsSending(false);
+          setPendingMessage(null);
+        }
       }
     }
   };
@@ -587,7 +643,6 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
             <button
               type="button"
               onClick={startNewConversation}
-              disabled={isSending || messages.length === 1}
               className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-3 text-xs font-semibold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Start a new chatbot conversation"
               title="Start a new chat"
@@ -607,7 +662,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       </div>
 
       <div className="rp-ai-chat-body flex-1 space-y-4 overflow-y-auto px-4 py-5">
-        {messages.map((message) => (
+        {[...messages, ...(pendingMessage?.language === language ? [pendingMessage] : [])].map((message) => (
           <div
             key={message.id}
             className={`flex items-end gap-2.5 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
@@ -643,10 +698,14 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
                       </h4>
                       <p className="mt-1 text-xs text-slate-600">
                         {formatVehicleType(vehicle.type, "N/A")} | {vehicle.transmission || "N/A"} |{" "}
-                        {vehicle.seats || 0} seats
+                        {vehicle.seats > 0 ? `${vehicle.seats} ${message.replyStyle === "fil" ? "upuan" : "seats"}` : message.replyStyle === "fil" ? "Hindi tukoy ang upuan" : "Seats unknown"}
+                        {vehicle.subtype && vehicle.subtype !== vehicle.type ? ` | ${vehicle.subtype}` : ""}
+                        {vehicle.fuel ? ` | ${vehicle.fuel}` : ""}
+                        {typeof vehicle.driverOptionEnabled === "boolean"
+                          ? ` | ${vehicle.driverOptionEnabled ? message.replyStyle === "fil" ? "May optional na driver" : "Optional driver" : message.replyStyle === "fil" ? "Self-drive lamang" : "Self-drive only"}` : ""}
                       </p>
                       <p className="mt-2 text-sm font-semibold text-[#0B75E7]">
-                        {formatRecommendationRate(vehicle)}
+                        {formatRecommendationRate(vehicle, message.replyStyle)}
                       </p>
                     </article>
                   ))}
@@ -709,11 +768,29 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       </div>
 
       <div className="border-t border-slate-200/80 bg-white/95 p-3.5 backdrop-blur">
+        {(feedback || rejectedDraft?.language === language) && (
+          <div id="rp-chat-composer-notice" role="status" className="mb-2 px-1 text-sm leading-5 text-slate-700">
+            {!feedback ? chatbotFeedbackText("unsent", feedbackStyle)
+              : ["rate", "busy"].includes(feedback.type) ? cooldownSeconds > 0
+              ? <>{feedback.type === "busy" || feedback.layer === "concurrency"
+                ? chatbotFeedbackText("busy", feedbackStyle)
+                : chatbotFeedbackText("rate", feedbackStyle)}<span aria-live="off" className="tabular-nums">{formatChatbotCooldown(cooldownSeconds)}</span>.</>
+              : chatbotFeedbackText("ready", feedbackStyle)
+              : chatbotFeedbackText(feedback.type, feedbackStyle)}
+            {rejectedDraft?.language === language && <button type="button" className="ml-2 inline-flex min-h-11 items-center px-2 font-semibold text-blue-700 underline underline-offset-2" onClick={() => {
+              const current = draftsRef.current[language];
+              updateDraftForLanguage(language, rejectedDraft.text);
+              setRejectedDraft(current?.trim() ? { language, text: current } : null);
+              inputRef.current?.focus();
+            }}>{language === "filipino" ? "Ibalik ang naunang draft" : "Restore previous draft"}</button>}
+          </div>
+        )}
         <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50">
           <AutoResizeTextarea
             ref={inputRef}
             maxRows={3}
             aria-label="Message Rentify AI"
+            aria-describedby={feedback || rejectedDraft?.language === language ? "rp-chat-composer-notice" : undefined}
             value={draft}
             onChange={(event) =>
               updateDraftForLanguage(language, limitDraftInput(event.target.value))
@@ -734,7 +811,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
           />
           <button
             onClick={() => sendMessage()}
-            disabled={isSending}
+            disabled={isSending || cooldownSeconds > 0}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#0B75E7,#045FC3)] text-white shadow-[0_8px_18px_rgba(11,117,231,0.24)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Send message"
           >

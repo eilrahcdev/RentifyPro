@@ -1,6 +1,20 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getKycUploadDir } from "../utils/storagePaths.js";
+import PreKycDocument from "../models/PreKycDocument.js";
+import RegistrationDraft from "../models/RegistrationDraft.js";
+import { auditLog } from "../middleware/auditLogger.middleware.js";
+
+export async function discardUnusedPreKycFile(key) {
+  if (!key || key !== path.basename(key) || /[\\/]/.test(key)) return;
+  try {
+    if (await PreKycDocument.exists({ fileKey: key })) return;
+    await fs.unlink(path.join(getKycUploadDir(), key)).catch(error => { if (error.code !== "ENOENT") throw error; });
+  } catch {
+    // Retain evidence when the database cannot confirm whether it is still referenced.
+    auditLog.warn("KYC", "Unused private upload cleanup will be retried by the retention job");
+  }
+}
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_RETENTION_HOURS = 3;
@@ -44,6 +58,7 @@ export const purgeExpiredKycFiles = async () => {
   const cutoff = getCutoff();
   const reviewCutoff = getReviewCutoff();
   const files = await walkFiles(root);
+  await RegistrationDraft.deleteMany({ $or: [{ expiresAt: { $lte: new Date() } }, { absoluteExpiresAt: { $lte: new Date() } }] });
   let deleted = 0;
 
   for (const file of files) {
@@ -51,6 +66,9 @@ export const purgeExpiredKycFiles = async () => {
       const stats = await fs.stat(file);
       const effectiveCutoff = path.basename(file).startsWith("review-") ? reviewCutoff : cutoff;
       if (stats.mtimeMs > effectiveCutoff) continue;
+      if (await PreKycDocument.exists({ fileKey: path.basename(file), $or: [
+        { expiresAt: { $gt: new Date() } }, { registeredUser: { $ne: null }, expiresAt: { $exists: false } },
+      ] })) continue;
       await fs.unlink(file);
       deleted += 1;
     } catch (error) {

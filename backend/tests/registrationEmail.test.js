@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
 import User from "../models/User.js";
+import RegistrationDraft from "../models/RegistrationDraft.js";
 import { issuePreKycSession } from "../utils/preKycSession.js";
 
 // Enable the actual limiter before importing the route's middleware.
@@ -78,10 +79,13 @@ test("final registration still rejects an email claimed after the early check", 
     assert.deepEqual(query, { email: "racing@gmail.com" });
     return { _id: "another-account", isVerified: true };
   });
+  t.mock.method(RegistrationDraft, "findOne", async () => ({ _id: "verified-draft", role: "user", sessionId: "email-session",
+    fields: { email: "racing@gmail.com" }, verifiedEmail: "racing@gmail.com", emailVerifiedAt: new Date(), createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 60000), absoluteExpiresAt: new Date(Date.now() + 60000) }));
   const oldSecret = process.env.PRE_KYC_SESSION_SECRET;
   process.env.PRE_KYC_SESSION_SECRET = "registration-email-test-secret";
   try {
-    const { token } = issuePreKycSession({ email: "racing@gmail.com", role: "user" });
+    const { token } = issuePreKycSession({ email: "racing@gmail.com", role: "user", sessionId: "email-session", draftId: "verified-draft" });
     const final = response();
     await registerUser({ body: { name: "Test User", email: "racing@gmail.com", password: "Example123!", preKycToken: token }, ip: "127.0.0.1" }, final);
     assert.equal(final.statusCode, 409);

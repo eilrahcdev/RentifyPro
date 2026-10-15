@@ -4,6 +4,7 @@ import io
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -117,6 +118,50 @@ class ServiceTests(unittest.TestCase):
             with patch.object(main.ENGINE, "predict", return_value=[{
                     "rec_texts": ["SYNTHETIC SAMPLE"], "rec_scores": [0.95], "rec_boxes": boxes}]):
                 self.assertEqual(self.request().status_code, 503)
+
+    def test_cpu_acceleration_is_bounded_without_changing_models_resolution_or_batch_size(self):
+        options = []
+        def factory(**kwargs):
+            options.append(kwargs)
+            return FakeEngine()
+        with patch.dict(os.environ, {"KYC_OCR_ENABLE_MKLDNN": "true"}), \
+                patch.dict(sys.modules, {"paddleocr": SimpleNamespace(PaddleOCR=factory)}), \
+                patch.object(Path, "is_file", return_value=True):
+            main.create_engine()
+        self.assertTrue(options[0]["enable_mkldnn"])
+        self.assertEqual(options[0]["mkldnn_cache_capacity"], 1)
+        self.assertEqual(options[0]["text_recognition_batch_size"], 1)
+        self.assertEqual(options[0]["cpu_threads"], 2)
+        self.assertEqual(options[0]["device"], "cpu")
+        self.assertEqual(options[0]["text_detection_model_name"], "PP-OCRv5_mobile_det")
+        self.assertEqual(options[0]["text_recognition_model_name"], "en_PP-OCRv5_mobile_rec")
+        self.assertEqual(main.MAX_IMAGE_EDGE, 1400)
+
+    def test_unsupported_cpu_acceleration_falls_back_during_startup(self):
+        options = []
+        class UnsupportedEngine:
+            def predict(self, _image):
+                raise NotImplementedError("Synthetic unsupported CPU kernel")
+        def factory(**kwargs):
+            options.append(kwargs)
+            return UnsupportedEngine() if kwargs["enable_mkldnn"] else FakeEngine()
+        with patch.dict(os.environ, {"KYC_OCR_ENABLE_MKLDNN": "true"}), \
+                patch.dict(sys.modules, {"paddleocr": SimpleNamespace(PaddleOCR=factory)}), \
+                patch.object(Path, "is_file", return_value=True):
+            main.create_engine()
+        self.assertEqual([option["enable_mkldnn"] for option in options], [True, False])
+
+    def test_acceleration_can_be_disabled_and_baseline_failures_are_not_hidden(self):
+        options = []
+        def factory(**kwargs):
+            options.append(kwargs)
+            raise RuntimeError("Synthetic baseline startup failure")
+        with patch.dict(os.environ, {"KYC_OCR_ENABLE_MKLDNN": "false"}), \
+                patch.dict(sys.modules, {"paddleocr": SimpleNamespace(PaddleOCR=factory)}), \
+                patch.object(Path, "is_file", return_value=True):
+            with self.assertRaisesRegex(RuntimeError, "baseline startup failure"):
+                main.create_engine()
+        self.assertEqual([option["enable_mkldnn"] for option in options], [False])
 
 
 if __name__ == "__main__":

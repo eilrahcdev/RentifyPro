@@ -53,7 +53,7 @@ const parseLimit = (value, fallback = 30) => Math.min(Math.max(Number.parseInt(v
 const populateReport = (query) => query
   .populate({ path: "reporter", select: "name email role" })
   .populate({ path: "reportedUser", select: "name email role isDisabled disabledUntil moderationRestrictions" })
-  .populate({ path: "booking", select: "status pickupAt returnAt paymentStatus totalAmount" })
+  .populate({ path: "booking", select: "status pickupAt returnAt paymentStatus totalAmount bookingPolicyVersion originalReturnAt actualReturnAt returnReportedHandoverAt returnConfirmedAt lateReturnPenaltyFee extensionHistory.status extensionHistory.billingStartAt extensionHistory.requestedReturnAt extensionHistory.durationMinutes extensionHistory.totalAmount" })
   .populate({ path: "vehicle", select: "name location availabilityStatus specs.plateNumber" })
   .populate({ path: "assignedTo", select: "name email" })
   .populate({ path: "currentDecision", select: "outcome action policyReason userVisibleReason durationDays createdAt decidedBy" });
@@ -71,16 +71,19 @@ const serializeReport = (report, requester, { admin = false } = {}) => {
   const raw = report.toObject ? report.toObject() : report;
   const isReporter = sameId(raw.reporter, requester?._id || requester);
   const isAdmin = admin || requester?.role === "admin";
+  const returnContext = isAdmin && raw.sourceType !== "chat_message" && raw.booking?.actualReturnAt
+    ? `\n\nBooking return records:\nReported handover: ${raw.booking.returnReportedHandoverAt ? new Date(raw.booking.returnReportedHandoverAt).toISOString() : "Not reported"}\nVerified handover: ${new Date(raw.booking.actualReturnAt).toISOString()}\nApp confirmation: ${raw.booking.returnConfirmedAt ? new Date(raw.booking.returnConfirmedAt).toISOString() : "Not recorded"}\nRecorded late fee: PHP ${Number(raw.booking.lateReturnPenaltyFee || 0).toFixed(2)}`
+    : "";
   return {
     _id: raw._id,
     caseReference: raw.caseReference,
     sourceType: raw.sourceType || "booking",
     category: raw.category,
-    description: isAdmin && raw.sourceType === "chat_message"
+    description: (isAdmin && raw.sourceType === "chat_message"
       ? `Reported message only:\n“${raw.messageSnapshot?.text || "Message unavailable"}”\n\nSent ${raw.messageSnapshot?.sentAt ? new Date(raw.messageSnapshot.sentAt).toISOString() : "at an unavailable time"}. No other conversation messages are included.`
       : isAdmin && raw.informationResponses?.length
         ? `${raw.description}\n\nAdditional information:\n${raw.informationResponses.map((item) => item.statement).join("\n\n")}`
-        : raw.description,
+        : raw.description) + returnContext,
     status: raw.status,
     priority: raw.priority,
     reporterRole: raw.reporterRole,

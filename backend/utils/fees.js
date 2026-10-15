@@ -1,4 +1,4 @@
-export const TRANSACTION_FEE = 140;
+export const TRANSACTION_FEE = 100;
 
 export const getTransactionFee = () => {
   const configured = Number(process.env.BOOKING_TRANSACTION_FEE ?? TRANSACTION_FEE);

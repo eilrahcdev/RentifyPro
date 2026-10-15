@@ -185,6 +185,35 @@ test("an incompatible OCR worker preserves the upload for manual review and neve
   assert.equal(isIdentityReadyForSelfie({ ...document, ...saved }), false);
 });
 
+test("uncertain private fields reach manual comparison without a retry, rejection or selfie unlock", async (t) => {
+  env(t);
+  const bytes = Buffer.from("synthetic uncertain-field fixture");
+  const document = doc({ processingAttempts: 1, processingLockedAt: new Date(),
+    fileHash: crypto.createHash("sha256").update(bytes).digest("hex") });
+  t.mock.method(PreKycDocument, "findOneAndUpdate", () => ({ select: async () => document }));
+  t.mock.method(fs, "readFile", async () => bytes);
+  t.mock.method(auditLog, "info", () => {});
+  const payload = ocr(); payload.lines.find((entry) => entry.text.startsWith("Full Name")).confidence = 0.7;
+  t.mock.method(globalThis, "fetch", async (url) => { assert.equal(url, "http://127.0.0.1:8020/inspect"); return Response.json(payload); });
+  let saved;
+  t.mock.method(PreKycDocument, "updateOne", async (_filter, update) => { saved = update.$set; return { modifiedCount: 1 }; });
+  const removal = t.mock.method(fs, "unlink", async () => assert.fail("Uncertain extraction must retain the private original"));
+  await processNextKycDocument();
+  assert.equal(saved.status, "pending_review");
+  assert.equal(saved.reasonCode, "EXTRACTION_UNCERTAIN");
+  assert.equal(saved.privateScreening.automatedCheck.outcome, "review_needed");
+  assert.equal(saved.privateScreening.automatedCheck.checks.registrationDetails, null);
+  assert.equal(saved.nextAttemptAt, null);
+  assert.equal(saved.detailsMatched, false);
+  assert.equal(saved.verifiedAt, null);
+  assert.equal(removal.mock.callCount(), 0);
+  assert.equal(isIdentityReadyForSelfie({ ...document, ...saved }), false);
+  const compared = prepareManualDocumentComparison({ ...document, ...saved }, input({ fileHash: document.fileHash }), "admin-fixture");
+  assert.equal(compared.detailsMatched, true);
+  assert.equal(compared.status, undefined);
+  assert.equal(isIdentityReadyForSelfie({ ...document, ...saved, ...compared }), true);
+});
+
 test("human comparison uses existing matching rules and records evidence without approving", (t) => {
   env(t);
   const fields = prepareManualDocumentComparison(doc(), input(), "admin-fixture");
@@ -451,6 +480,7 @@ test("applicant status exposes safe current screening checks and revision withou
     selectedDocType: document.selectedDocCategory, profile: document.profileSnapshot, sessionId: document.sessionId, role: document.role,
     fileHash: document.fileHash, reviewVersion: document.reviewVersion }).privateScreening;
   t.mock.method(PreKycDocument, "find", () => ({ select: () => ({ sort: () => ({ lean: async () => [document] }) }) }));
+  t.mock.method(PreKycFace, "findOne", () => ({ lean: async () => null }));
   let response;
   await getPreKycStatus({ preKyc: { email: document.email, sessionId: document.sessionId } }, { json: (value) => { response = value; } });
   assert.equal(response.documents[0].automatedScreening.outcome, "passed");
@@ -461,14 +491,29 @@ test("applicant status exposes safe current screening checks and revision withou
 });
 
 test("selfie HTTP handler permits current automated matching and refuses direct calls after replacement or mismatch", async (t) => {
-  env(t, { FACE_SERVICE_URL: "http://127.0.0.1:8010" });
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "registration-selfie-binding-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  env(t, { FACE_SERVICE_URL: "http://127.0.0.1:8010", KYC_UPLOAD_DIR: directory });
   const { preSelfieVerify } = await import("../controllers/kyc.controller.js?selfie-bound-fixture");
   const document = doc();
+  const idBytes = Buffer.from("synthetic ID fixture");
+  await fs.writeFile(path.join(directory, document.fileKey), idBytes);
+  document.fileHash = crypto.createHash("sha256").update(idBytes).digest("hex");
+  document.expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   document.privateScreening = evaluatePrivateDocumentInspection({ inspection: normalizePrivateOcrResponse(ocr()), docType: "id",
     selectedDocType: document.selectedDocCategory, profile: document.profileSnapshot, sessionId: document.sessionId, role: document.role,
     fileHash: document.fileHash, reviewVersion: document.reviewVersion }).privateScreening;
-  t.mock.method(PreKycDocument, "findOne", () => ({ select: () => ({ lean: async () => document }) }));
+  t.mock.method(PreKycDocument.collection, "findOne", async (_filter, { projection = {} } = {}) => {
+    const inclusive = Object.values(projection).some(value => value === 1);
+    return Object.fromEntries(Object.entries(document).filter(([key]) => projection[key] !== 0
+      && (!inclusive || key === "_id" || projection[key] === 1)));
+  });
   t.mock.method(PreKycFace, "findOneAndUpdate", async () => null);
+  t.mock.method(PreKycDocument, "updateOne", async (filter, update) => {
+    assert.equal(filter.reviewVersion, "current-review");
+    assert.equal(update.$set.selfieVerification.idDocumentRevision, "current-review");
+    return { modifiedCount: 1 };
+  });
   t.mock.method(auditLog, "info", () => {});
   const faceRequest = t.mock.method(axios, "post", async () => ({ data: { success: true, verified: true } }));
   const image = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from("synthetic fixture")]).toString("base64");
@@ -478,7 +523,13 @@ test("selfie HTTP handler permits current automated matching and refuses direct 
       body: { selfie_image_base64: image } }, { json: (value) => { response = value; }, status(value) { status = value; return this; } });
     return { status, response };
   };
-  assert.equal((await invoke()).response.verified, true);
+  for (const role of ["user", "owner"]) {
+    document.role = role;
+    document.privateScreening = evaluatePrivateDocumentInspection({ inspection: normalizePrivateOcrResponse(ocr()), docType: "id",
+      selectedDocType: document.selectedDocCategory, profile: document.profileSnapshot, sessionId: document.sessionId, role,
+      fileHash: document.fileHash, reviewVersion: document.reviewVersion }).privateScreening;
+    assert.deepEqual((await invoke()).response, { success: true, verified: true });
+  }
   for (const mutation of [() => { document.reviewVersion = "replacement"; },
     () => { document.reviewVersion = "current-review"; document.profileSnapshot.first_name = "Wrong"; },
     () => { document.profileSnapshot.first_name = "Sample"; document.status = "rejected"; }]) {
@@ -487,7 +538,9 @@ test("selfie HTTP handler permits current automated matching and refuses direct 
     assert.equal(result.status, 409);
     assert.equal(result.response.code, "ID_DETAILS_NOT_MATCHED");
   }
-  assert.equal(faceRequest.mock.callCount(), 1);
+  assert.equal(faceRequest.mock.callCount(), 4);
+  assert.equal(faceRequest.mock.calls[0].arguments[1].user_id, `pre:${document.sessionId}:current-review`);
+  assert.equal(faceRequest.mock.calls[1].arguments[1].user_id, `pre:${document.sessionId}:current-review`);
 });
 
 test("a delayed screening-status read cannot turn a completed ID upload into a failed upload", async (t) => {
@@ -533,7 +586,7 @@ test("same-file submissions refresh legacy screening without overwriting approve
     selectedDocType: document.selectedDocCategory, profile, sessionId: document.sessionId, role: document.role,
     fileHash: document.fileHash, reviewVersion: document.reviewVersion });
   document.privateScreening = structuredClone(fresh.privateScreening);
-  document.privateScreening.automatedCheck.version = 1;
+  document.privateScreening.automatedCheck.version = fresh.privateScreening.automatedCheck.version - 1;
   t.mock.method(PreKycDocument, "findOne", () => ({ select: async () => document }));
   t.mock.method(fs, "mkdir", async () => {});
   t.mock.method(fs, "writeFile", async () => {});

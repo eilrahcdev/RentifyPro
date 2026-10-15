@@ -11,6 +11,7 @@ const preKycDocumentSchema = new mongoose.Schema(
       index: true,
     },
     sessionId: { type: String, required: true, index: true },
+    registeredUser: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     role: {
       type: String,
       enum: ["user", "owner"],
@@ -76,6 +77,16 @@ const preKycDocumentSchema = new mongoose.Schema(
     queuedAt: { type: Date, default: null },
     // Changes for every screening request, including a corrected profile with the same file.
     reviewVersion: { type: String, default: "" },
+    selfieVerification: {
+      type: new mongoose.Schema({
+        status: { type: String, enum: ["approved", "rejected"] },
+        idDocumentHash: String,
+        idDocumentRevision: String,
+        verifiedAt: Date,
+        expiresAt: Date,
+      }, { _id: false }),
+      default: null,
+    },
     nextAttemptAt: { type: Date, default: null, index: true },
     processingLockedAt: { type: Date, default: null },
     lastProcessedAt: { type: Date, default: null },
@@ -92,6 +103,11 @@ const preKycDocumentSchema = new mongoose.Schema(
     verifiedAt: { type: Date },
     reviewedAt: { type: Date },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewHistory: { type: [new mongoose.Schema({
+      reviewVersion: String, fileHash: String, action: { type: String, enum: ["approve", "reject"] },
+      reason: String, reviewedAt: Date, reviewedBy: String,
+      sessionId: String, notificationPending: Boolean, notificationQueuedAt: Date, notificationSkippedAt: Date,
+    }, { _id: false })], default: [] },
     expiresAt: { type: Date },
   },
   { timestamps: true }

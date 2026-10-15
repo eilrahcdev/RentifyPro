@@ -22,6 +22,8 @@ RUN useradd --create-home --user-group --uid 10001 app
 
 COPY --chown=app:app app.py ./
 COPY --chown=app:app chatbot_routing.py ./
+COPY --chown=app:app chatbot_rental_entities.py ./
+COPY --chown=app:app chatbot_conversation.py ./
 COPY --chown=app:app service_security.py ./
 COPY --chown=app:app chatbot_config.json ./
 COPY --chown=app:app rentifypro_chatbot_dataset_v6.json ./

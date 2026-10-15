@@ -25,7 +25,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe download_models.py
 ```
 
-The download script retrieves two public inference models from PaddlePaddle and verifies their reviewed SHA-256 checksums. The generated `models/` directory and virtual environment are ignored by Git. Model weights must exist before startup; inference does not download them. [PaddleOCR's documentation](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/pipeline_usage/OCR.en.md) describes the local model-directory and CPU options used here.
+The download script retrieves two public inference models from PaddlePaddle and verifies their reviewed SHA-256 checksums. The generated `models/` directory and virtual environment are ignored by Git. Model weights must exist before startup; inference does not download them. [PaddleOCR's documentation](https://github.com/PaddlePaddle/PaddleOCR/blob/v3.4.0/docs/version3.x/pipeline_usage/OCR.en.md) describes the local model-directory and CPU options used here.
 
 Set a private `KYC_PRIVATE_INTERNAL_API_KEY` in the backend `.env`, at least 32 characters, or use the existing `INTERNAL_API_KEY` when it meets that requirement. The explicit local launcher reads the chosen key privately and passes it to Python as `INTERNAL_API_KEY`. From `backend/`, start it with:
 
@@ -72,15 +72,32 @@ Ready private documents run sequentially without queue-poll gaps. Transient priv
 
 The Node provider never falls back to Gemini. Private OCR results always require review, even if a legacy automatic-verification switch is true. The administrator must confirm original-document features and correct OCR fields; the backend rejects mismatching registration details, expired documents, duplicate identifiers, or stale file/version evidence. Comparison and final approval remain separate, password-protected actions in the admin application. OCR suggestions and images are not written to service logs or disk; protect the existing Node storage and admin audit records with their existing access and retention rules.
 
+## Performance and restart recovery
+
+CPU acceleration (`enable_mkldnn`) is enabled by default with a shape-cache capacity of one. Models, two CPU threads, recognition batch size, image size, confidence thresholds, and document rules are unchanged. If acceleration cannot initialize, startup retries with the baseline CPU reader; failure of that reader still prevents readiness. To disable acceleration explicitly, set `KYC_OCR_ENABLE_MKLDNN=false` in Python's environment, or in the backend environment when it launches Python. Restart the Python worker after changing it.
+
+On the local Windows machine, sequential reads of the supplied driver's licence, DTI certificate, and National ID measured approximately 8.2, 9.2, and 5.0 seconds with acceleration disabled, versus 2.8, 3.9, and 2.0 seconds with acceleration enabled and the bounded cache. Required-field confidence remained unchanged, and matching test profiles passed the same preliminary comparisons. These are local reading measurements, excluding upload, queue wait, Face Service, and frontend polling; they do not establish registration latency or accuracy for all 17 document categories.
+
+An isolated local HTTP check used the updated Python service and the real Node request/response adapter, with external connections disabled and a temporary service key. Readiness took 4.343 seconds; authenticated reads took 2.657 seconds for the licence, 3.842 seconds for DTI, and 2.173 seconds for the masked BIR sample. Licence and DTI matching passed; the masked BIR sample required review. A wrong key returned 401 and an invalid protocol returned 422. No database writes or account registrations were performed.
+
+Acceleration can retain more memory: process RSS after the real-document sequence rose to about 622 MiB, compared with about 345 MiB in the baseline sequence. These are readings after extraction, not measured peaks. The synthetic comparison below samples memory throughout engine startup and extraction; workload and native startup allocations affect those results. Check hosted memory limits before deployment and use the baseline switch if needed.
+
+The development queue waits for the shared local startup attempt before claiming a document, so model loading does not consume a document's retry attempt. The launcher caches readiness only for its own running worker and applies a 30-second cooldown after failed startup. Existing external workers still receive compatibility checks; production and remote endpoints are never autostarted.
+
+Abandoned private processing claims become eligible for recovery after 60 seconds by default, replacing the ten-minute fallback. The lease always allows at least the configured private HTTP timeout plus 30 seconds for writing the result. Longer explicit `KYC_PROCESSING_LOCK_TIMEOUT_MS` values remain honored, and Gemini's ten-minute fallback is unchanged. This is a crash-recovery window, not a maximum verification time. Current file hash, review revision, and lock timestamp still guard every result write.
+
+Restart Python, the main Node backend, and the admin backend to use the updated reader and synchronized admin module. Cold starts, earlier queued documents, multi-page PDFs, unavailable services, and separate face processing can still extend the time shown by registration. Final administrator review remains a separate step.
+
 ## Validation
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe tests/benchmark_synthetic.py
+.\.venv\Scripts\python.exe tests/benchmark_synthetic.py --compare-cpu
 ```
 
 Service unit tests use a fake OCR engine to exercise request authentication, file decoding, PDF bounds, output shape, and busy/startup behavior. The separate benchmark uses the real downloaded models, denies network connections, and creates synthetic text images/PDFs in memory. It verifies sample name and identifier extraction. It does not measure real-document accuracy or issuer authenticity.
 
 Backend tests exercise the full 17-type recognition/mismatch matrix, positioned extraction, required-field confidence, dates, business matching, safe public summaries, stale revisions, and unchanged manual approval. The opt-in `scripts/private-document-checker-browser-check.mjs` checks the actual renter/owner forms at desktop/mobile sizes with intercepted synthetic responses. These checks do not establish real-document accuracy; representative labeled document variants are still needed before claiming parity with Gemini.
 
-With the essential matching flow, the local Windows synthetic benchmark measured model startup at 5.594 seconds, two PNG extractions at 2.003 and 2.157 seconds, a PDF extraction at 3.238 seconds, and sampled process RSS at 335.6 MiB. Memory is sampled after extraction rather than a continuous peak measurement. These are single-process synthetic measurements, not a capacity guarantee. Docker/Linux and Azure startup, memory, concurrency, and real-document accuracy require separate verification.
+The local Windows synthetic comparison ran each CPU mode in a fresh process. Baseline startup measured 4.913 seconds, PNG reads 2.125 and 1.969 seconds, and PDF reading 3.308 seconds. Accelerated startup measured 3.460 seconds, PNG reads 0.879 and 0.599 seconds, and PDF reading 1.208 seconds. Sampled peak RSS was 682.7 MiB for baseline and 616.6 MiB for acceleration, sampling every 50 milliseconds during engine startup and extraction. A sampled peak can miss shorter native allocations. These single-process synthetic measurements are not a capacity guarantee; Docker/Linux and Azure startup, memory, concurrency, and real-document accuracy need separate verification.

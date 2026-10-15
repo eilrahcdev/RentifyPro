@@ -3,242 +3,811 @@
   "description": "Held-out classifier and final-response checks against a fixed renter-visible vehicle snapshot.",
   "cases": [
     {
-      "id": "assistant_femboy_en", "input": "Are you femboy?",
-      "intent": "chat_gender_identity", "language": "en",
-      "recommendations": [], "reply_contains": ["gender expression", "not sexual orientation", "AI assistant"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "rental_van_duration",
+      "input": "Can I rent a van for 3 days?",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "van",
+        "duration_value": 3,
+        "duration_unit": "day"
+      },
+      "recommendations": [
+        "van"
+      ],
+      "clarification": {
+        "required": false
+      },
+      "reply_excludes": [
+        "passenger",
+        "add a little more detail"
+      ]
     },
     {
-      "id": "assistant_femboy_fil", "input": "Femboy ba si Rentify AI?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["pagpapahayag ng kasarian", "hindi sa seksuwal na oryentasyon"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "rental_suv_date_location",
+      "input": "May SUV ba available sa Cebu tomorrow?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "suv",
+        "location": "cebu",
+        "requested_schedule": "tomorrow"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "clarification": {
+        "required": false
+      },
+      "reply_contains": [
+        "Hindi pa confirmed",
+        "pickup",
+        "return"
+      ]
     },
     {
-      "id": "assistant_femboy_taglish", "input": "Reply in Taglish: are you a femboy?",
-      "intent": "chat_gender_identity", "language": "taglish",
-      "recommendations": [], "reply_contains": ["gender expression", "hindi sexual orientation"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "rental_motor_slang",
+      "input": "Ano pinakamurang motor available?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "motorcycle",
+        "sort_by": "lowest_price"
+      },
+      "recommendations": [],
+      "clarification": {
+        "required": false
+      },
+      "reply_excludes": [
+        "Ford",
+        "Toyota",
+        "add a little more detail"
+      ]
     },
     {
-      "id": "femboy_definition_en", "input": "What does femboy mean?",
-      "intent": "chat_gender_identity", "language": "en",
-      "recommendations": [], "reply_contains": ["gender expression", "not sexual orientation"],
-      "reply_excludes": ["I'm an AI assistant"]
+      "id": "rental_budget_unspecified",
+      "input": "May automatic na sedan ba under ₱2,000?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "sedan",
+        "transmission": "automatic",
+        "max_budget": 2000,
+        "currency": "PHP"
+      },
+      "recommendations": [],
+      "clarification": {
+        "required": true,
+        "field": "rate_unit"
+      },
+      "reply_contains": [
+        "per day or per hour"
+      ]
     },
     {
-      "id": "femboy_definition_fil", "input": "Ano ang ibig sabihin ng femboy?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["pagpapahayag ng kasarian", "hindi sa seksuwal na oryentasyon"],
-      "reply_excludes": ["AI assistant ako"]
+      "id": "rental_duration_capacity_separate",
+      "input": "A van for 7 people for 3 days please",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "van",
+        "pax": 7,
+        "duration_value": 3,
+        "duration_unit": "day"
+      },
+      "recommendations": [
+        "van"
+      ],
+      "clarification": {
+        "required": false
+      }
     },
     {
-      "id": "assistant_bading_fil", "input": "Bading ka?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["AI assistant", "wala akong kasarian"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "rental_context_total",
+      "input": "Magkano lahat kung 5 days ko irerent?",
+      "intent": "rental_rate",
+      "language": "taglish",
+      "previous_context": {
+        "intent": "available_vehicles",
+        "topic": "vehicles",
+        "entities": {
+          "category": "suv",
+          "location": "cebu"
+        },
+        "choices": []
+      },
+      "entities": {
+        "category": "suv",
+        "location": "cebu",
+        "duration_value": 5,
+        "duration_unit": "day",
+        "quote_requested": true
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "clarification": {
+        "required": true,
+        "field": "model"
+      },
+      "reply_contains": [
+        "listing"
+      ],
+      "reply_excludes": [
+        "motorcycle",
+        "passenger"
+      ]
     },
     {
-      "id": "assistant_tomboy_fil", "input": "Tomboy ba si Rentify AI?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["AI assistant", "wala akong kasarian"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "rental_quote_selected",
+      "input": "What would Toyota Vios cost for 3 days?",
+      "intent": "rental_rate",
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "duration_value": 3,
+        "duration_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "clarification": {
+        "required": false
+      },
+      "reply_contains": [
+        "PHP 7,200",
+        "checkout fees",
+        "not a confirmed booking"
+      ]
     },
     {
-      "id": "assistant_beki_fil", "input": "Ikaw ba ay beki?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["AI assistant", "oryentasyon"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "assistant_femboy_en",
+      "input": "Are you femboy?",
+      "intent": "chat_gender_identity",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "gender expression",
+        "not sexual orientation",
+        "AI assistant"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "assistant_bading_taglish", "input": "Are you bading?",
-      "intent": "chat_gender_identity", "language": "taglish",
-      "recommendations": [], "reply_contains": ["AI assistant", "wala akong gender"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "assistant_femboy_fil",
+      "input": "Femboy ba si Rentify AI?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "pagpapahayag ng kasarian",
+        "hindi sa seksuwal na oryentasyon"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "assistant_gender_en", "input": "Are you a girl or a boy?",
-      "intent": "chat_gender_identity", "language": "en",
-      "recommendations": [], "reply_contains": ["AI assistant", "don't have a gender", "sexual orientation"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "assistant_femboy_taglish",
+      "input": "Reply in Taglish: are you a femboy?",
+      "intent": "chat_gender_identity",
+      "language": "taglish",
+      "recommendations": [],
+      "reply_contains": [
+        "gender expression",
+        "hindi sexual orientation"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "assistant_orientation_en", "input": "Are you a gay?",
-      "intent": "chat_gender_identity", "language": "en",
-      "recommendations": [], "reply_contains": ["AI assistant", "sexual orientation"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "femboy_definition_en",
+      "input": "What does femboy mean?",
+      "intent": "chat_gender_identity",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "gender expression",
+        "not sexual orientation"
+      ],
+      "reply_excludes": [
+        "I'm an AI assistant"
+      ]
     },
     {
-      "id": "assistant_gender_fil", "input": "Babae ka ba o lalaki?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["AI assistant", "wala akong kasarian"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "femboy_definition_fil",
+      "input": "Ano ang ibig sabihin ng femboy?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "pagpapahayag ng kasarian",
+        "hindi sa seksuwal na oryentasyon"
+      ],
+      "reply_excludes": [
+        "AI assistant ako"
+      ]
     },
     {
-      "id": "assistant_orientation_fil", "input": "Bakla ka ba?",
-      "intent": "chat_gender_identity", "language": "fil",
-      "recommendations": [], "reply_contains": ["AI assistant", "oryentasyon"],
-      "reply_excludes": ["dagdagan ng kaunting detalye"]
+      "id": "assistant_bading_fil",
+      "input": "Bading ka?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "wala akong kasarian"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "assistant_gender_taglish", "input": "Girl ka ba or boy?",
-      "intent": "chat_gender_identity", "language": "taglish",
-      "recommendations": [], "reply_contains": ["AI assistant", "wala akong gender"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "assistant_tomboy_fil",
+      "input": "Tomboy ba si Rentify AI?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "wala akong kasarian"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "assistant_orientation_taglish", "input": "Lesbian ka ba?",
-      "intent": "chat_gender_identity", "language": "taglish",
-      "recommendations": [], "reply_contains": ["AI assistant", "sexual orientation"],
-      "reply_excludes": ["add a little more detail"]
+      "id": "assistant_beki_fil",
+      "input": "Ikaw ba ay beki?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "oryentasyon"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "daily_rate_en", "input": "How much is a Toyota Vios per day?",
-      "intent": "rental_rate", "language": "en",
-      "entities": { "brand": "Toyota", "model": "Vios", "rate_unit": "day" },
-      "recommendations": ["vios"], "display_rate": 2400, "display_rate_unit": "day",
-      "reply_contains": ["PHP 2,400", "per day"]
+      "id": "assistant_bading_taglish",
+      "input": "Are you bading?",
+      "intent": "chat_gender_identity",
+      "language": "taglish",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "wala akong gender"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "daily_rate_fil", "input": "Magkano ang Toyota Vios bawat araw?",
-      "intent": "rental_rate", "language": "fil",
-      "entities": { "brand": "Toyota", "model": "Vios", "rate_unit": "day" },
-      "recommendations": ["vios"], "reply_contains": ["PHP 2,400", "bawat araw"]
+      "id": "assistant_gender_en",
+      "input": "Are you a girl or a boy?",
+      "intent": "chat_gender_identity",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "don't have a gender",
+        "sexual orientation"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "daily_rate_taglish", "input": "Magkano yung Toyota Vios per day?",
-      "intent": "rental_rate", "language": "taglish",
-      "entities": { "brand": "Toyota", "model": "Vios", "rate_unit": "day" },
-      "recommendations": ["vios"], "reply_contains": ["PHP 2,400", "per day"]
+      "id": "assistant_orientation_en",
+      "input": "Are you a gay?",
+      "intent": "chat_gender_identity",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "sexual orientation"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "budget_needs_unit", "input": "Are there SUVs under ₱2,000?",
-      "intent": "available_vehicles", "language": "en",
-      "entities": { "category": "suv", "max_budget": 2000, "currency": "PHP", "rate_unit": null },
-      "clarification": { "required": true, "type": "missing_entity", "field": "rate_unit" },
-      "recommendations": [], "reply_contains": ["2,000", "per day or per hour"],
-      "reply_excludes": ["deposit", "late-return fee"]
+      "id": "assistant_gender_fil",
+      "input": "Babae ka ba o lalaki?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "wala akong kasarian"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "budget_day_en", "input": "Are there SUVs under ₱2,000 per day?",
-      "intent": "available_vehicles", "language": "en",
-      "entities": { "category": "suv", "max_budget": 2000, "currency": "PHP", "rate_unit": "day" },
-      "recommendations": ["everest"], "display_rate": 1800, "display_rate_unit": "day",
-      "reply_contains": ["PHP 2,000 per day"], "reply_excludes": ["Fortuner", "Honda SUV"]
+      "id": "assistant_orientation_fil",
+      "input": "Bakla ka ba?",
+      "intent": "chat_gender_identity",
+      "language": "fil",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "oryentasyon"
+      ],
+      "reply_excludes": [
+        "dagdagan ng kaunting detalye"
+      ]
     },
     {
-      "id": "budget_day_taglish", "input": "May SUV ba under ₱2,000 per day?",
-      "intent": "available_vehicles", "language": "taglish",
-      "entities": { "category": "suv", "max_budget": 2000, "currency": "PHP", "rate_unit": "day" },
-      "recommendations": ["everest"], "reply_contains": ["PHP 2,000 per day"]
+      "id": "assistant_gender_taglish",
+      "input": "Girl ka ba or boy?",
+      "intent": "chat_gender_identity",
+      "language": "taglish",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "wala akong gender"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "budget_day_fil", "input": "May SUV bang mas mababa sa ₱2,000 bawat araw?",
-      "intent": "available_vehicles", "language": "fil",
-      "entities": { "category": "suv", "max_budget": 2000, "currency": "PHP", "rate_unit": "day" },
-      "recommendations": ["everest"], "reply_contains": ["PHP 2,000", "bawat araw"]
+      "id": "assistant_orientation_taglish",
+      "input": "Lesbian ka ba?",
+      "intent": "chat_gender_identity",
+      "language": "taglish",
+      "recommendations": [],
+      "reply_contains": [
+        "AI assistant",
+        "sexual orientation"
+      ],
+      "reply_excludes": [
+        "add a little more detail"
+      ]
     },
     {
-      "id": "budget_hour_van", "input": "van below 500 per hour",
-      "intent": "available_vehicles", "language": "en",
-      "entities": { "category": "van", "max_budget": 500, "currency": "PHP", "rate_unit": "hour" },
-      "recommendations": ["van"], "display_rate": 400, "display_rate_unit": "hour",
-      "reply_contains": ["PHP 500 per hour"]
+      "id": "daily_rate_en",
+      "input": "How much is a Toyota Vios per day?",
+      "intent": "rental_rate",
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "display_rate": 2400,
+      "display_rate_unit": "day",
+      "reply_contains": [
+        "PHP 2,400",
+        "per day"
+      ]
     },
     {
-      "id": "daily_budget_excludes_hourly_van", "input": "show me vans below ₱2,000 daily",
-      "intent": "available_vehicles", "language": "en",
-      "entities": { "category": "van", "max_budget": 2000, "currency": "PHP", "rate_unit": "day" },
-      "recommendations": [], "reply_contains": ["couldn't find"],
-      "reply_excludes": ["Toyota Hiace"]
+      "id": "daily_rate_fil",
+      "input": "Magkano ang Toyota Vios bawat araw?",
+      "intent": "rental_rate",
+      "language": "fil",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "PHP 2,400",
+        "bawat araw"
+      ]
     },
     {
-      "id": "budget_short_followup", "input": "per day", "previous_language": "taglish",
-      "previous_context": { "brand": null, "model": null, "category": "suv", "max_budget": 2000, "currency": "PHP" },
-      "intent": "available_vehicles", "language": "taglish",
-      "entities": { "category": "suv", "max_budget": 2000, "rate_unit": "day" },
-      "recommendations": ["everest"], "reply_contains": ["PHP 2,000 per day"]
+      "id": "daily_rate_taglish",
+      "input": "Magkano yung Toyota Vios per day?",
+      "intent": "rental_rate",
+      "language": "taglish",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "PHP 2,400",
+        "per day"
+      ]
     },
     {
-      "id": "compound_balance", "input": "Can I pay 30% now and the balance after the due date?",
-      "intent": "payment_downpayment", "language": "en",
-      "conditions": { "downpayment_percent": 30, "remaining_balance": true, "payment_after_due_date": true },
-      "recommendations": [], "reply_contains": ["30%", "remaining balance", "due", "returned", "booking"],
-      "reply_excludes": ["your balance is PHP"]
+      "id": "budget_needs_unit",
+      "input": "Are there SUVs under ₱2,000?",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "suv",
+        "max_budget": 2000,
+        "currency": "PHP",
+        "rate_unit": null
+      },
+      "clarification": {
+        "required": true,
+        "type": "missing_entity",
+        "field": "rate_unit"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "2,000",
+        "per day or per hour"
+      ],
+      "reply_excludes": [
+        "deposit",
+        "late-return fee"
+      ]
     },
     {
-      "id": "balance_after_deadline", "input": "Can I pay the remaining balance after the deadline?",
-      "intent": "unpaid_balance", "language": "en",
-      "conditions": { "remaining_balance": true, "payment_after_due_date": true },
-      "recommendations": [], "reply_contains": ["remaining balance", "due", "returned", "booking"],
-      "reply_excludes": ["your balance is PHP"]
+      "id": "budget_day_en",
+      "input": "Are there SUVs under ₱2,000 per day?",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "suv",
+        "max_budget": 2000,
+        "currency": "PHP",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "display_rate": 1800,
+      "display_rate_unit": "day",
+      "reply_contains": [
+        "PHP 2,000 per day"
+      ],
+      "reply_excludes": [
+        "Fortuner",
+        "Honda SUV"
+      ]
     },
     {
-      "id": "compound_balance_taglish", "input": "Pwede bang 30% muna tapos balanse pagkatapos ng due date?",
-      "intent": "payment_downpayment", "language": "taglish",
-      "conditions": { "downpayment_percent": 30, "remaining_balance": true, "payment_after_due_date": true },
-      "recommendations": [], "reply_contains": ["30%", "remaining balance", "due", "booking"]
+      "id": "budget_day_taglish",
+      "input": "May SUV ba under ₱2,000 per day?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "suv",
+        "max_budget": 2000,
+        "currency": "PHP",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "reply_contains": [
+        "PHP 2,000 per day"
+      ]
     },
     {
-      "id": "pickup_en", "input": "What time can I pick up the car?",
-      "intent": "booking_pickup_time", "language": "en",
-      "clarification": { "required": true, "type": "missing_entity", "field": "booking" },
-      "recommendations": [], "reply_contains": ["pickup time", "which booking or vehicle"],
-      "reply_excludes": ["deposit", "late-return fee"]
+      "id": "budget_day_fil",
+      "input": "May SUV bang mas mababa sa ₱2,000 bawat araw?",
+      "intent": "available_vehicles",
+      "language": "fil",
+      "entities": {
+        "category": "suv",
+        "max_budget": 2000,
+        "currency": "PHP",
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "reply_contains": [
+        "PHP 2,000",
+        "bawat araw"
+      ]
     },
     {
-      "id": "pickup_taglish", "input": "Anong oras ko kukunin yung car?",
-      "intent": "booking_pickup_time", "language": "taglish",
-      "clarification": { "required": true, "type": "missing_entity", "field": "booking" },
-      "recommendations": [], "reply_contains": ["pickup time", "booking or vehicle"]
+      "id": "budget_hour_van",
+      "input": "van below 500 per hour",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "van",
+        "max_budget": 500,
+        "currency": "PHP",
+        "rate_unit": "hour"
+      },
+      "recommendations": [
+        "van"
+      ],
+      "display_rate": 400,
+      "display_rate_unit": "hour",
+      "reply_contains": [
+        "PHP 500 per hour"
+      ]
     },
     {
-      "id": "pickup_fil", "input": "Anong oras ko maaaring kunin ang sasakyan?",
-      "intent": "booking_pickup_time", "language": "fil",
-      "clarification": { "required": true, "type": "missing_entity", "field": "booking" },
-      "recommendations": [], "reply_contains": ["oras ng pagkuha", "aling booking"]
+      "id": "daily_budget_excludes_hourly_van",
+      "input": "show me vans below ₱2,000 daily",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "van",
+        "max_budget": 2000,
+        "currency": "PHP",
+        "rate_unit": "day"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "couldn't find"
+      ],
+      "reply_excludes": [
+        "Toyota Hiace"
+      ]
     },
     {
-      "id": "explicit_reply_style", "input": "Reply in Filipino: how much is the Toyota Vios?",
-      "intent": "rental_rate", "language": "fil",
-      "entities": { "brand": "Toyota", "model": "Vios" },
-      "recommendations": ["vios"], "reply_contains": ["Toyota Vios", "PHP 100"]
+      "id": "budget_short_followup",
+      "input": "per day",
+      "previous_language": "taglish",
+      "previous_context": {
+        "brand": null,
+        "model": null,
+        "category": "suv",
+        "max_budget": 2000,
+        "currency": "PHP"
+      },
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "suv",
+        "max_budget": 2000,
+        "rate_unit": "day"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "reply_contains": [
+        "PHP 2,000 per day"
+      ]
     },
     {
-      "id": "model_boundary", "input": "Toyota Vios automatic",
-      "intent": "vehicle_brand_search", "language": "en",
-      "entities": { "brand": "Toyota", "model": "Vios", "transmission": "automatic" },
-      "recommendations": ["vios"], "reply_contains": ["Toyota Vios"]
+      "id": "compound_balance",
+      "input": "Can I pay 30% now and the balance after the due date?",
+      "intent": "payment_downpayment",
+      "language": "en",
+      "conditions": {
+        "downpayment_percent": 30,
+        "remaining_balance": true,
+        "payment_after_due_date": true
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "30%",
+        "remaining balance",
+        "due",
+        "returned",
+        "booking"
+      ],
+      "reply_excludes": [
+        "your balance is PHP"
+      ]
     },
     {
-      "id": "brand_typo_confirmation", "input": "toyotaa",
-      "intent": "REJECT", "language": "en",
-      "clarification": { "required": true, "type": "spelling_confirmation", "field": "brand" },
-      "recommendations": [], "reply_contains": ["Toyota"]
+      "id": "balance_after_deadline",
+      "input": "Can I pay the remaining balance after the deadline?",
+      "intent": "unpaid_balance",
+      "language": "en",
+      "conditions": {
+        "remaining_balance": true,
+        "payment_after_due_date": true
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "remaining balance",
+        "due",
+        "returned",
+        "booking"
+      ],
+      "reply_excludes": [
+        "your balance is PHP"
+      ]
     },
     {
-      "id": "compound_honda_search", "input": "may Honda automatic under 1500 per day?",
-      "intent": "available_vehicles", "language": "taglish",
-      "entities": { "brand": "Honda", "model": null, "max_budget": 1500, "currency": "PHP", "rate_unit": "day", "transmission": "automatic" },
-      "recommendations": ["city"], "reply_contains": ["PHP 1,500 per day"]
+      "id": "compound_balance_taglish",
+      "input": "Pwede bang 30% muna tapos balanse pagkatapos ng due date?",
+      "intent": "payment_downpayment",
+      "language": "taglish",
+      "conditions": {
+        "downpayment_percent": 30,
+        "remaining_balance": true,
+        "payment_after_due_date": true
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "30%",
+        "remaining balance",
+        "due",
+        "booking"
+      ]
     },
     {
-      "id": "brand_category", "input": "Toyota SUV",
-      "intent": "vehicle_brand_search", "language": "en",
-      "entities": { "brand": "Toyota", "model": null, "category": "suv" },
-      "recommendations": ["fortuner"], "reply_contains": ["Toyota"]
+      "id": "pickup_en",
+      "input": "What time can I pick up the car?",
+      "intent": "booking_pickup_time",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "type": "missing_entity",
+        "field": "booking"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "pickup time",
+        "which booking or vehicle"
+      ],
+      "reply_excludes": [
+        "deposit",
+        "late-return fee"
+      ]
     },
     {
-      "id": "multiple_brands", "input": "Toyota or Honda?",
-      "intent": "REJECT", "language": "en",
-      "clarification": { "required": true, "type": "ambiguous_entity", "field": "brand" },
-      "recommendations": [], "reply_contains": ["Honda", "Toyota", "compare"]
+      "id": "pickup_taglish",
+      "input": "Anong oras ko kukunin yung car?",
+      "intent": "booking_pickup_time",
+      "language": "taglish",
+      "clarification": {
+        "required": true,
+        "type": "missing_entity",
+        "field": "booking"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "pickup time",
+        "booking or vehicle"
+      ]
     },
     {
-      "id": "unknown_followup", "input": "What about it?",
-      "intent": "REJECT", "language": "en",
-      "recommendations": [], "reply_contains": ["more detail"],
-      "reply_excludes": ["deposit", "late-return fee"]
+      "id": "pickup_fil",
+      "input": "Anong oras ko maaaring kunin ang sasakyan?",
+      "intent": "booking_pickup_time",
+      "language": "fil",
+      "clarification": {
+        "required": true,
+        "type": "missing_entity",
+        "field": "booking"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "oras ng pagkuha",
+        "aling booking"
+      ]
+    },
+    {
+      "id": "explicit_reply_style",
+      "input": "Reply in Filipino: how much is the Toyota Vios?",
+      "intent": "rental_rate",
+      "language": "fil",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "Toyota Vios",
+        "PHP 100"
+      ]
+    },
+    {
+      "id": "model_boundary",
+      "input": "Toyota Vios automatic",
+      "intent": "vehicle_brand_search",
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": "Vios",
+        "transmission": "automatic"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "Toyota Vios"
+      ]
+    },
+    {
+      "id": "brand_typo_confirmation",
+      "input": "toyotaa",
+      "intent": "REJECT",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "type": "spelling_confirmation",
+        "field": "brand"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "Toyota"
+      ]
+    },
+    {
+      "id": "compound_honda_search",
+      "input": "may Honda automatic under 1500 per day?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "brand": "Honda",
+        "model": null,
+        "max_budget": 1500,
+        "currency": "PHP",
+        "rate_unit": "day",
+        "transmission": "automatic"
+      },
+      "recommendations": [
+        "city"
+      ],
+      "reply_contains": [
+        "PHP 1,500 per day"
+      ]
+    },
+    {
+      "id": "brand_category",
+      "input": "Toyota SUV",
+      "intent": "vehicle_brand_search",
+      "language": "en",
+      "entities": {
+        "brand": "Toyota",
+        "model": null,
+        "category": "suv"
+      },
+      "recommendations": [
+        "fortuner"
+      ],
+      "reply_contains": [
+        "Toyota"
+      ]
+    },
+    {
+      "id": "multiple_brands",
+      "input": "Toyota or Honda?",
+      "intent": "REJECT",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "type": "ambiguous_entity",
+        "field": "brand"
+      },
+      "recommendations": [],
+      "reply_contains": [
+        "Honda",
+        "Toyota",
+        "compare"
+      ]
+    },
+    {
+      "id": "unknown_followup",
+      "input": "What about it?",
+      "intent": "REJECT",
+      "language": "en",
+      "recommendations": [],
+      "reply_contains": [
+        "more detail"
+      ],
+      "reply_excludes": [
+        "deposit",
+        "late-return fee"
+      ]
     },
     {
       "id": "spanish_capability_paraphrase",
@@ -441,11 +1010,15 @@
       "language": "en",
       "recommendations": [
         "city",
+        "everest",
         "vios"
       ],
       "reply_excludes": [
         "Honda SUV"
-      ]
+      ],
+      "entities": {
+        "category": "car"
+      }
     },
     {
       "id": "scope_boundary_1",
@@ -1001,10 +1574,12 @@
         "transmission": "automatic",
         "excluded_transmissions": [
           "manual"
-        ]
+        ],
+        "category": "car"
       },
       "recommendations": [
         "city",
+        "everest",
         "vios"
       ]
     },
@@ -1016,10 +1591,12 @@
       "entities": {
         "excluded_transmissions": [
           "manual"
-        ]
+        ],
+        "category": "car"
       },
       "recommendations": [
         "city",
+        "everest",
         "vios"
       ]
     },

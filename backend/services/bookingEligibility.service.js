@@ -74,7 +74,7 @@ export const getRenterBookingStatusRecords = async (renterId) => Booking.find({
       { paymentStatus: { $ne: "paid" } }, { paymentAmountDue: { $gt: 0 } }, { lateReturnPenaltyFee: { $gt: 0 } },
     ] },
   ],
-}).select("_id status pickupAt returnAt actualReturnAt returnStatus paymentStatus paymentAmountPaid paymentAmountDue totalAmount baseAmount driverAmount transactionFee lateReturnPenaltyFee lateReturnFeeType lateReturnFeeValue lateReturnGraceMinutes vehicleDailyRate driverDailyRate rentalRateUnit driverSelected bookingDurationHours bookingDurationMinutes bookingDays")
+}).select("_id status pickupAt returnAt actualReturnAt returnStatus paymentStatus paymentAmountPaid paymentAmountDue totalAmount baseAmount driverAmount transactionFee bookingPolicyVersion lateReturnPenaltyFee lateReturnFeeType lateReturnFeeValue lateReturnGraceMinutes vehicleDailyRate driverDailyRate rentalRateUnit driverSelected bookingDurationHours bookingDurationMinutes bookingDays")
   .maxTimeMS(10_000).lean();
 
 export const getRenterBookingEligibility = async (renterId, options = {}) => {

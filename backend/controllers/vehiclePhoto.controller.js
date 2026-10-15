@@ -30,7 +30,7 @@ export async function uploadVehiclePhoto(req, res, next) {
     // The durable processing record survives a disconnected browser or server restart.
     key = null;
     const decision = await screenVehiclePhoto(buffer, vehicleType);
-    photo = await VehiclePhoto.findOneAndUpdate({ _id: photo._id, status: "processing" }, { $set: decision }, { new: true }) || await VehiclePhoto.findById(photo._id);
+    photo = await VehiclePhoto.findOneAndUpdate({ _id: photo._id, status: "processing" }, { $set: decision }, { returnDocument: "after" }) || await VehiclePhoto.findById(photo._id);
     return res.status(201).json({ photo: serializePhoto(photo) });
   } catch (error) {
     if (key) await fs.unlink(photoPath(key)).catch(() => {});
@@ -62,7 +62,7 @@ export async function reviewVehiclePhoto(req, res, next) {
   try {
     const { status, exterior, reason } = req.body;
     if (!["approved", "rejected"].includes(status) || typeof exterior !== "boolean" || typeof reason !== "string" || reason.trim().length < 5 || reason.length > 500) return res.status(400).json({ message: "Choose a decision, cover eligibility, and a reason (5–500 characters)." });
-    const photo = await VehiclePhoto.findOneAndUpdate({ _id: req.params.id, status: "needs_review" }, { $set: { status, exterior: status === "approved" && exterior, reason: reason.trim(), reviewedBy: req.user._id, reviewedAt: new Date() } }, { new: true });
+    const photo = await VehiclePhoto.findOneAndUpdate({ _id: req.params.id, status: "needs_review" }, { $set: { status, exterior: status === "approved" && exterior, reason: reason.trim(), reviewedBy: req.user._id, reviewedAt: new Date() } }, { returnDocument: "after" });
     if (!photo) return res.status(409).json({ message: "This photo has already been reviewed or is not awaiting review." });
     res.json({ photo: serializePhoto(photo) });
   } catch (error) { next(error); }

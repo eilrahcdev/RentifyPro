@@ -99,6 +99,12 @@ const vehicleSchema = new mongoose.Schema(
       enum: ["none", "manual", "inspection"],
       default: "none",
     },
+    bookingReservationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Booking",
+      default: null,
+      select: false,
+    },
     images: {
       type: [String],
       default: [],

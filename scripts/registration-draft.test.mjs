@@ -80,3 +80,19 @@ test("blocked storage never prevents registration and blank forms are not saved"
   writeRegistrationDraft(store, "owner", { ownerType: "individual", password: "secret" }, now + DRAFT_IDLE_MS);
   assert.equal(store.getItem(draftStorageKey("owner")), null);
 });
+
+test("pending autosaves cache only safe fields and untrusted progress metadata", () => {
+  const store = storage();
+  writeRegistrationDraft(store, "owner", { businessEmail: "owner@gmail.com", taxIdentificationNumber: "123456789", branchCode: "00000",
+    supportingDocType: "BIR Form 2303", password: "plaintext-secret", selfieVerified: true }, now + DRAFT_IDLE_MS,
+    { step: 4, phase: "documents", revision: 3, sentStep: 3, sentFields: { businessEmail: "owner@gmail.com", password: "plaintext-secret" } });
+  const restored = readRegistrationDraft(store, "owner", now);
+  assert.equal(restored.pending.step, 4); assert.equal(restored.pending.revision, 3);
+  assert.equal(restored.pending.phase, "documents");
+  assert.deepEqual(restored.pending.sentFields, { businessEmail: "owner@gmail.com" });
+  assert.equal(restored.fields.branchCode, "00000");
+  assert.equal(store.getItem(draftStorageKey("owner")).includes("plaintext-secret"), false);
+  assert.equal("selfieVerified" in restored.fields, false);
+  writeRegistrationDraft(store, "user", { email: "user@gmail.com" }, now + DRAFT_IDLE_MS, { step: 5, phase: "approved" });
+  assert.equal(readRegistrationDraft(store, "user", now).pending.phase, undefined);
+});

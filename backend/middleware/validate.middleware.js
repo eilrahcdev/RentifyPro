@@ -28,7 +28,7 @@ const MAX_ADDRESS_LENGTH = 255;
 const MAX_EMERGENCY_CONTACT_NAME_LENGTH = 50;
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
-const parseDateOfBirth = (value) => {
+export const parseDateOfBirth = (value) => {
   const clean = toText(value);
   if (!clean) return null;
 
@@ -52,7 +52,7 @@ const parseDateOfBirth = (value) => {
   return null;
 };
 
-const getAgeFromDate = (birthDate, today) => {
+export const getAgeFromDate = (birthDate, today) => {
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
   const dayDiff = today.getDate() - birthDate.getDate();
@@ -60,7 +60,7 @@ const getAgeFromDate = (birthDate, today) => {
   return age;
 };
 
-const registrationEmailError = (email) => {
+export const registrationEmailError = (email) => {
   if (!email || typeof email !== "string") return "Email is required.";
   if (/\s/.test(email.trim())) return "Email must not contain spaces.";
   if (EMOJI_REGEX.test(email)) return "Email must not contain emoji.";

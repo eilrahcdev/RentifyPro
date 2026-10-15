@@ -5,6 +5,11 @@ const fail = (message, status = 503, retryable = false, code = "PRIVATE_KYC_SCRE
   status, retryable, code,
 });
 
+export function getPrivateOcrRequestTimeoutMs(env = process.env) {
+  const configured = Number(env.KYC_PRIVATE_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 1000 && configured <= 120_000 ? configured : 30_000;
+}
+
 export function isCompatiblePrivateOcrHealth(health) {
   return health?.ready === true && health.schema_version === 1
     && health.provider === "paddleocr" && health.layout_version === 2;
@@ -80,9 +85,7 @@ async function readBoundedJson(response) {
 
 export async function inspectPrivateKycDocument({ base64, mimeType }) {
   assertKycScreeningAvailable("private_ocr");
-  const configuredTimeout = Number(process.env.KYC_PRIVATE_REQUEST_TIMEOUT_MS);
-  const timeout = Number.isFinite(configuredTimeout) && configuredTimeout >= 1000 && configuredTimeout <= 120_000
-    ? configuredTimeout : 30_000;
+  const timeout = getPrivateOcrRequestTimeoutMs();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {

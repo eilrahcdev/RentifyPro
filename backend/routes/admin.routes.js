@@ -17,6 +17,7 @@ import { canManuallyCompareDocument, hasCurrentManualDocumentComparison } from "
 import { getPrivateKycReviewContext } from "../services/privateKycReviewContext.js";
 import PreKycDocument from "../models/PreKycDocument.js";
 import { getKycUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
+import { getAccountVerification } from "../services/accountVerification.service.js";
 
 const VEHICLE_MEDIA_PREFIX = "uploads/vehicles/";
 const VEHICLE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
@@ -52,7 +53,6 @@ const mapRole = (role) => {
 const mapCustomerStatus = (user) => {
   if (user.isArchived) return "Archived";
   if (user.isDisabled) return "Suspended";
-  if (user.kycStatus === "rejected") return "Inactive";
   return user.isVerified ? "Active" : "Pending Verification";
 };
 
@@ -73,6 +73,8 @@ const mapUser = (user) => ({
   phone: asText(user.phone, "—"),
   role: mapRole(user.role),
   status: mapCustomerStatus(user),
+  emailVerified: user.isVerified === true,
+  documentStatus: user.kycStatus || "not_started",
   created: asDate(user.createdAt),
   createdAt: asTimestamp(user.createdAt),
   disabledUntil: asTimestamp(user.disabledUntil),
@@ -140,6 +142,7 @@ const mapDocument = (document, usersByEmail) => {
       ? "Identity details have not passed comparison. Ask the applicant to correct their registration details or upload the matching ID."
       : "",
     reviewVersion: document.reviewVersion || document.fileHash,
+    reviewHistory: document.reviewHistory || [],
     mimeType: asText(document.mimeType, "application/octet-stream"),
     reason: asText(document.reason),
     reasonCode: asText(document.reasonCode),
@@ -242,13 +245,13 @@ router.get("/data", async (_request, response, next) => {
       const database = mongoose.connection.db;
       const [users, vehicles, documents, bookings] = await Promise.all([
         database.collection("users").find({}, {
-          projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, kycStatus: 1, isDisabled: 1, isArchived: 1, disabledUntil: 1, moderationRestrictions: 1, createdAt: 1 },
+          projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, kycStatus: 1, registrationDraftId: 1, ownerDocumentVerificationRequired: 1, isDisabled: 1, isArchived: 1, disabledUntil: 1, moderationRestrictions: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("vehicles").find({}, {
           projection: { owner: 1, name: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("prekycdocuments").find({}, {
-          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, provider: 1, privateScreening: 1, manualComparison: 1 },
+          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, reviewHistory: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, provider: 1, privateScreening: 1, manualComparison: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("bookings").find({}, {
           projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, status: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
@@ -261,7 +264,7 @@ router.get("/data", async (_request, response, next) => {
       const ownerNames = new Map(users.map((user) => [user._id.toString(), asText(user.name, "Unknown operator")]));
 
       return response.json({
-        customers: users.map(mapUser),
+        customers: await Promise.all(users.map(async user => ({ ...mapUser(user), verification: await getAccountVerification(user) }))),
         vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, ownerNames)),
         documents: documents.map((document) => mapDocument(document, usersByEmail)),
         bookings: bookings.map((booking) => mapBooking(booking, usersById, vehiclesById)),

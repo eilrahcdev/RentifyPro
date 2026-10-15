@@ -34,6 +34,11 @@ export const clearPreKycSessionToken = (email, role = "user") => {
   }
 };
 
+export const restorePreKycSessionToken = (email, role, token) => {
+  if (token) writeSessionToken(sessionKey(email, role), token);
+};
+export const readPreKycSessionToken = (email, role = "user") => readSessionToken(sessionKey(email, role));
+
 const tokenNeedsRenewal = (token) => {
   try {
     const payloadPart = String(token || "").split(".")[1] || "";
@@ -130,7 +135,7 @@ export async function preRegisterIdFace(
   idImageMime,
   options = {}
 ) {
-  const { idType = "", userProfile = {} } = options || {};
+  const { idType = "", userProfile = {}, documentRevision = "" } = options || {};
   return postPreKyc("/kyc/pre/id-register", email, role, {
     email,
     full_name: fullName,
@@ -139,6 +144,7 @@ export async function preRegisterIdFace(
     id_image_mime: idImageMime,
     id_type: idType,
     user_profile: userProfile,
+    document_revision: documentRevision,
   });
 }
 
@@ -159,7 +165,7 @@ export async function preVerifySupportingDocument(
   role = "owner",
   options = {}
 ) {
-  const { documentType = "", userProfile = {} } = options || {};
+  const { documentType = "", userProfile = {}, documentRevision = "" } = options || {};
   return postPreKyc("/kyc/pre/supporting-doc/verify", email, role, {
     email,
     role,
@@ -167,5 +173,6 @@ export async function preVerifySupportingDocument(
     doc_image_mime: docImageMime,
     supporting_doc_type: documentType,
     user_profile: userProfile,
+    document_revision: documentRevision,
   });
 }

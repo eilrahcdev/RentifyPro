@@ -51,7 +51,7 @@ const toReviewError = (failure) => {
 };
 
 export default function PreKycReviewNotice({ email, role = "user", enabled, onResubmit, onCorrectDetails, onIdStatus, onDocumentsChange, refreshKey = 0, ignoreSupportingDocument = false,
-  ignoreIdDocument = false, idRevision = "", supportingRevision = "" }) {
+  ignoreIdDocument = false, idRevision = "", supportingRevision = "", onVerificationChange }) {
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -86,6 +86,8 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
         });
         setDocuments(nextDocuments);
         onDocumentsChange?.(nextDocuments);
+        onVerificationChange?.(nextDocuments.some(document => document.docType === "id" && document.identityReadyForSelfie)
+          && result.selfieVerified === true);
         setError(null);
         const id = nextDocuments.find((document) => document.docType === "id");
         if (id) onIdStatus?.(id.status, id);
@@ -105,7 +107,7 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [email, role, enabled, onIdStatus, onDocumentsChange, refreshSignal, refreshKey, ignoreSupportingDocument, ignoreIdDocument, idRevision, supportingRevision]);
+  }, [email, role, enabled, onIdStatus, onDocumentsChange, onVerificationChange, refreshSignal, refreshKey, ignoreSupportingDocument, ignoreIdDocument, idRevision, supportingRevision]);
   if (!enabled) return null;
 
   const expectedDocuments = (role === "owner"

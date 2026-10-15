@@ -225,7 +225,7 @@ export const requestOwnerOtp = async (req, res) => {
           lastSentAt: new Date(),
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     await sendEmail(email, otp, "owner_register");
@@ -368,7 +368,7 @@ export const verifyOwnerOtp = async (req, res) => {
           verifiedAt: new Date(),
           remarks: "Identity approved during signed pre-registration KYC.",
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: "after" }
       );
     } catch (kycCaseError) {
       console.error("Failed to create owner KYC case:", kycCaseError.message);

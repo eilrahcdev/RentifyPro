@@ -1,5 +1,5 @@
 import Vehicle from "../models/Vehicle.js";
-import { hasActiveBookingForVehicle } from "../utils/vehicleAvailability.js";
+import { hasActiveBookingForVehicle, syncVehicleAvailabilityByBookingState } from "../utils/vehicleAvailability.js";
 import { HOURLY_RATE_UNIT, getVehicleHourlyRate } from "../utils/pricing.js";
 import { getVehicleLateReturnPolicy } from "../utils/lateReturnPolicy.js";
 import {
@@ -358,6 +358,10 @@ export const updateOwnerVehicle = async (req, res) => {
 
     if (req.approvedPhotoMetadata) vehicle.imageReviews = req.approvedPhotoMetadata;
     await vehicle.save();
+    if (req.body.availabilityStatus === "available") {
+      const availabilityStatus = await syncVehicleAvailabilityByBookingState(vehicle._id);
+      if (availabilityStatus) vehicle.availabilityStatus = availabilityStatus;
+    }
     if (removedImages.length) {
       await removeLocalVehicleImages(removedImages);
     }
@@ -409,6 +413,11 @@ export const setOwnerVehicleAvailability = async (req, res) => {
           ? "inspection"
           : "manual";
     await vehicle.save();
+
+    if (availabilityStatus === "available") {
+      const nextStatus = await syncVehicleAvailabilityByBookingState(vehicle._id);
+      if (nextStatus) vehicle.availabilityStatus = nextStatus;
+    }
 
     res.json({ success: true, vehicle: serializeVehicle(req, vehicle) });
   } catch {

@@ -40,6 +40,9 @@ const getBookingRentalAmountForPayment = (booking) => {
 };
 
 export const getEffectiveTransactionFee = (booking) => {
+  if (Number(booking?.bookingPolicyVersion) === 2 && Number.isFinite(Number(booking.transactionFee))) {
+    return roundCurrency(Math.max(0, Number(booking.transactionFee)));
+  }
   const configured = getTransactionFee();
   const persisted = Number(booking?.transactionFee);
   let effective = Number.isFinite(persisted) && persisted > 0 ? roundCurrency(persisted) : 0;

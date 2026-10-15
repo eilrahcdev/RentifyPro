@@ -7,7 +7,7 @@ import { createBookingPayment, verifyBookingPayment } from "../controllers/booki
 import { acquirePaymentCheckoutLock, applyCapturedBookingCheckout, getOrCreateBookingCheckout } from "../services/bookingPayment.service.js";
 import { getPayMongoCapturedAmountInCentavos, isPayMongoCheckoutPaid } from "../utils/paymongo.js";
 import { receivePayMongoWebhook, verifyPayMongoWebhookSignature } from "../controllers/paymentWebhook.controller.js";
-import { reconcileBookingPayments } from "../jobs/paymentReconciliation.job.js";
+import { reconcileBookingPayments, stopPaymentReconciliationJob } from "../jobs/paymentReconciliation.job.js";
 import eventBus from "../events/eventBus.js";
 
 const ids = { booking: "507f1f77bcf86cd799439013", renter: "507f1f77bcf86cd799439012", owner: "507f1f77bcf86cd799439011" };
@@ -71,6 +71,39 @@ function setup(t, initial = fixture()) {
   t.mock.method(eventBus, "emit", () => { notifications++; });
   environment(t, "PAYMONGO_SECRET_KEY", "sk_test_fixture");
   return { booking: () => structuredClone(stored), writes: () => writes, notifications: () => notifications };
+}
+
+for (const scenario of [
+  { scope: "downpayment", paid: 0, amount: 330 },
+  { scope: "full", paid: 0, amount: 1100 },
+  { scope: "full", paid: 330, amount: 770 },
+]) {
+  test(`PHP 100 fee is included in ${scenario.scope} checkout with PHP ${scenario.paid} already paid`, async (t) => {
+    environment(t, "BOOKING_TRANSACTION_FEE", "100");
+    const state = setup(t, fixture({
+      transactionFee: 100, paymentStatus: scenario.paid ? "partial" : "unpaid",
+      paymentAmountPaid: scenario.paid, paymentAmountDue: 1100 - scenario.paid,
+      paymentCheckoutAmount: 0, paymongoCheckoutId: null,
+    }));
+    t.mock.method(axios, "get", async () => { assert.fail("A new checkout must not retrieve an old session"); });
+    let checkoutRequests = 0;
+    t.mock.method(axios, "post", async (_url, payload) => {
+      checkoutRequests++;
+      const attributes = payload.data.attributes;
+      assert.equal(attributes.line_items[0].currency, "PHP");
+      assert.equal(attributes.line_items[0].amount, scenario.amount * 100);
+      assert.equal(attributes.metadata.transactionFee, "100");
+      assert.equal(attributes.metadata.totalPayable, "1100");
+      return { data: { data: checkout({ payments: [] }) } };
+    });
+    const res = response();
+    await createBookingPayment(request({ paymentScope: scenario.scope, paymentChannel: "card" }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(checkoutRequests, 1);
+    assert.equal(state.booking().transactionFee, 100);
+    assert.equal(state.booking().paymentCheckoutAmount, scenario.amount);
+    assert.equal(state.booking().paymentAmountDue, 1100 - scenario.paid);
+  });
 }
 
 test("authorization, pending capture, and unrelated statuses cannot claim a captured payment", () => {
@@ -261,6 +294,115 @@ test("background reconciliation records capture without a browser request", asyn
   await reconcileBookingPayments();
   assert.equal(state.booking().paymentAmountPaid, 342);
   assert.equal(state.notifications(), 1);
+});
+
+test("captured payments requiring review retain their specific reason and never change settled or corrected balances", async t => {
+  for (const scenario of [
+    { extra: { status: "completed", paymentStatus: "paid", paymentAmountPaid: 1140, paymentAmountDue: 0 }, reason: "CAPTURE_EXCEEDS_BALANCE" },
+    { extra: { status: "cancelled" }, reason: "BOOKING_STATUS_CHANGED" },
+    { extra: { manualPaymentRevision: 1 }, reason: "MANUAL_PAYMENT_CHANGED" },
+  ]) {
+    const state = setup(t, fixture(scenario.extra));
+    await assert.rejects(applyCapturedBookingCheckout(state.booking(), checkout()), error => {
+      assert.equal(error.code, "BOOKING_PAYMENT_CHANGED");
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.reconciliationReason, scenario.reason);
+      assert.equal(error.requiresReview, true);
+      return true;
+    });
+    assert.equal(state.writes(), 0);
+    assert.equal(state.booking().paymentAmountPaid, scenario.extra.paymentAmountPaid || 0);
+    assert.deepEqual(state.booking().paymongoVerifiedCheckoutIds, []);
+  }
+});
+
+test("unchanged review cases back off, remain visible, and retry without crediting an already settled capture", async t => {
+  stopPaymentReconciliationJob(); t.after(stopPaymentReconciliationJob);
+  let clock = Date.now(), reads = 0;
+  t.mock.method(Date, "now", () => clock);
+  const state = setup(t, fixture({ status: "completed", paymentStatus: "paid", paymentAmountPaid: 1140, paymentAmountDue: 0 }));
+  const reports = [];
+  t.mock.method(console, "error", (_message, details) => reports.push(details));
+  t.mock.method(axios, "get", async () => { reads++; return { data: { data: checkout() } }; });
+  await reconcileBookingPayments();
+  assert.equal(reads, 1);
+  assert.equal(reports[0].reason, "CAPTURE_EXCEEDS_BALANCE");
+  assert.equal(reports[0].action, "manual_review");
+  assert.equal(new Date(reports[0].retryAt).getTime(), clock + 15 * 60_000);
+  await reconcileBookingPayments();
+  assert.equal(reads, 1);
+  clock += 15 * 60_000;
+  await reconcileBookingPayments();
+  assert.equal(reads, 2);
+  assert.equal(reports.length, 2);
+  assert.equal(state.writes(), 0);
+  assert.equal(state.booking().paymentAmountPaid, 1140);
+});
+
+test("a changed booking bypasses review backoff and legitimate capture still records exactly once", async t => {
+  stopPaymentReconciliationJob(); t.after(stopPaymentReconciliationJob);
+  let reads = 0;
+  const state = setup(t, fixture({ status: "cancelled" }));
+  t.mock.method(console, "error", () => {});
+  t.mock.method(axios, "get", async () => { reads++; return { data: { data: checkout() } }; });
+  await reconcileBookingPayments();
+  assert.equal(state.writes(), 0);
+  await Booking.updateOne({ _id: ids.booking }, { $set: { status: "confirmed", paymentRevision: 1 } });
+  await reconcileBookingPayments();
+  assert.equal(reads, 2);
+  assert.equal(state.booking().paymentAmountPaid, 342);
+  assert.equal(state.notifications(), 1);
+  await reconcileBookingPayments();
+  assert.equal(state.booking().paymentAmountPaid, 342);
+  assert.equal(state.notifications(), 1);
+});
+
+test("provider failures back off independently, retain a safe retry diagnostic, and recover", async t => {
+  stopPaymentReconciliationJob(); t.after(stopPaymentReconciliationJob);
+  let clock = Date.now(), reads = 0;
+  t.mock.method(Date, "now", () => clock);
+  const state = setup(t), reports = [];
+  t.mock.method(console, "error", (_message, details) => reports.push(details));
+  t.mock.method(axios, "get", async () => {
+    reads++;
+    if (reads <= 2) throw Object.assign(new Error("private-provider-response"), { response: { status: 503 } });
+    return { data: { data: checkout() } };
+  });
+  await reconcileBookingPayments(); await reconcileBookingPayments();
+  assert.equal(reads, 1);
+  assert.equal(reports[0].action, "retry");
+  assert.equal(JSON.stringify(reports).includes("private-provider-response"), false);
+  clock += 60_000; await reconcileBookingPayments();
+  assert.equal(reads, 2);
+  assert.equal(new Date(reports[1].retryAt).getTime(), clock + 120_000);
+  clock += 120_000; await reconcileBookingPayments();
+  assert.equal(reads, 3);
+  assert.equal(state.booking().paymentAmountPaid, 342);
+  assert.equal(state.notifications(), 1);
+});
+
+test("a deferred review does not stop another booking from reconciling in the same batch", async t => {
+  stopPaymentReconciliationJob(); t.after(stopPaymentReconciliationJob);
+  const state = setup(t);
+  const settled = fixture({ _id: "507f1f77bcf86cd799439015", status: "completed", paymentStatus: "paid",
+    paymentAmountPaid: 1140, paymentAmountDue: 0, paymongoCheckoutId: "cs_settled" });
+  t.mock.method(Booking, "find", () => query(() => [settled, state.booking()]));
+  const requested = [], reports = [];
+  t.mock.method(console, "error", (_message, details) => reports.push(details));
+  t.mock.method(axios, "get", async url => {
+    requested.push(url);
+    const session = checkout();
+    if (url.endsWith("cs_settled")) { session.id = "cs_settled"; session.attributes.metadata.bookingId = settled._id; }
+    return { data: { data: session } };
+  });
+  await reconcileBookingPayments();
+  assert.equal(state.booking().paymentAmountPaid, 342);
+  assert.equal(state.notifications(), 1);
+  assert.equal(reports[0].reason, "CAPTURE_EXCEEDS_BALANCE");
+  const firstReviewReads = requested.filter(url => url.endsWith("cs_settled")).length;
+  await reconcileBookingPayments();
+  assert.equal(requested.filter(url => url.endsWith("cs_settled")).length, firstReviewReads);
+  assert.equal(state.booking().paymentAmountPaid, 342);
 });
 
 test("webhook verification rejects tampering, stale timestamps, missing headers, and mode mismatch", () => {

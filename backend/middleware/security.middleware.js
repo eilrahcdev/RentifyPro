@@ -3,6 +3,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import hpp from "hpp";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
+import { createChatbotProtection } from "./chatbotProtection.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 const rateLimitingEnabled =
@@ -40,9 +41,7 @@ const apiPath = (req) => String(req.path || "").toLowerCase().replace(/\/+$/, ""
 const isHealthRead = (req) => ["GET", "HEAD"].includes(req.method) && apiPath(req) === "/health";
 const isPreKycStatusRead = (req) =>
   ["GET", "HEAD"].includes(req.method) && apiPath(req) === "/kyc/pre/status";
-const CHATBOT_RATE_LIMIT_MAX = 20;
-const CHATBOT_IN_FLIGHT_TTL_MS = 30 * 1000;
-const activeChatbotRequests = new Map();
+const isChatbotPost = (req) => req.method === "POST" && apiPath(req) === "/chat";
 
 const hasValidSessionToken = (req) => Boolean(getVerifiedSessionUserId(req));
 
@@ -85,6 +84,7 @@ const buildRateLimitHandler = (messagePrefix) => (req, res, _next, options) => {
   res.setHeader("Cache-Control", "no-store");
   return res.status(429).json({
     success: false,
+    ...(isChatbotPost(req) ? { code: "CHAT_RATE_LIMITED", layer: "network" } : {}),
     message: `${messagePrefix} Try again in ${countdown}.`,
     retryAfterSeconds,
     retryAfterMs,
@@ -142,53 +142,12 @@ export const generalLimiter = createLimiter({
   max: (req) => getVerifiedSessionUserId(req) ? userRequestLimit : guestRequestLimit,
   messagePrefix: "Too many requests.",
   keyGenerator: keyByVerifiedSessionOrIp,
-  skipCondition: (req) => req.method === "OPTIONS" || isHealthRead(req) || isPreKycStatusRead(req),
+  skipCondition: (req) => req.method === "OPTIONS" || isHealthRead(req) || isPreKycStatusRead(req) || isChatbotPost(req),
 });
 
-// Chatbot requests are computationally expensive and may also query live vehicle data.
-// Count every request, including successful requests, for both guests and signed-in users.
-export const chatbotLimiter = createLimiter({
-  max: CHATBOT_RATE_LIMIT_MAX,
-  messagePrefix: "Too many chatbot requests.",
-  keyGenerator: keyByVerifiedSessionOrIp,
-});
-
-export const chatbotConcurrencyGuard = (req, res, next) => {
-  if (!rateLimitingEnabled) return next();
-
-  const key = keyByVerifiedSessionOrIp(req);
-  if (activeChatbotRequests.has(key)) {
-    const retryAfterSeconds = 2;
-    const retryAfterMs = retryAfterSeconds * 1000;
-    res.setHeader("Retry-After", String(retryAfterSeconds));
-    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
-    return res.status(429).json({
-      success: false,
-      message: "A chatbot request is already processing. Please wait for it to finish before sending another.",
-      reason: "chatbot_request_in_progress",
-      retryAfterSeconds,
-      retryAfterMs,
-      retryAfterAt: new Date(Date.now() + retryAfterMs).toISOString(),
-      countdown: "00:02",
-      serverTime: new Date().toISOString(),
-    });
-  }
-
-  const requestToken = Symbol(key);
-  activeChatbotRequests.set(key, requestToken);
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    if (activeChatbotRequests.get(key) === requestToken) activeChatbotRequests.delete(key);
-    clearTimeout(safetyTimer);
-  };
-  const safetyTimer = setTimeout(release, CHATBOT_IN_FLIGHT_TTL_MS);
-  safetyTimer.unref?.();
-  res.once("finish", release);
-  res.once("close", release);
-  return next();
-};
+const chatbotProtection = createChatbotProtection({ enabled: rateLimitingEnabled });
+export const chatbotLimiter = chatbotProtection.limiter;
+export const chatbotConcurrencyGuard = chatbotProtection.concurrencyGuard;
 
 // Auth limit
 export const authLimiter = createLimiter({

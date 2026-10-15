@@ -79,6 +79,9 @@ async function request(endpoint, options = {}) {
     const msg = data.message || data.errors?.email || `Request failed (${response.status})`;
     const error = new Error(msg);
     error.status = response.status;
+    error.code = typeof data.code === "string" ? data.code : undefined;
+    error.retryAfterHeader = response.headers.get("Retry-After");
+    error.serverDateHeader = response.headers.get("Date");
 
     if (data && typeof data === "object") {
       error.details = data;
@@ -157,6 +160,7 @@ const API = {
   kycRegisterFace: (body) => request("/kyc/id-register", { method: "POST", body: JSON.stringify(body) }),
   kycVerifySelfie: (body) => request("/kyc/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
   kycGetStatus: () => request("/kyc/me"),
+  kycReplaceDocument: (docType, body) => request(`/kyc/documents/${encodeURIComponent(docType)}`, { method: "POST", body: JSON.stringify(body) }),
   kycReverifyId: (body) => request("/kyc/reverify/id-register", { method: "POST", body: JSON.stringify(body) }),
   kycReverifySelfie: (body) => request("/kyc/reverify/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
   kycCancelReverification: (attemptId) => request("/kyc/reverify/cancel", { method: "POST", body: JSON.stringify({ attemptId }) }),
@@ -221,9 +225,13 @@ const API = {
       method: "POST",
       body: JSON.stringify(body || {}),
     }),
-  requestBookingReturn: (id) =>
+  withdrawBookingExtension: (id, body = {}) => request(`/bookings/${id}/extension-request/withdraw`, {
+    method: "PATCH", body: JSON.stringify(body),
+  }),
+  requestBookingReturn: (id, body = {}) =>
     request(`/bookings/${id}/return-request`, {
       method: "POST",
+      body: JSON.stringify(body),
     }),
   cancelBooking: (id) => request(`/bookings/${id}/cancel`, { method: "PATCH" }),
   reviewBooking: (id, body) => request(`/bookings/${id}/review`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -233,9 +241,10 @@ const API = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
-  confirmOwnerVehicleReturn: (id) =>
+  confirmOwnerVehicleReturn: (id, body = {}) =>
     request(`/owner/bookings/${id}/confirm-return`, {
       method: "POST",
+      body: JSON.stringify(body),
     }),
   reviewOwnerVehicleReturnRequest: (id, action, body = {}) =>
     request(`/owner/bookings/${id}/return-request`, {
@@ -299,7 +308,7 @@ const API = {
       method: "PATCH",
       body: JSON.stringify({ pinned }),
     }),
-  chatWithBot: (body) => request("/chat", { method: "POST", body: JSON.stringify(body) }),
+  chatWithBot: (body, { signal } = {}) => request("/chat", { method: "POST", body: JSON.stringify(body), signal }),
   getMessagesWithUser: (userId, context = "") =>
     request(`/chat/messages/${userId}${buildQueryString(normalizeChatContext(context))}`),
   sendMessageToUser: (userId, body) =>

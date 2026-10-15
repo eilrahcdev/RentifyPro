@@ -8,6 +8,8 @@ test("late-return notification details survive notification data sanitization", 
     vehicleName: "Yamaha R3",
     scheduledReturnAt: "2026-08-29T12:00:00.000Z",
     actualReturnAt: "2026-08-29T16:40:00.000Z",
+    returnConfirmedAt: "2026-08-29T18:00:00.000Z",
+    returnReportedHandoverAt: "2026-08-29T16:40:00.000Z",
     overdueMinutes: 280,
     graceMinutes: 15,
     lateReturnPenaltyRatePerHour: 200,
@@ -24,6 +26,8 @@ test("late-return notification details survive notification data sanitization", 
   });
 
   assert.equal(data.vehicleName, "Yamaha R3");
+  assert.equal(data.returnConfirmedAt, "2026-08-29T18:00:00.000Z");
+  assert.equal(data.returnReportedHandoverAt, "2026-08-29T16:40:00.000Z");
   assert.equal(data.lateReturnPenaltyFee, 933.33);
   assert.equal(data.remainingBalance, 14368.68);
   assert.equal(data.paymentAction, "Pay Remaining");

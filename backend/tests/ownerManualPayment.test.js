@@ -33,7 +33,7 @@ function setup(t, initial = fixture()) {
   t.mock.method(Booking, "findOneAndUpdate", (filter, update, options) => ({ populate: async () => {
     assert.equal(filter.owner, owner);
     assert.equal(options.runValidators, true);
-    assert.equal(options.new, true);
+    assert.equal(options.returnDocument, "after");
     if (filter.updatedAt.getTime() !== stored.updatedAt.getTime() ||
         (typeof filter.manualPaymentRevision === "number" && filter.manualPaymentRevision !== stored.manualPaymentRevision) ||
         (typeof filter.manualPaymentRevision === "object" && stored.manualPaymentRevision !== 0)) return null;
@@ -77,12 +77,13 @@ test("manual Paid settles finalized penalties and restores booking eligibility",
   assert.equal(evaluateBookingEligibility([state.booking()]).eligible, true);
 });
 
-test("unpaid legacy records preserve their transaction fee when marked paid", async (t) => {
+test("unpaid legacy records receive the configured transaction fee when marked paid", async (t) => {
   setup(t, fixture({ paymentStatus: "unpaid", transactionFee: 0, paymentAmountPaid: 0, paymentAmountDue: 1000, paymentMethod: null }));
   const res = response();
   await updateOwnerBookingPaymentStatus(request("paid"), res);
-  assert.equal(res.body.booking.amountPayable, 1140);
-  assert.equal(res.body.booking.paymentAmountPaid, 1140);
+  assert.equal(res.body.booking.transactionFee, 100);
+  assert.equal(res.body.booking.amountPayable, 1100);
+  assert.equal(res.body.booking.paymentAmountPaid, 1100);
   assert.equal(res.body.booking.paymentMethod, "Owner-confirmed");
 });
 

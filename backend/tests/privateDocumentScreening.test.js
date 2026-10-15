@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ID_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES } from "../services/documentValidation.service.js";
 import { evaluatePrivateDocumentInspection, extractPrivateDocumentFields } from "../services/privateDocumentExtraction.service.js";
 import { normalizePrivateOcrResponse } from "../services/privateKycOcr.service.js";
-import { publicPrivateScreening, hasCurrentPrivateAutomatedMatch } from "../services/privateDocumentLayout.service.js";
+import { publicPrivateScreening, hasCurrentPrivateAutomatedMatch, PRIVATE_AUTOMATED_CHECK_VERSION } from "../services/privateDocumentLayout.service.js";
 import { isIdentityReadyForSelfie } from "../utils/preKycDocs.js";
 
 const headings = [
@@ -95,7 +95,11 @@ test("uncertain, missing, contradictory fields and invalid dates never produce a
     (payload) => { payload.lines.find((entry) => entry.text.startsWith("Expiration Date")).text = "Expiration Date: 05/12/2099"; },
   ]) {
     const payload = fixture(); change(payload);
-    assert.equal(assess("Philippine Passport", { payload, minimumFieldConfidence: 20 }).privateScreening.automatedCheck.outcome, "correction_needed");
+    const decision = assess("Philippine Passport", { payload, minimumFieldConfidence: 20 });
+    assert.equal(decision.privateScreening.automatedCheck.outcome, "review_needed");
+    assert.equal(decision.status, "pending_review");
+    assert.equal(decision.privateScreening.automatedCheck.checks.registrationDetails, null);
+    assert.equal(isIdentityReadyForSelfie({ ...decision, provider: "private-ocr", docType: "id" }), false);
   }
   const expired = fixture(); expired.lines.find((entry) => entry.text.startsWith("Expiration Date")).text = "Expiration Date: 2000-05-12";
   assert.equal(assess("Philippine Passport", { payload: expired }).reasonCode, "DOCUMENT_EXPIRED");
@@ -120,14 +124,18 @@ test("bilingual National ID labels and a unique unlabeled card number match with
   assert.equal(decision.privateScreening.automatedCheck.outcome, "passed");
   assert.equal(JSON.stringify(decision).includes("1234-5678-9012-3456"), false);
   payload.lines.push(line("1234-5678-9012-0000", 0.15));
-  assert.equal(assess("PhilSys National ID", { payload }).privateScreening.automatedCheck.outcome, "correction_needed");
+  const contradictory = assess("PhilSys National ID", { payload });
+  assert.equal(contradictory.privateScreening.automatedCheck.outcome, "review_needed");
+  assert.equal(contradictory.privateScreening.automatedCheck.checks.requiredFields, false);
 });
 
 test("owner ID comparison requires only the profile fields supplied by the existing owner flow", () => {
   const payload = fixture(); payload.lines = payload.lines.filter((entry) => !entry.text.startsWith("Date of Birth"));
   const decision = assess("Philippine Passport", { payload, profile: { first_name: "Sample", last_name: "Applicant" }, requireBirthDate: false, role: "owner" });
   assert.equal(decision.privateScreening.automatedCheck.outcome, "passed");
-  assert.equal(assess("Philippine Passport", { payload }).privateScreening.automatedCheck.outcome, "correction_needed");
+  const renter = assess("Philippine Passport", { payload });
+  assert.equal(renter.privateScreening.automatedCheck.outcome, "review_needed");
+  assert.equal(renter.privateScreening.automatedCheck.checks.requiredFields, false);
 });
 
 test("a bilingual ID ignores low-confidence hologram noise between the label and readable name in OCR order", () => {
@@ -178,7 +186,7 @@ test("only a current backend-bound match enables selfies; stale, duplicate, expi
     { status: "rejected" }, { status: "processing" }, { expiresAt: new Date(0) }, { suspectedTampering: true }]) {
     assert.equal(isIdentityReadyForSelfie({ ...document, ...edits }), false);
   }
-  for (const edits of [{ version: 1 }, { outcome: "review_needed" }, { profileBinding: "forged" },
+  for (const edits of [{ version: 1 }, { version: PRIVATE_AUTOMATED_CHECK_VERSION - 1 }, { outcome: "review_needed" }, { profileBinding: "forged" },
     { checks: { ...decision.privateScreening.automatedCheck.checks, registrationDetails: false } }]) {
     const changed = { ...document, privateScreening: { ...decision.privateScreening, automatedCheck: { ...decision.privateScreening.automatedCheck, ...edits } } };
     assert.equal(hasCurrentPrivateAutomatedMatch(changed), false);

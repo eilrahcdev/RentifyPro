@@ -6,6 +6,10 @@ const DEFAULT_TTL = "20m";
 
 const normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
 const normalizeRole = (value = "") => (String(value || "").trim().toLowerCase() === "owner" ? "owner" : "user");
+export const getPreKycMaxRenewalMs = () => {
+  const configured = Number(process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS || 72);
+  return (Number.isFinite(configured) ? Math.max(1, configured) : 72) * 60 * 60 * 1000;
+};
 
 const getSecret = () => {
   const secret = String(process.env.PRE_KYC_SESSION_SECRET || process.env.JWT_SECRET || "").trim();
@@ -18,6 +22,7 @@ export const issuePreKycSession = ({
   role,
   sessionId: existingSessionId = "",
   originIat: existingOriginIat = 0,
+  draftId = "",
 }) => {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) throw new Error("Email is required.");
@@ -32,6 +37,7 @@ export const issuePreKycSession = ({
       role: normalizedRole,
       sessionId,
       originIat,
+      ...(draftId ? { draftId } : {}),
     },
     getSecret(),
     {
@@ -40,7 +46,7 @@ export const issuePreKycSession = ({
     }
   );
 
-  return { token, email: normalizedEmail, role: normalizedRole, sessionId };
+  return { token, email: normalizedEmail, role: normalizedRole, sessionId, ...(draftId ? { draftId } : {}) };
 };
 
 export const renewPreKycSession = (token, { email, role } = {}) => {
@@ -55,12 +61,8 @@ export const renewPreKycSession = (token, { email, role } = {}) => {
     throw error;
   }
 
-  const configuredMaxRenewalHours = Number(process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS || 72);
-  const maxRenewalHours = Number.isFinite(configuredMaxRenewalHours)
-    ? Math.max(1, configuredMaxRenewalHours)
-    : 72;
   const issuedAtMs = Number(decoded?.originIat || decoded?.iat || 0) * 1000;
-  if (!issuedAtMs || Date.now() - issuedAtMs > maxRenewalHours * 60 * 60 * 1000) {
+  if (!issuedAtMs || Date.now() - issuedAtMs > getPreKycMaxRenewalMs()) {
     const error = new Error("Verification session is too old. Please restart document verification.");
     error.status = 401;
     throw error;
@@ -95,6 +97,7 @@ const verifyPreKycSessionClaims = (decoded, { email, role } = {}) => {
     role: normalizedRole,
     sessionId,
     originIat: Number(decoded?.originIat || decoded?.iat || 0),
+    ...(decoded?.draftId ? { draftId: String(decoded.draftId) } : {}),
   };
 };
 

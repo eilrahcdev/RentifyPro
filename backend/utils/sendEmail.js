@@ -98,9 +98,16 @@ const escapeHtml = (value) =>
 
 export const sendNotificationEmail = async ({ to, title, message, actionUrl = "" }) => {
   const recipient = normalizeRecipient(to);
-  const safeTitle = escapeHtml(title).slice(0, 180);
-  const safeMessage = escapeHtml(message).slice(0, 1000);
-  const safeActionUrl = String(actionUrl || "").trim();
+  const safeTitle = escapeHtml(toText(title).slice(0, 180));
+  const safeMessage = escapeHtml(toText(message).slice(0, 1000));
+  let safeActionUrl = String(actionUrl || "").trim();
+  if (safeActionUrl.startsWith("/")) {
+    try {
+      const base = new URL(toText(process.env.FRONTEND_URL).split(",")[0]);
+      const destination = new URL(safeActionUrl, base);
+      safeActionUrl = base.protocol === "https:" && destination.origin === base.origin ? destination.href : "";
+    } catch { safeActionUrl = ""; }
+  }
   const hasSafeAction = /^https:\/\//i.test(safeActionUrl);
   const transporter = getTransporter();
   const result = await transporter.sendMail({

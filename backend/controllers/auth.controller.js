@@ -10,26 +10,23 @@ import Otp from "../models/Otp.js";
 import LoginChallenge from "../models/LoginChallenge.js";
 import LoginActivity from "../models/LoginActivity.js";
 import { repairLegacyKycSummary } from "../services/kycSummary.service.js";
+import { getAccountVerification } from "../services/accountVerification.service.js";
 import { validateOwnerUpgradeDetails, validateOwnerUpgradeDocument } from "../services/ownerUpgrade.service.js";
 import sendEmail from "../utils/sendEmail.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
-import {
-  getMissingPreKycDocs,
-  getPendingPreKycDocs,
-  getActionRequiredPreKycDocs,
-  clearPreKycDocs,
-  preKycIdentityMatchesRegistration,
-  preKycSupportingMatchesRegistration,
-} from "../utils/preKycDocs.js";
-import { isPreKycFaceVerified, clearPreKycFace } from "../utils/preKycFace.js";
 import { isValidPhilippineMobile, normalizePhilippineMobile } from "../utils/phone.js";
 import { verifyPreKycSession } from "../utils/preKycSession.js";
+import { assertVerifiedRegistrationDraft } from "../utils/registrationDraft.js";
+import RegistrationDraft from "../models/RegistrationDraft.js";
+import PreKycDocument from "../models/PreKycDocument.js";
+import { registrationRecoveryState } from "./registrationDraft.controller.js";
+import { createOtpCode, OTP_EXPIRY_MS } from "../utils/emailOtp.js";
+import { finalizeRegistrationAccount } from "../services/registrationFinalization.service.js";
 import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
 import { hashAuthToken, revokeSessionToken } from "../utils/authTokenRevocation.js";
 import { disconnectSessionSockets } from "../socket/index.js";
 import { getAvatarUploadDir } from "../utils/storagePaths.js";
 
-const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const OTP_RESEND_COOLDOWN_SECONDS = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 45);
 const PASSWORD_RESET_TOKEN_EXPIRE = process.env.PASSWORD_RESET_TOKEN_EXPIRE || "15m";
 const PASSWORD_RESET_TOKEN_SECRET = process.env.PASSWORD_RESET_TOKEN_SECRET || process.env.JWT_SECRET;
@@ -39,8 +36,6 @@ const EMERGENCY_CONTACT_NAME_REGEX = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
 const MAX_EMERGENCY_CONTACT_NAME_LENGTH = 50;
 const LOGIN_CHALLENGE_TTL_MINUTES = Number(process.env.LOGIN_CHALLENGE_TTL_MINUTES || 180);
 const LOGIN_CHALLENGE_MAX_ATTEMPTS = Number(process.env.LOGIN_CHALLENGE_MAX_ATTEMPTS || 5);
-const CLEAR_PREKYC_ON_REGISTER =
-  String(process.env.PREKYC_CLEAR_ON_REGISTER || "").trim().toLowerCase() === "true";
 const AVATAR_UPLOAD_DIR = getAvatarUploadDir();
 const AVATAR_MAX_BYTES = Number(process.env.AVATAR_MAX_BYTES || 2 * 1024 * 1024);
 const AVATAR_MEDIA_PREFIX = "uploads/avatars/";
@@ -87,7 +82,6 @@ const toBool = (value, fallback = false) => {
   return fallback;
 };
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
-const createOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 const parseDateOfBirth = (value) => {
   const clean = toText(value);
   if (!clean) return null;
@@ -367,7 +361,17 @@ export const checkRegistrationEmail = async (req, res) => {
   }
 };
 
+async function finalizeDraftAccount(user, draft, res) {
+  await finalizeRegistrationAccount(user, draft);
+  clearAuthCookie(res);
+  return res.status(201).json({ success: true, message: user.kycStatus === "approved"
+    ? "Account created. Sign in to continue." : "Account created. Your documents are Pending Review. Sign in to continue.",
+    user: buildSafeUserResponse(user) });
+}
+
 export const registerUser = async (req, res) => {
+  let claimedDraft;
+  let accountCreationStarted = false;
   try {
     const {
       name,
@@ -404,18 +408,27 @@ export const registerUser = async (req, res) => {
     const normalizedPhone = normalizePhilippineMobile(phone);
     const requestedRole = role === "owner" ? "owner" : "user";
     let preKycSession;
+    let registrationDraft;
     try {
       preKycSession = verifyPreKycSession(req.body.preKycToken, {
         email: normalizedEmail,
         role: requestedRole,
       });
+      registrationDraft = await assertVerifiedRegistrationDraft(preKycSession);
     } catch (error) {
       return res.status(Number(error?.status) || 401).json({ success: false, message: error.message });
     }
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
+      if (existing.registrationDraftId === registrationDraft._id && existing.role === requestedRole && existing.isVerified) {
+        return await finalizeDraftAccount(existing, registrationDraft, res);
+      }
       auditLog.warn("AUTH", `Register with existing email: ${normalizedEmail}`, { ip: req.ip });
       return sendFieldError(res, 409, "email", "This email is already registered.");
+    }
+    if (registrationDraft.evidenceEmail && registrationDraft.evidenceEmail !== normalizedEmail
+      && await User.exists({ email: registrationDraft.evidenceEmail })) {
+      return res.status(409).json({ success: false, message: "The saved evidence belongs to an existing account. Sign in to manage that account." });
     }
 
     if (hasPhone && !normalizedPhone) {
@@ -435,87 +448,18 @@ export const registerUser = async (req, res) => {
       }
     }
 
-    const requiredDocs = requestedRole === "owner" ? ["id", "supporting"] : ["id"];
-    const pendingDocs = await getPendingPreKycDocs(
-      normalizedEmail,
-      requiredDocs,
-      preKycSession.sessionId
-    );
-    if (pendingDocs.length) {
-      return res.status(409).json({
-        success: false,
-        message: "Your document is awaiting manual review. Please try registration again after it is approved.",
-        reviewRequired: true,
-        pendingDocuments: pendingDocs,
-      });
+    const fields = registrationDraft.fields;
+    const normalize = value => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const shared = ["phone", "region", "province", "city", "barangay"];
+    const profileFields = requestedRole === "owner" ? ["ownerType", "businessName", "permitNumber", "taxIdentificationNumber", "branchCode"]
+      : ["dateOfBirth", "gender", "emergencyContactName", "emergencyContactPhone", "emergencyContactRelationship"];
+    if (normalize(name) !== normalize(fields.firstName + " " + fields.lastName)
+      || [...shared, ...profileFields].some(field => normalize(req.body[field]) !== normalize(fields[field]))) {
+      return res.status(409).json({ success: false, message: "Your details changed. Save and recover your registration before submitting." });
     }
-    const actionRequiredDocs = await getActionRequiredPreKycDocs(
-      normalizedEmail,
-      requiredDocs,
-      preKycSession.sessionId
-    );
-    if (actionRequiredDocs.length) {
-      return res.status(409).json({
-        success: false,
-        message: "One or more documents need your attention. Review the document status and upload a corrected file before registering.",
-        reuploadRequired: true,
-        documents: actionRequiredDocs,
-      });
-    }
-    const missingDocs = await getMissingPreKycDocs(
-      normalizedEmail,
-      requiredDocs,
-      preKycSession.sessionId
-    );
-    if (missingDocs.length) {
-      const needsId = missingDocs.includes("id");
-      const needsSupporting = missingDocs.includes("supporting");
-      let message = "Please verify your ID before registering.";
-      if (needsId && needsSupporting) {
-        message = "Please verify your ID and supporting document before registering.";
-      } else if (needsSupporting) {
-        message = "Please verify your supporting document before registering.";
-      }
-      return res.status(400).json({ success: false, message });
-    }
-
-    const registrationIdentityMatches = await preKycIdentityMatchesRegistration(
-      normalizedEmail,
-      preKycSession.sessionId,
-      { full_name: name, date_of_birth: dateOfBirth },
-      { requireBirthDate: requestedRole === "user" }
-    );
-    if (!registrationIdentityMatches) {
-      return res.status(409).json({
-        success: false,
-        message: "Your personal details changed after ID verification. Return to Identity and upload the matching ID again.",
-        identityDetailsChanged: true,
-      });
-    }
-
-    if (requestedRole === "owner" && !await preKycSupportingMatchesRegistration(
-      normalizedEmail,
-      preKycSession.sessionId,
-      {
-        business_name: businessName,
-        permit_number: permitNumber,
-        tax_identification_number: req.body.taxIdentificationNumber,
-        branch_code: req.body.branchCode,
-      }
-    )) {
-      return res.status(409).json({
-        success: false,
-        message: "Your business details changed after document review. Return to the supporting document step and submit it for review again.",
-        supportingDetailsChanged: true,
-      });
-    }
-
-    const faceVerified = await isPreKycFaceVerified(normalizedEmail, preKycSession.sessionId);
-    if (!faceVerified) {
-      return res.status(400).json({
-        success: false,
-        message: "Please verify your selfie matches your ID before registering.",
-      });
+    const state = await registrationRecoveryState({ ...(registrationDraft.toObject?.() || registrationDraft), step: 5 });
+    if (state.step !== 5 || !state.emailVerified || !state.documentsComplete || !state.selfieVerified) {
+      return res.status(409).json({ success: false, message: "Complete email, document, and selfie verification in Step 4 before creating your account." });
     }
 
     const passwordMessage = validatePasswordStrength(password);
@@ -523,14 +467,31 @@ export const registerUser = async (req, res) => {
       return sendFieldError(res, 400, "password", passwordMessage);
     }
 
+    const documents = await PreKycDocument.find({ role: requestedRole, sessionId: registrationDraft.sessionId,
+      expiresAt: { $gt: new Date() } }).select("fileHash reviewVersion docType").lean();
+    const submissionDocuments = state.documents.filter(doc => doc.docType === "id" || (requestedRole === "owner" && doc.docType === "supporting")).map(document => ({ ...document,
+      fileHash: documents.find(doc => String(doc._id) === document.reference && doc.reviewVersion === document.documentRevision)?.fileHash }));
+    if (submissionDocuments.some(doc => !doc.fileHash)) return res.status(409).json({ success: false, message: "A document changed. Recover your progress before submitting." });
+    if (registrationDraft.evidenceEmail !== normalizedEmail && await PreKycDocument.exists({ email: normalizedEmail,
+      sessionId: { $ne: registrationDraft.sessionId }, docType: { $in: submissionDocuments.map(doc => doc.docType) } })) {
+      return res.status(409).json({ success: false, message: "Another registration has documents for this email. Recover that registration or choose another email before creating an account." });
+    }
+    claimedDraft = await RegistrationDraft.findOneAndUpdate({ _id: registrationDraft._id, revision: registrationDraft.revision,
+      verifiedEmail: normalizedEmail, registeredUser: null, expiresAt: { $gt: new Date() }, absoluteExpiresAt: { $gt: new Date() },
+      $or: [{ submissionUntil: null }, { submissionUntil: { $lte: new Date() } }] },
+    { $set: { submissionUntil: new Date(Date.now() + 120000), submissionDocuments } }, { returnDocument: "after" });
+    if (!claimedDraft) return res.status(409).json({ success: false, message: "Account creation is already in progress or your draft changed. Recover your progress." });
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
+    accountCreationStarted = true;
     const user = await User.create({
       name: toText(name),
       email: normalizedEmail,
       password: hashedPassword,
       role: requestedRole,
-      kycStatus: "approved",
+      kycStatus: "challenge_passed",
+      isVerified: true,
+      registrationDraftId: registrationDraft._id,
       phone: normalizedPhone || undefined,
       dateOfBirth: toText(dateOfBirth) || undefined,
       gender: toText(gender) || undefined,
@@ -548,40 +509,13 @@ export const registerUser = async (req, res) => {
       emergencyContactRelationship: toText(emergencyContactRelationship) || undefined,
     });
 
-    try {
-      await KycVerification.findOneAndUpdate(
-        { user: user._id },
-        {
-          user: user._id,
-          status: "approved",
-          verifiedAt: new Date(),
-          remarks: "Identity approved during signed pre-registration KYC.",
-        },
-        { upsert: true, new: true }
-      );
-    } catch (kycCaseError) {
-      // User.kycStatus remains the authorization source and /kyc/me fallback.
-      // Do not strand a fully created account if the secondary audit write fails.
-      auditLog.error("KYC", "Failed to create registration KYC case", {
-        userId: user._id.toString(),
-        detail: kycCaseError.message,
-      });
-    }
-
-    clearAuthCookie(res);
-
-    auditLog.info("AUTH", `Registered: ${normalizedEmail}`, { userId: user._id.toString() });
-    if (CLEAR_PREKYC_ON_REGISTER) {
-      await clearPreKycDocs(normalizedEmail);
-      await clearPreKycFace(normalizedEmail);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "Registration successful. Please verify your email to continue.",
-      user: buildSafeUserResponse(user),
-    });
+    auditLog.info("AUTH", "Registered account", { userId: user._id.toString() });
+    return await finalizeDraftAccount(user, claimedDraft, res);
   } catch (error) {
+    if (claimedDraft && (!accountCreationStarted || error.code === 11000 || error.name === "ValidationError")) {
+      await RegistrationDraft.updateOne({ _id: claimedDraft._id }, { $unset: { submissionUntil: "", submissionDocuments: "" } }).catch(() => {});
+    }
+    if (error.status) return res.status(error.status).json({ success: false, message: error.message });
     if (error?.code === 11000) {
       const duplicate = getDuplicateKeyDetails(error);
       return sendFieldError(res, 409, duplicate.field, duplicate.message);
@@ -855,7 +789,7 @@ export const verifyOTP = async (req, res) => {
     const user = await User.findOneAndUpdate(
       { email: normalizedEmail },
       { isVerified: true },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!user) {
@@ -1073,7 +1007,7 @@ export const resetPassword = async (req, res) => {
         $unset: { passwordResetTokenHash: "" },
         $inc: { sessionVersion: 1 },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!user) {
       return res.status(400).json({
@@ -1133,7 +1067,7 @@ export const changePassword = async (req, res) => {
         $unset: { passwordResetTokenHash: "" },
         $inc: { sessionVersion: 1 },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!updatedUser) {
       return res.status(409).json({ success: false, message: "Password changed in another session. Please sign in again." });
@@ -1248,23 +1182,35 @@ export const upgradeToOwner = async (req, res) => {
       return res.status(403).json({ success: false, message: "This account cannot upgrade to a vehicle owner." });
     }
     await repairLegacyKycSummary(user);
-    if (user.kycStatus !== "approved") {
+    if (user.kycStatus !== "approved" || !(await getAccountVerification(user)).bookingEligible) {
       return res.status(403).json({ success: false, code: "IDENTITY_VERIFICATION_REQUIRED",
         message: "Verify your identity in Account Settings before upgrading to a vehicle owner." });
     }
     const details = validateOwnerUpgradeDetails(req.body);
-    await validateOwnerUpgradeDocument(user, preKycSession.sessionId, req.body, details);
+    const supportingDocument = await validateOwnerUpgradeDocument(user, preKycSession.sessionId, req.body, details);
     // Changing roles must preserve the existing identity decision and its original date.
     const updated = await User.findOneAndUpdate({
       _id: user._id, email: user.email, role: "user", isVerified: true, kycStatus: "approved",
       kycStatusUpdatedAt: user.kycStatusUpdatedAt || null,
       isDisabled: { $ne: true }, isArchived: { $ne: true },
-    }, { $set: { role: "owner", ownerType: details.ownerType, businessName: details.businessName,
-      licenseNumber: details.licenseNumber, permitNumber: details.permitNumber } }, { new: true, runValidators: true });
+    }, { $set: { role: "owner", ownerDocumentVerificationRequired: true, ownerType: details.ownerType, businessName: details.businessName,
+      licenseNumber: details.licenseNumber, permitNumber: details.permitNumber } }, { returnDocument: "after", runValidators: true });
     if (!updated) {
       return res.status(409).json({ success: false, code: "ACCOUNT_CHANGED",
         message: "Your account changed during submission. Refresh Account Settings before trying again." });
     }
+
+    const pinned = await KycVerification.updateOne({ user: user._id, status: "approved" }, { $set: {
+      registrationSupportingSessionId: preKycSession.sessionId,
+      "registrationDocumentVersions.supporting": supportingDocument.reviewVersion,
+      ...(!user.registrationDraftId ? { legacyIdentityApprovedAt: user.kycStatusUpdatedAt || new Date() } : {}),
+    }, ...(!user.registrationDraftId ? { $setOnInsert: { user: user._id, status: "approved", verifiedAt: user.kycStatusUpdatedAt || new Date() } } : {}) },
+    { timestamps: false, upsert: !user.registrationDraftId });
+    if (!pinned.matchedCount && !pinned.upsertedCount) throw Object.assign(new Error("Identity verification changed during the upgrade. Refresh verification before listing vehicles."), { status: 409 });
+    const linked = await PreKycDocument.updateOne({ _id: supportingDocument._id, sessionId: preKycSession.sessionId,
+      reviewVersion: supportingDocument.reviewVersion, status: "verified", expiresAt: { $gt: new Date() } },
+    { $set: { registeredUser: user._id, detailsMatched: true }, $unset: { expiresAt: "" } });
+    if (!linked.matchedCount) throw Object.assign(new Error("Your account is now an owner, but the business document changed. Refresh verification before listing vehicles."), { status: 409 });
 
     auditLog.info("AUTH", "Upgraded to owner", { userId: user._id.toString() });
 

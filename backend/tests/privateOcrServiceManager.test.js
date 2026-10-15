@@ -97,6 +97,39 @@ test("concurrent startup requests start one worker and shutdown stops only that 
   assert.equal(child.kills, 1);
 });
 
+test("a warmed owned worker is reused without rechecking or reloading its models on each document", async () => {
+  const child = new Child();
+  let checks = 0;
+  const manager = createPrivateOcrServiceManager({ env: configuration(), checkHealth: async () => ++checks === 2,
+    isListening: async () => false, launchOptions: async () => ({ command: "fixture", args: [], options: {} }),
+    spawnProcess: () => child, logger: quietLogger });
+  assert.equal(await manager.ensureReady(), true);
+  assert.equal(await manager.warmup(), true);
+  assert.equal(await manager.warmup(), true);
+  assert.equal(checks, 2);
+  manager.stop();
+  assert.equal(child.kills, 1);
+});
+
+test("a failed startup is not restarted for each queue poll and can recover after its short cooldown", async (t) => {
+  let now = 100000, launches = 0;
+  t.mock.method(Date, "now", () => now);
+  const manager = createPrivateOcrServiceManager({ env: configuration(), checkHealth: async () => launches > 1,
+    isListening: async () => false, launchOptions: async () => ({ command: "fixture", args: [], options: {} }),
+    spawnProcess: () => {
+      const child = new Child(); launches++;
+      if (launches === 1) child.exitCode = 1;
+      return child;
+    }, logger: quietLogger });
+  assert.equal(await manager.warmup(), false);
+  assert.equal(await manager.warmup(), false);
+  assert.equal(launches, 1);
+  now += 30001;
+  assert.equal(await manager.warmup(), true);
+  assert.equal(launches, 2);
+  manager.stop();
+});
+
 test("OCR startup timeout kills its worker and reports failure without failing API warmup", async () => {
   const child = new Child();
   const manager = createPrivateOcrServiceManager({ env: configuration(), checkHealth: async () => false,

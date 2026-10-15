@@ -107,16 +107,22 @@ const connectDB = async () => {
   process.exit(1);
 };
 
+let disconnectedAt = null;
 mongoose.connection.on("connected", () => {
-  console.log("Mongoose connected to MongoDB");
+  const now = Date.now();
+  console.log("Mongoose connected to MongoDB", { at: new Date(now).toISOString(),
+    ...(disconnectedAt === null ? {} : { outageMs: Math.max(0, now - disconnectedAt) }) });
+  disconnectedAt = null;
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("Mongoose connection error:", err);
+  console.error("Mongoose connection error:", { at: new Date().toISOString(), name: err?.name,
+    code: err?.code || err?.cause?.code, message: sanitizeMongoUri(err?.message), stack: sanitizeMongoUri(err?.stack) });
 });
 
 mongoose.connection.on("disconnected", () => {
-  console.log("Mongoose disconnected from MongoDB");
+  disconnectedAt ??= Date.now();
+  console.warn("Mongoose disconnected from MongoDB", { at: new Date(disconnectedAt).toISOString() });
 });
 
 process.on("SIGINT", async () => {

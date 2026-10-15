@@ -17,7 +17,7 @@ const vehicles = [
 const locations = { vios: "Manila", everest: "Cebu City", fortuner: "Davao City", raptor: "Davao City", city: "Cebu City", van: "Manila", hidden: "Cebu City" };
 for (const vehicle of vehicles) vehicle.location = locations[vehicle._id];
 export function fulfillHoldoutRequests(requests, includeRecommendationDetails = false) {
-  return requests.map(({ message, classifier }) => {
+  return requests.map(({ message, classifier, previous_context = null }) => {
   const answers = [classifier, ...(classifier.additional_answers || [])].map((answer) => {
     const payload = buildChatbotPayload(answer.question || message, "auto", vehicles, answer.entities);
     const canonical = applyChatbotGuardrails({ ...answer, additional_answers: [] }, payload);
@@ -25,8 +25,13 @@ export function fulfillHoldoutRequests(requests, includeRecommendationDetails = 
       ? fulfillVehicleAvailabilityStatus(canonical, vehicles) : canonical;
   });
   const response = answers[0];
+  const contextAnswer = answers.find((answer) => answer.requires_clarification)
+    || answers.find((answer) => answer.recommendations.length)
+    || [...answers].reverse().find((answer) => answer.topic !== "conversation") || answers.at(-1);
   return {
     intent: response.intent,
+    response_variant: response.response_variant,
+    requested_answer_type: response.requested_answer_type,
     language: response.language,
     entities: response.entities,
     conditions: response.conditions,
@@ -34,7 +39,7 @@ export function fulfillHoldoutRequests(requests, includeRecommendationDetails = 
     reply: answers.map((answer) => answer.reply).join("\n\n"),
     reason_code: response.reason_code,
     additional_intents: answers.slice(1).map((answer) => answer.intent),
-    conversation_context: buildChatbotConversationContext(response),
+    conversation_context: buildChatbotConversationContext(contextAnswer, previous_context),
     recommendations: includeRecommendationDetails ? response.recommendations : response.recommendations.map(({ _id, displayRate, displayRateUnit }) => ({
       id: _id, displayRate, displayRateUnit,
     })),

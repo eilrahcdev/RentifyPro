@@ -2,6 +2,7 @@
 // Example: router.post('/vehicles', protect, authorize('owner', 'admin'), handler)
 import { auditLog } from "./auditLogger.middleware.js";
 import { repairLegacyKycSummary } from "../services/kycSummary.service.js";
+import { getAccountVerification } from "../services/accountVerification.service.js";
 
 export const authorize = (...roles) => {
   return (req, res, next) => {
@@ -31,12 +32,19 @@ export const requireKyc = async (req, res, next) => {
       });
     }
   }
-  if (req.user.kycStatus !== "approved") {
+  let verification;
+  try { verification = await getAccountVerification(req.user); }
+  catch (error) {
+    auditLog.error("KYC", "Could not validate current document eligibility", { userId: req.user._id?.toString(), detail: error.message });
+    return res.status(503).json({ success: false, message: "Verification status is temporarily unavailable. Please retry." });
+  }
+  if (!verification.bookingEligible) {
     return res.status(403).json({
       success: false,
       code: "IDENTITY_VERIFICATION_REQUIRED",
       message: "Identity verification is required before using this feature.",
       kycStatus: req.user.kycStatus || "not_started",
+      verification,
     });
   }
   next();

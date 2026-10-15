@@ -7,7 +7,7 @@ const destination = process.argv.find((arg) => arg.startsWith("--destination="))
 if (!destination || !path.isAbsolute(destination)) throw new Error("Pass --destination=<absolute admin backend/data/private-kyc directory>.");
 const files = ["services/documentValidation.service.js", "services/manualDocumentComparison.js",
   "services/privateDocumentExtraction.service.js", "services/privateDocumentLayout.service.js", "services/privateKycReviewContext.js",
-  "services/privateKycOcr.service.js", "utils/kycScreeningProvider.js", "utils/geminiDataPolicy.js"];
+  "services/privateKycOcr.service.js", "utils/kycScreeningProvider.js", "utils/geminiDataPolicy.js", "utils/accountVerification.js"];
 const assets = await Promise.all(files.map(async (file) => ({ file, bytes: await fs.readFile(path.join(backend, file)) })));
 for (const { file, bytes } of assets) {
   const target = path.join(destination, file);

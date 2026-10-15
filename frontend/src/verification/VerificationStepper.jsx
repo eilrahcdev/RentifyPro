@@ -15,6 +15,7 @@ const STEPS = [
 ];
 
 function verificationErrorMessage(error) {
+  if (error?.status === 409) return error.message;
   const message = String(error?.message || "").toLowerCase();
   if (message.includes("attempt") && /ended|expired|cancelled|replaced/.test(message)) {
     return "This attempt ended. Cancel verification and start Reverify face again with your ID.";
@@ -34,8 +35,8 @@ function verificationErrorMessage(error) {
   return "We couldn't complete verification right now. Please try again.";
 }
 
-export default function VerificationStepper({ onVerificationComplete, mode = "verify", reverification, onCancel }) {
-  const [step, setStep] = useState(1);
+export default function VerificationStepper({ onVerificationComplete, mode = "verify", reverification, onCancel, initialStep = 1 }) {
+  const [step, setStep] = useState(initialStep);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 

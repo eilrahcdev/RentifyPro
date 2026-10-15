@@ -142,7 +142,7 @@ export const archiveNotification = async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
       { ...activeUserNotificationScope(req.user._id), _id: req.params.id },
       { $set: { archived_at: new Date() } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!notification) return res.status(404).json({ success: false, message: "Notification not found." });
     res.json({ success: true, notification });
@@ -159,7 +159,7 @@ export const restoreNotification = async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
       { ...archivedUserNotificationScope(req.user._id), _id: req.params.id },
       { $set: { archived_at: null } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!notification) return res.status(404).json({ success: false, message: "Archived notification not found." });
     res.json({ success: true, notification });

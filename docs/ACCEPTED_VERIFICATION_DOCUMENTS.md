@@ -1,147 +1,113 @@
 # RentifyPro accepted verification documents
 
-Compiled from the current workspace on September 10, 2026.
+Updated October 14, 2026. This describes the application's private OCR screening policy. A selectable category, an OCR match, and government authentication are different claims. RentifyPro does not verify these documents with a government issuer.
 
-This catalog describes document types currently offered by RentifyPro registration and verification. Inclusion in the application's list does not establish that a particular upload is authentic, unexpired, or legally sufficient. Government issuance rules and document variants have not been researched for this code inventory.
+## Registration requirements
 
-## Requirements by flow
+Renters submit one accepted identity document. New owners submit one identity document and one accepted supporting business document. Existing users upgrading to owner submit a supporting document through the existing upgrade flow. Selfie verification and email verification remain separate requirements.
 
-| Flow | Identity document | Supporting business document | Other verification |
-| --- | --- | --- | --- |
-| New renter/user registration | One of the 10 ID types below | Not required | ID name and birth date must match before selfie verification; required documents must have `verified` status in the same pre-registration session |
-| New individual owner registration | One of the 10 ID types below | One of the 7 supporting types below | ID name must match before selfie verification; same document-approval requirements |
-| New business owner registration | One of the 10 ID types below | One of the 7 supporting types below | ID name must match before selfie verification; same document-approval requirements |
-| Existing user upgrading to owner | Upgrade endpoint does not request a new ID | One of the 7 supporting types below | Verified email and a verified supporting document in the owner pre-registration session |
-| Logged-in identity verification | One of the 10 ID types below | Not part of this flow | ID upload and selfie verification |
+Renter identity screening compares complete first name, surname and birth date. Owner automated screening compares the name and any birth date supplied by the existing flow. The manual ID comparison retains its existing requirement for a printed birth date. An ID variant lacking a field required by the flow cannot establish that field; use another accepted ID showing it. No value is inferred or fabricated.
 
-The owner registration requirement applies to both `individual` and `business`. Currently, the backend checks for one verified supporting document; it does not require all seven or select a different document bundle for each business structure. Selfies and email OTPs are separate verification evidence, not additional document types.
+The private checker never grants final approval. Final registration still requires the existing verified-document and selfie gates. An automated match can enable the next step while the document remains `pending_review`; a Super Admin must inspect and compare the original before final approval.
 
-Sources: [registration and owner-upgrade controller](../backend/controllers/auth.controller.js), [renter registration](../frontend/src/components/RegisterPage.jsx), [owner registration](../frontend/src/pages/RegisterOwnerPage.jsx), [owner upgrade form](../frontend/src/pages/AccountSettings.jsx), [logged-in verification](../frontend/src/verification/VerificationStepper.jsx).
+## All 17 categories
 
-## Identity documents: 10 accepted types
+The exact labels remain unchanged in [the frontend catalog](../frontend/src/data/kycDocumentTypes.js) and [the backend allowlists](../backend/services/documentValidation.service.js).
 
-Use these exact labels when integrating with the current application. Every row belongs to backend category `id` and is offered to both renters and owners.
+### Identity documents
 
-| # | Exact application label |
-| --- | --- |
-| 1 | PhilSys National ID |
-| 2 | Philippine Passport |
-| 3 | LTO Driver's License |
-| 4 | UMID |
-| 5 | PRC ID |
-| 6 | SSS ID |
-| 7 | GSIS ID |
-| 8 | PhilHealth ID |
-| 9 | Postal ID |
-| 10 | Voter's ID |
+| Category | Category-specific identifier labels recognized | Expiry policy |
+| --- | --- | --- |
+| PhilSys National ID | PCN, PSN, PhilSys card number; unique four-group printed card number | Check if an expiry field is printed |
+| Philippine Passport | Passport number / Passport No. | Required |
+| LTO Driver's License | License number / License No. | Required |
+| UMID | CRN / Common Reference Number | Check if printed |
+| PRC ID | Registration number / Registration No. | Required |
+| SSS ID | SS Number, SSS number, Social Security Number | Check if printed |
+| GSIS ID | BP Number, Business Partner Number, GSIS number | Check if printed |
+| PhilHealth ID | PIN / PhilHealth identification number | Check if printed |
+| Postal ID | PRN / Postal Reference Number | Required |
+| Voter's ID | VIN / Voter's Identification Number | Check if printed |
 
-The current screening service expects an ID image with at least one visible human face photograph. Therefore, being selectable does not guarantee that every format or version of a listed ID will pass screening.
+These are application screening requirements, not statements that every historical version has these labels or dates. Generic document-number labels remain supported. Names can be separate first/middle/surname fields, bilingual fields, or an LTO combined heading. Surname-first names and compound surnames are handled without substring matching.
 
-## Owner supporting documents: 7 accepted types
+### Supporting business documents
 
-Every row belongs to backend category `supporting`. These are selectable alternatives for an owner supporting-document upload, not substitutes for the owner's identity ID.
+| Category | Comparison fields and recognized labels | Expiry policy |
+| --- | --- | --- |
+| DTI Business Name Registration | Business name below “This certifies that”; Business Name No. / registration number | Required; explicit valid-from/to period supported |
+| SEC Certificate of Registration | Company/business name; Company Registration No. / SEC registration number | Check if printed |
+| Mayor's/Business Permit | Business/trade name; Business Permit No. / permit number | Required |
+| BIR Certificate of Registration (Form 2303) | Business/trade name; Taxpayer Identification Number / TIN plus branch code | Check if printed |
+| BIR Notice to Issue Receipt/Invoice | Business name; TIN plus branch code, including a combined caption | Check if printed |
+| Barangay Business Clearance | Business name; clearance/reference number if supplied in registration | Check if printed |
+| CDA Certificate of Registration | Name of Coop. / cooperative/business name; cooperative registration number | Check if printed |
 
-| # | Exact application label |
-| --- | --- |
-| 1 | DTI Business Name Registration |
-| 2 | SEC Certificate of Registration |
-| 3 | Mayor's/Business Permit |
-| 4 | BIR Certificate of Registration (Form 2303) |
-| 5 | BIR Notice to Issue Receipt/Invoice |
-| 6 | Barangay Business Clearance |
-| 7 | CDA Certificate of Registration |
+For BIR documents, a permit number cannot substitute for TIN and branch code. Masked identifiers cannot produce an automated match. A Barangay clearance without a reference number retains the existing optional-reference policy. Company names are compared as complete normalized names; an entity match does not establish an applicant's authority to represent that entity.
 
-The owner form asks for the business/trade name and permit/registration number shown on the uploaded document. The screening service also receives the applicant's name, owner type, and address for comparison.
+## Extraction and decisions
 
-Both document lists were checked against [the frontend catalog](../frontend/src/data/kycDocumentTypes.js) and [the backend screening allowlists](../backend/services/geminiDocument.service.js). Their labels and order match.
+The Python service returns bounded text, confidence, page and normalized rectangles from local PaddleOCR models. The Node backend independently recognizes the category and then associates values with labels on the same page and spatial column. It supports nearby right-hand/below values, padded rectangles that overlap adjacent rows, BIR/CDA captions below values, and bounded wrapped business names. Category-specific patterns separate a merged LTO number/date row.
 
-## Upload rules currently implemented
+DTI recognition supports the certificate's printed narrative issuer clause together with its certificate title. BIR notice recognition supports its posted receipt/invoice title together with BIR issuer or specific official contact evidence. These are recognition signals requiring original-document inspection, not proof of authenticity. Arbitrary issuer references alone do not establish a category. Instructions inside documents remain data, never commands to the application.
+
+Both category evidence and every required field must meet at least 90% confidence, or a higher configured threshold. Lowering configuration values cannot bypass the 90% floor. Ambiguous readings, contradictory values, absent positions for non-inline fields, and impossible dates remain uncertain. Numeric dates are accepted only when their interpretation is unambiguous; `05/12/2099` is not guessed. Required missing expiry stays unknown. Future issue dates or an issue date after expiry require inspection.
+
+| Result | Applicant behavior | Security gate |
+| --- | --- | --- |
+| Complete confident type and detail match | Continue to the next permitted step | `pending_review`; final approval remains manual |
+| Correct category but uncertain/missing field | Await administrator comparison or replace the upload | `review_needed`; no automated selfie unlock |
+| Missing required birth date | Use another accepted ID showing birth date if this variant lacks it | Birth-date verification remains required |
+| Wrong/unrecognized/multiple categories | Correct the selection or upload the complete correct document | `reupload_required` |
+| Confident identity mismatch or expiry | Correct the registration details or provide a matching current document | Existing correction gates remain enforced |
+| Duplicate, changed file/revision/profile/session, suspected alteration | Follow existing review/correction workflow | No stale or duplicate selfie authorization |
+
+Administrators must still inspect the private original, confirm its official layout/markings and readability, and enter matching fields. Expiry requirements and complete-name comparisons also apply when saving manual comparisons. Human comparison and final approval remain separate actions, with existing authentication, authorization, audit and duplicate checks.
+
+## Upload and image-quality checks
 
 | Rule | Identity ID | Supporting document |
 | --- | --- | --- |
-| Frontend file formats | JPEG/JPG, PNG | JPEG/JPG, PNG, PDF |
-| Frontend maximum file size | 4 MiB, displayed as 4 MB | 4 MiB, displayed as 4 MB |
-| Upload count | One ID file | One supporting file |
-| Image dimensions | Client checks at least 480 px wide and 300 px high | No equivalent dimension check in the shared supporting-file validator |
-| Basic image quality | Client runs a simple edge-based blank/blur check | No equivalent check in the shared supporting-file validator |
-| Backend file validation | Base64 decoding, byte limit, and JPEG/PNG signature checks | Base64 decoding, byte limit, and JPEG/PNG/PDF signature checks |
-| Document-type selection | Required | Required |
+| Formats | JPEG, PNG | JPEG, PNG, PDF |
+| Frontend byte limit | 4 MiB | 4 MiB |
+| Image dimensions | At least 480 px wide and 300 px high | Same for images; PDFs use server PDF checks |
+| Basic image quality | Decode, darkness and insufficient visible detail | Same for images |
+| Backend validation | Existing byte/signature/private-file checks | Existing byte/signature/private-file and bounded PDF checks |
 
-The controller's byte limit defaults to 4 MiB and can be changed with `KYC_IMAGE_MAX_BYTES`; the Gemini service also has `KYC_DOC_MAX_BYTES`, defaulting to 4 MiB. These are code defaults, not a check of the running deployment's environment.
+White paper is naturally bright. Mean luminance alone cannot determine glare, so a readable white certificate is no longer rejected as overexposed. Horizontal and vertical adjacent-pixel detail checks still reject blank images. This client check cannot prove legibility or detect every patch of glare; required-field confidence and human inspection handle uncertain content afterward.
 
-The data model has a unique `(email, docType)` index. It stores at most one record per email for each category, rather than a separate record for every accepted type or document side. There is no dedicated front/back upload pair in these forms.
+The Python limits remain unchanged: 4 MiB file bytes, 20 million image pixels, five PDF pages and bounded OCR output. Existing file/session expiry and secure private storage remain unchanged. There is no new front/back upload workflow, issuer connection, image-training corpus or cloud OCR fallback in this change.
 
-Sources: [file rules](../frontend/src/utils/fileValidation.js), [ID image checks](../frontend/src/utils/cameraKyc.js), [KYC controller](../backend/controllers/kyc.controller.js), [document model](../backend/models/PreKycDocument.js).
+## Apply and verify locally
 
-## Existing AI screening and decisions
+Restart the Node backend and refresh/rebuild the frontend after applying the source changes. No Python dependency or model update is needed for these parser fixes. Resubmit a previously unsuccessful or pending upload to obtain a fresh result. Automated screening policy version 3 invalidates older automated matches on resubmission; approved documents and current recorded manual comparisons retain their existing protections.
 
-RentifyPro already calls Gemini through `verifyPhilippinesDocument()` in [geminiDocument.service.js](../backend/services/geminiDocument.service.js).
+The separate admin application imports mirrored KYC modules under its `backend/data/private-kyc` directory. Keep those modules synchronized with this checkout using [the existing synchronization script](../backend/scripts/sync-admin-kyc-assets.js), then restart the admin backend. Verify with its `--check` option. Do not overwrite independent admin edits without reviewing them.
 
-The service currently:
+Focused backend verification, from `backend`:
 
-- Asks the model to recognize and classify the upload independently without receiving the applicant's selected document type.
-- Allows an explicit `UNKNOWN` result and treats plain paper, typed or handwritten personal information, screenshots, unrelated images, unsupported documents, and ambiguous layouts as unrecognized.
-- Applies backend hard gates for readability, supported Philippine origin, exact type match, and document-specific structural features before extracting and comparing registration data.
-- Requires passport MRZ/layout regions, LTO license-card regions, ID portrait/number/birth-date regions, or official business-registration features as appropriate.
-- Compares the business name and the identifier appropriate to the selected supporting document: permit or registration number for DTI/SEC/Mayor's Permit/CDA, or TIN plus branch code for the two accepted BIR documents. A Barangay Business Clearance without a reference number can proceed to manual review after its name and official features pass the other checks.
-- Routes uncertain authenticity, low classification certainty, and duplicate documents to manual review. These are screening signals; the implementation does not confirm authenticity with a government issuer.
-- Requires complete first-name and surname token matches for IDs instead of substring matching. Renter IDs also require an exact birth-date match; conflicting identity data requires correction or a matching replacement ID and cannot use ordinary administrator approval.
-- Allows administrator decisions only after processing reaches manual review. Queued, processing, retrying, and unresolved-identity records cannot be approved.
-- Stores only a masked extracted document number and a keyed fingerprint after hard gates pass. The private, temporary pre-registration profile snapshot contains the applicant-entered comparison fields, including TIN and branch code for BIR uploads; these fields are not copied into the permanent owner profile. Ordinary applicant status responses do not expose confidence calculations or raw extracted identity numbers.
-
-The queue worker defaults `KYC_ALLOW_RULE_BASED_AUTO_VERIFY` to `false`. In that configuration, documents that pass every hard gate move to `pending_review` for a Super Admin decision. `KYC_ALLOW_GEMINI_AUTO_APPROVE` remains a compatibility fallback. If rule-based auto-verification is explicitly enabled, the classification threshold defaults to 90/100 and the extraction threshold to 85/100; neither score is proof of authenticity.
-
-Temporary provider failures retry and eventually move to manual review. They do not automatically reject the applicant. Registration checks verified documents and a matching selfie separately.
-
-Status flow:
-
-```text
-queued -> processing -> pending_review -> verified or rejected
-              |
-              +-> retry_wait -> processing
-
-Optional auto-approval: processing -> verified
+```powershell
+node --test --test-reporter=spec tests/privateDocumentLayouts.test.js tests/privateDocumentScreening.test.js tests/privateDocumentTypes.test.js tests/privateKyc.test.js tests/privateOcrServiceManager.test.js tests/preKycSelfieGate.test.js tests/preKycDocumentGate.test.js tests/documentConfidence.test.js tests/documentValidation.test.js
 ```
 
-Sources: [queue worker](../backend/jobs/kycDocumentProcessing.job.js), [review service](../backend/services/kycReview.service.js), [workflow guide](KYC_VERIFICATION_WORKFLOW.md).
+Frontend and native-browser verification:
 
-## Planning the next validator
-
-The following are proposed additions, not claims about existing functionality or official document requirements.
-
-1. **Define document variants.** For each of the 17 types, explicitly enumerate supported versions, sides/pages, and physical/digital formats. The current lists do not separately define ePhilID, Digital National ID, electronic driver's licenses, or older/newer layouts. Decide those policies before labeling examples or enforcing a template.
-2. **Extract structured fields with evidence.** For IDs, consider name, date of birth, document number, issue/expiry dates where present, and portrait location. For supporting documents, consider registered entity/business name, registration/permit number, named proprietor where present, address, issuing office, and dates where present. Record the source page/region and an unreadable/missing state rather than inventing absent values. These are candidate fields; a type-specific policy should determine which are needed.
-3. **Separate extraction from validation.** Compare extracted values with the user's profile in deterministic code. Keep raw text and normalized values distinct. Treat instructions printed inside uploaded documents as document content, never as instructions to the validator.
-4. **Handle personal and entity names separately.** A company registration may identify an entity rather than the individual applicant. Define what evidence establishes the applicant's relationship to that entity; the current generic name check does not establish that authority.
-5. **Add explicit date and status policies.** The present service has no structured, per-type expiry validation. Define how each supported variant handles absent expiry dates, validity periods, and unreadable dates, then implement those checks independently of the model.
-6. **Keep identity and driving eligibility separate.** The current registration gate accepts any listed ID; it does not require the selected document to be an LTO driver's license. If driving eligibility is a product requirement, give it its own evidence and validation rules.
-7. **Separate authenticity evidence from appearance.** Track whether a result came from OCR/model screening, human review, or a future issuer-backed check. Do not label an upload issuer-verified solely because the model reports a high confidence score. Issuer integrations and verification procedures would require separate research.
-8. **Evaluate before changing approval policy.** Build labeled cases per supported variant covering legible and unreadable uploads, wrong selected type, profile mismatch, missing sides, relevant expiry cases, and suspected alteration. Measure false acceptance and false rejection by type. Keep uncertain results reviewable with a correction reason.
-
-Suggested result fields for a future validator:
-
-```text
-category: id | supporting
-selected_type: exact catalog label
-detected_type: exact catalog label | unknown
-variant: supported variant identifier | unknown
-extracted_fields: values with page/region evidence
-checks: file, quality, type_match, profile_match, dates, tampering
-check_status: pass | fail | unknown | not_applicable (per check)
-issuer_check: not_performed | verified | failed | unavailable
-decision: pending_review | verified | rejected
-reason_codes: stable codes for UI and audit records
-policy_version, model_version, reviewed_by, reviewed_at
+```powershell
+# From frontend
+node --test tests/cameraKyc.test.mjs
+npm.cmd run build
+# From repository root; requires local Chrome, or KYC_TEST_CHROME pointing to Chromium
+node scripts/kyc-image-quality-browser-check.mjs
 ```
 
-This suggested schema is a planning sketch, not the current API contract.
+The native-browser script creates and closes its own temporary browser profile. Its synthetic white-paper/blank/dark/low-resolution cases do not call APIs. Optional local samples can be checked with `--sample-directory=<absolute directory>`; image bytes remain local and only filenames, dimensions and decisions are printed.
 
-## Scope and verification
+## Evidence and limits
 
-This is a source-code inventory of the main RentifyPro checkout. It does not include copies of users' private documents or a training-image dataset. Passport/ID specimens, issuer specifications, and legal acceptance rules need a separate collection and verification step.
+Regression fixtures exercise the 17 category aliases, wrong-type matrix, LTO combined/overlapping/merged rows, DTI narrative fields, BIR posted notices and captions, CDA labels, wrapped business names, name boundaries, ambiguous dates, expiry, manual review and stale authorization. Fixtures use synthetic values; private participant images are not stored in the repository.
 
-NBI clearances, police clearances, birth certificates, TIN IDs, utility bills, student IDs, and vehicle OR/CR are not named in the current registration document allowlists. That is a statement about this application's configured list, not their validity for other purposes.
+Local PaddleOCR checks on the supplied LTO, DTI and National ID images produced matching automated results with matching registration profiles. The masked-TIN BIR sample remains for manual review. Fictional/unrecognized ID and business-permit controls remain rejected. Native Chrome quality checks accept the readable local images and reject unusable controls.
 
-Private document bytes and database metadata are separate: the code writes evidence to private file storage and keeps keys, hashes, and screening metadata in MongoDB. Records have expiry support. Do not assume registration uploads form a permanent training corpus.
+These checks do not establish live registration, live database/admin approval, issuer verification, government legal acceptance, or an accuracy rate across every historical layout. Representative genuine samples of the remaining categories and versions are still needed for a broader evaluation before claiming those results in a thesis defense.
 
-Validation for this compilation: inspected the current form consumers, frontend/backend allowlists, upload validators, registration gates, queue worker, and document model. No live provider, government service, database, or real-document acceptance tests were run.
+Implementation sources: [private field extraction](../backend/services/privateDocumentExtraction.service.js), [bound automated matches](../backend/services/privateDocumentLayout.service.js), [manual comparison](../backend/services/manualDocumentComparison.js), [client image checks](../frontend/src/utils/cameraKyc.js), [private OCR service](../kyc-ocr-service/main.py), and [queue worker](../backend/jobs/kycDocumentProcessing.job.js).

@@ -24,6 +24,8 @@ const preKycFaceSchema = new mongoose.Schema(
     reason: { type: String, default: "" },
     provider: { type: String, default: "face-service" },
     verifiedAt: { type: Date },
+    idDocumentHash: { type: String, default: "" },
+    idDocumentRevision: { type: String, default: "" },
     expiresAt: { type: Date },
   },
   { timestamps: true }

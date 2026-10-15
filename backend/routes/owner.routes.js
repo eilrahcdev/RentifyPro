@@ -1,11 +1,7 @@
 import { parseVehicleListing, prepareApprovedVehicleImages } from "../middleware/vehiclePhoto.middleware.js";
 // Owner signup routes
 import express from "express";
-import {
-  requestOwnerOtp,
-  resendOwnerOtp,
-  verifyOwnerOtp,
-} from "../controllers/owner.controller.js";
+import { registerUser } from "../controllers/auth.controller.js";
 import {
   createOwnerVehicle,
   deleteOwnerVehicle,
@@ -22,6 +18,7 @@ import {
   validateVehicleAvailability,
   validateVehicleCreate,
   validateVehicleUpdate,
+  validateRegister,
 } from "../middleware/validate.middleware.js";
 import {
   getOwnerBookings,
@@ -36,14 +33,23 @@ import {
   reviewOwnerWalkInPaymentRequest,
   confirmOwnerWalkInPayment,
 } from "../controllers/ownerDashboard.controller.js";
-import { otpLimiter, vehicleWriteLimiter } from "../middleware/security.middleware.js";
+import { otpLimiter, registerLimiter, vehicleWriteLimiter } from "../middleware/security.middleware.js";
 import { requireModerationCapability } from "../middleware/moderation.middleware.js";
 
 const router = express.Router();
 
-router.post("/register", otpLimiter, requestOwnerOtp);
-router.post("/resend-otp", otpLimiter, resendOwnerOtp);
-router.post("/verify-otp", otpLimiter, verifyOwnerOtp);
+router.post("/register", otpLimiter, registerLimiter, (req, res, next) => {
+  const body = req.body || {};
+  req.body = { ...body, role: "owner", name: body.name || [body.firstName, body.lastName].filter(value => typeof value === "string").join(" ") };
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+}, validateRegister, registerUser);
+const retiredSignupOtp = (_req, res) => res.status(410).set("Cache-Control", "private, no-store").json({
+  success: false, code: "REGISTRATION_WIZARD_REQUIRED", registrationPath: "/register-owner",
+  message: "Verify your email in Step 4 and create your account from Review.",
+});
+router.post("/resend-otp", otpLimiter, retiredSignupOtp);
+router.post("/verify-otp", otpLimiter, retiredSignupOtp);
 router.get("/vehicles", protect, authorize("owner"), getOwnerVehicles);
 router.post(
   "/vehicles",
@@ -62,6 +68,7 @@ router.put(
   protect,
   authorize("owner"),
   validateObjectIdParam("id"),
+  requireKyc,
   requireModerationCapability("listing"),
   vehicleWriteLimiter,
   parseVehicleListing,
@@ -74,6 +81,7 @@ router.patch(
   protect,
   authorize("owner"),
   validateObjectIdParam("id"),
+  (req, res, next) => String(req.body?.availabilityStatus || "").trim().toLowerCase() === "available" ? requireKyc(req, res, next) : next(),
   requireModerationCapability("listing"),
   validateVehicleAvailability,
   setOwnerVehicleAvailability

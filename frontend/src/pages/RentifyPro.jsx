@@ -1,4 +1,3 @@
-import ResponsiveDisclosure from "../components/ResponsiveDisclosure";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Bike,
@@ -604,7 +603,6 @@ export default function RentifyPro({
           </p>
         </div>
 
-        <ResponsiveDisclosure label="Read our story and values">
         <article
           className="rp-surface rp-scroll-reveal rp-reveal-from-left p-6 sm:p-8 mb-8"
           data-rp-reveal=""
@@ -663,7 +661,6 @@ export default function RentifyPro({
             </article>
           ))}
         </div>
-        </ResponsiveDisclosure>
       </section>
 
       <section className="rp-home-section mx-auto max-w-7xl px-5 pb-16 pt-12 sm:px-8 sm:pb-20">

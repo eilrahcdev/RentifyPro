@@ -95,7 +95,8 @@ test("pre-KYC middleware does not expose unexpected internal errors", () => {
   assert.equal(response.payload.message.includes("internal implementation detail"), false);
 });
 
-test("KYC middleware blocks unapproved users and lets approved users and admins through", async () => {
+test("KYC middleware blocks unapproved users and lets approved users and admins through", async t => {
+  t.mock.method(KycVerification, "findOne", async () => null);
   const response = {
     statusCode: 200,
     payload: null,
@@ -110,16 +111,17 @@ test("KYC middleware blocks unapproved users and lets approved users and admins 
   assert.equal(response.payload.code, "IDENTITY_VERIFICATION_REQUIRED");
   assert.equal(nextCalls, 0);
 
-  await requireKyc({ user: { role: "user", kycStatus: "approved" } }, response, next);
+  await requireKyc({ user: { role: "user", isVerified: true, kycStatus: "approved" } }, response, next);
   await requireKyc({ user: { role: "admin", kycStatus: "not_started" } }, response, next);
   assert.equal(nextCalls, 2);
 });
 
 test("KYC middleware repairs a stale owner summary only from an approved KYC case", async (t) => {
   const approvedAt = new Date("2026-09-19T00:00:00.000Z");
-  const owner = { _id: "507f1f77bcf86cd799439011", role: "owner", kycStatus: "not_started" };
+  const owner = { _id: "507f1f77bcf86cd799439011", role: "owner", isVerified: true, kycStatus: "not_started" };
   const writes = [];
-  t.mock.method(KycVerification, "findOne", () => ({ select: async () => ({ updatedAt: approvedAt }) }));
+  const kyc = { status: "approved", updatedAt: approvedAt };
+  t.mock.method(KycVerification, "findOne", () => ({ select: async () => kyc, then(resolve) { return Promise.resolve(kyc).then(resolve); } }));
   t.mock.method(User, "updateOne", async (filter, update) => {
     writes.push({ filter, update });
     return { matchedCount: 1 };

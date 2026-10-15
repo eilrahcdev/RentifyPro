@@ -122,7 +122,7 @@ const upsertChatThread = ({ ownerId, renterId, update = {} }) =>
         renter: renterId,
       },
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
+    { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
   ).lean();
 
 const applyScopeQuery = (query, relation, context = {}) => {
@@ -857,7 +857,7 @@ export const updateConversationArchive = async (req, res) => {
         [archived ? "$addToSet" : "$pull"]: { archivedFor: currentUserId },
         $setOnInsert: { owner: relation.ownerId, renter: relation.renterId },
       },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
     ).lean();
     const isArchived = (thread.archivedFor || []).some(
       (id) => String(id) === String(currentUserId)

@@ -81,7 +81,7 @@ export async function getOrCreateVehiclePhotoReview(buffer, owner, vehicleType) 
   const updated = await VehiclePhoto.findOneAndUpdate(
     { _id: photo._id, status: "processing" },
     { $set: decision },
-    { new: true }
+    { returnDocument: "after" }
   );
   return updated || VehiclePhoto.findById(photo._id);
 }

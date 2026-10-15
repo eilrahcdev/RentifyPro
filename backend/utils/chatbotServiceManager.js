@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { createInterface } from "node:readline";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 
 const CHATBOT_URL = process.env.CHATBOT_URL || "http://localhost:8001";
@@ -36,15 +37,6 @@ const isLocalUrl = (url) => {
   } catch {
     return false;
   }
-};
-
-const parseLines = (chunk, sink) => {
-  const text = chunk?.toString?.().trim();
-  if (!text) return;
-  text.split(/\r?\n/).forEach((line) => {
-    const clean = line.trim();
-    if (clean) sink(clean);
-  });
 };
 
 const chatbotServiceRootUrl = () => {
@@ -140,11 +132,21 @@ const waitUntilHealthy = async () => {
   return false;
 };
 
-const attachLogs = (child) => {
-  child.stdout?.on("data", (chunk) => parseLines(chunk, (line) => auditLog.info("CHATBOT", `[ChatbotService] ${line}`)));
-  child.stderr?.on("data", (chunk) => parseLines(chunk, (line) => auditLog.warn("CHATBOT", `[ChatbotService] ${line}`)));
+export const attachChatbotServiceLogs = (child, logger = auditLog) => {
+  for (const [input, fallback] of [[child.stdout, "info"], [child.stderr, "warn"]]) {
+    if (!input) continue;
+    createInterface({ input, crlfDelay: Infinity }).on("line", text => {
+      const line = text.trim();
+      if (!line) return;
+      const severity = line.match(/^(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL):/i)?.[1].toUpperCase();
+      const level = /^(ERROR|CRITICAL)$/.test(severity) || /^Traceback\b|^\w*(?:Error|Exception):/.test(line) ? "error"
+        : /^(WARNING|WARN)$/.test(severity) ? "warn" : /^(DEBUG|INFO)$/.test(severity) ? "info" : fallback;
+      logger[level]("CHATBOT", `[ChatbotService] ${line}`);
+    });
+  }
   child.once("exit", (code, signal) => {
-    auditLog.warn("CHATBOT", `Chatbot service exited (code=${code ?? "null"}, signal=${signal ?? "none"})`);
+    const level = code === 0 || signal === "SIGTERM" ? "info" : code !== null ? "error" : "warn";
+    logger[level]("CHATBOT", `Chatbot service exited (code=${code ?? "null"}, signal=${signal ?? "none"})`);
     if (chatbotServiceProcess?.pid === child.pid) chatbotServiceProcess = null;
   });
 };
@@ -169,7 +171,7 @@ const startChatbotService = async () => {
     }
 
     chatbotServiceProcess = spawned.child;
-    attachLogs(spawned.child);
+    attachChatbotServiceLogs(spawned.child);
     auditLog.info("CHATBOT", `Starting local chatbot service with ${candidate.command} (${candidate.source})`);
 
     const healthy = await waitUntilHealthy();

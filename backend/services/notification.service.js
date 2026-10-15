@@ -31,7 +31,7 @@ const DATA_KEYS = new Set([
   "bookingId", "vehicleId", "conversationId", "messageId", "senderId", "status", "paymentStatus",
   "walkInPaymentStatus", "cancellationStatus", "extensionStatus", "requestedReturnAt", "returnAt",
   "overdueMinutes", "isOverdue", "autoCompleted", "rating", "actions", "unreadCount", "actionUrl",
-  "returnStatus", "returnRequestedAt", "actualReturnAt",
+  "returnStatus", "returnRequestedAt", "actualReturnAt", "returnConfirmedAt", "returnReportedHandoverAt",
   "vehicleName", "scheduledReturnAt", "graceMinutes", "lateReturnPenaltyRatePerHour",
   "estimatedLateReturnPenaltyFee", "lateReturnPenaltyFee", "feeStatus", "rentalAmount",
   "transactionFee", "totalAmountPayable", "paymentAmountPaid", "remainingBalance",
@@ -138,16 +138,18 @@ const findExistingByDedupeKey = ({ user, dedupeKey }) => {
   return Notification.findOne({ user, dedupeKey });
 };
 
-const queueEmailDelivery = async (notification) => {
-  if (!EMAIL_ENABLED() || !notification || notification.category === "chat") return;
+export const queueEmailDelivery = async (notification) => {
+  if (!EMAIL_ENABLED() || !notification || notification.category === "chat") return true;
   try {
     await NotificationDelivery.updateOne(
       { notification: notification._id },
       { $setOnInsert: { notification: notification._id, user: notification.user, channel: "email", status: "pending", nextAttemptAt: new Date() } },
       { upsert: true }
     );
+    return true;
   } catch (error) {
     console.error("[notification] Failed to queue email delivery:", error?.message || error);
+    return false;
   }
 };
 

@@ -11,6 +11,7 @@ import {
   proceedBookingLateReturn,
   requestBookingReturn,
   requestBookingExtension,
+  withdrawBookingExtension,
   setBookingBalancePaymentMethod,
   verifyBookingPayment,
 } from "../controllers/booking.controller.js";
@@ -38,6 +39,13 @@ router.post(
   authorize("user", "owner", "admin"),
   validateObjectIdParam("id"),
   requestBookingExtension
+);
+router.patch(
+  "/:id/extension-request/withdraw",
+  protect,
+  authorize("user", "owner", "admin"),
+  validateObjectIdParam("id"),
+  withdrawBookingExtension
 );
 router.post(
   "/:id/return-request",

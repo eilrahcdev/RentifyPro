@@ -1,145 +1,2113 @@
 {
   "schema_version": "v1",
   "cases": [
-    {"id":"greet-reordered","input":"Hey there, Rentify","intent":"chat_greeting","language":"en"},
-    {"id":"wellbeing-paraphrase","input":"How have you been doing?","intent":"chat_wellbeing","language":"en"},
-    {"id":"identity-paraphrase","input":"Who exactly am I chatting with?","intent":"chat_identity","language":"en"},
-    {"id":"gender-paraphrase","input":"Are you a girl chatbot or a boy chatbot?","intent":"chat_gender_identity","language":"en"},
-    {"id":"language-spanish","input":"Is Spanish one of the languages you know?","intent":"chat_language_support","language":"en","reply_contains":["English","Filipino","Taglish"],"reply_excludes":["fluent in Spanish"]},
-    {"id":"gratitude-paraphrase","input":"Your answer helped, thank you so much","intent":"chat_gratitude","language":"en"},
-    {"id":"acknowledge-paraphrase","input":"Okay I understand now","intent":"chat_acknowledgement","language":"en"},
-    {"id":"goodbye-paraphrase","input":"No further questions, bye for now","intent":"chat_goodbye","language":"en"},
-    {"id":"casual-paraphrase","input":"Haha you're funny","intent":"chat_casual_conversation","language":"en"},
-    {"id":"unclear-paraphrase","input":"I'm confused by that explanation","intent":"unclear_message","language":"en"},
-    {"id":"nonsense-unseen","input":"zxjvqzjv","intent":"nonsense_message","language":"en"},
-    {"id":"help-paraphrase","input":"What kinds of rental questions can you help answer?","intent":"help_request","language":"en"},
-    {"id":"rate-word-order","input":"Rental prices, how much are they each day?","intent":"rental_rate","language":"en"},
-    {"id":"insurance-paraphrase","input":"Is insurance part of the car rental fee?","intent":"insurance_included","language":"en"},
-    {"id":"deposit-return","input":"Do I need to leave a refundable deposit for the rental?","intent":"security_deposit","language":"en"},
-    {"id":"payment-options","input":"How can I pay online for a rented car?","intent":"payment_methods","language":"en"},
-    {"id":"requirements-prepare","input":"Before I hire a car what paperwork should I bring?","intent":"rental_requirements","language":"en"},
-    {"id":"age-threshold","input":"How old must a person be to rent here?","intent":"minimum_age","language":"en"},
-    {"id":"id-address-proof","input":"Do you ask for identification and proof of where I live?","intent":"id_or_proof_of_address","language":"en"},
-    {"id":"available-current","input":"Recommend vehicles that I can rent at the moment","intent":"available_vehicles","language":"en","recommendations":["city","everest","vios"]},
-    {"id":"brand-reordered","input":"Nissan cars, have you got any to rent?","intent":"vehicle_brand_search","language":"en","entities":{"brand":"Nissan"}},
-    {"id":"transmission-clutch","input":"Any rentals with a manual gearbox?","intent":"available_transmission","language":"en","entities":{"transmission":"manual"},"recommendations":["van"]},
-    {"id":"fuel-reordered","input":"On return should the fuel tank be filled up?","intent":"full_tank_return","language":"en"},
-    {"id":"capacity-family","input":"Which rental can fit 7 passengers?","intent":"passenger_capacity","language":"en","entities":{"pax":7},"recommendations":["everest","fortuner","van"]},
-    {"id":"specific-model-request","input":"May I select the exact model for my rental?","intent":"choose_specific_model","language":"en"},
-    {"id":"pickup-hour","input":"At what time should I pick up my booking?","intent":"booking_pickup_time","language":"en","clarification":{"required":true,"field":"booking"}},
-    {"id":"booking-start","input":"How do I get started reserving a car on this site?","intent":"how_to_book","language":"en"},
-    {"id":"same-day-collect","input":"Can I book a car and collect it today?","intent":"same_day_rental","language":"en"},
-    {"id":"early-discount","input":"If I book well ahead do I get a cheaper rate?","intent":"advance_booking_discount","language":"en"},
-    {"id":"downpayment-thirty","input":"Could I pay 30 percent now instead of the whole amount?","intent":"payment_downpayment","language":"en"},
-    {"id":"walk-in-remaining","input":"Can I pay the rest in person at collection?","intent":"walk_in_payment","language":"en"},
-    {"id":"booking-status-personal","input":"Has my rental request been accepted yet?","intent":"booking_status","language":"en"},
-    {"id":"active-personal","input":"Which rentals on my account are ongoing?","intent":"my_active_bookings","language":"en"},
-    {"id":"overdue-personal","input":"Have I missed my vehicle return deadline?","intent":"my_overdue_return","language":"en"},
-    {"id":"balance-personal","input":"Is there anything left for me to pay on my rentals?","intent":"my_unpaid_balance","language":"en"},
-    {"id":"extend-period","input":"How can I keep my rental for one extra day?","intent":"booking_extension","language":"en"},
-    {"id":"cancel-request","input":"I want to withdraw my vehicle reservation","intent":"booking_cancellation","language":"en"},
-    {"id":"driver-included","input":"Is someone available to drive the rented car for me?","intent":"driver_option","language":"en"},
-    {"id":"categories-vs-current","input":"What sorts of vehicles does RentifyPro support renting?","intent":"vehicle_categories","language":"en"},
-    {"id":"review-after-rental","input":"Can I leave a star rating once my rental is over?","intent":"reviews_ratings","language":"en"},
-    {"id":"notifications-find","input":"Where do I find alerts about my rental requests?","intent":"notifications","language":"en"},
-    {"id":"message-owner","input":"How can I talk to the person who owns the car?","intent":"messaging","language":"en"},
-    {"id":"verification-private","input":"Who protects the ID files I upload for verification?","intent":"verification_security","language":"en"},
-    {"id":"booking-max","input":"What is the limit on pending reservations?","intent":"booking_limits","language":"en"},
-    {"id":"schedule-overlap","input":"May two rental bookings share the same dates and times?","intent":"schedule_conflict","language":"en"},
-    {"id":"late-policy-general","input":"What happens when a renter brings a car back too late?","intent":"late_return_policy","language":"en"},
-    {"id":"balance-blocking","input":"Does a due balance keep me from making another reservation?","intent":"unpaid_balance","language":"en"},
-    {"id":"hidden-explanation","input":"Why can't I see unavailable listings on the vehicles screen?","intent":"vehicle_unavailability","language":"en"},
-    {"id":"status-unseen-count","input":"Is there any unavailable vehicle rn?","intent":"vehicle_availability_status","language":"en","conditions":{"vehicle_status_overview":true},"reply_contains":["1 currently unavailable","6 available"],"clarification":{"required":false}},
-    {"id":"payment-failure","input":"The money was deducted but my booking payment is still processing","intent":"payment_troubleshooting","language":"en"},
-    {"id":"checkout-expired","input":"My checkout session has expired, what next?","intent":"payment_checkout_expired","language":"en"},
-    {"id":"reset-forgotten","input":"I've forgotten my password, how do I sign in again?","intent":"account_password_reset","language":"en"},
-    {"id":"verification-rejection","input":"My uploaded ID got declined during verification","intent":"verification_troubleshooting","language":"en"},
-    {"id":"rental-breakdown","input":"The car I rented won't start now","intent":"rental_problem_support","language":"en"},
-    {"id":"owner-add","input":"I'm an owner, where do I put my car up for rental?","intent":"owner_listing_guidance","language":"en"},
-    {"id":"owner-request-decline","input":"As owner how do I reject a rental request?","intent":"owner_booking_guidance","language":"en"},
-    {"id":"owner-income-view","input":"Can an owner see the income from their rentals?","intent":"owner_earnings_guidance","language":"en"},
-    {"id":"pickup-address","input":"Where is the address to collect my rental?","intent":"pickup_location","language":"en"},
-    {"id":"refund-request","input":"Can I request my money back from the rental?","intent":"rental_refund_guidance","language":"en"},
-    {"id":"bare-unavailable-guided","input":"unavailable?","intent":"REJECT","language":"en","clarification":{"required":true},"reply_contains":["vehicles","payment option"]},
-    {"id":"plural-unavailable","input":"unavailable vehicles","intent":"vehicle_availability_status","language":"en","clarification":{"required":false},"reply_contains":["1 currently unavailable"]},
-    {"id":"listing-fragment","input":"the unavailable vehicle listing","intent":"vehicle_availability_status","language":"en","clarification":{"required":false}},
-    {"id":"inventory-list-action","input":"Could you list the unavailable vehicles for me?","intent":"vehicle_availability_status","language":"en","conditions":{"vehicle_status_list":true},"reply_contains":["Honda SUV (unavailable)"],"reply_excludes":["Toyota Vios"]},
-    {"id":"inventory-filter-empty","input":"Which unavailable Nissan vehicles are there?","intent":"vehicle_availability_status","language":"en","reply_contains":["no current vehicle listings"]},
-    {"id":"payment-unavailable-action","input":"Is GCash unavailable right now?","intent":"payment_troubleshooting","language":"en","reply_excludes":["currently unavailable and","GCash is offline"]},
-    {"id":"payment-negated-state","input":"GCash is not working for my rental payment","intent":"payment_troubleshooting","language":"en"},
-    {"id":"languages-bisaya","input":"Marunong ka bang magsalita ng Bisaya dito?","intent":"chat_language_support","language":"fil","reply_contains":["Bisaya","English","Filipino","Taglish"]},
-    {"id":"languages-ilonggo","input":"Kaya mo bang magsalita sa akin ng Ilonggo?","intent":"chat_language_support","language":"fil","reply_contains":["Ilonggo"]},
-    {"id":"languages-ilocano","input":"Could you respond to me using Ilocano?","intent":"chat_language_support","language":"en","reply_contains":["Ilocano"]},
-    {"id":"keyword-private-negative","input":"List another renter's unpaid bookings","intent":"REJECT","language":"en","reason_code":"private_record_scope"},
-    {"id":"keyword-foreign-account-negative","input":"My Spotify payment is unavailable","intent":"REJECT","language":"en","reason_code":"outside_scope"},
-    {"id":"keyword-foreign-booking-negative","input":"Cancel a hotel reservation for me","intent":"REJECT","language":"en","reason_code":"outside_scope"},
-    {"id":"keyword-stock-negative","input":"What does Toyota stock cost today?","intent":"REJECT","language":"en","reason_code":"outside_scope"},
-    {"id":"negated-unavailable-filter","input":"Show cars that are not unavailable","intent":"available_vehicles","language":"en","recommendations":["city","vios"]},
-    {"id":"nonvehicle-negated-unavailable","input":"My payment is not unavailable","intent":"payment_troubleshooting","language":"en","reply_excludes":["vehicle listings"]},
-    {"id":"status-specific-singular","input":"Is that vehicle unavailable?","intent":"vehicle_availability_status","language":"en","clarification":{"required":true,"field":"model"}},
-    {"id":"uncertain-choice","input":"yes","intent":"chat_acknowledgement","language":"en"}
+    {
+      "id": "greet-reordered",
+      "input": "Hey there, Rentify",
+      "intent": "chat_greeting",
+      "language": "en"
+    },
+    {
+      "id": "wellbeing-paraphrase",
+      "input": "How have you been doing?",
+      "intent": "chat_wellbeing",
+      "language": "en"
+    },
+    {
+      "id": "identity-paraphrase",
+      "input": "Who exactly am I chatting with?",
+      "intent": "chat_identity",
+      "language": "en"
+    },
+    {
+      "id": "gender-paraphrase",
+      "input": "Are you a girl chatbot or a boy chatbot?",
+      "intent": "chat_gender_identity",
+      "language": "en"
+    },
+    {
+      "id": "language-spanish",
+      "input": "Is Spanish one of the languages you know?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "reply_contains": [
+        "English",
+        "Filipino",
+        "Taglish"
+      ],
+      "reply_excludes": [
+        "fluent in Spanish"
+      ]
+    },
+    {
+      "id": "gratitude-paraphrase",
+      "input": "Your answer helped, thank you so much",
+      "intent": "chat_gratitude",
+      "language": "en"
+    },
+    {
+      "id": "acknowledge-paraphrase",
+      "input": "Okay I understand now",
+      "intent": "chat_acknowledgement",
+      "language": "en"
+    },
+    {
+      "id": "goodbye-paraphrase",
+      "input": "No further questions, bye for now",
+      "intent": "chat_goodbye",
+      "language": "en"
+    },
+    {
+      "id": "casual-paraphrase",
+      "input": "Haha you're funny",
+      "intent": "chat_casual_conversation",
+      "language": "en"
+    },
+    {
+      "id": "unclear-paraphrase",
+      "input": "I'm confused by that explanation",
+      "intent": "unclear_message",
+      "language": "en"
+    },
+    {
+      "id": "nonsense-unseen",
+      "input": "zxjvqzjv",
+      "intent": "nonsense_message",
+      "language": "en"
+    },
+    {
+      "id": "help-paraphrase",
+      "input": "What kinds of rental questions can you help answer?",
+      "intent": "help_request",
+      "language": "en"
+    },
+    {
+      "id": "rate-word-order",
+      "input": "Rental prices, how much are they each day?",
+      "intent": "rental_rate",
+      "language": "en"
+    },
+    {
+      "id": "insurance-paraphrase",
+      "input": "Is insurance part of the car rental fee?",
+      "intent": "insurance_included",
+      "language": "en"
+    },
+    {
+      "id": "deposit-return",
+      "input": "Do I need to leave a refundable deposit for the rental?",
+      "intent": "security_deposit",
+      "language": "en"
+    },
+    {
+      "id": "payment-options",
+      "input": "How can I pay online for a rented car?",
+      "intent": "payment_methods",
+      "language": "en"
+    },
+    {
+      "id": "requirements-prepare",
+      "input": "Before I hire a car what paperwork should I bring?",
+      "intent": "rental_requirements",
+      "language": "en"
+    },
+    {
+      "id": "age-threshold",
+      "input": "How old must a person be to rent here?",
+      "intent": "minimum_age",
+      "language": "en"
+    },
+    {
+      "id": "id-address-proof",
+      "input": "Do you ask for identification and proof of where I live?",
+      "intent": "id_or_proof_of_address",
+      "language": "en"
+    },
+    {
+      "id": "available-current",
+      "input": "Recommend vehicles that I can rent at the moment",
+      "intent": "available_vehicles",
+      "language": "en",
+      "recommendations": [
+        "city",
+        "everest",
+        "vios"
+      ]
+    },
+    {
+      "id": "brand-reordered",
+      "input": "Nissan cars, have you got any to rent?",
+      "intent": "vehicle_brand_search",
+      "language": "en",
+      "entities": {
+        "brand": "Nissan"
+      }
+    },
+    {
+      "id": "transmission-clutch",
+      "input": "Any rentals with a manual gearbox?",
+      "intent": "available_transmission",
+      "language": "en",
+      "entities": {
+        "transmission": "manual"
+      },
+      "recommendations": [
+        "van"
+      ]
+    },
+    {
+      "id": "fuel-reordered",
+      "input": "On return should the fuel tank be filled up?",
+      "intent": "full_tank_return",
+      "language": "en"
+    },
+    {
+      "id": "capacity-family",
+      "input": "Which rental can fit 7 passengers?",
+      "intent": "passenger_capacity",
+      "language": "en",
+      "entities": {
+        "pax": 7
+      },
+      "recommendations": [
+        "everest",
+        "fortuner",
+        "van"
+      ]
+    },
+    {
+      "id": "specific-model-request",
+      "input": "May I select the exact model for my rental?",
+      "intent": "choose_specific_model",
+      "language": "en"
+    },
+    {
+      "id": "pickup-hour",
+      "input": "At what time should I pick up my booking?",
+      "intent": "booking_pickup_time",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "field": "booking"
+      }
+    },
+    {
+      "id": "booking-start",
+      "input": "How do I get started reserving a car on this site?",
+      "intent": "how_to_book",
+      "language": "en"
+    },
+    {
+      "id": "same-day-collect",
+      "input": "Can I book a car and collect it today?",
+      "intent": "same_day_rental",
+      "language": "en"
+    },
+    {
+      "id": "early-discount",
+      "input": "If I book well ahead do I get a cheaper rate?",
+      "intent": "advance_booking_discount",
+      "language": "en"
+    },
+    {
+      "id": "downpayment-thirty",
+      "input": "Could I pay 30 percent now instead of the whole amount?",
+      "intent": "payment_downpayment",
+      "language": "en"
+    },
+    {
+      "id": "walk-in-remaining",
+      "input": "Can I pay the rest in person at collection?",
+      "intent": "walk_in_payment",
+      "language": "en"
+    },
+    {
+      "id": "booking-status-personal",
+      "input": "Has my rental request been accepted yet?",
+      "intent": "booking_status",
+      "language": "en"
+    },
+    {
+      "id": "active-personal",
+      "input": "Which rentals on my account are ongoing?",
+      "intent": "my_active_bookings",
+      "language": "en"
+    },
+    {
+      "id": "overdue-personal",
+      "input": "Have I missed my vehicle return deadline?",
+      "intent": "my_overdue_return",
+      "language": "en"
+    },
+    {
+      "id": "balance-personal",
+      "input": "Is there anything left for me to pay on my rentals?",
+      "intent": "my_unpaid_balance",
+      "language": "en"
+    },
+    {
+      "id": "extend-period",
+      "input": "How can I keep my rental for one extra day?",
+      "intent": "booking_extension",
+      "language": "en"
+    },
+    {
+      "id": "cancel-request",
+      "input": "I want to withdraw my vehicle reservation",
+      "intent": "booking_cancellation",
+      "language": "en"
+    },
+    {
+      "id": "driver-included",
+      "input": "Is someone available to drive the rented car for me?",
+      "intent": "driver_option",
+      "language": "en"
+    },
+    {
+      "id": "categories-vs-current",
+      "input": "What sorts of vehicles does RentifyPro support renting?",
+      "intent": "vehicle_categories",
+      "language": "en"
+    },
+    {
+      "id": "review-after-rental",
+      "input": "Can I leave a star rating once my rental is over?",
+      "intent": "reviews_ratings",
+      "language": "en"
+    },
+    {
+      "id": "notifications-find",
+      "input": "Where do I find alerts about my rental requests?",
+      "intent": "notifications",
+      "language": "en"
+    },
+    {
+      "id": "message-owner",
+      "input": "How can I talk to the person who owns the car?",
+      "intent": "messaging",
+      "language": "en"
+    },
+    {
+      "id": "verification-private",
+      "input": "Who protects the ID files I upload for verification?",
+      "intent": "verification_security",
+      "language": "en"
+    },
+    {
+      "id": "booking-max",
+      "input": "What is the limit on pending reservations?",
+      "intent": "booking_limits",
+      "language": "en"
+    },
+    {
+      "id": "schedule-overlap",
+      "input": "May two rental bookings share the same dates and times?",
+      "intent": "schedule_conflict",
+      "language": "en"
+    },
+    {
+      "id": "late-policy-general",
+      "input": "What happens when a renter brings a car back too late?",
+      "intent": "late_return_policy",
+      "language": "en"
+    },
+    {
+      "id": "balance-blocking",
+      "input": "Does a due balance keep me from making another reservation?",
+      "intent": "unpaid_balance",
+      "language": "en"
+    },
+    {
+      "id": "hidden-explanation",
+      "input": "Why can't I see unavailable listings on the vehicles screen?",
+      "intent": "vehicle_unavailability",
+      "language": "en"
+    },
+    {
+      "id": "status-unseen-count",
+      "input": "Is there any unavailable vehicle rn?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "conditions": {
+        "vehicle_status_overview": true
+      },
+      "reply_contains": [
+        "1 currently unavailable",
+        "6 available"
+      ],
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "payment-failure",
+      "input": "The money was deducted but my booking payment is still processing",
+      "intent": "payment_troubleshooting",
+      "language": "en"
+    },
+    {
+      "id": "checkout-expired",
+      "input": "My checkout session has expired, what next?",
+      "intent": "payment_checkout_expired",
+      "language": "en"
+    },
+    {
+      "id": "reset-forgotten",
+      "input": "I've forgotten my password, how do I sign in again?",
+      "intent": "account_password_reset",
+      "language": "en"
+    },
+    {
+      "id": "verification-rejection",
+      "input": "My uploaded ID got declined during verification",
+      "intent": "verification_troubleshooting",
+      "language": "en"
+    },
+    {
+      "id": "rental-breakdown",
+      "input": "The car I rented won't start now",
+      "intent": "rental_problem_support",
+      "language": "en"
+    },
+    {
+      "id": "owner-add",
+      "input": "I'm an owner, where do I put my car up for rental?",
+      "intent": "owner_listing_guidance",
+      "language": "en"
+    },
+    {
+      "id": "owner-request-decline",
+      "input": "As owner how do I reject a rental request?",
+      "intent": "owner_booking_guidance",
+      "language": "en"
+    },
+    {
+      "id": "owner-income-view",
+      "input": "Can an owner see the income from their rentals?",
+      "intent": "owner_earnings_guidance",
+      "language": "en"
+    },
+    {
+      "id": "pickup-address",
+      "input": "Where is the address to collect my rental?",
+      "intent": "pickup_location",
+      "language": "en"
+    },
+    {
+      "id": "refund-request",
+      "input": "Can I request my money back from the rental?",
+      "intent": "rental_refund_guidance",
+      "language": "en"
+    },
+    {
+      "id": "bare-unavailable-guided",
+      "input": "unavailable?",
+      "intent": "REJECT",
+      "language": "en",
+      "clarification": {
+        "required": true
+      },
+      "reply_contains": [
+        "vehicles",
+        "payment option"
+      ]
+    },
+    {
+      "id": "plural-unavailable",
+      "input": "unavailable vehicles",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "clarification": {
+        "required": false
+      },
+      "reply_contains": [
+        "1 currently unavailable"
+      ]
+    },
+    {
+      "id": "listing-fragment",
+      "input": "the unavailable vehicle listing",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "clarification": {
+        "required": false
+      }
+    },
+    {
+      "id": "inventory-list-action",
+      "input": "Could you list the unavailable vehicles for me?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "conditions": {
+        "vehicle_status_list": true
+      },
+      "reply_contains": [
+        "Honda SUV (unavailable)"
+      ],
+      "reply_excludes": [
+        "Toyota Vios"
+      ]
+    },
+    {
+      "id": "inventory-filter-empty",
+      "input": "Which unavailable Nissan vehicles are there?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "reply_contains": [
+        "no current vehicle listings"
+      ]
+    },
+    {
+      "id": "payment-unavailable-action",
+      "input": "Is GCash unavailable right now?",
+      "intent": "payment_troubleshooting",
+      "language": "en",
+      "reply_excludes": [
+        "currently unavailable and",
+        "GCash is offline"
+      ]
+    },
+    {
+      "id": "payment-negated-state",
+      "input": "GCash is not working for my rental payment",
+      "intent": "payment_troubleshooting",
+      "language": "en"
+    },
+    {
+      "id": "languages-bisaya",
+      "input": "Marunong ka bang magsalita ng Bisaya dito?",
+      "intent": "chat_language_support",
+      "language": "fil",
+      "reply_contains": [
+        "Bisaya",
+        "English",
+        "Filipino",
+        "Taglish"
+      ]
+    },
+    {
+      "id": "languages-ilonggo",
+      "input": "Kaya mo bang magsalita sa akin ng Ilonggo?",
+      "intent": "chat_language_support",
+      "language": "fil",
+      "reply_contains": [
+        "Ilonggo"
+      ]
+    },
+    {
+      "id": "languages-ilocano",
+      "input": "Could you respond to me using Ilocano?",
+      "intent": "chat_language_support",
+      "language": "en",
+      "reply_contains": [
+        "Ilocano"
+      ]
+    },
+    {
+      "id": "keyword-private-negative",
+      "input": "List another renter's unpaid bookings",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "private_record_scope"
+    },
+    {
+      "id": "keyword-foreign-account-negative",
+      "input": "My Spotify payment is unavailable",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope"
+    },
+    {
+      "id": "keyword-foreign-booking-negative",
+      "input": "Cancel a hotel reservation for me",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope"
+    },
+    {
+      "id": "keyword-stock-negative",
+      "input": "What does Toyota stock cost today?",
+      "intent": "REJECT",
+      "language": "en",
+      "reason_code": "outside_scope"
+    },
+    {
+      "id": "negated-unavailable-filter",
+      "input": "Show cars that are not unavailable",
+      "intent": "available_vehicles",
+      "language": "en",
+      "recommendations": [
+        "city",
+        "everest",
+        "vios"
+      ],
+      "entities": {
+        "category": "car"
+      }
+    },
+    {
+      "id": "nonvehicle-negated-unavailable",
+      "input": "My payment is not unavailable",
+      "intent": "payment_troubleshooting",
+      "language": "en",
+      "reply_excludes": [
+        "vehicle listings"
+      ]
+    },
+    {
+      "id": "status-specific-singular",
+      "input": "Is that vehicle unavailable?",
+      "intent": "vehicle_availability_status",
+      "language": "en",
+      "clarification": {
+        "required": true,
+        "field": "model"
+      }
+    },
+    {
+      "id": "uncertain-choice",
+      "input": "yes",
+      "intent": "chat_acknowledgement",
+      "language": "en"
+    },
+    {
+      "id": "reliability-reschedule",
+      "input": "Could I reschedule the pickup for my approved rental?",
+      "intent": "booking_changes_guidance",
+      "language": "en",
+      "reply_contains": [
+        "does not offer a general reschedule",
+        "Messages do not change"
+      ]
+    },
+    {
+      "id": "reliability-rental-terms",
+      "input": "Are toll charges and mileage limits set for every rental?",
+      "intent": "rental_terms_guidance",
+      "language": "en",
+      "reply_contains": [
+        "cannot confirm a universal",
+        "Messages"
+      ]
+    },
+    {
+      "id": "reliability-emergency",
+      "input": "Our rental vehicle crashed and someone is injured at the pickup.",
+      "intent": "rental_problem_support",
+      "language": "en",
+      "reply_contains": [
+        "911",
+        "Report issue"
+      ],
+      "reply_excludes": [
+        "available vehicles",
+        "insurance will cover"
+      ]
+    },
+    {
+      "id": "reliability-expired-id",
+      "input": "My ID for the identity check is expired now",
+      "intent": "verification_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "valid government ID",
+        "Resubmit verification"
+      ]
+    },
+    {
+      "id": "reliability-cash-location",
+      "input": "pwde cash sa balance",
+      "intent": "walk_in_payment",
+      "language": "taglish",
+      "reply_contains": [
+        "owner",
+        "approve"
+      ]
+    },
+    {
+      "id": "reliability-discount-location",
+      "input": "May discount sa SUV?",
+      "intent": "advance_booking_discount",
+      "language": "fil",
+      "entities": {
+        "category": "suv"
+      },
+      "reply_contains": [
+        "Hindi ko makukumpirma"
+      ]
+    },
+    {
+      "id": "reliability-cars-broad",
+      "input": "Please find available cars for me",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "car"
+      },
+      "recommendations": [
+        "city",
+        "everest",
+        "vios"
+      ]
+    },
+    {
+      "id": "reliability-trucks-broad",
+      "input": "Show trucks",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "truck"
+      },
+      "recommendations": [
+        "raptor"
+      ]
+    },
+    {
+      "id": "reliability-compound-quote",
+      "input": "Show SUVs in Cebu and quote one for 5 days",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "suv",
+        "location": "cebu"
+      },
+      "recommendations": [
+        "everest"
+      ],
+      "additional_intents": [
+        "rental_rate"
+      ],
+      "reply_contains": [
+        "Which listing should I quote"
+      ]
+    },
+    {
+      "id": "reliability-compound-pay",
+      "input": "Can I rent a van for 3 days and pay using GCash?",
+      "intent": "available_vehicles",
+      "language": "en",
+      "entities": {
+        "category": "van",
+        "duration_value": 3,
+        "duration_unit": "day"
+      },
+      "recommendations": [
+        "van"
+      ],
+      "additional_intents": [
+        "payment_methods"
+      ],
+      "reply_contains": [
+        "GCash",
+        "PayMongo"
+      ]
+    },
+    {
+      "id": "reliability-compound-motor",
+      "input": "May motor sa Manila at magkano per day?",
+      "intent": "available_vehicles",
+      "language": "taglish",
+      "entities": {
+        "category": "motorcycle",
+        "location": "manila"
+      },
+      "additional_intents": [
+        "rental_rate"
+      ],
+      "reply_excludes": [
+        "Ford",
+        "Toyota"
+      ]
+    },
+    {
+      "id": "reliability-model-only",
+      "input": "magkano rent ng vios 3 days",
+      "intent": "rental_rate",
+      "language": "taglish",
+      "entities": {
+        "model": "vios",
+        "duration_value": 3,
+        "duration_unit": "day"
+      },
+      "recommendations": [
+        "vios"
+      ],
+      "reply_contains": [
+        "PHP 7,200"
+      ]
+    },
+    {
+      "id": "reliability-receipt",
+      "input": "Please help me find proof of my rental payment receipt",
+      "intent": "payment_troubleshooting",
+      "language": "en",
+      "reply_contains": [
+        "payment reference",
+        "cannot issue a receipt"
+      ]
+    },
+    {
+      "id": "reliability-shortening",
+      "input": "I would like to shorten the rental after confirmation",
+      "intent": "booking_changes_guidance",
+      "language": "en",
+      "reply_contains": [
+        "does not offer a general reschedule",
+        "recorded schedule or price"
+      ]
+    },
+    {
+      "id": "repair-without-context-how",
+      "input": "No, I meant how to do it.",
+      "intent": "REJECT",
+      "language": "en",
+      "clarification": {
+        "required": true
+      },
+      "requested_answer_type": "instructions",
+      "reply_contains": [
+        "Which task"
+      ],
+      "reply_excludes": [
+        "Of course!"
+      ]
+    },
+    {
+      "id": "repair-without-context-filipino",
+      "input": "Ang tanong ko paano.",
+      "intent": "REJECT",
+      "language": "fil",
+      "clarification": {
+        "required": true
+      },
+      "requested_answer_type": "instructions",
+      "reply_contains": [
+        "Aling gawain"
+      ],
+      "reply_excludes": [
+        "Siyempre"
+      ]
+    },
+    {
+      "id": "repair-browse-instructions",
+      "input": "Explain how to browse the available vehicle listings",
+      "intent": "available_vehicles",
+      "language": "en",
+      "response_variant": "instructions",
+      "requested_answer_type": "instructions",
+      "reply_contains": [
+        "Open Vehicles",
+        "search box"
+      ],
+      "reply_excludes": [
+        "There are",
+        "reserved for you"
+      ]
+    },
+    {
+      "id": "repair-navigation-messaging",
+      "input": "Where do I click to chat with a vehicle owner?",
+      "intent": "messaging",
+      "language": "en",
+      "response_variant": "navigation",
+      "requested_answer_type": "navigation",
+      "reply_contains": [
+        "Chat Owner",
+        "Chat owner"
+      ]
+    },
+    {
+      "id": "repair-troubleshooting-messaging",
+      "input": "Why can't I contact the owner from this listing?",
+      "intent": "messaging",
+      "language": "en",
+      "response_variant": "troubleshooting",
+      "requested_answer_type": "troubleshooting",
+      "reply_contains": [
+        "error",
+        "Sign in"
+      ],
+      "reply_excludes": [
+        "automatically approved"
+      ]
+    }
   ],
   "conversations": [
-    {"id":"screenshot-unavailable","turns":[
-      {"input":"unavailable?","intent":"REJECT","clarification":{"required":true},"reply_contains":["vehicles","payment option"]},
-      {"input":"is there any unavailable vehicle rn?","intent":"vehicle_availability_status","clarification":{"required":false},"reply_contains":["1 currently unavailable","6 available"]},
-      {"input":"the unavailable","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"unavailable vehicles","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"the unavailable vehicle listing","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"Are there unavailable vehicles?","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"which ones?","intent":"vehicle_availability_status","clarification":{"required":false},"reply_contains":["Honda SUV (unavailable)"]},
-      {"input":"why?","intent":"vehicle_unavailability","clarification":{"required":false}},
-      {"input":"and GCash?","intent":"payment_methods","clarification":{"required":false},"reply_excludes":["matching vehicle"]}
-    ]},
-    {"id":"unavailable-clarification-choice","turns":[
-      {"input":"unavailable?","intent":"REJECT","clarification":{"required":true}},
-      {"input":"vehicles","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"How many?","intent":"vehicle_availability_status","clarification":{"required":false},"reply_contains":["1 currently unavailable"]}
-    ]},
-    {"id":"payment-choice-policy-followup","turns":[
-      {"input":"payment","intent":"REJECT","clarification":{"required":true}},
-      {"input":"methods","intent":"payment_methods","clarification":{"required":false}},
-      {"input":"what about unavailable GCash?","intent":"payment_troubleshooting","clarification":{"required":false}},
-      {"input":"tell me more","intent":"payment_troubleshooting","clarification":{"required":false}},
-      {"input":"and Toyota Vios?","intent":"vehicle_brand_search","clarification":{"required":false},"entities":{"brand":"Toyota","model":"Vios"},"recommendations":["vios"]}
-    ]},
-    {"id":"verification-choice-topic-change","turns":[
-      {"input":"verification","intent":"REJECT","clarification":{"required":true}},
-      {"input":"rejected","intent":"verification_troubleshooting","clarification":{"required":false}},
-      {"input":"why?","intent":"verification_troubleshooting","clarification":{"required":false}},
-      {"input":"What payment methods do you accept?","intent":"payment_methods","clarification":{"required":false}}
-    ]},
-    {"id":"inventory-budget-unit-and-reset","turns":[
-      {"input":"List unavailable SUVs in Cebu below PHP 2000","intent":"vehicle_availability_status","clarification":{"required":true,"field":"rate_unit"}},
-      {"input":"per day","intent":"vehicle_availability_status","clarification":{"required":false},"entities":{"location":"cebu","max_budget":2000,"rate_unit":"day"},"reply_contains":["Honda SUV (unavailable)"]},
-      {"input":"How about tomorrow?","intent":"vehicle_availability_status","clarification":{"required":false},"reply_contains":["not confirm"]},
-      {"input":"which ones?","reset":true,"intent":"REJECT","clarification":{"required":true}}
-    ]},
-    {"id":"owner-choice","turns":[
-      {"input":"owner","intent":"REJECT","clarification":{"required":true}},
-      {"input":"earnings","intent":"owner_earnings_guidance","clarification":{"required":false}},
-      {"input":"explain please","intent":"owner_earnings_guidance","clarification":{"required":false}}
-    ]},
-    {"id":"support-choice","turns":[
-      {"input":"support","intent":"REJECT","clarification":{"required":true}},
-      {"input":"messages","intent":"messaging","clarification":{"required":false}},
-      {"input":"how?","intent":"messaging","clarification":{"required":false}}
-    ]},
-    {"id":"status-list-public-choice","turns":[
-      {"input":"List the unavailable vehicles","intent":"vehicle_availability_status","clarification":{"required":false},"reply_contains":["Honda SUV (unavailable)"]},
-      {"input":"the first one","intent":"vehicle_availability_status","clarification":{"required":false},"entities":{"brand":"Honda","model":"SUV"},"reply_contains":["Honda SUV","cannot"],"reply_excludes":["currently available."]},
-      {"input":"and GCash?","intent":"payment_methods","clarification":{"required":false},"entities":{"brand":null,"model":null}}
-    ]},
-    {"id":"unavailable-payment-choice","turns":[
-      {"input":"unavailable?","intent":"REJECT","clarification":{"required":true}},
-      {"input":"payment option","intent":"payment_troubleshooting","clarification":{"required":false},"reply_contains":["can't verify a payment-provider outage"]},
-      {"input":"tell me more","intent":"payment_troubleshooting","clarification":{"required":false},"reply_contains":["checkout"]}
-    ]},
-    {"id":"status-to-vehicle-policy","turns":[
-      {"input":"Is Honda SUV unavailable?","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"and insurance?","intent":"insurance_included","clarification":{"required":false}},
-      {"input":"Is Toyota Vios unavailable?","intent":"vehicle_availability_status","clarification":{"required":false}},
-      {"input":"what about the rental price?","intent":"rental_rate","clarification":{"required":false},"entities":{"brand":"Toyota","model":"Vios"},"recommendations":["vios"]}
-    ]}
+    {
+      "id": "rental-filter-to-quote",
+      "turns": [
+        {
+          "input": "Find SUVs in Cebu that are currently listed",
+          "intent": "available_vehicles",
+          "clarification": {
+            "required": false
+          },
+          "recommendations": [
+            "everest"
+          ],
+          "entities": {
+            "category": "suv",
+            "location": "cebu"
+          }
+        },
+        {
+          "input": "Yung automatic lang.",
+          "intent": "available_vehicles",
+          "clarification": {
+            "required": false
+          },
+          "recommendations": [
+            "everest"
+          ],
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "transmission": "automatic"
+          }
+        },
+        {
+          "input": "Under 2k per day.",
+          "intent": "available_vehicles",
+          "clarification": {
+            "required": false
+          },
+          "recommendations": [
+            "everest"
+          ],
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "transmission": "automatic",
+            "max_budget": 2000,
+            "rate_unit": "day"
+          }
+        },
+        {
+          "input": "How about for 5 days?",
+          "intent": "rental_rate",
+          "clarification": {
+            "required": true,
+            "field": "model"
+          },
+          "recommendations": [
+            "everest"
+          ],
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "duration_value": 5,
+            "duration_unit": "day"
+          }
+        },
+        {
+          "input": "Magkano total?",
+          "intent": "rental_rate",
+          "clarification": {
+            "required": true,
+            "field": "model"
+          },
+          "reply_excludes": [
+            "motorcycle",
+            "passenger"
+          ]
+        },
+        {
+          "input": "The first one please",
+          "intent": "rental_rate",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "PHP 9,000",
+            "checkout fees"
+          ],
+          "recommendations": [
+            "everest"
+          ]
+        },
+        {
+          "input": "How do I pay using GCash?",
+          "intent": "payment_methods",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "brand": null,
+            "model": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot-unavailable",
+      "turns": [
+        {
+          "input": "unavailable?",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          },
+          "reply_contains": [
+            "vehicles",
+            "payment option"
+          ]
+        },
+        {
+          "input": "is there any unavailable vehicle rn?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "1 currently unavailable",
+            "6 available"
+          ]
+        },
+        {
+          "input": "the unavailable",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "unavailable vehicles",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "the unavailable vehicle listing",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "Are there unavailable vehicles?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "which ones?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "Honda SUV (unavailable)"
+          ]
+        },
+        {
+          "input": "why?",
+          "intent": "vehicle_unavailability",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "and GCash?",
+          "intent": "payment_methods",
+          "clarification": {
+            "required": false
+          },
+          "reply_excludes": [
+            "matching vehicle"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unavailable-clarification-choice",
+      "turns": [
+        {
+          "input": "unavailable?",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "vehicles",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "How many?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "1 currently unavailable"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "payment-choice-policy-followup",
+      "turns": [
+        {
+          "input": "payment",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "methods",
+          "intent": "payment_methods",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "what about unavailable GCash?",
+          "intent": "payment_troubleshooting",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "tell me more",
+          "intent": "payment_troubleshooting",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "and Toyota Vios?",
+          "intent": "vehicle_brand_search",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "brand": "Toyota",
+            "model": "Vios"
+          },
+          "recommendations": [
+            "vios"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verification-choice-topic-change",
+      "turns": [
+        {
+          "input": "verification",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "rejected",
+          "intent": "verification_troubleshooting",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "why?",
+          "intent": "verification_troubleshooting",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "What payment methods do you accept?",
+          "intent": "payment_methods",
+          "clarification": {
+            "required": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "inventory-budget-unit-and-reset",
+      "turns": [
+        {
+          "input": "List unavailable SUVs in Cebu below PHP 2000",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": true,
+            "field": "rate_unit"
+          }
+        },
+        {
+          "input": "per day",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "location": "cebu",
+            "max_budget": 2000,
+            "rate_unit": "day"
+          },
+          "reply_contains": [
+            "Honda SUV (unavailable)"
+          ]
+        },
+        {
+          "input": "How about tomorrow?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "not confirm"
+          ]
+        },
+        {
+          "input": "which ones?",
+          "reset": true,
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "owner-choice",
+      "turns": [
+        {
+          "input": "owner",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "earnings",
+          "intent": "owner_earnings_guidance",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "explain please",
+          "intent": "owner_earnings_guidance",
+          "clarification": {
+            "required": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "support-choice",
+      "turns": [
+        {
+          "input": "support",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "messages",
+          "intent": "messaging",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "how?",
+          "intent": "messaging",
+          "clarification": {
+            "required": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "status-list-public-choice",
+      "turns": [
+        {
+          "input": "List the unavailable vehicles",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "Honda SUV (unavailable)"
+          ]
+        },
+        {
+          "input": "the first one",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "brand": "Honda",
+            "model": "SUV"
+          },
+          "reply_contains": [
+            "Honda SUV",
+            "cannot"
+          ],
+          "reply_excludes": [
+            "currently available."
+          ]
+        },
+        {
+          "input": "and GCash?",
+          "intent": "payment_methods",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "brand": null,
+            "model": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "unavailable-payment-choice",
+      "turns": [
+        {
+          "input": "unavailable?",
+          "intent": "REJECT",
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "payment option",
+          "intent": "payment_troubleshooting",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "can't verify a payment-provider outage"
+          ]
+        },
+        {
+          "input": "tell me more",
+          "intent": "payment_troubleshooting",
+          "clarification": {
+            "required": false
+          },
+          "reply_contains": [
+            "checkout"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "status-to-vehicle-policy",
+      "turns": [
+        {
+          "input": "Is Honda SUV unavailable?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "and insurance?",
+          "intent": "insurance_included",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "Is Toyota Vios unavailable?",
+          "intent": "vehicle_availability_status",
+          "clarification": {
+            "required": false
+          }
+        },
+        {
+          "input": "what about the rental price?",
+          "intent": "rental_rate",
+          "clarification": {
+            "required": false
+          },
+          "entities": {
+            "brand": "Toyota",
+            "model": "Vios"
+          },
+          "recommendations": [
+            "vios"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "memory_model_confirmation_explanation",
+      "turns": [
+        {
+          "input": "Can I choose a specific vehicle model?",
+          "intent": "choose_specific_model",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "you sure?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "owner",
+            "approve"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "how?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "Vehicles",
+            "Book Now"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_booking_continuation_wellbeing",
+      "turns": [
+        {
+          "input": "how to book?",
+          "intent": "how_to_book",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "and?",
+          "intent": "how_to_book",
+          "reply_contains": [
+            "After submitting",
+            "Bookings"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "you okay?",
+          "intent": "chat_wellbeing",
+          "reply_contains": [
+            "ready to help"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "what next?",
+          "intent": "how_to_book",
+          "reply_contains": [
+            "payment",
+            "pickup"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_walk_in_short_followups",
+      "turns": [
+        {
+          "input": "What payment methods are accepted?",
+          "intent": "payment_methods",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "Is there a walk in payment?",
+          "intent": "walk_in_payment",
+          "reply_contains": [
+            "down payment"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "how?",
+          "intent": "walk_in_payment",
+          "reply_contains": [
+            "Request Walk-in Approval"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "Does the owner need to approve?",
+          "intent": "walk_in_payment",
+          "reply_contains": [
+            "approve"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "What if they reject it?",
+          "intent": "walk_in_payment",
+          "reply_contains": [
+            "online",
+            "eligible"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_social_and_topic_replacement",
+      "turns": [
+        {
+          "input": "how to book?",
+          "intent": "how_to_book",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "thanks",
+          "intent": "chat_gratitude",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "how to cancel?",
+          "intent": "booking_cancellation",
+          "reply_contains": [
+            "Cancel Booking"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "refund?",
+          "intent": "rental_refund_guidance",
+          "reply_contains": [
+            "cannot promise"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "why?",
+          "intent": "rental_refund_guidance",
+          "reply_contains": [
+            "needs review"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_reset_missing_and_new_topic",
+      "turns": [
+        {
+          "input": "how?",
+          "intent": "REJECT",
+          "reply_contains": [
+            "booking"
+          ],
+          "reply_excludes": [],
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "and?",
+          "intent": "REJECT",
+          "reply_contains": [
+            "booking"
+          ],
+          "reply_excludes": [],
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "you sure?",
+          "intent": "REJECT",
+          "reply_contains": [
+            "booking"
+          ],
+          "reply_excludes": [],
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "how to book?",
+          "intent": "how_to_book",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "Start a new chat",
+          "intent": "chat_greeting",
+          "reply_contains": [
+            "new conversation"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "how?",
+          "intent": "REJECT",
+          "reply_contains": [
+            "booking"
+          ],
+          "reply_excludes": [],
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "What payment methods are accepted?",
+          "intent": "payment_methods",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "how?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "PayMongo"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_approval_time_payment",
+      "turns": [
+        {
+          "input": "how to book?",
+          "intent": "how_to_book",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "Thanks",
+          "intent": "chat_gratitude",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "How long does approval take?",
+          "intent": "booking_status",
+          "reply_contains": [
+            "owner",
+            "Bookings"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "What about payment?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "GCash",
+            "Maya"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "How?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "Proceed to Pay"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_fil_confirmation_and_steps",
+      "turns": [
+        {
+          "input": "Puwede ba akong pumili ng partikular na modelo ng sasakyan?",
+          "intent": "choose_specific_model",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "sigurado ka?",
+          "intent": "choose_specific_model",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "paano?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "Vehicles",
+            "Book Now"
+          ],
+          "reply_excludes": []
+        },
+        {
+          "input": "salamat",
+          "intent": "chat_gratitude",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "tapos ano?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "Bookings"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "memory_taglish_social_and_expiry",
+      "turns": [
+        {
+          "input": "How to book ng vehicle?",
+          "intent": "how_to_book",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "thanks",
+          "intent": "chat_gratitude",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "okay",
+          "intent": "chat_acknowledgement",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "noted",
+          "intent": "chat_acknowledgement",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "paano?",
+          "intent": "REJECT",
+          "reply_contains": [
+            "booking"
+          ],
+          "reply_excludes": [],
+          "clarification": {
+            "required": true
+          }
+        },
+        {
+          "input": "What payment methods ang accepted?",
+          "intent": "payment_methods",
+          "reply_contains": [],
+          "reply_excludes": []
+        },
+        {
+          "input": "paano?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "PayMongo"
+          ],
+          "reply_excludes": []
+        }
+      ]
+    },
+    {
+      "id": "reliability-model-unavailable",
+      "turns": [
+        {
+          "input": "May I select a specific car model?",
+          "intent": "choose_specific_model"
+        },
+        {
+          "input": "sure?",
+          "intent": "choose_specific_model"
+        },
+        {
+          "input": "how?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "Vehicles",
+            "Book Now"
+          ]
+        },
+        {
+          "input": "What if that model is unavailable?",
+          "intent": "choose_specific_model",
+          "reply_contains": [
+            "alternatives",
+            "owner approval"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reliability-payment-pivot",
+      "turns": [
+        {
+          "input": "How do I book a vehicle rental?",
+          "intent": "how_to_book"
+        },
+        {
+          "input": "and?",
+          "intent": "how_to_book"
+        },
+        {
+          "input": "you okay?",
+          "intent": "chat_wellbeing"
+        },
+        {
+          "input": "Anyway, what about payment?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "GCash",
+            "Maya"
+          ]
+        },
+        {
+          "input": "how?",
+          "intent": "payment_methods",
+          "reply_contains": [
+            "Proceed to Pay"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reliability-supported-filters",
+      "turns": [
+        {
+          "input": "Find SUVs in Cebu",
+          "intent": "available_vehicles",
+          "entities": {
+            "category": "suv",
+            "location": "cebu"
+          }
+        },
+        {
+          "input": "automatic",
+          "intent": "available_vehicles",
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "transmission": "automatic"
+          }
+        },
+        {
+          "input": "under 2k per day",
+          "intent": "available_vehicles",
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "transmission": "automatic",
+            "max_budget": 2000
+          }
+        },
+        {
+          "input": "tomorrow",
+          "intent": "available_vehicles",
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "transmission": "automatic",
+            "max_budget": 2000
+          }
+        },
+        {
+          "input": "for five days",
+          "intent": "rental_rate",
+          "entities": {
+            "category": "suv",
+            "location": "cebu",
+            "duration_value": 5
+          },
+          "clarification": {
+            "required": true,
+            "field": "model"
+          },
+          "reply_contains": [
+            "listing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-messaging-steps",
+      "turns": [
+        {
+          "input": "Please explain how to message the vehicle owner on this site",
+          "intent": "messaging",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "I asked how.",
+          "intent": "messaging",
+          "response_variant": "instructions_detail",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "Where do I click?",
+          "intent": "messaging",
+          "response_variant": "navigation",
+          "requested_answer_type": "navigation",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-messaging-capability",
+      "turns": [
+        {
+          "input": "May I contact the vehicle owner on this listing?",
+          "intent": "messaging",
+          "response_variant": "overview",
+          "requested_answer_type": "overview",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "How?",
+          "intent": "messaging",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "What if they don't reply?",
+          "intent": "messaging",
+          "response_variant": "no_reply",
+          "requested_answer_type": "troubleshooting",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Report issue"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-booking-steps",
+      "turns": [
+        {
+          "input": "Please tell me how to book a vehicle on this site",
+          "intent": "how_to_book",
+          "response_variant": null,
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        },
+        {
+          "input": "That's not what I asked.",
+          "intent": "how_to_book",
+          "response_variant": null,
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        },
+        {
+          "input": "Show me the steps.",
+          "intent": "how_to_book",
+          "response_variant": null,
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-walk-in-request",
+      "turns": [
+        {
+          "input": "How can I request walk-in payment?",
+          "intent": "walk_in_payment",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        },
+        {
+          "input": "I meant how to request it.",
+          "intent": "walk_in_payment",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        },
+        {
+          "input": "What if the owner rejects it?",
+          "intent": "walk_in_payment",
+          "response_variant": "rejection",
+          "requested_answer_type": null,
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-messaging-filipino",
+      "turns": [
+        {
+          "input": "Paano ko i-message ang vehicle owner dito?",
+          "intent": "messaging",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "taglish",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "Paano nga?",
+          "intent": "messaging",
+          "response_variant": "instructions_detail",
+          "requested_answer_type": "instructions",
+          "language": "taglish",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "Saan ko makikita?",
+          "intent": "messaging",
+          "response_variant": "navigation",
+          "requested_answer_type": "navigation",
+          "language": "taglish",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair-reset-no-history",
+      "turns": [
+        {
+          "input": "For this listing, how can I contact the owner?",
+          "intent": "messaging",
+          "response_variant": "instructions",
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "reply_contains": [
+            "Chat Owner"
+          ]
+        },
+        {
+          "input": "Start a new conversation.",
+          "intent": "chat_greeting",
+          "response_variant": "reset",
+          "requested_answer_type": null,
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ]
+        },
+        {
+          "input": "I asked how.",
+          "intent": "REJECT",
+          "response_variant": null,
+          "requested_answer_type": "instructions",
+          "language": "en",
+          "recommendations": [],
+          "reply_excludes": [
+            "Of course!",
+            "What are you looking for"
+          ],
+          "clarification": {
+            "required": true
+          },
+          "reply_contains": [
+            "Which task"
+          ]
+        }
+      ]
+    }
   ]
 }

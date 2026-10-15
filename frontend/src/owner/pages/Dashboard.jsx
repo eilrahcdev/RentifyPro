@@ -38,6 +38,7 @@ import { formatVehicleTypeLabel } from "../../utils/vehicleText";
 import ModalPortal from "../../components/ModalPortal";
 import { showActionToast } from "../../utils/actionToast";
 import ReturnReviewModal from "../components/ReturnReviewModal";
+import { getBookingLateReturnInfo as getLateReturnInfo } from "../../utils/bookingPolicy";
 
 const money = (value) =>
   `\u20b1${Number(value || 0).toLocaleString("en-PH", {
@@ -115,7 +116,8 @@ const formatRelativeActivityTime = (value) => {
 };
 
 const isCancellationRequested = (booking) =>
-  booking?.cancellationRequest?.status === "requested" || booking?.cancellation_request?.status === "requested";
+  ["pending", "confirmed", "extended"].includes(String(booking?.status || "").trim().toLowerCase()) &&
+  (booking?.cancellationRequest?.status === "requested" || booking?.cancellation_request?.status === "requested");
 
 const isExtensionRequested = (booking) =>
   String(booking?.extensionStatus || booking?.extensionRequest?.status || booking?.extension_request?.status || "")
@@ -145,6 +147,7 @@ const getExtensionRequestInfo = (booking) => {
     requestNote: String(extension?.requestNote || booking?.extensionRequestNote || "").trim(),
     reviewNote: String(extension?.reviewNote || booking?.extensionReviewNote || "").trim(),
     requestedAt: extension?.requestedAt || booking?.extensionRequestedAt || null,
+    quote: extension?.quote || null,
   };
 };
 
@@ -163,19 +166,6 @@ const getWalkInPaymentInfo = (booking) => {
     status: String(payment?.status || booking?.walkInPaymentStatus || "none").trim().toLowerCase(),
     requestedAt: payment?.requestedAt || booking?.walkInRequestedAt || null,
     requestNote: String(payment?.requestNote || booking?.walkInRequestNote || "").trim(),
-  };
-};
-
-const getLateReturnInfo = (booking) => {
-  const lateReturn = booking?.lateReturn || booking?.late_return || {};
-  const overdueMinutes = Number(lateReturn?.overdueMinutes || booking?.lateReturnOverdueMinutes || 0);
-  const penaltyFee = Number(lateReturn?.penaltyFee || booking?.lateReturnPenaltyFee || 0);
-
-  return {
-    isOverdue:
-      Boolean(lateReturn?.isOverdue) || Boolean(booking?.lateReturnIsOverdue) || overdueMinutes > 0,
-    overdueMinutes: Number.isFinite(overdueMinutes) && overdueMinutes > 0 ? Math.round(overdueMinutes) : 0,
-    penaltyFee: Number.isFinite(penaltyFee) && penaltyFee > 0 ? penaltyFee : 0,
   };
 };
 
@@ -435,6 +425,7 @@ const getRenterRequests = (bookings) =>
     .flatMap((booking) => {
       const requests = [];
       const bookingStatus = String(booking?.status || "").trim().toLowerCase();
+      if (!["pending", "confirmed", "extended"].includes(bookingStatus)) return [];
       const extension = getExtensionRequestInfo(booking);
       const cancellation = getCancellationRequestInfo(booking);
       const walkInPayment = getWalkInPaymentInfo(booking);
@@ -681,6 +672,7 @@ const getScheduleEventInfo = (booking, date) => {
 };
 
 const formatExtensionFee = (booking, extension) => {
+  if (extension.quote) return money(extension.quote.totalAmount);
   const currentReturnAt = toDate(extension?.currentReturnAt || booking?.returnAt);
   const requestedReturnAt = toDate(extension?.requestedReturnAt);
   const pickupAt = toDate(booking?.pickupAt);
@@ -793,11 +785,13 @@ export default function Dashboard() {
       activeRentals: bookings.filter((booking) => ["confirmed", "extended"].includes(String(booking.status || "").toLowerCase())).length,
       pendingRequests: bookings.filter(
         (booking) =>
-          String(booking.status || "").toLowerCase() === "pending" ||
-          isCancellationRequested(booking) ||
-          isExtensionRequested(booking) ||
-          getReturnRequestInfo(booking).status === "requested" ||
-          getWalkInPaymentInfo(booking).status === "requested"
+          ["pending", "confirmed", "extended"].includes(String(booking.status || "").trim().toLowerCase()) && (
+            String(booking.status || "").toLowerCase() === "pending" ||
+            isCancellationRequested(booking) ||
+            isExtensionRequested(booking) ||
+            getReturnRequestInfo(booking).status === "requested" ||
+            getWalkInPaymentInfo(booking).status === "requested"
+          )
       ).length,
     }),
     [vehicles, bookings]
@@ -855,7 +849,7 @@ export default function Dashboard() {
     setReviewingExtensionId(booking._id);
     setReviewError("");
     try {
-      const response = await API.reviewOwnerBookingExtensionRequest(booking._id, action);
+      const response = await API.reviewOwnerBookingExtensionRequest(booking._id, action, { expectedRequestedAt: getExtensionRequestInfo(booking).requestedAt });
       if (response?.success === false) throw new Error(response.message || "Failed to review extension request.");
       const updated = normalizeBookingStatus(response.booking);
 
@@ -884,7 +878,14 @@ export default function Dashboard() {
     setRenterRequestReview(request);
   };
 
-  const reviewRenterRequest = async (request, action, note = "") => {
+  const reviewRenterRequest = async (request, action, note = "", details = {}) => {
+    if (request?.type === "return" && action === "approve" && !details.actualReturnAt) {
+      setReturnReviewNote("");
+      setReviewError("");
+      setReturnDeclineRequest({ ...request, action: "confirm" });
+      setRenterRequestReview(null);
+      return;
+    }
     if (!request?.booking?._id) return;
 
     setReviewingRenterRequestKey(request.key);
@@ -897,14 +898,14 @@ export default function Dashboard() {
           action === "approve" ? "confirmed" : "rejected"
         );
       } else if (request.type === "cancellation") {
-        response = await API.reviewOwnerBookingCancellationRequest(request.booking._id, action);
+        response = await API.reviewOwnerBookingCancellationRequest(request.booking._id, action, { expectedRequestedAt: getCancellationRequestInfo(request.booking).requestedAt });
       } else if (request.type === "walk-in") {
         response = await API.reviewOwnerWalkInPaymentRequest(request.booking._id, action);
       } else if (request.type === "return") {
         response = await API.reviewOwnerVehicleReturnRequest(
           request.booking._id,
           action === "approve" ? "confirm" : "decline",
-          action === "reject" ? { note } : {}
+          { note, ...details, expectedRequestedAt: getReturnRequestInfo(request.booking).requestedAt }
         );
       } else {
         return;
@@ -931,6 +932,15 @@ export default function Dashboard() {
             : action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.";
       showActionToast(decisionMessage, { id: `owner-booking-${request.booking._id}` });
     } catch (err) {
+      if (request.type === "cancellation" && err?.details?.booking) {
+        const updated = normalizeBookingStatus(err.details.booking);
+        setBookings((prev) => prev.map((booking) => booking._id === updated._id &&
+          !(new Date(booking.updatedAt).getTime() > new Date(updated.updatedAt).getTime()) ? updated : booking));
+        if (!["pending", "confirmed", "extended"].includes(String(updated.status || "").trim().toLowerCase()) || getCancellationRequestInfo(updated).status !== "requested") {
+          setRenterRequestReview(null);
+          showActionToast(err.message, { id: `owner-booking-${updated._id}` });
+        }
+      }
       setReviewError(err.message || `Failed to review ${request.label.toLowerCase()}.`);
     } finally {
       setReviewingRenterRequestKey("");
@@ -1558,7 +1568,7 @@ export default function Dashboard() {
         </Modal>
       )}
       <ReturnReviewModal
-        review={returnDeclineRequest && { booking: returnDeclineRequest.booking, action: "decline" }}
+        review={returnDeclineRequest && { booking: returnDeclineRequest.booking, action: returnDeclineRequest.action || "decline" }}
         note={returnReviewNote}
         error={returnDeclineRequest ? reviewError : ""}
         loading={Boolean(returnDeclineRequest) && reviewingRenterRequestKey === returnDeclineRequest.key}
@@ -1569,7 +1579,7 @@ export default function Dashboard() {
           setReturnReviewNote("");
           setReviewError("");
         }}
-        onSubmit={() => reviewRenterRequest(returnDeclineRequest, "reject", returnReviewNote)}
+        onSubmit={(details) => reviewRenterRequest(returnDeclineRequest, returnDeclineRequest.action === "confirm" ? "approve" : "reject", returnReviewNote, details)}
       />
     </div>
   );

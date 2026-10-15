@@ -8,6 +8,7 @@ import Booking from "../models/Booking.js";
 import { updateProfile } from "../controllers/auth.controller.js";
 import { validateRegister } from "../middleware/validate.middleware.js";
 import { createBooking, getMyBookingEligibility } from "../controllers/booking.controller.js";
+import { approvedAccountFixture } from "./helpers/approvedAccountFixture.js";
 
 const response = () => ({
   statusCode: 200,
@@ -67,6 +68,7 @@ test("six-month horizon matches across frontend and backend including month ends
 });
 
 test("API rejects either booking date beyond six months and accepts the last day", async (t) => {
+  approvedAccountFixture(t);
   t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 8, 21, 12) });
   for (const range of [
     { pickupAt: "2027-03-22T10:00", returnAt: "2027-03-22T11:00" },
@@ -85,7 +87,7 @@ test("API rejects either booking date beyond six months and accepts the last day
     lean: async () => [],
   }));
   const res = response();
-  await getMyBookingEligibility({ query: { pickupAt: "2027-03-21T22:00", returnAt: "2027-03-21T23:59:59.999" }, user: { _id: "fixture" } }, res);
+  await getMyBookingEligibility({ query: { pickupAt: "2027-03-21T22:00", returnAt: "2027-03-21T23:59:59.999" }, user: { _id: "fixture", isVerified: true, kycStatus: "approved" } }, res);
   assert.equal(res.statusCode, 200);
 });
 

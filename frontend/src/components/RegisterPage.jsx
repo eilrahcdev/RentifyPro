@@ -30,6 +30,7 @@ import AuthShell from "./AuthShell";
 import LegalPolicyModal from "./LegalPolicyModal";
 import RegistrationDraftNotice from "./RegistrationDraftNotice";
 import RegistrationProgress from "./RegistrationProgress";
+import RegistrationEmailVerification from "./RegistrationEmailVerification";
 import HelpLink from "./HelpLink";
 import SelfieCapture from "./SelfieCapture";
 import useRegistrationDraft from "../hooks/useRegistrationDraft";
@@ -38,7 +39,7 @@ import { getMinBirthDate, getMaxBirthDate, RELATIONSHIP_OPTIONS, VALIDATION_RULE
 import { ID_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 import API from "../utils/api";
 
-const STEP_LABELS = ["Account", "About you", "Location & safety", "Identity", "Review"];
+const STEP_LABELS = ["Account", "About you", "Location & safety", "Verification", "Review"];
 const TOTAL_STEPS = STEP_LABELS.length;
 const ACTION_COOLDOWN_MS = 2000;
 const RATE_LIMIT_FALLBACK_SECONDS = 5 * 60;
@@ -98,6 +99,88 @@ function friendlyError(msg) {
   return "Something went wrong. Please try again.";
 }
 
+// File upload card
+
+const FileCard = ({ title, description, file, saved, previewUrl, onPick, onRemove, accept, inputRef, icon: Icon, error, disabled }) => (
+  <div className="rp-registration-upload min-w-0 rounded-2xl border border-gray-200 p-4 bg-white">
+    <div className="flex min-w-0 items-start gap-3">
+      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+        <Icon size={20} className="text-gray-700" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-gray-900">{title}</p>
+        <p className="text-sm text-gray-600 mt-1">{description}</p>
+        {previewUrl && (
+          <img src={previewUrl} alt="Selected government ID preview" className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input ref={inputRef} type="file" accept={accept} className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
+          {!file ? (
+            <button type="button" onClick={() => inputRef?.current?.click()} disabled={disabled}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
+              {saved ? "Replace ID" : "Upload"}
+            </button>
+          ) : (
+            <>
+              <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+                <span className="font-medium">Selected:</span> {file.name}
+              </div>
+              <button type="button" onClick={onRemove} disabled={disabled}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-gray-800 font-semibold hover:bg-gray-50 transition disabled:opacity-60 flex-shrink-0">
+                Remove
+              </button>
+            </>
+          )}
+        </div>
+        {error && <p className="text-red-500 text-sm font-medium mt-2">{error}</p>}
+      </div>
+    </div>
+  </div>
+);
+
+const SelectField = ({
+  label,
+  value,
+  onChange,
+  options,
+  error,
+  disabled,
+  required = false,
+  inputRef,
+  placeholder = "Select an option",
+  onBlur,
+}) => (
+  <div className="space-y-2">
+    <label className="block text-sm font-semibold text-slate-700">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <div className="relative">
+      <select
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        disabled={disabled}
+        className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 focus:outline-none ${
+          error
+            ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+            : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
+        } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
+      >
+        <option value="" disabled hidden>{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+    {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+  </div>
+);
+
+
 export default function RegisterPage(props) {
   const [attempt, setAttempt] = useState({ key: 0, reason: "" });
   const resetDraft = useCallback((reason) => setAttempt((previous) => ({ key: previous.key + 1, reason })), []);
@@ -107,7 +190,6 @@ export default function RegisterPage(props) {
 function RegisterForm({
   onNavigateToHome,
   onNavigateToSignIn,
-  onNavigateToRegisterOTP,
   onNavigateToOwnerRegister,
   onResetDraft,
   draftResetReason,
@@ -122,6 +204,7 @@ function RegisterForm({
     password: "", confirmPassword: "", agree: false,
   }, { busy: isLoading, onReset: onResetDraft, resetReason: draftResetReason });
   const { form, setForm } = draft;
+  const { recovery, trackProgress } = draft;
   const { check: checkEmail, cancel: cancelEmailCheck, isChecking: isCheckingEmail } = useRegistrationEmailCheck();
 
   const [accountType, setAccountType] = useState("user");
@@ -134,18 +217,21 @@ function RegisterForm({
   // KYC data
   const [kyc, setKyc] = useState({
     idType: "",
+    savedDocument: null,
     idCardFile: null,
     idRegistered: false,
     idReadyForSelfie: false,
     selfieVerified: false,
     selfieDataUrl: "",
     selfieBase64Clean: "",
+    selfieDocumentRevision: "",
   });
 
   const [kycUi, setKycUi] = useState({ statusText: "" });
   const [documentReviewStatus, setDocumentReviewStatus] = useState("not_uploaded");
   const [idRevision, setIdRevision] = useState("");
   const [reviewingId, setReviewingId] = useState(false);
+  const [verificationView, setVerificationView] = useState("");
   const identityHeadingRef = useRef(null);
   const idPreviewUrl = useMemo(
     () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
@@ -157,12 +243,14 @@ function RegisterForm({
       ? "id_blocked"
     : !kyc.idReadyForSelfie
       ? "id_checking"
+      : kyc.selfieVerified ? "complete"
       : !kyc.selfieBase64Clean
         ? "camera"
         : !kyc.selfieVerified
           ? "selfie"
           : "complete";
-  const showingSelfie = !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
+  const showingSelfie = draft.emailVerified && verificationView !== "email" && !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
+  const verificationPhase = !draft.emailVerified || verificationView === "email" ? "email" : showingSelfie ? "face" : "documents";
   const handleIdStatus = useCallback((status, document) => {
     setDocumentReviewStatus(status);
     const ready = document?.identityReadyForSelfie === true;
@@ -175,19 +263,42 @@ function RegisterForm({
       };
     });
     if (ready) {
+      setStepErrors(previous => ({ ...previous, idRegistered: "" }));
       setKycUi((previous) => ({ ...previous, statusText: "" }));
     } else if (!["queued", "processing", "retry_wait"].includes(status)) {
       setKycUi((previous) => ({ ...previous, statusText: "" }));
     }
   }, []);
-  const isDocumentApproved = documentReviewStatus === "verified";
 
   // Page state
   const [step, setStep] = useState(1);
+  useEffect(() => {
+    if (!recovery) return;
+    const id = recovery.documents.find(document => document.docType === "id");
+    setStep(recovery.step);
+    setVerificationView(recovery.verificationPhase === "email" ? "email" : "");
+    setReviewingId(recovery.verificationPhase === "documents");
+    setKyc(previous => ({ ...previous, idType: recovery.fields.idType || "", savedDocument: id?.available ? id : null,
+      idRegistered: Boolean(id?.profileMatches), idReadyForSelfie: id?.identityReadyForSelfie === true,
+      selfieVerified: recovery.selfieVerified === true,
+      selfieDataUrl: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieDataUrl : "",
+      selfieBase64Clean: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieBase64Clean : "" }));
+    setStepErrors(previous => ({ ...previous,
+      ...(id?.available && id.profileMatches ? { idRegistered: "" } : {}),
+      ...(recovery.selfieVerified ? { selfieVerified: "" } : {}) }));
+    setDocumentReviewStatus(id?.status || "not_uploaded");
+    setIdRevision(id?.documentRevision || "");
+  }, [recovery]);
+  useEffect(() => {
+    trackProgress(step, { idType: kyc.idType }, verificationPhase);
+  }, [trackProgress, step, kyc.idType, verificationPhase]);
+  const handleVerificationChange = useCallback(verified => {
+    setKyc(previous => previous.selfieVerified === verified ? previous : { ...previous, selfieVerified: verified });
+  }, []);
   const { formRef, formId, revealError } = useRegistrationNavigation(step);
   const actionsSpaceRef = useRef(null);
   useEffect(() => {
-    if (step === 4) identityHeadingRef.current?.focus();
+    if (step === 4) identityHeadingRef.current?.focus({ preventScroll: true });
   }, [step, showingSelfie]);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -197,6 +308,7 @@ function RegisterForm({
     getRemainingRateLimitSeconds(readStoredRateLimitUntil())
   );
   const [successMessage, setSuccessMessage] = useState("");
+  const submitting = useRef(false);
   const [formError, setFormError] = useState("");
   const [legalModalType, setLegalModalType] = useState("");
   const isRateLimited = rateLimitSeconds > 0;
@@ -254,7 +366,7 @@ function RegisterForm({
   // Small cooldown to avoid double clicks
   const lastActionRef = useRef(0);
   const canAct = () => {
-    if (isFormLocked) return false;
+    if (isFormLocked || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
@@ -475,8 +587,7 @@ function RegisterForm({
 
   const handleChange = (field, value) => {
     if (field === "email") cancelEmailCheck();
-    const nextForm = { ...form, [field]: value };
-    setForm(nextForm);
+    setForm(previous => ({ ...previous, [field]: value }));
     setFormError("");
     setTouched((prev) => ({ ...prev, [field]: true }));
     setErrors((prev) => ({
@@ -484,7 +595,7 @@ function RegisterForm({
       [field]: "",
       ...(field === "password" ? { confirmPassword: "" } : {}),
     }));
-    if (["firstName", "lastName", "email", "dateOfBirth", "gender"].includes(field)) {
+    if (["firstName", "lastName", "dateOfBirth"].includes(field)) {
       setDocumentReviewStatus("not_uploaded");
       setIdRevision("");
       setKyc((prev) => ({
@@ -601,6 +712,7 @@ function RegisterForm({
   const resetKyc = useCallback(() => {
     setKyc({
       idType: "",
+      savedDocument: null,
       idCardFile: null, idRegistered: false, idReadyForSelfie: false,
       selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "",
     });
@@ -650,7 +762,8 @@ function RegisterForm({
     return true;
   };
 
-  const validateAccountStep = () => validateFields(["email", "phone", "password", "confirmPassword"]);
+  const validateAccountStep = (requirePassword = true) => validateFields(["email", "phone",
+    ...(requirePassword ? ["password", "confirmPassword"] : [])]);
   const validateAboutStep = () => validateFields(["firstName", "lastName", "dateOfBirth", "gender"]);
   const validateLocationStep = () => validateFields([
     "region",
@@ -665,8 +778,9 @@ function RegisterForm({
 
   const validateIdentityStep = () => {
     const nextErrors = {};
+    if (!draft.emailVerified) nextErrors.emailVerified = "Verify your email before continuing.";
     if (!kyc.idType) nextErrors.idType = "Please select your ID type.";
-    if (!kyc.idCardFile) nextErrors.idCardFile = "Please upload your full ID card.";
+    if (!kyc.idCardFile && !kyc.savedDocument) nextErrors.idCardFile = "Please upload your full ID card.";
     if (!kyc.idRegistered) nextErrors.idRegistered = "Please upload your ID first.";
     else if (!kyc.idReadyForSelfie) nextErrors.idRegistered = "Wait for your ID details to match before taking your selfie.";
     else if (!kyc.selfieVerified) nextErrors.selfieVerified = "Please verify your selfie matches the ID.";
@@ -680,7 +794,7 @@ function RegisterForm({
     if (!canAct()) return;
     setSuccessMessage("");
     if (step === 1) {
-      if (!validateAccountStep()) { revealError(); return; }
+      if (!validateAccountStep(!draft.recovery)) { revealError(); return; }
       setFormError("");
       setIsLoading(true);
       try {
@@ -701,6 +815,10 @@ function RegisterForm({
     }
     if (step === 2 && !validateAboutStep()) { revealError(); return; }
     if (step === 3 && !validateLocationStep()) { revealError(); return; }
+    if (step === 4 && verificationPhase === "email") {
+      if (!draft.emailVerified) { setStepErrors({ emailVerified: "Verify your email before continuing." }); return; }
+      setVerificationView(""); setStepErrors({}); return;
+    }
     if (step === 4 && reviewingId && kyc.idRegistered && kyc.idReadyForSelfie) {
       setReviewingId(false);
       setStepErrors({});
@@ -716,10 +834,12 @@ function RegisterForm({
     setSuccessMessage("");
     setStepErrors({});
     setErrors({});
-    if (step === 4 && showingSelfie) {
+    if (step === 4 && verificationPhase === "face") {
       setReviewingId(true);
       return;
     }
+    if (step === 4 && verificationPhase === "documents") { setVerificationView("email"); return; }
+    setVerificationView(""); setReviewingId(false);
     setStep((s) => Math.max(1, s - 1));
   };
 
@@ -732,20 +852,25 @@ function RegisterForm({
       idTypeRef.current?.focus?.();
       return;
     }
-    if (!kyc.idCardFile) {
+    if (!kyc.idCardFile && !kyc.savedDocument) {
       setStepErrors((p) => ({ ...p, idCardFile: "Upload your ID image first." }));
       return;
     }
     setIsLoading(true);
     setReviewingId(false);
+    setStepErrors(previous => ({ ...previous, idRegistered: "" }));
     setKycUi((p) => ({ ...p, statusText: "Uploading ID securely..." }));
+    let uploadStarted = false;
     try {
-      await validateDocumentImageFile(kyc.idCardFile);
-      const dataUrl = await fileToBase64(kyc.idCardFile);
+      if (kyc.idCardFile) await validateDocumentImageFile(kyc.idCardFile);
+      if (!await draft.flush({ force: true })) throw new Error("Save your progress before uploading. Retry saving and then continue.");
+      const dataUrl = kyc.idCardFile ? await fileToBase64(kyc.idCardFile) : "";
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
+      uploadStarted = true;
       const result = await preRegisterIdFace(form.email, fullName, "user", clean, mime, {
         idType: kyc.idType,
+        documentRevision: kyc.savedDocument?.documentRevision || "",
         userProfile: {
           full_name: fullName,
           first_name: form.firstName.trim(),
@@ -767,8 +892,10 @@ function RegisterForm({
       setStepErrors((p) => ({ ...p, idType: "", idRegistered: "" }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } catch (e) {
+      const recovered = uploadStarted ? await draft.recover() : null;
+      const savedId = recovered?.documents.find(document => document.docType === "id" && document.available && document.profileMatches);
       const msg = friendlyError(e.message);
-      setStepErrors((p) => ({ ...p, idRegistered: msg }));
+      setStepErrors((p) => ({ ...p, idRegistered: savedId ? "" : msg }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } finally {
       setIsLoading(false);
@@ -783,6 +910,7 @@ function RegisterForm({
       selfieVerified: false,
       selfieDataUrl: dataUrl,
       selfieBase64Clean: base64,
+      selfieDocumentRevision: idRevision,
     }));
     setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
     setKycUi((previous) => ({ ...previous, statusText: "" }));
@@ -808,17 +936,21 @@ function RegisterForm({
       return;
     }
     setIsLoading(true);
+    setStepErrors(previous => ({ ...previous, selfieVerified: "" }));
     setKycUi((p) => ({ ...p, statusText: "Verifying face match..." }));
     try {
+      if (!await draft.flush()) throw new Error("Save your progress before verification. Retry saving and then continue.");
       const result = await preSelfieVerify(form.email, kyc.selfieBase64Clean, "user");
-      if (!result.verified) throw new Error(result.message || "Face does not match ID.");
+      if (!result.verified) throw Object.assign(new Error(result.message || "Face does not match ID."), { verified: false });
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((p) => ({ ...p, selfieVerified: "" }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } catch (e) {
-      setKyc((prev) => ({ ...prev, selfieVerified: false }));
+      const recovered = [401, 403, 409].includes(e.status) || (e.verified !== false && (!e.status || e.status >= 500))
+        ? await draft.recover() : null;
+      setKyc((prev) => ({ ...prev, selfieVerified: recovered?.selfieVerified === true }));
       const msg = friendlyError(e.message);
-      setStepErrors((p) => ({ ...p, selfieVerified: msg }));
+      setStepErrors((p) => ({ ...p, selfieVerified: recovered?.selfieVerified ? "" : msg }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } finally {
       setIsLoading(false);
@@ -829,7 +961,7 @@ function RegisterForm({
 
   const handleFinalRegister = async (e) => {
     e.preventDefault();
-    if (!canAct()) return;
+    if (submitting.current || draft.completed || draft.registrationComplete || !canAct()) return;
     if (accountType !== "user") {
       if (typeof onNavigateToOwnerRegister === "function") onNavigateToOwnerRegister();
       return;
@@ -839,16 +971,12 @@ function RegisterForm({
     if (!validateLocationStep()) { setStep(3); return; }
     if (!validateIdentityStep()) { setStep(4); return; }
     if (!validateReviewStep()) return;
-    if (!isDocumentApproved) {
-      setFormError(["reupload_required", "rejected"].includes(documentReviewStatus)
-        ? "Your government ID needs a new upload. Return to Identity, follow the correction shown under Document review, and try again."
-        : "Your government ID is still being checked. Refresh the document status and submit after it is approved.");
-      return;
-    }
+    submitting.current = true;
     setIsLoading(true);
     setSuccessMessage("");
     setFormError("");
     try {
+      if (!await draft.flush()) throw new Error("Save your progress before submitting. Retry saving and then continue.");
       const preKycToken = await getPreKycSessionToken(form.email, "user");
       const response = await API.register({
         name: fullName,
@@ -868,13 +996,15 @@ function RegisterForm({
         role: "user",
         preKycToken,
       });
-      const registeredEmail = String(response?.user?.email || form.email || "").trim().toLowerCase();
-      draft.complete();
-      setSuccessMessage(response?.message || "Registration successful! Redirecting to OTP verification...");
+      if (response?.success !== true || !response.user?._id || response.user.isVerified !== true || response.user.role !== "user"
+        || String(response.user.email || "").trim().toLowerCase() !== form.email.trim().toLowerCase()) {
+        throw new Error("Account creation was not confirmed. Recover your saved progress and try again.");
+      }
+      draft.complete(response.user.kycStatus);
+      setSuccessMessage(response?.message || "Account created. Sign in to continue.");
       clearRateLimit();
-      await API.sendOTP(registeredEmail).catch(() => {});
-      setTimeout(() => { onNavigateToRegisterOTP(registeredEmail, form.phone, fullName); }, 1500);
     } catch (error) {
+      if (!error.status || error.status >= 500) void draft.recover();
       const raw = error?.message || "";
       const lower = raw.toLowerCase();
       const retryAfterSeconds = Number(error?.retryAfterSeconds || error?.details?.retryAfterSeconds || 0);
@@ -956,90 +1086,10 @@ function RegisterForm({
       setErrors({});
       setFormError(msg);
     } finally {
+      submitting.current = false;
       setIsLoading(false);
     }
   };
-
-  // File upload card
-
-  const FileCard = ({ title, description, file, previewUrl, onPick, onRemove, accept, inputRef, icon: Icon, error }) => (
-    <div className="rp-registration-upload min-w-0 rounded-2xl border border-gray-200 p-4 bg-white">
-      <div className="flex min-w-0 items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-          <Icon size={20} className="text-gray-700" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900">{title}</p>
-          <p className="text-sm text-gray-600 mt-1">{description}</p>
-          {previewUrl && (
-            <img src={previewUrl} alt="Selected government ID preview" className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />
-          )}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input ref={inputRef} type="file" accept={accept} className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
-            {!file ? (
-              <button type="button" onClick={() => inputRef?.current?.click()} disabled={isLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
-                Upload
-              </button>
-            ) : (
-              <>
-                <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
-                  <span className="font-medium">Selected:</span> {file.name}
-                </div>
-                <button type="button" onClick={onRemove} disabled={isLoading}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-800 font-semibold hover:bg-gray-50 transition disabled:opacity-60 flex-shrink-0">
-                  Remove
-                </button>
-              </>
-            )}
-          </div>
-          {error && <p className="text-red-500 text-sm font-medium mt-2">{error}</p>}
-        </div>
-      </div>
-    </div>
-  );
-
-  const SelectField = ({
-    label,
-    value,
-    onChange,
-    options,
-    error,
-    disabled,
-    required = false,
-    inputRef,
-    placeholder = "Select an option",
-    onBlur,
-  }) => (
-    <div className="space-y-2">
-      <label className="block text-sm font-semibold text-slate-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <div className="relative">
-        <select
-          ref={inputRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={onBlur}
-          disabled={disabled}
-          className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-slate-900 shadow-sm transition-all duration-200 focus:outline-none ${
-            error
-              ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-              : "border-slate-200 hover:border-slate-300 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
-          } ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
-        >
-          <option value="" disabled hidden>{placeholder}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error && <p className="text-sm font-medium text-red-500">{error}</p>}
-    </div>
-  );
 
   // Render
 
@@ -1049,6 +1099,7 @@ function RegisterForm({
     enabled={kyc.idRegistered}
     idRevision={idRevision}
     onIdStatus={handleIdStatus}
+    onVerificationChange={handleVerificationChange}
     onCorrectDetails={() => setStep(2)}
     onResubmit={() => { resetKyc(); setStep(4); }}
   />;
@@ -1081,10 +1132,10 @@ function RegisterForm({
         <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
         {step === 4 && <HelpLink guide="verify-identity" className="mt-3">Need help with your ID or selfie?</HelpLink>}
 
-        <RegistrationDraftNotice draft={draft} busy={isLoading} />
+        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} />
 
         {/* success message */}
-        {successMessage && (
+        {successMessage && !draft.completed && !draft.registrationComplete && (
           <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
               <CircleCheck size={18} strokeWidth={2} aria-hidden="true" />
@@ -1097,7 +1148,7 @@ function RegisterForm({
           event.preventDefault();
           if (step < TOTAL_STEPS) void goNext();
           else void handleFinalRegister(event);
-        }} id={formId} ref={formRef} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
+        }} id={formId} ref={formRef} hidden={draft.completed || draft.registrationComplete} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
           {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
           {formError && (
             <div
@@ -1108,7 +1159,7 @@ function RegisterForm({
             </div>
           )}
 
-          <fieldset disabled={isFormLocked} className="min-w-0 space-y-4">
+          <fieldset disabled={isFormLocked || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
                 {/* step 1 */}
                 {[1, 2, 3].includes(step) && (
                   <>
@@ -1271,6 +1322,7 @@ function RegisterForm({
                 {/* step 2 */}
                 {step === 4 && (
                   <>
+                    {verificationPhase === "email" ? <RegistrationEmailVerification email={form.email} draft={draft} disabled={isFormLocked} onVerified={() => setVerificationView("")} /> : <>
                     <div data-identity-view={showingSelfie ? "selfie" : "id"} className="rounded-2xl border border-gray-200 p-4 bg-white">
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -1278,7 +1330,7 @@ function RegisterForm({
                         </div>
                         <div>
                           <h2 ref={identityHeadingRef} tabIndex={-1} className="font-semibold text-gray-900">
-                            Step 4 — {showingSelfie ? "Selfie verification" : "Identity verification"}
+                            Step 4 — {showingSelfie ? "Face Recognition" : "ID Verification"}
                           </h2>
                           <p className="text-sm text-gray-500 mt-1">
                             {showingSelfie ? "Your ID check passed. Capture a live selfie to match your ID photo."
@@ -1321,9 +1373,11 @@ function RegisterForm({
                     />
 
                       <FileCard
+                        disabled={isLoading}
                         title="Government ID (Front — full card)"
                         description="Upload a clear photo of a Philippine government ID showing the entire card with readable text and no cropped edges."
                       file={kyc.idCardFile}
+                      saved={Boolean(kyc.savedDocument)}
                       previewUrl={idPreviewUrl}
                       onPick={async (f) => {
                         try {
@@ -1333,7 +1387,7 @@ function RegisterForm({
                           if (idInputRef.current) idInputRef.current.value = "";
                           return;
                         }
-                        setKyc((prev) => ({ ...prev, idCardFile: f, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                        setKyc((prev) => ({ ...prev, savedDocument: null, idCardFile: f, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
                         setDocumentReviewStatus("not_uploaded");
                         setIdRevision("");
                         setKycUi((p) => ({ ...p, statusText: "" }));
@@ -1343,7 +1397,8 @@ function RegisterForm({
                       accept="image/jpeg,image/png" inputRef={idInputRef} icon={Upload}
                       error={stepErrors.idCardFile}
                     />
-                    <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || !kyc.idCardFile} onClick={registerId}
+                    {kyc.savedDocument && !kyc.idCardFile && <p className="text-sm text-slate-700">Your government ID is saved privately. Choose Upload to replace it.</p>}
+                    <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || (!kyc.idCardFile && !kyc.savedDocument)} onClick={registerId}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
                       {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
                         : ["queued", "processing"].includes(documentReviewStatus) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
@@ -1368,12 +1423,19 @@ function RegisterForm({
                     )}
                     {kycUi.statusText && <p role="status" className="text-sm font-medium text-slate-600">{kycUi.statusText}</p>}
                     {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium">{stepErrors.idRegistered}</p>}
+                    </>}
+                    {!draft.emailVerified && stepErrors.emailVerified && <p role="alert" className="text-sm text-red-600">{stepErrors.emailVerified}</p>}
                   </>
                 )}
 
                 {/* step 5 */}
                 {step === 5 && (
                   <>
+                    {draft.recovery && <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm text-slate-700">Re-enter your password to submit this recovered registration.</p>
+                      <PasswordInput label="Create Password" placeholder="" value={form.password} onChange={(e) => handleChange("password", e.target.value)} error={errors.password} disabled={isLoading} required showStrength maxLength={128} />
+                      <PasswordInput label="Confirm Password" placeholder="" value={form.confirmPassword} onChange={(e) => handleChange("confirmPassword", e.target.value)} error={errors.confirmPassword} disabled={isLoading} required showStrength={false} maxLength={128} />
+                    </div>}
                     <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                       <p className="font-semibold text-gray-900">Step 5 — Review & submit</p>
                       <p className="text-sm text-gray-500 mt-1">Confirm your details before creating your account.</p>
@@ -1382,6 +1444,7 @@ function RegisterForm({
                       {[
                         { label: "Full Name", value: fullName || "—" },
                         { label: "Email", value: form.email || "—" },
+                        { label: "Email Verification", value: draft.emailVerified ? "Verified" : "Not verified", highlight: draft.emailVerified },
                         { label: "Phone", value: form.phone || "—" },
                         { label: "ID Type", value: kyc.idType || "—" },
                         { label: "Account Type", value: "User (Renter)" },
@@ -1415,10 +1478,10 @@ function RegisterForm({
                 {step === 5 && documentReviewNotice}
 
                 {/* navigation */}
-                <RegistrationActions spaceRef={actionsSpaceRef}>
+                {!draft.completed && !draft.registrationComplete && <RegistrationActions spaceRef={actionsSpaceRef}>
                   <button type="button" onClick={goBack} disabled={step === 1 || isFormLocked}
                     className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                    {step === 4 && showingSelfie ? "Back to ID" : "Back"}
+                    {step === 4 && verificationPhase === "face" ? "Back to ID" : step === 4 && verificationPhase === "documents" ? "Back to Email" : "Back"}
                   </button>
                   {step < TOTAL_STEPS ? (
                     <button type="button" onClick={goNext} disabled={isFormLocked}
@@ -1434,7 +1497,7 @@ function RegisterForm({
                       )}
                     </button>
                   ) : (
-                    <button type="submit" form={formId} disabled={isFormLocked || !isDocumentApproved}
+                    <button type="submit" form={formId} disabled={isFormLocked || draft.completed || !draft.emailVerified || !kyc.selfieVerified}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
                       {isLoading ? (
                         <>
@@ -1442,14 +1505,12 @@ function RegisterForm({
                         </>
                       ) : isRateLimited ? (
                         `Try again in ${formatCountdown(rateLimitSeconds)}`
-                      ) : !isDocumentApproved ? (
-                        "Waiting for ID approval"
                       ) : (
                         "Create Account"
                       )}
                     </button>
                   )}
-                </RegistrationActions>
+                </RegistrationActions>}
 
                 {step === 1 && (
                   <p className="rp-registration-signin text-center text-slate-600 text-sm mt-1">

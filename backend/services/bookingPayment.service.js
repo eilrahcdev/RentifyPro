@@ -11,8 +11,8 @@ import {
 
 const id = (value) => String(value?._id || value || "");
 const revisionFilter = (value) => Number(value || 0) === 0 ? { $in: [0, null] } : Number(value);
-export const paymentConflict = (message = "This booking changed. Refresh its payment details and try again.") =>
-  Object.assign(new Error(message), { statusCode: 409, code: "BOOKING_PAYMENT_CHANGED" });
+export const paymentConflict = (message = "This booking changed. Refresh its payment details and try again.", reconciliationReason = "BOOKING_CHANGED", requiresReview = false) =>
+  Object.assign(new Error(message), { statusCode: 409, code: "BOOKING_PAYMENT_CHANGED", reconciliationReason, requiresReview });
 const snapshotFilter = (booking) => ({
   _id: booking._id, updatedAt: booking.updatedAt,
   paymentRevision: revisionFilter(booking.paymentRevision),
@@ -70,7 +70,7 @@ export async function applyCapturedBookingCheckout(initialBooking, checkout) {
   for (let retry = 0; retry < 3; retry++) {
     if ((booking.paymongoVerifiedCheckoutIds || []).includes(checkoutId)) return { booking, updated: false, captured: true };
     if (!["confirmed", "extended", "completed"].includes(booking.status) || booking.paymentStatus === "refunded") {
-      throw paymentConflict("This captured payment needs review because the booking status changed.");
+      throw paymentConflict("This captured payment needs review because the booking status changed.", "BOOKING_STATUS_CHANGED", true);
     }
     const metadata = getPayMongoCheckoutMetadata(checkout);
     const manualRevision = Number(booking.manualPaymentRevision || 0);
@@ -79,7 +79,7 @@ export async function applyCapturedBookingCheckout(initialBooking, checkout) {
     if ((metadata.manualPaymentRevision !== undefined && Number(metadata.manualPaymentRevision) !== manualRevision) ||
         (metadata.manualPaymentRevision === undefined && manualRevision > 0 &&
           (!createdAt || new Date(booking.manualPaymentUpdatedAt) >= new Date(createdAt)))) {
-      throw paymentConflict("This captured payment needs review because the owner corrected payment details after checkout began.");
+      throw paymentConflict("This captured payment needs review because the owner corrected payment details after checkout began.", "MANUAL_PAYMENT_CHANGED", true);
     }
     const expectedAmount = checkoutId === booking.paymongoCheckoutId
       ? Number(booking.paymentCheckoutAmount || metadata.paymentAmount || roundCurrency(getBookingPayableAmount(booking) - getBookingPaidAmount(booking)))
@@ -90,7 +90,7 @@ export async function applyCapturedBookingCheckout(initialBooking, checkout) {
     const total = getBookingPayableAmount(booking);
     const before = getBookingPaidAmount(booking);
     if (amount > roundCurrency(total - before + 0.01)) {
-      throw paymentConflict("This captured payment exceeds the remaining balance and needs review.");
+      throw paymentConflict("This captured payment exceeds the remaining balance and needs review.", "CAPTURE_EXCEEDS_BALANCE", true);
     }
     const paid = Math.min(total, roundCurrency(before + amount));
     const due = roundCurrency(total - paid);
@@ -108,15 +108,15 @@ export async function applyCapturedBookingCheckout(initialBooking, checkout) {
     });
     const updated = await Booking.findOneAndUpdate({ ...snapshotFilter(booking), paymongoVerifiedCheckoutIds: { $ne: checkoutId } },
       { $set: changes, $addToSet: { paymongoVerifiedCheckoutIds: checkoutId }, $inc: { paymentRevision: 1 } },
-      { new: true, runValidators: true });
+      { returnDocument: "after", runValidators: true });
     if (updated) return { booking: updated, updated: true, captured: true };
     const latest = await Booking.findById(booking._id);
-    if (!latest) throw paymentConflict();
+    if (!latest) throw paymentConflict(undefined, "BOOKING_UNAVAILABLE", true);
     // A manual correction is authoritative and must be reviewed before adding a delayed payment.
-    if (Number(latest.manualPaymentRevision || 0) !== Number(initialBooking.manualPaymentRevision || 0)) throw paymentConflict();
+    if (Number(latest.manualPaymentRevision || 0) !== Number(initialBooking.manualPaymentRevision || 0)) throw paymentConflict(undefined, "MANUAL_PAYMENT_CHANGED", true);
     booking = latest;
   }
-  throw paymentConflict();
+  throw paymentConflict(undefined, "CONCURRENT_PAYMENT_UPDATE");
 }
 
 async function saveCheckout(booking, checkout, request) {
@@ -130,7 +130,7 @@ async function saveCheckout(booking, checkout, request) {
     paymentCheckoutAmount: request.amountInCentavos / 100, transactionFee: getEffectiveTransactionFee(booking),
     paymentAmountDue: roundCurrency(getBookingPayableAmount(booking) - getBookingPaidAmount(booking)),
     paymentRequestedAt: new Date(), paymentUpdatedAt: new Date(), paymentCheckoutClosedAt: null,
-  }, $inc: { paymentRevision: 1 } }, { new: true, runValidators: true }).select("+paymentCheckoutAttempt");
+  }, $inc: { paymentRevision: 1 } }, { returnDocument: "after", runValidators: true }).select("+paymentCheckoutAttempt");
   if (!updated) throw paymentConflict();
   return updated;
 }
@@ -182,7 +182,7 @@ export async function getOrCreateBookingCheckout(initialBooking, request) {
   const attempt = { key: randomUUID(), request, createdAt: new Date() };
   booking = await Booking.findOneAndUpdate(snapshotFilter(booking), { $set: {
     paymentCheckoutAttempt: attempt, paymongoCheckoutId: null, paymentCheckoutAmount: 0,
-  }, $inc: { paymentRevision: 1 } }, { new: true, runValidators: true }).select("+paymentCheckoutAttempt");
+  }, $inc: { paymentRevision: 1 } }, { returnDocument: "after", runValidators: true }).select("+paymentCheckoutAttempt");
   if (!booking) throw paymentConflict();
   const checkout = await createAttemptCheckout(booking, attempt);
   booking = await saveCheckout(booking, checkout, request);

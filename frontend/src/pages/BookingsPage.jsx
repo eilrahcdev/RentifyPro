@@ -1,5 +1,8 @@
 import VehicleThumbnail from "../components/VehicleThumbnail";
 import BookingDetails, { BookingInfo as Info } from "../components/BookingDetails";
+import BookingRequestModal from "../components/BookingRequestModal";
+import BookingPolicyDetails from "../components/BookingPolicyDetails";
+import { formatHandoverInput, getBookingExtensionQuote, getBookingLateReturnInfo as getLateReturnInfo } from "../utils/bookingPolicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RequestFeedback from "../components/RequestFeedback";
 import RefreshButton from "../components/RefreshButton";
@@ -281,44 +284,6 @@ function isBookingUnsettled(booking, currentTimeMs = Date.now()) {
   return Number.isFinite(returnAtMs) && currentTimeMs > returnAtMs;
 }
 
-const getLateReturnInfo = (booking, currentTimeMs = Date.now()) => {
-  const lateReturn = booking?.lateReturn || booking?.late_return || {};
-  const storedOverdueMinutes = Number(lateReturn?.overdueMinutes || 0);
-  const returnAtMs = booking?.returnAt ? new Date(booking.returnAt).getTime() : Number.NaN;
-  const graceMinutes = Number(lateReturn?.graceMinutes ?? booking?.lateReturnPolicy?.graceMinutes ?? 0);
-  const isFinal =
-    String(lateReturn?.action || "").toLowerCase() === "return_confirmed" ||
-    String(booking?.status || "").toLowerCase() === "completed" ||
-    String(booking?.returnRequest?.status || booking?.return_request?.status || "").toLowerCase() === "confirmed";
-  const liveOverdueMinutes =
-    Boolean(lateReturn?.isOverdue) && !isFinal && Number.isFinite(returnAtMs)
-      ? Math.max(0, Math.round((currentTimeMs - returnAtMs - Math.max(0, graceMinutes) * 60000) / 60000))
-      : 0;
-  const overdueMinutes = Math.max(
-    Number.isFinite(storedOverdueMinutes) ? storedOverdueMinutes : 0,
-    liveOverdueMinutes
-  );
-  const penaltyFee = Number(lateReturn?.penaltyFee || booking?.lateReturnPenaltyFee || 0);
-  const penaltyRatePerHour = Number(lateReturn?.penaltyRatePerHour || booking?.lateReturnPenaltyRatePerHour || 0);
-  const providedEstimate = Number(lateReturn?.estimatedPenaltyFee);
-  const estimatedPenaltyFee =
-    !isFinal && penaltyRatePerHour > 0
-      ? penaltyRatePerHour * (Math.max(0, overdueMinutes) / 60)
-      : Number.isFinite(providedEstimate) && providedEstimate >= 0
-      ? providedEstimate
-      : penaltyRatePerHour * (Math.max(0, overdueMinutes) / 60);
-  return {
-    isOverdue: Boolean(lateReturn?.isOverdue),
-    overdueMinutes: Number.isFinite(overdueMinutes) && overdueMinutes > 0 ? Math.round(overdueMinutes) : 0,
-    penaltyFee: Number.isFinite(penaltyFee) && penaltyFee > 0 ? roundCurrency(penaltyFee) : 0,
-    estimatedPenaltyFee:
-      Number.isFinite(estimatedPenaltyFee) && estimatedPenaltyFee > 0 ? roundCurrency(estimatedPenaltyFee) : 0,
-    penaltyRatePerHour:
-      Number.isFinite(penaltyRatePerHour) && penaltyRatePerHour > 0 ? roundCurrency(penaltyRatePerHour) : 0,
-    action: String(lateReturn?.action || "none").trim().toLowerCase(),
-  };
-};
-
 const getExtensionRequestInfo = (booking) => {
   const extension = booking?.extensionRequest || booking?.extension_request || {};
   return {
@@ -422,6 +387,12 @@ export default function BookingsPage({
     note: "",
   });
   const [extensionSubmitting, setExtensionSubmitting] = useState(false);
+  const [extensionFormError, setExtensionFormError] = useState("");
+  const [returnModalBooking, setReturnModalBooking] = useState(null);
+  const [reportedHandover, setReportedHandover] = useState(false);
+  const [reportedHandoverInput, setReportedHandoverInput] = useState("");
+  const [returnFormError, setReturnFormError] = useState("");
+  const [withdrawingExtensionId, setWithdrawingExtensionId] = useState("");
   const [returnRequestSubmittingId, setReturnRequestSubmittingId] = useState("");
   const [paymentPreferences, setPaymentPreferences] = useState({
     scope: "downpayment",
@@ -608,7 +579,7 @@ export default function BookingsPage({
       arrivedFromPayment.current || activePaymentRecovery || paymentSuccessToast ||
       paymentConfirmBooking || payingBookingId || verifyingBookingId ||
       approvalModalBooking || cancellationModalBooking || extensionModalBooking ||
-      reportBooking || chatReportMessage || chatBooking || showAI) return;
+      reportBooking || chatReportMessage || chatBooking || showAI || returnModalBooking) return;
 
     const byId = new Map(reviewPromptCandidates.map((booking) => [String(booking._id), booking]));
     bookings.forEach((booking) => byId.set(String(booking._id), booking));
@@ -623,7 +594,7 @@ export default function BookingsPage({
     paymentSuccessToast,
     paymentConfirmBooking, payingBookingId, verifyingBookingId, approvalModalBooking,
     cancellationModalBooking, extensionModalBooking, reportBooking, chatReportMessage,
-    chatBooking, showAI, bookings, reviewPromptCandidates, hasSeenReviewPrompt, markReviewPromptSeen]);
+    chatBooking, showAI, returnModalBooking, bookings, reviewPromptCandidates, hasSeenReviewPrompt, markReviewPromptSeen]);
 
   useEffect(() => {
     if (!recoveryBookingPaid || !paymentRecovery) return;
@@ -664,7 +635,7 @@ export default function BookingsPage({
     const currentReturn = booking?.returnAt ? new Date(booking.returnAt) : null;
     const fallback = new Date(Date.now() + 60 * 60 * 1000);
     const suggested = currentReturn && !Number.isNaN(currentReturn.getTime())
-      ? new Date(currentReturn.getTime() + 60 * 60 * 1000)
+      ? new Date(Math.max(currentReturn.getTime(), Date.now()) + 60 * 60 * 1000)
       : fallback;
 
     setExtensionForm({
@@ -673,6 +644,7 @@ export default function BookingsPage({
       note: "",
     });
     setExtensionModalBooking(booking);
+    setExtensionFormError("");
   };
 
   const submitExtensionRequest = async () => {
@@ -682,25 +654,25 @@ export default function BookingsPage({
     const newReturnAt = getDateTime(extensionForm.newReturnDate, extensionForm.newReturnTime);
     const currentReturnAt = booking?.returnAt ? new Date(booking.returnAt) : null;
     if (!newReturnAt || Number.isNaN(newReturnAt.getTime())) {
-      setError("Please provide a valid new return date and time.");
+      setExtensionFormError("Please provide a valid new return date and time.");
       return;
     }
     if (!currentReturnAt || Number.isNaN(currentReturnAt.getTime())) {
-      setError("Current return schedule is invalid for this booking.");
+      setExtensionFormError("Current return schedule is invalid for this booking.");
       return;
     }
     if (extensionForm.newReturnDate > getMaxBookingDate()) {
-      setError("The extended return must be within 6 months from today.");
+      setExtensionFormError("The extended return must be within 6 months from today.");
       return;
     }
-    if (newReturnAt.getTime() <= currentReturnAt.getTime()) {
-      setError("New return date/time must be later than the current return schedule.");
+    if (newReturnAt.getTime() <= Math.max(currentReturnAt.getTime(), Date.now())) {
+      setExtensionFormError("Choose a return time later than now and the current return deadline.");
       return;
     }
 
     try {
       setExtensionSubmitting(true);
-      setError("");
+      setExtensionFormError("");
       const response = await API.requestBookingExtension(booking._id, {
         newReturnAt: newReturnAt.toISOString(),
         note: extensionForm.note || "",
@@ -712,7 +684,7 @@ export default function BookingsPage({
       showActionToast("Extension request sent. Waiting for owner approval.", { id: `renter-booking-${booking._id}`, tone: "info" });
       setExtensionModalBooking(null);
     } catch (err) {
-      setError(err.message || "Failed to request booking extension.");
+      setExtensionFormError(err.message || "Failed to request booking extension.");
     } finally {
       setExtensionSubmitting(false);
     }
@@ -720,21 +692,44 @@ export default function BookingsPage({
 
   const handleRequestVehicleReturn = async (booking) => {
     if (!booking?._id) return;
+    const handover = reportedHandover ? new Date(reportedHandoverInput) : null;
+    if (reportedHandover && (!reportedHandoverInput || Number.isNaN(handover.getTime()) || handover > new Date() || handover < new Date(booking.pickupAt))) {
+      setReturnFormError("Enter a handover time between pickup and now.");
+      return;
+    }
     try {
       setReturnRequestSubmittingId(booking._id);
-      setError("");
-      const response = await API.requestBookingReturn(booking._id);
+      setReturnFormError("");
+      const response = await API.requestBookingReturn(booking._id, handover ? { reportedHandoverAt: handover.toISOString() } : {});
       if (response?.success === false) throw new Error(response.message || "Failed to request vehicle return.");
       if (response.booking) {
         upsertBooking(response.booking);
       }
       showActionToast("Vehicle return request sent. Waiting for owner confirmation.", { id: `renter-booking-${booking._id}`, tone: "info" });
+      setReturnModalBooking(null);
     } catch (err) {
-      setError(err.message || "Failed to request vehicle return.");
+      setReturnFormError(err.message || "Failed to request vehicle return.");
     } finally {
       setReturnRequestSubmittingId("");
     }
   };
+
+  const withdrawExtension = async (booking) => {
+    if (withdrawingExtensionId) return;
+    setWithdrawingExtensionId(booking._id);
+    try {
+      const response = await API.withdrawBookingExtension(booking._id, { expectedRequestedAt: booking.extensionRequest?.requestedAt });
+      if (response.booking) upsertBooking(response.booking);
+      showActionToast(response.message || "Extension request withdrawn.", { id: `renter-booking-${booking._id}` });
+    } catch (err) {
+      if (err.details?.booking) upsertBooking(err.details.booking);
+      setError(err.message || "Failed to withdraw extension. Refresh this booking and try again.");
+    } finally { setWithdrawingExtensionId(""); }
+  };
+
+  const proposedExtensionReturn = getDateTime(extensionForm.newReturnDate, extensionForm.newReturnTime);
+  const extensionQuote = extensionModalBooking ? getBookingExtensionQuote(extensionModalBooking, proposedExtensionReturn, bookingClock) : null;
+  const extensionLateInfo = extensionModalBooking ? getLateReturnInfo(extensionModalBooking, bookingClock) : null;
 
   const openChat = async (booking) => {
     if (!booking?.owner?._id) return;
@@ -1298,8 +1293,7 @@ export default function BookingsPage({
             const isPaymentEligibleStatus = ["confirmed", "extended", "completed"].includes(
               String(booking.status || "").toLowerCase()
             );
-            const canResolveOverdue =
-              lateReturnInfo.isOverdue && ["confirmed", "extended"].includes(String(booking.status || "").toLowerCase());
+            const canRequestExtension = ["confirmed", "extended"].includes(String(booking.status || "").toLowerCase()) && ["none", "declined"].includes(returnRequestInfo.status);
             const hasSettledLateReturn =
               String(booking.status || "").toLowerCase() === "completed" &&
               String(booking.paymentStatus || "").toLowerCase() === "paid" &&
@@ -1392,13 +1386,17 @@ export default function BookingsPage({
                 <Info title="Transaction Fee" value={moneyWithCents(getBookingTransactionFee(booking))} />
               </BookingDetails>
 
+              <BookingPolicyDetails booking={booking} onReport={() => setReportBooking(booking)} />
+              {lateReturnInfo.accruedOverdueMinutes > 0 && !lateReturnInfo.isOverdue && !hasSettledLateReturn && (
+                <p className="mt-3 text-sm text-amber-900">Earlier late time: {formatDurationMinutes(lateReturnInfo.accruedOverdueMinutes)}. Estimated late charge: {moneyWithCents(lateReturnInfo.estimatedPenaltyFee)}. Approval preserves this earlier late time; the final fee uses verified handover.</p>
+              )}
               {lateReturnInfo.isOverdue && !hasSettledLateReturn && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                   Late return detected: overdue by {formatDurationMinutes(lateReturnInfo.overdueMinutes)}.
                   {lateReturnInfo.penaltyFee > 0
                     ? ` Final late charge: ${moneyWithCents(lateReturnInfo.penaltyFee)}. To settle your remaining balance, select Pay Remaining below and pay online or request walk-in payment.`
                     : lateReturnInfo.estimatedPenaltyFee > 0
-                      ? ` Estimated late charge: ${moneyWithCents(lateReturnInfo.estimatedPenaltyFee)} at ${moneyWithCents(lateReturnInfo.penaltyRatePerHour)} per overdue hour. This estimate continues until the owner confirms receipt.`
+                      ? ` Estimated late charge: ${moneyWithCents(lateReturnInfo.estimatedPenaltyFee)} at ${moneyWithCents(lateReturnInfo.penaltyRatePerHour)} per overdue hour. The final fee uses the verified physical handover time.`
                       : " This booking has no monetary late charge under its snapshotted policy."}
                 </div>
               )}
@@ -1407,6 +1405,7 @@ export default function BookingsPage({
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   Extension request pending owner approval.
                   {extensionInfo.requestedReturnAt ? ` Requested return: ${formatDate(extensionInfo.requestedReturnAt)}.` : ""}
+                  <p className="mt-1">Approval is required. The request expires at the requested return time. You can withdraw it or request vehicle return.</p>
                 </div>
               )}
               {extensionInfo.status === "rejected" && (
@@ -1414,6 +1413,7 @@ export default function BookingsPage({
                   Your extension request was rejected. Original return schedule still applies.
                 </div>
               )}
+              {["expired", "withdrawn"].includes(extensionInfo.status) && <p className="mt-3 text-sm text-slate-700">Extension request {extensionInfo.status}. Your current return deadline still applies.</p>}
               {returnRequestInfo.status === "declined" && returnRequestInfo.reviewNote && (
                 <p className="mt-3 text-sm text-slate-600">Owner note: {returnRequestInfo.reviewNote}</p>
               )}
@@ -1482,7 +1482,7 @@ export default function BookingsPage({
                   <p className="w-full text-xs text-slate-600">Cancellation becomes available if the owner declines the return request.</p>
                 )}
 
-                {canResolveOverdue && returnRequestInfo.status === "none" && (
+                {canRequestExtension && (
                     <button
                       onClick={() => openExtensionModal(booking)}
                       disabled={extensionInfo.status === "requested" || returnRequestSubmittingId === booking._id}
@@ -1491,10 +1491,12 @@ export default function BookingsPage({
                       Extend Rental Time
                     </button>
                 )}
+                {extensionInfo.status === "requested" && <button type="button" onClick={() => withdrawExtension(booking)} disabled={Boolean(withdrawingExtensionId) || returnRequestSubmittingId === booking._id}
+                  className="min-h-11 rounded-xl border border-slate-400 px-3 text-sm font-semibold text-slate-800 disabled:opacity-60">{withdrawingExtensionId === booking._id ? "Withdrawing..." : "Withdraw extension request"}</button>}
                 {canRequestVehicleReturn && (
                     <button
-                      onClick={() => handleRequestVehicleReturn(booking)}
-                      disabled={returnRequestSubmittingId === booking._id || extensionInfo.status === "requested"}
+                      onClick={() => { setReturnModalBooking(booking); setReportedHandover(false); setReportedHandoverInput(formatHandoverInput()); setReturnFormError(""); }}
+                      disabled={returnRequestSubmittingId === booking._id || withdrawingExtensionId === booking._id}
                       className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {returnRequestSubmittingId === booking._id ? "Requesting..." : "Request Vehicle Return"}
@@ -2087,34 +2089,25 @@ export default function BookingsPage({
       )}
 
       {extensionModalBooking && (
-        <>
-          <div
-            className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] z-[70]"
-            onClick={() => {
-              if (!extensionSubmitting) setExtensionModalBooking(null);
-            }}
-          />
-          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="rp-booking-dialog relative w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-[0_25px_80px_rgba(15,23,42,0.25)]">
-              <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-r from-violet-500/10 via-white to-white">
-                <h3 className="text-lg font-semibold text-slate-900">Request Rental Extension</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Current return: {formatDate(extensionModalBooking.returnAt)}
-                </p>
-              </div>
-              <div className="px-6 py-5 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+        <BookingRequestModal titleId="extension-request-title" title="Request rental extension"
+          subtitle={`Current return: ${formatDate(extensionModalBooking.returnAt)}`} loading={extensionSubmitting} error={extensionFormError}
+          onClose={() => setExtensionModalBooking(null)} onSubmit={submitExtensionRequest} submitLabel="Send extension request">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-sm font-semibold text-slate-800">New return date
                   <input
                     type="date"
                     aria-label="Extended return date"
                     value={extensionForm.newReturnDate}
-                    min={formatDateInput(extensionModalBooking.returnAt || new Date())}
+                    min={formatDateInput(new Date(Math.max(new Date(extensionModalBooking.returnAt).getTime(), Date.now())))}
                     max={getMaxBookingDate()}
                     onChange={(event) =>
                       setExtensionForm((prev) => ({ ...prev, newReturnDate: event.target.value }))
                     }
-                    className="border rounded-lg px-3 py-2 text-sm"
+                    disabled={extensionSubmitting}
+                    className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-slate-400 px-3 text-base font-normal focus:border-blue-700 focus:outline focus:outline-2 focus:outline-blue-700"
                   />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-800">New return time
                   <input
                     type="time"
                     aria-label="Extended return time"
@@ -2122,38 +2115,51 @@ export default function BookingsPage({
                     onChange={(event) =>
                       setExtensionForm((prev) => ({ ...prev, newReturnTime: event.target.value }))
                     }
-                    className="border rounded-lg px-3 py-2 text-sm"
+                    disabled={extensionSubmitting}
+                    className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-slate-400 px-3 text-base font-normal focus:border-blue-700 focus:outline focus:outline-2 focus:outline-blue-700"
                   />
+                  </label>
                 </div>
+                <p className="text-sm text-slate-600">Choose a time later than now and your current deadline. Owner approval is required before you continue using the vehicle beyond that deadline.</p>
+                {extensionQuote && <dl className="space-y-2 text-sm text-slate-800" aria-live="polite">
+                  <div className="flex flex-wrap justify-between gap-2"><dt>Additional rental time if approved</dt><dd className="font-semibold">{formatDurationMinutes(extensionQuote.durationMinutes)}</dd></div>
+                  <div className="flex flex-wrap justify-between gap-2"><dt>Estimated extension rental charge</dt><dd className="font-semibold">{moneyWithCents(extensionQuote.totalAmount)}</dd></div>
+                  <div className="flex flex-wrap justify-between gap-2"><dt>Late charge estimated so far</dt><dd className="font-semibold">{moneyWithCents(extensionLateInfo.estimatedPenaltyFee)}</dd></div>
+                </dl>}
+                <p className="text-sm text-slate-700">{Number(extensionModalBooking.bookingPolicy?.version) === 2
+                  ? "An approved late request preserves earlier late time and charges the additional rental interval separately. Estimates remain subject to verified physical handover."
+                  : "This existing booking retains its agreed pricing: an approved extension includes rental time from its current deadline to the new return time."}</p>
+                <label className="block text-sm font-semibold text-slate-800">Optional note to owner
                 <AutoResizeTextarea
                   value={extensionForm.note}
                   onChange={(event) => setExtensionForm((prev) => ({ ...prev, note: event.target.value }))}
                   maxLength={500}
                   aria-label="Optional note to owner"
                   placeholder="Optional note to owner"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  disabled={extensionSubmitting}
+                  className="mt-1 w-full rounded-xl border border-slate-400 px-3 py-2 text-base font-normal placeholder:text-slate-600 focus:border-blue-700 focus:outline focus:outline-2 focus:outline-blue-700"
                 />
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => setExtensionModalBooking(null)}
-                    disabled={extensionSubmitting}
-                    className="rp-btn-secondary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={submitExtensionRequest}
-                    disabled={extensionSubmitting}
-                    className="rp-btn-primary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {extensionSubmitting ? "Submitting..." : "Submit Request"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+                </label>
+        </BookingRequestModal>
       )}
+
+      {returnModalBooking && <BookingRequestModal titleId="vehicle-return-title" title="Request vehicle return"
+        subtitle={returnModalBooking.vehicle?.name || "Review your vehicle return."}
+        loading={returnRequestSubmittingId === returnModalBooking._id} error={returnFormError}
+        onClose={() => setReturnModalBooking(null)} onSubmit={() => handleRequestVehicleReturn(returnModalBooking)} submitLabel="Send return request">
+        {returnModalBooking.extensionRequest?.status === "requested" && <p className="text-sm text-amber-900">Submitting this return request withdraws your pending extension.</p>}
+        <p className="text-sm text-slate-700">The owner must confirm physical receipt. The vehicle remains unavailable until the return and inspection checks are complete.</p>
+        <label className="flex min-h-11 items-start gap-3 py-2 text-sm text-slate-800">
+          <input type="checkbox" checked={reportedHandover} disabled={Boolean(returnRequestSubmittingId)} onChange={(event) => setReportedHandover(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-blue-700" />
+          I have already handed the vehicle back to the owner.
+        </label>
+        {reportedHandover && <label className="block text-sm font-semibold text-slate-800">Reported handover date and time
+          <input type="datetime-local" value={reportedHandoverInput} min={formatHandoverInput(returnModalBooking.pickupAt)} max={formatHandoverInput()}
+            disabled={Boolean(returnRequestSubmittingId)} onChange={(event) => setReportedHandoverInput(event.target.value)}
+            className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-slate-400 px-3 text-base font-normal focus:border-blue-700 focus:outline focus:outline-2 focus:outline-blue-700" />
+        </label>}
+        <p className="text-sm text-slate-600">Any reported handover time awaits owner verification. The final late fee uses the verified handover time, so a later app confirmation does not add late time.</p>
+      </BookingRequestModal>}
 
       {cancellationModalBooking && (
         <>

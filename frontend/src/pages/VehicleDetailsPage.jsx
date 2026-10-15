@@ -8,6 +8,8 @@ import {
   Star,
 } from "lucide-react";
 import API from "../utils/api";
+import { needsIdentityVerification as requiresIdentityVerification, verificationGuidance } from "../utils/verificationStatus";
+import { getSocket } from "../utils/socket";
 import Navbar from "../components/Navbar";
 import HelpLink from "../components/HelpLink";
 import { showActionToast } from "../utils/actionToast";
@@ -136,13 +138,12 @@ export default function VehicleDetailsPage({
   const eligibilityError = eligibilityState?.key === eligibilityKey ? eligibilityState.error : "";
   const balanceReasons = eligibility?.reasons?.filter((reason) => BALANCE_REASON_CODES.has(reason.code)) || [];
   const firstNonBalanceReason = eligibility?.reasons?.find((reason) => !BALANCE_REASON_CODES.has(reason.code));
-  const needsIdentityVerification = isLoggedIn && (
-    bookingRequiresKyc || (user?.role !== "admin" && String(user?.kycStatus || "not_started") !== "approved")
-  );
+  const needsIdentityVerification = isLoggedIn && requiresIdentityVerification(user, eligibility?.verification, bookingRequiresKyc);
+  const verificationStatus = verificationGuidance(eligibility?.verification);
   const knownEligibilityBlock = isLoggedIn && eligibility?.eligible === false;
   const changeDatesToBook = knownEligibilityBlock && eligibility.reasons?.length > 0
     && eligibility.reasons.every((reason) => reason.code === "RENTER_SCHEDULE_CONFLICT");
-  const resolveInBookings = knownEligibilityBlock && !changeDatesToBook;
+  const resolveInBookings = knownEligibilityBlock && !changeDatesToBook && !needsIdentityVerification;
 
   useEffect(() => {
     if (!isLoggedIn) return undefined;
@@ -161,11 +162,16 @@ export default function VehicleDetailsPage({
       }
     }, 250);
     const refresh = () => setEligibilityRetry((value) => value + 1);
+    const decision = notification => { if (notification?.event?.startsWith("verification.document_")) refresh(); };
+    const socket = getSocket(); socket.on("notification:new", decision);
     window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
     return () => {
       active = false;
       clearTimeout(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      socket.off("notification:new", decision);
     };
   }, [isLoggedIn, eligibilityKey, eligibilityRetry, pickupDate, pickupTime, returnDate, returnTime]);
 
@@ -315,10 +321,8 @@ export default function VehicleDetailsPage({
       return;
     }
 
-    const userRequiresKyc =
-      user?.role !== "admin" && String(user?.kycStatus || "not_started") !== "approved";
-    if (userRequiresKyc || bookingRequiresKyc) {
-      onNavigateToAccountSettings?.();
+    if (needsIdentityVerification) {
+      window.location.assign(user?.role === "owner" ? "/owner-dashboard?tab=Profile#verification-status" : "/account-settings#verification-status");
       return;
     }
 
@@ -358,6 +362,9 @@ export default function VehicleDetailsPage({
       }
       if (error?.details?.code === "IDENTITY_VERIFICATION_REQUIRED") {
         setBookingRequiresKyc(true);
+        if (error.details.verification) setEligibilityState(previous => previous?.data ? { ...previous, data: {
+          ...previous.data, verification: error.details.verification, eligible: false,
+        } } : previous);
         setBookingError(
           "Complete identity verification in Account Settings before booking. Your session is still active."
         );
@@ -640,7 +647,13 @@ export default function VehicleDetailsPage({
                     <div>
                       {eligibility ? (
                         <>
-                          {balanceReasons.length > 0 ? (
+                          {needsIdentityVerification ? (
+                            <>
+                              <p className="mt-2 font-semibold text-amber-950">{verificationStatus.title}</p>
+                              <p className="mt-1 text-amber-900">{verificationStatus.instruction}</p>
+                              <a href={user?.role === "owner" ? "/owner-dashboard?tab=Profile#verification-status" : "/account-settings#verification-status"} className="mt-2 inline-flex min-h-11 items-center font-semibold text-blue-700 underline underline-offset-2">View Verification Status</a>
+                            </>
+                          ) : balanceReasons.length > 0 ? (
                             <>
                               <p className="mt-2 font-medium text-amber-950">Pay your remaining balance first.</p>
                               {balanceReasons.map((reason) => (
@@ -675,7 +688,7 @@ export default function VehicleDetailsPage({
                 <button
                   type="button"
                   onClick={resolveInBookings ? onNavigateToBookingHistory : handleContinueBooking}
-                  disabled={bookingLoading || !isAvailable || changeDatesToBook}
+                  disabled={bookingLoading || !isAvailable || changeDatesToBook || (isLoggedIn && !eligibility && !eligibilityError)}
                   className="rp-btn-primary min-h-[3.3rem] w-full px-4 text-[0.97rem] tracking-[0.01em] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {bookingLoading
@@ -686,6 +699,8 @@ export default function VehicleDetailsPage({
                     ? "View bookings to resolve"
                     : changeDatesToBook
                     ? "Change dates to book"
+                    : isLoggedIn && !eligibility && !eligibilityError
+                    ? "Checking verification..."
                     : needsIdentityVerification
                     ? "Verify Identity to Book"
                     : isLoggedIn

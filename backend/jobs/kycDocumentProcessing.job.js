@@ -10,7 +10,8 @@ import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { getKycUploadDir } from "../utils/storagePaths.js";
 import { GEMINI_MANUAL_REVIEW_REASON } from "../utils/geminiDataPolicy.js";
 import { getKycScreeningProvider, assertKycScreeningAvailable } from "../utils/kycScreeningProvider.js";
-import { inspectPrivateKycDocument } from "../services/privateKycOcr.service.js";
+import { inspectPrivateKycDocument, getPrivateOcrRequestTimeoutMs } from "../services/privateKycOcr.service.js";
+import { privateOcrServiceManager } from "../utils/privateOcrServiceManager.js";
 import { evaluatePrivateDocumentInspection } from "../services/privateDocumentExtraction.service.js";
 
 const positiveNumber = (value, fallback) => {
@@ -41,6 +42,12 @@ const maxAttempts = () => getKycScreeningProvider() === "private_ocr" ? 2
 const requestsPerMinute = () => Math.max(1, Math.floor(positiveNumber(process.env.KYC_GEMINI_REQUESTS_PER_MINUTE, 4)));
 const retryDelayMs = (attempt) => getKycScreeningProvider() === "private_ocr" ? 3_000
   : Math.min(30_000 * (2 ** Math.max(attempt - 1, 0)), 5 * 60_000);
+const processingLockTimeoutMs = () => {
+  if (getKycScreeningProvider() !== "private_ocr") return positiveNumber(process.env.KYC_PROCESSING_LOCK_TIMEOUT_MS, 10 * 60_000);
+  // Allow the entire private request plus write grace before another worker may recover its claim.
+  const minimum = Math.max(60_000, getPrivateOcrRequestTimeoutMs() + 30_000);
+  return Math.max(minimum, positiveNumber(process.env.KYC_PROCESSING_LOCK_TIMEOUT_MS, minimum));
+};
 
 let timer = null;
 let running = false;
@@ -66,7 +73,7 @@ const throttleGemini = async () => {
 
 const claimNextDocument = async () => {
   const now = new Date();
-  const staleLock = new Date(Date.now() - positiveNumber(process.env.KYC_PROCESSING_LOCK_TIMEOUT_MS, 10 * 60_000));
+  const staleLock = new Date(Date.now() - processingLockTimeoutMs());
   return PreKycDocument.findOneAndUpdate(
     {
       $or: [
@@ -79,7 +86,7 @@ const claimNextDocument = async () => {
       $set: { status: "processing", processingLockedAt: now, processingError: "" },
       $inc: { processingAttempts: 1 },
     },
-    { sort: { createdAt: 1 }, new: true },
+    { sort: { createdAt: 1 }, returnDocument: "after" },
   ).select("+profileSnapshot");
 };
 
@@ -276,6 +283,8 @@ export const processNextKycDocument = async () => {
   if (!workerEnabled() || running) return false;
   running = true;
   try {
+    if (getKycScreeningProvider() === "private_ocr") await privateOcrServiceManager.warmup();
+    if (!workerEnabled()) return false;
     const document = await claimNextDocument();
     if (!document) return false;
     try {

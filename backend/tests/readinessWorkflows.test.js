@@ -7,10 +7,12 @@ import eventBus from "../events/eventBus.js";
 import { updateOwnerBookingStatus } from "../controllers/ownerDashboard.controller.js";
 import { processNextKycDocument } from "../jobs/kycDocumentProcessing.job.js";
 import { bookingStatusLabel, bookingGuidance } from "../../frontend/src/utils/workflowStatus.js";
+import { approvedAccountFixture } from "./helpers/approvedAccountFixture.js";
 
 const res = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
 
 test("concurrent approval and rejection of the same pending booking apply only one decision", async (t) => {
+  approvedAccountFixture(t);
   let storedStatus = "pending", notifications = 0;
   const snapshot = { _id: "booking", owner: { _id: "owner" }, renter: { _id: "renter" }, vehicle: { _id: "vehicle" }, status: "pending", updatedAt: new Date(), pickupAt: new Date(Date.now() + 86400000), returnAt: new Date(Date.now() + 172800000) };
   t.mock.method(Booking, "findOne", () => ({ populate: async () => ({ ...snapshot }), select: () => ({ maxTimeMS: async () => null, then: (resolve) => resolve(null) }) }));
@@ -21,6 +23,7 @@ test("concurrent approval and rejection of the same pending booking apply only o
     storedStatus = update.$set.status; return { modifiedCount: 1 };
   });
   t.mock.method(Booking, "exists", async () => false);
+  t.mock.method(Booking, "findById", () => ({ populate: async () => ({ ...snapshot, status: storedStatus }) }));
   t.mock.method(Vehicle, "findById", () => ({ select: async () => null }));
   t.mock.method(eventBus, "emit", () => { notifications++; });
   const results = [res(), res()];

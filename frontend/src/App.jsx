@@ -19,7 +19,6 @@ const ProceedVehicleOwner = lazy(() => import("./pages/ProceedVehicleOwner"));
 const VehicleOwnerVerification = lazy(() => import("./pages/VehicleOwnerVerification"));
 const RegisterPage = lazy(() => import("./components/RegisterPage"));
 const RegisterOwnerPage = lazy(() => import("./pages/RegisterOwnerPage"));
-const RegisterOTP = lazy(() => import("./verification/RegisterOTP"));
 const ForgotPasswordEmail = lazy(() => import("./verification/ForgotPasswordEmail"));
 const ForgotPasswordOTP = lazy(() => import("./verification/ForgotPasswordOTP"));
 const ResetPassword = lazy(() => import("./verification/ResetPassword"));
@@ -308,19 +307,6 @@ const App = () => {
     return true;
   }, []);
 
-  const [registeredEmail, setRegisteredEmail] = useState(() =>
-    String(initialFlowState.registeredEmail || "").trim()
-  );
-  const [registeredPhone, setRegisteredPhone] = useState(() =>
-    String(initialFlowState.registeredPhone || "").trim()
-  );
-  const [registeredName, setRegisteredName] = useState(() =>
-    String(initialFlowState.registeredName || "").trim()
-  );
-  const [registerRole, setRegisterRole] = useState(() =>
-    String(initialFlowState.registerRole || "").trim().toLowerCase() === "owner" ? "owner" : "user"
-  );
-
   const [forgotEmail, setForgotEmail] = useState(() =>
     String(initialFlowState.forgotEmail || "").trim()
   );
@@ -493,6 +479,7 @@ const App = () => {
         setUser(null);
         setIsLoggedIn(false);
         setIsOwnerLoggedIn(false);
+        setCurrentPage(page => SESSION_REQUIRED_PAGES.has(page) ? "signin" : page);
         return;
       }
 
@@ -514,20 +501,12 @@ const App = () => {
     const selectedVehicleId = String(selectedVehicle?._id || selectedVehicle?.id || "").trim();
     writeFlowState({
       selectedVehicleId,
-      registeredEmail,
-      registeredPhone,
-      registeredName,
-      registerRole,
       forgotEmail,
       forgotResetToken,
     });
   }, [
     selectedVehicle?._id,
     selectedVehicle?.id,
-    registeredEmail,
-    registeredPhone,
-    registeredName,
-    registerRole,
     forgotEmail,
     forgotResetToken,
   ]);
@@ -536,22 +515,12 @@ const App = () => {
     const query = window.location.search;
 
     if (currentPage === "registerotp") {
-      const queryEmail = getQueryParam(query, "email");
-      const queryPhone = getQueryParam(query, "phone");
-      const queryRole = getQueryParam(query, "role").toLowerCase();
-
-      if (queryEmail && queryEmail !== registeredEmail) {
-        setRegisteredEmail(queryEmail);
-      }
-      if (queryPhone && queryPhone !== registeredPhone) {
-        setRegisteredPhone(queryPhone);
-      }
-      if ((queryRole === "owner" || queryRole === "user") && queryRole !== registerRole) {
-        setRegisterRole(queryRole);
-      }
-      if (!queryEmail && !registeredEmail) {
-        setCurrentPage("register");
-      }
+      const routeRole = window.location.pathname === PAGE_TO_ROUTE["register-owner"] ? "owner"
+        : window.location.pathname === PAGE_TO_ROUTE.register ? "user" : "";
+      const role = String(routeRole || getQueryParam(query, "role") || initialFlowState.registerRole).toLowerCase();
+      const page = role === "owner" ? "register-owner" : "register";
+      window.history.replaceState({ page }, "", PAGE_TO_ROUTE[page]);
+      setCurrentPage(page);
       return;
     }
 
@@ -573,11 +542,9 @@ const App = () => {
     }
   }, [
     currentPage,
-    registeredEmail,
-    registeredPhone,
-    registerRole,
     forgotEmail,
     forgotResetToken,
+    initialFlowState.registerRole,
   ]);
 
   useEffect(() => {
@@ -602,6 +569,7 @@ const App = () => {
   const closeHelp = useCallback(() => setHelpPanelGuideSlug(null), []);
 
   useEffect(() => {
+    if (currentPage === "registerotp") return;
     const baseRoute = PAGE_TO_ROUTE[currentPage];
     if (!baseRoute) return;
 
@@ -612,18 +580,6 @@ const App = () => {
         const storedVehicleId = String(readFlowState().selectedVehicleId || "").trim();
         return buildRouteWithQuery(baseRoute, {
           vehicleId: queryVehicleId || selectedVehicleId || storedVehicleId,
-        });
-      }
-
-      if (currentPage === "registerotp") {
-        const queryEmail = getQueryParam(window.location.search, "email");
-        const queryPhone = getQueryParam(window.location.search, "phone");
-        const queryRole = getQueryParam(window.location.search, "role");
-        const role = registerRole === "owner" ? "owner" : queryRole === "owner" ? "owner" : "user";
-        return buildRouteWithQuery(baseRoute, {
-          email: registeredEmail || queryEmail,
-          phone: registeredPhone || queryPhone,
-          role,
         });
       }
 
@@ -663,9 +619,6 @@ const App = () => {
     currentPage,
     selectedVehicle?._id,
     selectedVehicle?.id,
-    registeredEmail,
-    registeredPhone,
-    registerRole,
     forgotEmail,
     helpGuideSlug,
     helpAudience,
@@ -766,10 +719,6 @@ const App = () => {
     setSelectedVehicle(null);
     bookingReturnRef.current = null;
     clearBookingReturn();
-    setRegisteredEmail("");
-    setRegisteredPhone("");
-    setRegisteredName("");
-    setRegisterRole("user");
     setForgotEmail("");
     setForgotResetToken("");
     writeFlowState({});
@@ -865,20 +814,6 @@ const App = () => {
       });
     };
   }, [isLoggedIn, isOwnerLoggedIn, keepSessionActive, performLogout, logoutState.status]);
-
-  // Build initials from the full name
-  const buildUserData = (name, email, role) => {
-    const parts = name.trim().split(" ");
-    const firstName = parts[0] || "";
-    const lastName = parts.slice(1).join(" ") || "";
-    return {
-      name,
-      initials: firstName.charAt(0).toUpperCase() + (lastName.charAt(0) || "").toUpperCase(),
-      email,
-      role,
-      isVerified: true,
-    };
-  };
 
   const goToBookingHistory = () => {
     setCurrentPage("booking-history");
@@ -1183,10 +1118,6 @@ const App = () => {
             setSessionLoadError("");
             setUser(userData);
             setSessionUser(userData);
-            setRegisteredEmail("");
-            setRegisteredPhone("");
-            setRegisteredName("");
-            setRegisterRole("user");
             setForgotEmail("");
             setForgotResetToken("");
 
@@ -1306,13 +1237,6 @@ const App = () => {
         <RegisterPage
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
-          onNavigateToRegisterOTP={(email, phone, name) => {
-            setRegisteredEmail(email);
-            setRegisteredPhone(phone);
-            setRegisteredName(name || "");
-            setRegisterRole("user");
-            setCurrentPage("registerotp");
-          }}
           onNavigateToOwnerRegister={() => setCurrentPage("register-owner")}
         />
       )}
@@ -1323,60 +1247,6 @@ const App = () => {
           onBack={() => setCurrentPage("register")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToHome={() => setCurrentPage("home")}
-          onNavigateToRegisterOTP={(email, phone, name) => {
-            setRegisteredEmail(email);
-            setRegisteredPhone(phone);
-            setRegisteredName(name || "");
-            setRegisterRole("owner");
-            setCurrentPage("registerotp");
-          }}
-        />
-      )}
-
-      {/* OTP verification */}
-      {currentPage === "registerotp" && (
-        <RegisterOTP
-          email={registeredEmail}
-          phone={registeredPhone}
-          role={registerRole}
-          onNavigateToSignIn={() => setCurrentPage("signin")}
-          onNavigateToRegister={() => setCurrentPage("register")}
-          onVerificationSuccess={(role, verifiedUser) => {
-            setSessionLoadError("");
-            const fallbackUser = buildUserData(
-              registeredName || registeredEmail,
-              registeredEmail,
-              role
-            );
-            const userData = verifiedUser
-              ? {
-                  ...verifiedUser,
-                  initials:
-                    String(verifiedUser.initials || "").trim() ||
-                    getInitialsFromName(verifiedUser.name || verifiedUser.email),
-                }
-              : fallbackUser;
-
-            setRegisteredEmail("");
-            setRegisteredPhone("");
-            setRegisteredName("");
-            setRegisterRole("user");
-
-            if (role === "owner") {
-              setIsOwnerLoggedIn(true);
-              setIsLoggedIn(false);
-              localStorage.setItem("isNewOwner", "true");
-              setUser(userData);
-              setSessionUser(userData);
-              setCurrentPage("owner-dashboard");
-            } else {
-              setIsLoggedIn(true);
-              setIsOwnerLoggedIn(false);
-              setUser(userData);
-              setSessionUser(userData);
-              setCurrentPage("home");
-            }
-          }}
         />
       )}
 

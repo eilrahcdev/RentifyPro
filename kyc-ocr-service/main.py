@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import hmac
 import io
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -38,12 +39,17 @@ ACTIVE = asyncio.Lock()
 cv2.setNumThreads(2)
 
 
-def create_engine():
+def create_engine(enable_mkldnn=None):
     from paddleocr import PaddleOCR
     directories = [MODEL_ROOT / "PP-OCRv5_mobile_det", MODEL_ROOT / "en_PP-OCRv5_mobile_rec"]
     if any(not (directory / "inference.json").is_file() for directory in directories):
         raise RuntimeError("Local OCR models are missing. Run download_models.py before starting the service.")
-    engine = PaddleOCR(
+    if enable_mkldnn is None:
+        setting = os.getenv("KYC_OCR_ENABLE_MKLDNN", "true").strip().lower()
+        if setting not in {"true", "false"}:
+            raise RuntimeError("KYC_OCR_ENABLE_MKLDNN must be true or false.")
+        enable_mkldnn = setting == "true"
+    options = dict(
         text_detection_model_name="PP-OCRv5_mobile_det",
         text_detection_model_dir=str(directories[0]),
         text_recognition_model_name="en_PP-OCRv5_mobile_rec",
@@ -53,10 +59,22 @@ def create_engine():
         use_textline_orientation=False,
         device="cpu",
         cpu_threads=2,
-        enable_mkldnn=False,
+        enable_mkldnn=enable_mkldnn,
+        # Document widths vary; bound the CPU shape cache instead of retaining every shape.
+        mkldnn_cache_capacity=1,
         text_recognition_batch_size=1,
     )
-    list(engine.predict(np.full((100, 300, 3), 255, dtype=np.uint8)))
+    blank = np.full((100, 300, 3), 255, dtype=np.uint8)
+    try:
+        engine = PaddleOCR(**options)
+        list(engine.predict(blank))
+    except (RuntimeError, NotImplementedError):
+        if not enable_mkldnn:
+            raise
+        logging.getLogger(__name__).warning("CPU acceleration could not initialize; warming the baseline CPU reader.")
+        options["enable_mkldnn"] = False
+        engine = PaddleOCR(**options)
+        list(engine.predict(blank))
     return engine
 
 

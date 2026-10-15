@@ -5,7 +5,7 @@ import adminRouter from "../routes/admin.routes.js";
 import reportRouter from "../routes/report.routes.js";
 import { requireModerationCapability } from "../middleware/moderation.middleware.js";
 import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
-import { isMessageReportableBy } from "../controllers/report.controller.js";
+import { isMessageReportableBy, listAdminReports } from "../controllers/report.controller.js";
 import Report, {
   BOOKING_OWNER_REPORT_CATEGORIES,
   BOOKING_RENTER_REPORT_CATEGORIES,
@@ -14,6 +14,26 @@ import Report, {
 } from "../models/Report.js";
 
 const route = (router, path, method) => router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]);
+
+test("booking dispute review includes handover records while chat reports remain message-scoped", async (t) => {
+  const returnedBooking = {
+    actualReturnAt: new Date("2030-01-01T16:00:00Z"), returnReportedHandoverAt: new Date("2030-01-01T16:00:00Z"),
+    returnConfirmedAt: new Date("2030-01-01T18:00:00Z"), lateReturnPenaltyFee: 0,
+  };
+  const records = [
+    { _id: "booking-report", sourceType: "booking", description: "The handover time was disputed.", booking: returnedBooking },
+    { _id: "chat-report", sourceType: "chat_message", booking: returnedBooking, messageSnapshot: { text: "Only this message" } },
+  ];
+  const query = { sort() { return this; }, limit() { return this; }, populate() { return this; }, then(resolve, reject) { return Promise.resolve(records).then(resolve, reject); } };
+  t.mock.method(Report, "find", () => query);
+  t.mock.method(Report, "aggregate", async () => []);
+  const res = { json(body) { this.body = body; return this; } };
+  await listAdminReports({ query: {}, user: { _id: "admin", role: "admin" } }, res, (error) => { throw error; });
+  assert.match(res.body.reports[0].description, /Verified handover: 2030-01-01T16:00:00.000Z/);
+  assert.match(res.body.reports[0].description, /App confirmation: 2030-01-01T18:00:00.000Z/);
+  assert.match(res.body.reports[1].description, /Only this message/);
+  assert.doesNotMatch(res.body.reports[1].description, /Booking return records|Verified handover/);
+});
 
 test("report submission and case access are protected routes", () => {
   const createRoute = route(reportRouter, "/", "post");

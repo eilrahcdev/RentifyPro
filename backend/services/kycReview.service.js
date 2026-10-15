@@ -6,6 +6,8 @@ import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { hasCurrentManualDocumentComparison } from "./manualDocumentComparison.js";
 import { repairLegacyKycSummary } from "./kycSummary.service.js";
 import { reconcileFaceReverification } from "./kycReverification.service.js";
+import { currentAccountDocuments } from "./accountVerification.service.js";
+import { evaluateDocumentApprovals } from "../utils/accountVerification.js";
 
 export const REVIEWABLE_DOCUMENT_STATUSES = ["pending_review"];
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -15,18 +17,31 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 export async function reconcileUserKyc(userId) {
   const current = await KycVerification.findOne({ user: userId });
   if (!current) return null;
-  const document = await PreKycDocument.findOne({ sessionId: `user:${userId}`, docType: "id" });
+  const { identity: document, supporting } = await currentAccountDocuments(userId, current);
+  const versions = current.registrationDocumentVersions;
+  const managed = Boolean(versions?.id || versions?.supporting || current.identityUploadAttemptId);
+  const account = managed ? await User.findById(userId).select("kycStatus role registrationDraftId ownerDocumentVerificationRequired") : null;
+  if (account?.kycStatus === "not_started") return current;
+  const supportingApproved = !versions?.supporting || (supporting?.status === "verified" && supporting.reviewVersion === versions.supporting);
+  const registrationVersionMatches = !versions?.id || document?.reviewVersion === versions.id;
   const sameDocument = document && (!current.idDocumentHash || current.idDocumentHash === document.fileHash);
-  if (document && !sameDocument) return current;
+  if (!managed && document && (!sameDocument || !registrationVersionMatches)) return current;
   let status = current.status;
   let remarks = current.remarks;
-  if (sameDocument && document.status === "rejected" && current.status !== "approved") {
+  if (managed) {
+    const state = evaluateDocumentApprovals(current, document, supporting, undefined, account || {});
+    status = state.rejected ? "rejected" : state.complete ? "approved" : state.selfieVerified ? "challenge_passed" : "id_uploaded";
+    remarks = state.rejected ? String(supporting?.status === "rejected" ? supporting.reason : document?.reason || "Replace the document that needs correction.")
+      : status === "approved" ? "All required documents and your selfie are approved. Restricted actions are available."
+        : state.selfieVerified ? "Your selfie is verified. Required document approval is pending." : "Complete verification for the current ID document.";
+  } else if (((sameDocument && document.status === "rejected") || supporting?.status === "rejected") && current.status !== "approved") {
     status = "rejected";
-    remarks = `${document.reason} Upload a corrected ID and complete verification again.`;
+    remarks = `${supporting?.status === "rejected" ? supporting.reason : document.reason} Upload a corrected document and complete verification again.`;
   } else if (
     sameDocument
     && document.status === "verified"
     && document.detailsMatched === true
+    && supportingApproved
     && current.challengePassedAt
     && current.status === "challenge_passed"
   ) {
@@ -45,7 +60,7 @@ export async function reconcileUserKyc(userId) {
   const updated = !changed ? current : await KycVerification.findOneAndUpdate(
     { _id: current._id, updatedAt: current.updatedAt, status: current.status },
     { $set: { status, remarks, summarySyncPending: true, ...(status === "approved" ? { verifiedAt: current.verifiedAt || new Date() } : {}) } },
-    { new: true },
+    { returnDocument: "after" },
   );
   // A newer verification attempt won the race; it must not be overwritten.
   if (!updated) return KycVerification.findOne({ user: userId });
@@ -68,7 +83,7 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   const now = new Date();
   const current = await PreKycDocument.findById(id);
   if (!current) throw fail(404, "This document is no longer available. Refresh the document list.");
-  if (["private-ocr", "manual"].includes(current.provider) && !reviewVersion) {
+  if ((current.reviewVersion || ["private-ocr", "manual"].includes(current.provider)) && !reviewVersion) {
     throw fail(409, "Refresh the document and include its current review version before deciding.");
   }
   if (reviewVersion && (current.reviewVersion || current.fileHash) !== reviewVersion) {
@@ -89,14 +104,17 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   }
 
   const updated = current.status === status ? null : await PreKycDocument.findOneAndUpdate(
-    { _id: id, status: { $in: REVIEWABLE_DOCUMENT_STATUSES }, ...(reviewVersion ? { [current.reviewVersion ? "reviewVersion" : "fileHash"]: reviewVersion } : {}) },
+    { _id: id, status: { $in: REVIEWABLE_DOCUMENT_STATUSES },
+      reviewVersion: current.reviewVersion ?? null, ...(current.fileHash ? { fileHash: current.fileHash } : {}) },
     { $set: {
       status, reason: reason || "Approved by a RentifyPro administrator.",
       decisionSource: "admin_review",
       reviewedAt: now, reviewedBy: reviewerId, verifiedAt: action === "approve" ? now : null,
       processingLockedAt: null, nextAttemptAt: null,
-    } },
-    { new: true },
+    }, $push: { reviewHistory: { reviewVersion: current.reviewVersion || current.fileHash,
+      fileHash: current.fileHash, action, reason: reason || "Approved by a RentifyPro administrator.",
+      reviewedAt: now, reviewedBy: String(reviewerId), sessionId: current.sessionId, notificationPending: true } } },
+    { returnDocument: "after" },
   );
   const document = updated || await PreKycDocument.findById(id);
   if (!document) throw fail(404, "This document is no longer available. Refresh the document list.");
@@ -109,7 +127,9 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
     totalMs: document.queuedAt ? Math.max(0, now - new Date(document.queuedAt)) : null,
   });
   const sessionId = String(document.sessionId || "");
-  if (sessionId.startsWith("user:") && mongoose.Types.ObjectId.isValid(sessionId.slice(5))) {
+  if (document.registeredUser) {
+    await reconcileUserKyc(document.registeredUser);
+  } else if (sessionId.startsWith("user:") && mongoose.Types.ObjectId.isValid(sessionId.slice(5))) {
     await reconcileUserKyc(sessionId.slice(5));
   } else if (sessionId.startsWith("reverify:") && mongoose.Types.ObjectId.isValid(sessionId.split(":")[1])) {
     await reconcileFaceReverification(sessionId.split(":")[1]);

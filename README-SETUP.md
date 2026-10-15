@@ -66,9 +66,9 @@ cd ..
 
 If `py -3.10` is not available, use `python -m venv venv`.
 
-The chatbot uses only `chatbot-service/rentifypro_chatbot_dataset_v6.json`. Legacy
-dataset files are retained for history but are not loaded, and `CHATBOT_DATASET_PATH`
-does not override the v6 dataset.
+The chatbot uses only `chatbot-service/rentifypro_chatbot_dataset_v6.json`.
+`CHATBOT_DATASET_PATH` does not override the v6 dataset. Legacy datasets are
+available in Git history.
 
 ## 5. Create Environment Files
 

@@ -51,6 +51,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
 
   const data = notification.data || {};
   const eventName = String(notification.event || "").trim().toLowerCase();
+  const isVerification = eventName.startsWith("verification.document_");
   const isLateReturn =
     LATE_RETURN_EVENTS.has(eventName) &&
     (Boolean(data.isOverdue) ||
@@ -60,7 +61,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
   const isFinalFee = data.feeStatus === "final" || hasNumber(data.lateReturnPenaltyFee);
   const isRenter = String(viewerRole || "user").toLowerCase() !== "owner";
   const feeAmount = isFinalFee ? data.lateReturnPenaltyFee : data.estimatedLateReturnPenaltyFee;
-  const canOpenBookings = isRenter && typeof onOpenBookings === "function";
+  const canOpenBookings = !isVerification && isRenter && typeof onOpenBookings === "function";
 
   return (
     <ModalPortal>
@@ -114,7 +115,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
 
             <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
               <p className="pb-1 text-sm font-semibold text-slate-800">{notification.title}</p>
-              <p className="leading-6 text-slate-600">{notification.message}</p>
+              <p className="whitespace-pre-line break-words leading-6 text-slate-600">{notification.message}</p>
               <DetailLine label="Received" value={formatDateTime(notification.lastOccurredAt || notification.createdAt)} />
             </section>
 
@@ -124,7 +125,8 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
                   <p className="pb-1 text-sm font-semibold text-slate-800">Late-return details</p>
                   <DetailLine label="Vehicle" value={data.vehicleName || "Booked vehicle"} />
                   <DetailLine label="Scheduled Return" value={formatDateTime(data.scheduledReturnAt)} />
-                  {data.actualReturnAt && <DetailLine label="Receipt Confirmed" value={formatDateTime(data.actualReturnAt)} />}
+                  {data.actualReturnAt && <DetailLine label="Verified Handover" value={formatDateTime(data.actualReturnAt)} />}
+                  {data.returnConfirmedAt && <DetailLine label="App Confirmation" value={formatDateTime(data.returnConfirmedAt)} />}
                   <DetailLine label="Overdue Duration" value={formatDuration(data.overdueMinutes)} />
                   {hasNumber(data.graceMinutes) && <DetailLine label="Grace Period" value={formatDuration(data.graceMinutes)} />}
                   {hasNumber(data.lateReturnPenaltyRatePerHour) && (
@@ -160,6 +162,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
                 {isFinalFee ? "View Booking & Payment" : "View Booking"}
               </button>
             )}
+            {isVerification && <a href={isRenter ? "/account-settings#verification-status" : "/owner-dashboard?tab=Profile#verification-status"} className="rp-btn-primary px-4 py-2.5 text-center text-sm">View Verification Status</a>}
           </footer>
         </section>
       </div>

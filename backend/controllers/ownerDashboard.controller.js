@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Vehicle from "../models/Vehicle.js";
 import { findRenterScheduleConflict } from "../services/bookingEligibility.service.js";
+import { assertAccountEligibility } from "../services/accountVerification.service.js";
 import { acquireBookingMutationLock, BookingPolicyError } from "../utils/bookingMutationLock.js";
 import eventBus from "../events/eventBus.js";
 import { NOTIFICATION_EVENTS } from "../events/notification.events.js";
@@ -11,6 +12,14 @@ import {
   getBookingLateReturnPenaltyRatePerHour as getOwnerBookingLatePenaltyRatePerHour,
   getBookingLateReturnPolicy,
   getEstimatedLateReturnPenaltyFee,
+  calculateBookingLateReturn,
+  expireBookingExtensionRequest,
+  finishBookingExtensionRequest,
+  quoteBookingExtension,
+  serializeBookingPolicy,
+  updateBookingLateReturnState,
+  usesSeparatedExtensionBilling,
+  parseBookingHandoverTime,
 } from "../utils/lateReturnPolicy.js";
 import {
   HOURLY_RATE_UNIT,
@@ -30,7 +39,7 @@ const STATUSES = new Set(["pending", "confirmed", "extended", "completed", "canc
 const PAYMENT_STATUSES = new Set(["unpaid", "partial", "paid", "refunded"]);
 const WALK_IN_PAYMENT_STATUSES = new Set(["none", "requested", "approved", "rejected", "completed"]);
 const WALK_IN_REVIEW_ACTIONS = new Set(["approve", "reject"]);
-const EXTENSION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
+const EXTENSION_STATUSES = new Set(["none", "requested", "approved", "rejected", "withdrawn", "expired"]);
 const EXTENSION_REVIEW_ACTIONS = new Set(["approve", "reject"]);
 const CANCELLATION_STATUSES = new Set(["none", "requested", "approved", "rejected"]);
 const RETURN_STATUSES = new Set(["none", "requested", "confirmed", "declined"]);
@@ -56,6 +65,9 @@ const getOwnerBookingLatePenaltyFee = (booking) => {
 };
 
 const getOwnerBookingTransactionFee = (booking) => {
+  if (usesSeparatedExtensionBilling(booking) && Number.isFinite(Number(booking.transactionFee))) {
+    return roundCurrency(Math.max(0, Number(booking.transactionFee)));
+  }
   const configured = getTransactionFee();
   const persisted = Number(booking?.transactionFee);
   let effective = Number.isFinite(persisted) && persisted > 0 ? roundCurrency(persisted) : 0;
@@ -187,23 +199,6 @@ const getOwnerBookingRemainingAmount = (booking) => {
   return roundCurrency(Math.max(totalPayable - paidAmount, 0));
 };
 
-const getOwnerBookingReturnBoundaryWithGrace = (booking, graceMinutes = 0) => {
-  const returnAt = toDate(booking?.returnAt);
-  if (!returnAt) return null;
-  const grace = Math.max(0, Math.floor(Number(graceMinutes || 0)));
-  if (grace <= 0) return returnAt;
-  return new Date(returnAt.getTime() + grace * 60 * 1000);
-};
-
-const getOwnerBookingOverdueMinutes = (booking, now = new Date(), graceMinutes = 0) => {
-  const overdueBoundary = getOwnerBookingReturnBoundaryWithGrace(booking, graceMinutes);
-  const current = toDate(now);
-  if (!overdueBoundary || !current) return 0;
-  if (current.getTime() <= overdueBoundary.getTime()) return 0;
-  const diffMs = current.getTime() - overdueBoundary.getTime();
-  return Math.max(0, Math.round(diffMs / (1000 * 60)));
-};
-
 const recalculateOwnerBookingAmountsForRange = (booking, nextReturnAt) => {
   const pickupAt = toDate(booking?.pickupAt);
   const returnAt = toDate(nextReturnAt);
@@ -305,7 +300,8 @@ const serializeLateReturn = (booking) => {
   const overdueMinutes = Math.max(0, Math.round(Number(booking?.lateReturnOverdueMinutes || 0)));
   const policy = getBookingLateReturnPolicy(booking);
   return {
-    isOverdue: Boolean(booking?.lateReturnIsOverdue),
+    ...calculateBookingLateReturn(booking),
+    isOverdue: !["cancelled", "rejected"].includes(String(booking?.status || "").trim().toLowerCase()) && Boolean(booking?.lateReturnIsOverdue),
     overdueMinutes,
     detectedAt: booking?.lateReturnDetectedAt || null,
     notifiedAt: booking?.lateReturnNotifiedAt || null,
@@ -325,6 +321,8 @@ const serializeReturnRequest = (booking) => ({
   status: normalizeReturnStatus(booking?.returnStatus, "none"),
   requestedAt: booking?.returnRequestedAt || null,
   requestedBy: toIdString(booking?.returnRequestedBy),
+  reportedHandoverAt: booking?.returnReportedHandoverAt || null,
+  actualReturnAt: booking?.actualReturnAt || null,
   confirmedAt: booking?.returnConfirmedAt || booking?.actualReturnAt || null,
   confirmedBy: toIdString(booking?.returnConfirmedBy),
   reviewedAt: booking?.returnReviewedAt || null,
@@ -339,6 +337,8 @@ const serializeExtensionRequest = (booking) => ({
   requestedBy: toIdString(booking?.extensionRequestedBy),
   currentReturnAt: booking?.extensionCurrentReturnAt || null,
   requestedReturnAt: booking?.extensionRequestedReturnAt || null,
+  expiresAt: booking?.extensionRequestedReturnAt || null,
+  quote: quoteBookingExtension(booking, booking?.extensionRequestedReturnAt, booking?.extensionRequestedAt),
   requestNote: toOptionalText(booking?.extensionRequestNote),
   reviewedAt: booking?.extensionReviewedAt || null,
   reviewedBy: toIdString(booking?.extensionReviewedBy),
@@ -399,6 +399,8 @@ const serializeOwnerBooking = (req, booking) => {
     _id: booking._id,
     pickupAt: booking.pickupAt,
     returnAt: booking.returnAt,
+    bookingPolicy: serializeBookingPolicy(booking),
+    bookingWorkflowRevision: Number(booking.bookingWorkflowRevision || 0),
     bookingDays: booking.bookingDays,
     bookingDurationMinutes,
     bookingDurationHours,
@@ -477,49 +479,20 @@ const syncOwnerBookingLifecycleState = async (booking) => {
   if (!booking?._id) return { updated: false };
 
   const now = new Date();
-  const lateReturnPolicy = getBookingLateReturnPolicy(booking);
   const normalizedStatus = String(booking?.status || "").trim().toLowerCase();
   if (!ACTIVE_BOOKING_STATUSES.has(normalizedStatus)) {
     return { updated: false };
   }
 
   const returnAt = toDate(booking?.returnAt);
-  if (!returnAt || now.getTime() < returnAt.getTime()) {
+  const expired = expireBookingExtensionRequest(booking, now);
+  if (!returnAt || (now.getTime() < returnAt.getTime() && !expired && !booking.lateReturnIsOverdue)) {
     return { updated: false };
   }
 
-  const overdueMinutes = getOwnerBookingOverdueMinutes(booking, now, lateReturnPolicy.graceMinutes);
-  if (overdueMinutes <= 0) {
-    return { updated: false };
-  }
-  let changed = false;
+  const { changed, shouldNotify: shouldNotifyOverdue, overdueMinutes } = updateBookingLateReturnState(booking, now);
 
-  if (!booking.lateReturnIsOverdue) {
-    booking.lateReturnIsOverdue = true;
-    changed = true;
-  }
-  if (Number(booking.lateReturnOverdueMinutes || 0) !== overdueMinutes) {
-    booking.lateReturnOverdueMinutes = overdueMinutes;
-    changed = true;
-  }
-  if (!booking.lateReturnDetectedAt) {
-    booking.lateReturnDetectedAt = now;
-    changed = true;
-  }
-  const penaltyRatePerHour = getOwnerBookingLatePenaltyRatePerHour(booking);
-  if (roundCurrency(Number(booking.lateReturnPenaltyRatePerHour || 0)) !== penaltyRatePerHour) {
-    booking.lateReturnPenaltyRatePerHour = penaltyRatePerHour;
-    changed = true;
-  }
-
-  let shouldNotifyOverdue = false;
-  if (!booking.lateReturnNotifiedAt) {
-    booking.lateReturnNotifiedAt = now;
-    shouldNotifyOverdue = true;
-    changed = true;
-  }
-
-  if (changed) {
+  if (changed || expired) {
     await booking.save();
   }
 
@@ -530,7 +503,7 @@ const syncOwnerBookingLifecycleState = async (booking) => {
     });
   }
 
-  return { updated: changed || shouldNotifyOverdue, status: String(booking.status || "").toLowerCase() };
+  return { updated: changed || expired, status: String(booking.status || "").toLowerCase() };
 };
 
 const autoSyncOwnerBookingLifecycles = async (bookings = []) => {
@@ -561,6 +534,7 @@ export const getOwnerBookings = async (req, res) => {
         direction = "asc";
       }
     } else if (view === "action") {
+      query.status = { $in: ["pending", "confirmed", "extended"] };
       query.$or = [
         { status: "pending" },
         { extensionStatus: "requested" },
@@ -661,6 +635,8 @@ export const updateOwnerBookingStatus = async (req, res) => {
     }
 
     if (status === "confirmed") {
+      await assertAccountEligibility(req.user._id, "listing");
+      await assertAccountEligibility(booking.renter?._id || booking.renter, "booking", { exposeDetails: false });
       if (await findRenterScheduleConflict(booking, booking.returnAt)) {
         return res.status(409).json({
           success: false, code: "RENTER_SCHEDULE_CONFLICT",
@@ -684,14 +660,32 @@ export const updateOwnerBookingStatus = async (req, res) => {
       }
     }
 
+    const statusUpdate = { status: requestedStatus };
+    if (requestedStatus === "cancelled" && normalizeCancellationStatus(booking.cancellationStatus, "none") === "requested") {
+      Object.assign(statusUpdate, {
+        cancellationStatus: "approved",
+        cancellationReviewedAt: new Date(),
+        cancellationReviewedBy: req.user._id,
+        cancellationReviewAction: "approve",
+        cancellationReviewNote: toOptionalText(req.body?.note, 500),
+      });
+    }
+    const workflowRevision = Number(booking.bookingWorkflowRevision || 0);
+    if (requestedStatus === "confirmed") {
+      await assertAccountEligibility(req.user._id, "listing");
+      await assertAccountEligibility(booking.renter?._id || booking.renter, "booking", { exposeDetails: false });
+    }
     const transition = await Booking.updateOne(
-      { _id: booking._id, owner: req.user._id, status: currentStatus, updatedAt: booking.updatedAt },
-      { $set: { status: requestedStatus } },
+      {
+        _id: booking._id, owner: req.user._id, status: currentStatus, updatedAt: booking.updatedAt,
+        bookingWorkflowRevision: workflowRevision === 0 ? { $in: [0, null] } : workflowRevision,
+      },
+      { $set: statusUpdate, $inc: { bookingWorkflowRevision: 1 } },
     );
     if (!transition.modifiedCount) {
       return res.status(409).json({ success: false, message: "This booking changed while you were reviewing it. Refresh bookings to see its latest status." });
     }
-    booking.status = requestedStatus;
+    const refreshed = await Booking.findById(booking._id).populate(populateFields);
     await syncVehicleAvailabilityByBookingState(booking.vehicle?._id || booking.vehicle);
 
     const statusNotificationEvent =
@@ -704,19 +698,20 @@ export const updateOwnerBookingStatus = async (req, res) => {
             : NOTIFICATION_EVENTS.BOOKING_STATUS_UPDATED;
 
     eventBus.emit(statusNotificationEvent, {
-      booking,
+      booking: refreshed,
       actor: req.user,
       status,
       cancelledBy: status === "cancelled" ? "owner" : "",
       recipientId: booking.renter?._id || booking.renter,
     });
 
-    const payload = serializeOwnerBooking(req, booking);
+    const payload = serializeOwnerBooking(req, refreshed);
     emitToUser(String(booking.renter._id), "booking:updated", payload);
     emitToUser(String(booking.owner._id), "booking:updated", payload);
 
     res.json({ success: true, booking: payload });
-  } catch {
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ success: false, code: error.code, message: error.message, verification: error.verification });
     res.status(500).json({ success: false, message: "Failed to update booking status." });
   }
 };
@@ -823,7 +818,7 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
         paymentRevision: booking.paymentRevision || { $in: [0, null] },
       },
       { $set: changes, $inc: { manualPaymentRevision: 1, paymentRevision: 1 } },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     ).populate(populateFields);
     if (!updated) {
       const latest = await Booking.findOne({ _id: booking._id, owner: req.user._id }).populate(populateFields);
@@ -855,18 +850,25 @@ export const updateOwnerBookingPaymentStatus = async (req, res) => {
 };
 
 export const confirmOwnerVehicleReturn = async (req, res) => {
+  let renterLock;
   try {
     const action = String(req.body?.action || "confirm").trim().toLowerCase();
     if (!["confirm", "decline"].includes(action)) {
       return res.status(400).json({ success: false, message: "Invalid vehicle return review action." });
     }
 
-    const booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);
+    let booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found." });
     }
 
+    renterLock = await acquireBookingMutationLock(booking.renter?._id || booking.renter);
+    booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);
+    if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
     await syncOwnerBookingLifecycleState(booking);
+    if (req.body?.expectedRequestedAt && toDate(req.body.expectedRequestedAt)?.getTime() !== toDate(booking.returnRequestedAt)?.getTime()) {
+      return res.status(409).json({ success: false, message: "The return request changed. Refresh this booking before reviewing it." });
+    }
 
     const returnStatus = normalizeReturnStatus(booking.returnStatus, "none");
     if (action === "decline") {
@@ -890,6 +892,7 @@ export const confirmOwnerVehicleReturn = async (req, res) => {
       booking.returnReviewedBy = req.user._id;
       booking.returnReviewAction = "decline";
       booking.returnReviewNote = toOptionalText(req.body?.note, 500);
+      await renterLock.renew();
       await booking.save();
 
       eventBus.emit(NOTIFICATION_EVENTS.VEHICLE_RETURN_DECLINED, {
@@ -938,23 +941,22 @@ export const confirmOwnerVehicleReturn = async (req, res) => {
       });
     }
 
-    if (normalizeExtensionStatus(booking.extensionStatus, "none") === "requested") {
-      return res.status(409).json({
-        success: false,
-        message: "Review the pending extension request before confirming the vehicle return.",
-      });
-    }
-
     const now = new Date();
-    const lateReturnPolicy = getBookingLateReturnPolicy(booking);
-    const overdueMinutes = getOwnerBookingOverdueMinutes(booking, now, lateReturnPolicy.graceMinutes);
+    const suppliedHandover = req.body?.actualReturnAt;
+    const handoverAt = parseBookingHandoverTime(suppliedHandover);
+    if ((usesSeparatedExtensionBilling(booking) || suppliedHandover !== undefined) &&
+      (!handoverAt || handoverAt < pickupAt || handoverAt > now)) {
+      return res.status(400).json({ success: false, message: "Confirm the actual handover date and time between pickup and now." });
+    }
+    const actualReturnAt = handoverAt || now;
+    const { overdueMinutes } = calculateBookingLateReturn(booking, actualReturnAt);
     const penaltyRatePerHour = getOwnerBookingLatePenaltyRatePerHour(booking);
     const lateReturnPenaltyFee = roundCurrency(
       penaltyRatePerHour * getDurationHoursFromMinutes(overdueMinutes)
     );
 
     booking.status = "completed";
-    booking.actualReturnAt = now;
+    booking.actualReturnAt = actualReturnAt;
     booking.returnStatus = "confirmed";
     booking.returnConfirmedAt = now;
     booking.returnConfirmedBy = req.user._id;
@@ -972,8 +974,10 @@ export const confirmOwnerVehicleReturn = async (req, res) => {
     booking.lateReturnResolvedAt = now;
     booking.lateReturnResolvedBy = req.user._id;
     booking.paymentUpdatedAt = now;
+    if (booking.extensionStatus === "requested") finishBookingExtensionRequest(booking, "withdrawn", now, req.user._id, "Withdrawn at confirmed vehicle return.");
     syncOwnerBookingPaymentSnapshot(booking);
 
+    await renterLock.renew();
     await booking.save();
 
     const vehicleId = booking.vehicle?._id || booking.vehicle;
@@ -981,6 +985,7 @@ export const confirmOwnerVehicleReturn = async (req, res) => {
       { _id: vehicleId },
       { $set: { availabilityStatus: "unavailable", availabilityHoldReason: "inspection" } }
     );
+    await syncVehicleAvailabilityByBookingState(vehicleId);
 
     eventBus.emit(NOTIFICATION_EVENTS.VEHICLE_RETURN_CONFIRMED, {
       booking,
@@ -1002,8 +1007,12 @@ export const confirmOwnerVehicleReturn = async (req, res) => {
           : "Vehicle return confirmed. The vehicle remains under inspection/maintenance until you mark it available.",
       booking: payload,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof BookingPolicyError) return res.status(409).json({ success: false, code: error.code, message: error.message });
+    if (error?.name === "DocumentNotFoundError") return res.status(409).json({ success: false, message: "This booking changed. Refresh it before confirming return." });
     return res.status(500).json({ success: false, message: "Failed to confirm vehicle return." });
+  } finally {
+    await renterLock?.release();
   }
 };
 
@@ -1047,12 +1056,16 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
     if (extensionStatus !== "requested") {
       return res.status(409).json({
         success: false,
-        message: "No pending extension request found for this booking.",
+        message: extensionStatus === "expired" ? "This extension request expired. Ask the renter to submit a future return time." : "No pending extension request found for this booking.",
+        booking: serializeOwnerBooking(req, booking),
       });
     }
 
     const now = new Date();
     const note = toOptionalText(req.body?.note, 500);
+    if (req.body?.expectedRequestedAt && toDate(req.body.expectedRequestedAt)?.getTime() !== toDate(booking.extensionRequestedAt)?.getTime()) {
+      return res.status(409).json({ success: false, message: "The extension request changed. Refresh this booking before reviewing it." });
+    }
 
     if (action === "approve") {
       const requestedReturnAt = toDate(booking.extensionRequestedReturnAt);
@@ -1062,6 +1075,10 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
           success: false,
           message: "Requested extension schedule is invalid.",
         });
+      }
+      if (requestedReturnAt <= now) return res.status(409).json({ success: false, message: "This extension request expired. Ask the renter to choose a later return time." });
+      if (booking.extensionCurrentReturnAt && toDate(booking.extensionCurrentReturnAt)?.getTime() !== currentReturnAt.getTime()) {
+        return res.status(409).json({ success: false, message: "The return deadline changed after this request. Ask the renter to submit a new extension." });
       }
 
       const vehicleId = booking.vehicle?._id || booking.vehicle;
@@ -1086,7 +1103,25 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
         });
       }
 
-      const recalculated = recalculateOwnerBookingAmountsForRange(booking, requestedReturnAt);
+      let recalculated;
+      if (usesSeparatedExtensionBilling(booking)) {
+        const quote = quoteBookingExtension(booking, requestedReturnAt, booking.extensionRequestedAt);
+        const historyEntry = (booking.extensionHistory || []).find((entry) =>
+          entry.status === "requested" && toDate(entry.requestedAt)?.getTime() === toDate(booking.extensionRequestedAt)?.getTime());
+        if (quote && historyEntry) {
+          booking.baseAmount = roundCurrency(Number(booking.baseAmount || 0) + quote.baseAmount);
+          booking.driverAmount = roundCurrency(Number(booking.driverAmount || 0) + quote.driverAmount);
+          booking.totalAmount = roundCurrency(Number(booking.totalAmount || 0) + quote.totalAmount);
+          booking.bookingDurationMinutes = getBookingDurationMinutes(booking) + quote.durationMinutes;
+          booking.bookingDurationHours = getDurationHoursFromMinutes(booking.bookingDurationMinutes);
+          booking.bookingDays = Math.max(1, Math.ceil(booking.bookingDurationMinutes / (24 * 60)));
+          booking.returnAt = requestedReturnAt;
+          Object.assign(historyEntry, quote);
+          recalculated = quote;
+        }
+      } else {
+        recalculated = recalculateOwnerBookingAmountsForRange(booking, requestedReturnAt);
+      }
       if (!recalculated) {
         return res.status(400).json({
           success: false,
@@ -1095,16 +1130,10 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
       }
 
       booking.status = "extended";
-      booking.extensionStatus = "approved";
-      booking.extensionReviewedAt = now;
-      booking.extensionReviewedBy = req.user._id;
-      booking.extensionReviewAction = "approve";
-      booking.extensionReviewNote = note;
-      booking.lateReturnIsOverdue = false;
-      booking.lateReturnDetectedAt = null;
+      finishBookingExtensionRequest(booking, "approved", now, req.user._id, note);
       booking.lateReturnNotifiedAt = null;
-      booking.lateReturnOverdueMinutes = 0;
-      booking.lateReturnPenaltyFee = 0;
+      updateBookingLateReturnState(booking, now);
+      if (!usesSeparatedExtensionBilling(booking)) booking.lateReturnPenaltyFee = 0;
       booking.lateReturnAction = "none";
       booking.lateReturnResolvedAt = null;
       booking.lateReturnResolvedBy = null;
@@ -1112,6 +1141,7 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
       booking.paymentUpdatedAt = now;
       syncOwnerBookingPaymentSnapshot(booking);
       await renterLock.renew();
+      if (requestedReturnAt <= new Date()) return res.status(409).json({ success: false, message: "The requested return time passed during review. Refresh this booking." });
       await booking.save();
       await syncVehicleAvailabilityByBookingState(vehicleId);
 
@@ -1133,12 +1163,7 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
       });
     }
 
-    booking.extensionStatus = "rejected";
-    booking.extensionReviewedAt = now;
-    booking.extensionReviewedBy = req.user._id;
-    booking.extensionReviewAction = "reject";
-    booking.extensionReviewNote = note;
-    booking.lateReturnAction = "none";
+    finishBookingExtensionRequest(booking, "rejected", now, req.user._id, note);
     booking.paymentUpdatedAt = now;
     await renterLock.renew();
     await booking.save();
@@ -1163,6 +1188,7 @@ export const reviewOwnerBookingExtensionRequest = async (req, res) => {
     if (error instanceof BookingPolicyError) {
       return res.status(409).json({ success: false, code: error.code, message: error.message });
     }
+    if (error?.name === "DocumentNotFoundError") return res.status(409).json({ success: false, message: "This booking changed. Refresh it before reviewing the extension." });
     return res.status(500).json({ success: false, message: "Failed to review extension request." });
   } finally {
     await renterLock?.release();
@@ -1188,6 +1214,7 @@ export const reviewOwnerBookingCancellationRequest = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "This booking can no longer process cancellation requests.",
+        booking: serializeOwnerBooking(req, booking),
       });
     }
 
@@ -1196,21 +1223,45 @@ export const reviewOwnerBookingCancellationRequest = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: "No pending cancellation request found for this booking.",
+        booking: serializeOwnerBooking(req, booking),
       });
+    }
+
+    if (req.body?.expectedRequestedAt && toDate(req.body.expectedRequestedAt)?.getTime() !== toDate(booking.cancellationRequestedAt)?.getTime()) {
+      return res.status(409).json({ success: false, message: "The cancellation request changed. Refresh this booking before reviewing it.", booking: serializeOwnerBooking(req, booking) });
+    }
+    if (action === "approve" && normalizeReturnStatus(booking.returnStatus, "none") === "requested") {
+      return res.status(409).json({ success: false, message: "Confirm the pending vehicle return instead of cancelling the active rental.", booking: serializeOwnerBooking(req, booking) });
     }
 
     const now = new Date();
     const note = toOptionalText(req.body?.note, 500);
+    const reviewUpdate = {
+      cancellationStatus: action === "approve" ? "approved" : "rejected",
+      cancellationReviewedAt: now,
+      cancellationReviewedBy: req.user._id,
+      cancellationReviewAction: action,
+      cancellationReviewNote: note,
+      ...(action === "approve" ? { status: "cancelled" } : {}),
+    };
+    const workflowRevision = Number(booking.bookingWorkflowRevision || 0);
+    const review = await Booking.updateOne(
+      {
+        _id: booking._id, owner: req.user._id, status: normalizedStatus, updatedAt: booking.updatedAt,
+        cancellationStatus: "requested", cancellationRequestedAt: booking.cancellationRequestedAt || null,
+        bookingWorkflowRevision: workflowRevision === 0 ? { $in: [0, null] } : workflowRevision,
+      },
+      { $set: reviewUpdate, $inc: { bookingWorkflowRevision: 1 } },
+    );
+    if (!review.modifiedCount) {
+      const latest = await Booking.findOne({ _id: booking._id, owner: req.user._id }).populate(populateFields);
+      return res.status(409).json({
+        success: false, message: "This booking changed while you were reviewing it. Refresh bookings to see its latest status.",
+        ...(latest ? { booking: serializeOwnerBooking(req, latest) } : {}),
+      });
+    }
 
     if (action === "approve") {
-      booking.status = "cancelled";
-      booking.cancellationStatus = "approved";
-      booking.cancellationReviewedAt = now;
-      booking.cancellationReviewedBy = req.user._id;
-      booking.cancellationReviewAction = "approve";
-      booking.cancellationReviewNote = note;
-      await booking.save();
-
       const vehicleId = booking.vehicle?._id || booking.vehicle;
       await syncVehicleAvailabilityByBookingState(vehicleId);
 
@@ -1231,13 +1282,6 @@ export const reviewOwnerBookingCancellationRequest = async (req, res) => {
         booking: payload,
       });
     }
-
-    booking.cancellationStatus = "rejected";
-    booking.cancellationReviewedAt = now;
-    booking.cancellationReviewedBy = req.user._id;
-    booking.cancellationReviewAction = "reject";
-    booking.cancellationReviewNote = note;
-    await booking.save();
 
     const refreshed = await Booking.findById(booking._id).populate(populateFields);
     const payload = serializeOwnerBooking(req, refreshed);

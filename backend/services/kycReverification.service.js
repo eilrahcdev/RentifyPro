@@ -92,5 +92,5 @@ export async function reconcileFaceReverification(userId) {
     "faceReverification.status": "selfie_matched", "faceReverification.expiresAt": { $gt: now },
   }, { $set: approved ? {
     "faceReverification.status": "approved", "faceReverification.completedAt": now, lastFaceReverifiedAt: now,
-  } : { "faceReverification.status": "rejected" } }, { new: true, timestamps: false }) || kyc;
+  } : { "faceReverification.status": "rejected" } }, { returnDocument: "after", timestamps: false }) || kyc;
 }

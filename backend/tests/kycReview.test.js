@@ -141,3 +141,39 @@ test("a verified status without a passed identity comparison cannot approve an a
   assert.equal(kyc.status, "challenge_passed");
   assert.equal(writes.length, 0);
 });
+
+test("admin decisions retain one durable history entry for the exact document version", async t => {
+  const { document } = fixture(t);
+  document.reviewVersion = "version-one";
+  const review = t.mock.method(PreKycDocument, "findOneAndUpdate", async (filter, update) => {
+    assert.equal(filter.reviewVersion, document.reviewVersion);
+    assert.equal(update.$push.reviewHistory.reviewVersion, "version-one");
+    assert.equal(update.$push.reviewHistory.fileHash, document.fileHash);
+    assert.equal(update.$push.reviewHistory.reviewedBy, adminId);
+    assert.equal(update.$push.reviewHistory.action, "approve");
+    Object.assign(document, update.$set); document.reviewHistory = [update.$push.reviewHistory]; return { ...document };
+  });
+  await reviewKycDocument({ id: docId, action: "approve", reviewerId: adminId, reviewVersion: "version-one" });
+  await reviewKycDocument({ id: docId, action: "approve", reviewerId: adminId, reviewVersion: "version-one" });
+  assert.equal(review.mock.callCount(), 1); assert.equal(document.reviewHistory.length, 1);
+});
+
+test("an unversioned legacy file cannot be approved after a same-file rescreen changes its version", async t => {
+  const { document } = fixture(t);
+  t.mock.method(PreKycDocument, "findOneAndUpdate", async filter => {
+    assert.equal(filter.reviewVersion, null); assert.equal(filter.fileHash, "current-id");
+    document.reviewVersion = "rescreened-version"; return null;
+  });
+  await assert.rejects(reviewKycDocument({ id: docId, action: "approve", reviewerId: adminId, reviewVersion: "current-id" }), { status: 409 });
+  assert.equal(document.status, "pending_review"); assert.equal(document.reviewHistory, undefined);
+});
+
+test("a document decision atomically records a recoverable notification for its evidence session", async t => {
+  const { document } = fixture(t);
+  t.mock.method(PreKycDocument, "findOneAndUpdate", async (_filter, update) => {
+    assert.equal(update.$push.reviewHistory.notificationPending, true);
+    assert.equal(update.$push.reviewHistory.sessionId, document.sessionId);
+    Object.assign(document, update.$set); return { ...document };
+  });
+  await reviewKycDocument({ id: docId, action: "reject", reviewerId: adminId, remarks: "Upload a readable photo of this ID." });
+});

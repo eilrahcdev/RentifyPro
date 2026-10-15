@@ -188,6 +188,13 @@ export function DocumentReviewDialog({ document, onClose, onApprove, onReject })
             </div>
           )}
           {document.reason && <p className="text-sm text-slate-600">Review notes: {document.reason}</p>}
+          {document.reviewHistory?.length > 0 && <details className="rounded-xl border border-slate-200 p-3">
+            <summary className="min-h-11 cursor-pointer text-sm font-semibold text-slate-700">Document decision history</summary>
+            <ol className="space-y-3 pt-2">{document.reviewHistory.map((decision, index) => <li key={`${decision.reviewVersion}-${index}`} className="break-words text-sm text-slate-600">
+              <p className="font-semibold">{decision.action === "approve" ? "Approved" : "Rejected"} on {new Date(decision.reviewedAt).toLocaleString()}</p>
+              <p>{decision.reason}</p><p className="text-xs">Version: {decision.reviewVersion}. Reviewer: {decision.reviewedBy}</p>
+            </li>)}</ol>
+          </details>}
           {document.canReview && !document.canApprove && <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm leading-5 text-amber-950">
             <p className="font-semibold">Approval is unavailable</p>
             <p className="mt-1 break-words">{document.approvalBlockedReason || "The required identity comparison has not passed. Ask the applicant to correct their details or upload the matching ID."}</p>

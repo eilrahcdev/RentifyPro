@@ -18,6 +18,7 @@ import {
   registerReverificationId,
   verifyReverificationSelfie,
   cancelReverification,
+  replaceAccountDocument,
 } from "../controllers/kyc.controller.js";
 import {
   kycLimiter,
@@ -26,10 +27,13 @@ import {
   preKycAttemptLimiter,
   preKycStatusLimiter,
   preKycStatusIpLimiter,
+  otpLimiter,
 } from "../middleware/security.middleware.js";
-import { requirePreKycSession } from "../middleware/preKycSession.middleware.js";
+import { requirePreKycSession, requireRegistrationEmail } from "../middleware/preKycSession.middleware.js";
 import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
 import { validateObjectIdParam } from "../middleware/validate.middleware.js";
+import { registrationDraftGuard, registrationDraftLimiter, getRegistrationDraft, saveRegistrationDraft,
+  deleteRegistrationDraft, sendRegistrationOtp, verifyRegistrationOtp, registrationOtpSendLimiter } from "../controllers/registrationDraft.controller.js";
 
 const router = express.Router();
 // Identity documents, face scores, and verification status must never enter browser/proxy caches.
@@ -44,15 +48,28 @@ router.post("/face/detect", protect, kycLimiter, faceDetect);
 router.post("/id-register", protect, kycLimiter, registerIdFace);
 router.post("/selfie/verify", protect, kycLimiter, selfieVerify);
 router.get("/me", protect, getMyKyc);
+router.post("/documents/:docType", protect, authorize("user", "owner"), kycLimiter, replaceAccountDocument);
 router.post("/reverify/id-register", protect, kycLimiter, requireKyc, registerReverificationId);
 router.post("/reverify/selfie/verify", protect, kycLimiter, requireKyc, verifyReverificationSelfie);
 router.post("/reverify/cancel", protect, kycLimiter, cancelReverification);
 
 // Pre-registration KYC routes
+router.get("/pre/draft", registrationDraftLimiter, registrationDraftGuard, getRegistrationDraft);
+router.post("/pre/draft", registrationDraftLimiter, registrationDraftGuard, saveRegistrationDraft);
+router.delete("/pre/draft", registrationDraftLimiter, registrationDraftGuard, deleteRegistrationDraft);
+router.post("/pre/draft/otp/send", registrationDraftLimiter, registrationDraftGuard, registrationOtpSendLimiter, otpLimiter, sendRegistrationOtp);
+router.post("/pre/draft/otp/verify", registrationDraftLimiter, registrationDraftGuard, otpLimiter, verifyRegistrationOtp);
 router.post("/pre/session", preKycLimiter, createPreKycSession);
-router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preRegisterIdFace);
-router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preSelfieVerify);
-router.post("/pre/supporting-doc/verify", preKycUploadIpLimiter, requirePreKycSession, preKycAttemptLimiter, preVerifySupportingDocument);
+router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, preRegisterIdFace);
+router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, preSelfieVerify);
+const requireSupportingEmail = (req, res, next) => {
+  if (req.registrationDraft || req.preKyc?.role !== "owner" || !req.cookies?.token) return requireRegistrationEmail(req, res, next);
+  return protect(req, res, () => {
+    if (req.user.role !== "user" || req.user.email !== req.preKyc.email) return res.status(403).json({ success: false, message: "Use your signed-in account's document session." });
+    return requireKyc(req, res, next);
+  });
+};
+router.post("/pre/supporting-doc/verify", preKycUploadIpLimiter, requirePreKycSession, requireSupportingEmail, preKycAttemptLimiter, preVerifySupportingDocument);
 router.get("/pre/status", preKycStatusIpLimiter, requirePreKycSession, preKycStatusLimiter, getPreKycStatus);
 
 // Internal callback from the Python service

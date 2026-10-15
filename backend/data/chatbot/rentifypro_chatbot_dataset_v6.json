@@ -53,9 +53,22 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "reset": {
+          "en": [
+            "We can start a new conversation. What would you like to know about RentifyPro?"
+          ],
+          "fil": [
+            "Bagong usapan na ito. Ano ang gusto mong malaman tungkol sa RentifyPro?"
+          ],
+          "taglish": [
+            "New conversation na ito. What would you like to know about RentifyPro?"
+          ]
+        }
+      }
     },
     {
       "id": "chat_wellbeing",
@@ -70,7 +83,11 @@
         "okay ka lang ba",
         "Are you doing okay today?",
         "How are things with you?",
-        "Kumusta ang araw mo chatbot?"
+        "Kumusta ang araw mo chatbot?",
+        "Are you alright, Rentify AI?",
+        "Kumusta ka na, Rentify AI?",
+        "Okay ka ba ngayon, assistant?",
+        "You doing okay today, chatbot?"
       ],
       "responses": {
         "en": [
@@ -92,9 +109,22 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "working": {
+          "en": [
+            "Yes, I'm here and ready to help. We can continue with your rental questions."
+          ],
+          "fil": [
+            "Oo, nandito ako at handang tumulong. Puwede nating ituloy ang mga tanong mo tungkol sa rental."
+          ],
+          "taglish": [
+            "Yes, I'm here and ready to help. Puwede nating ituloy ang rental questions mo."
+          ]
+        }
+      }
     },
     {
       "id": "chat_identity",
@@ -285,16 +315,13 @@
       ],
       "responses": {
         "en": [
-          "You're very welcome! 😊 If you need anything else, just let me know.",
-          "No problem at all! I'm happy to help."
+          "You're welcome! I'm here if you need more help with your rental."
         ],
         "fil": [
-          "Walang anuman! 😊 Sabihin mo lang kung may kailangan ka pa.",
-          "Walang problema! Masaya akong makatulong."
+          "Walang anuman! Nandito ako kung kailangan mo pa ng tulong sa pagrerenta."
         ],
         "taglish": [
-          "You're welcome! 😊 Sabihin mo lang if may tanong ka pa.",
-          "No problem! Happy to help."
+          "You're welcome! Nandito lang ako if you need more rental help."
         ]
       },
       "description": "Handles approved RentifyPro guidance for chat gratitude.",
@@ -307,7 +334,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-14",
       "priority": 0,
       "fallback_only": false
     },
@@ -335,16 +362,13 @@
       ],
       "responses": {
         "en": [
-          "Sounds good! 😊 If you need anything else, just let me know.",
-          "Got it! If you're ready, I can also help with the next step."
+          "Got it."
         ],
         "fil": [
-          "Sige! 😊 Sabihin mo lang kung may iba ka pang kailangan.",
-          "Okay, gets! Kung ready ka na, matutulungan din kita sa next step."
+          "Sige."
         ],
         "taglish": [
-          "Sounds good! 😊 Sabihin mo lang if may kailangan ka pa.",
-          "Got it! If ready ka na, I can help you with the next step."
+          "Got it!"
         ]
       },
       "description": "Handles approved RentifyPro guidance for chat acknowledgement.",
@@ -354,13 +378,49 @@
         "sige",
         "noted"
       ],
-      "hard_negatives": [],
+      "hard_negatives": [
+        "Saan ko makikita?",
+        "Where do I click?"
+      ],
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "explanation": {
+          "en": [
+            "By 'Got it,' I meant I understood your message. It's a brief acknowledgement, not confirmation of insurance coverage, a booking, payment, or account approval."
+          ],
+          "fil": [
+            "Ang ibig kong sabihin sa 'Got it' ay naintindihan ko ang mensahe mo. Maikling pagkilala lang iyon, hindi kumpirmasyon ng insurance coverage, booking, bayad, o account approval."
+          ],
+          "taglish": [
+            "By 'Got it,' I meant naintindihan ko ang message mo. It's a brief acknowledgement, hindi confirmation ng insurance coverage, booking, payment, or account approval."
+          ]
+        },
+        "frustration": {
+          "en": ["I hear you. What would you like me to clarify?"],
+          "fil": ["Naiintindihan ko. Ano ang gusto mong linawin ko?"],
+          "taglish": ["I hear you. Ano ang gusto mong i-clarify ko?"]
+        },
+        "frustration_context": {
+          "en": ["I hear you. I can clarify my last answer. Which part was unclear?"],
+          "fil": ["Naiintindihan ko. Maaari kong linawin ang huling sagot ko. Aling bahagi ang hindi malinaw?"],
+          "taglish": ["I hear you. I can clarify my last answer. Aling part ang hindi clear?"]
+        },
+        "dissatisfaction": {
+          "en": ["Sorry I haven't been helpful. What question would you like me to clarify?"],
+          "fil": ["Pasensya na kung hindi naging helpful ang sagot ko. Anong tanong ang gusto mong linawin ko?"],
+          "taglish": ["Sorry kung hindi naging helpful ang sagot ko. What question should I clarify?"]
+        },
+        "dissatisfaction_context": {
+          "en": ["Sorry my answer wasn't helpful. I can clarify the last question we were discussing."],
+          "fil": ["Pasensya na kung hindi naging helpful ang sagot ko. Maaari kong linawin ang huling tanong natin."],
+          "taglish": ["Sorry kung hindi naging helpful ang sagot ko. I can clarify the last question natin."]
+        }
+      }
     },
     {
       "id": "chat_goodbye",
@@ -383,16 +443,13 @@
       ],
       "responses": {
         "en": [
-          "Goodbye! 😊 Take care, and feel free to come back if you need help with your rental.",
-          "Have a great day! I'll be here if you need me again."
+          "Take care! You can return here when you need rental help."
         ],
         "fil": [
-          "Sige, paalam! 😊 Ingat ka, at nandito lang ako kung kailangan mo ulit ng tulong.",
-          "Okay, hanggang sa muli! Ingat at magandang araw sa'yo."
+          "Ingat! Bumalik ka lang kung kailangan mo ng tulong sa rental."
         ],
         "taglish": [
-          "Sige, bye! 😊 Take care, and message me anytime if you need help.",
-          "Okay, yun lang pala. Ingat! Nandito lang ako if you need anything else."
+          "Ingat! Message here again if you need rental help."
         ]
       },
       "description": "Handles approved RentifyPro guidance for chat goodbye.",
@@ -401,11 +458,14 @@
         "goodbye",
         "paalam"
       ],
-      "hard_negatives": [],
+      "hard_negatives": [
+        "Paano nga?",
+        "Hindi yan yung tanong ko"
+      ],
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
       "fallback_only": false
     },
@@ -473,19 +533,13 @@
       ],
       "responses": {
         "en": [
-          "No worries. Could you tell me a little more about what you need? 😊",
-          "I'm not quite sure I caught that. Could you rephrase it for me?",
-          "That's okay! Give me a little more detail and I'll do my best to help."
+          "Which part do you need help with: finding a vehicle, making a booking, payment, or account verification?"
         ],
         "fil": [
-          "Okay lang. Pwede mo bang sabihin nang kaunti kung ano ang kailangan mo? 😊",
-          "Parang hindi ko nakuha nang maayos. Pwede mo bang sabihin ulit sa ibang paraan?",
-          "Walang problema! Bigyan mo lang ako ng kaunting detalye at tutulungan kita."
+          "Saan mo kailangan ng tulong: paghahanap ng sasakyan, pag-book, pagbabayad, o account verification?"
         ],
         "taglish": [
-          "No worries. Sabihin mo lang nang kaunti kung ano yung kailangan mo. 😊",
-          "Hindi ko yata nakuha. Pwede mo bang i-rephrase?",
-          "Okay lang! Give me a little more detail and I'll do my best to help."
+          "Which part do you need help with: finding a vehicle, booking, payment, or account verification?"
         ]
       },
       "description": "Handles a user who explicitly says the previous information was unclear.",
@@ -500,7 +554,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
       "fallback_only": true
     },
@@ -525,16 +579,13 @@
       ],
       "responses": {
         "en": [
-          "Hmm, I'm not quite sure what that means 😅. If you're testing me, I'm working! What can I help you with?",
-          "I didn't recognize that message. Try asking me about a vehicle, booking, payment, or rental requirement."
+          "I couldn't understand that message. Try a question about vehicles, bookings, payments, or your account."
         ],
         "fil": [
-          "Hmm, hindi ko masyadong gets iyan 😅. Kung tine-test mo ako, okay naman ako! Ano ang maitutulong ko?",
-          "Hindi ko nakilala ang message na iyan. Pwede kang magtanong tungkol sa sasakyan, booking, bayad, o requirements."
+          "Hindi ko maintindihan ang mensahe. Puwede kang magtanong tungkol sa sasakyan, booking, bayad, o account mo."
         ],
         "taglish": [
-          "Hmm, hindi ko masyadong gets 😅. If you're testing me, I'm here! Ano ang kailangan mo?",
-          "I didn't recognize that. Try asking me about vehicles, booking, payment, or requirements."
+          "Hindi ko na-understand ang message. Try asking about vehicles, bookings, payments, or your account."
         ]
       },
       "description": "Handles recognized test strings or messages without semantic content.",
@@ -547,7 +598,7 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
       "fallback_only": true
     },
@@ -600,13 +651,31 @@
         "topics can you answer",
         "what topics can you help with"
       ],
-      "hard_negatives": [],
+      "hard_negatives": [
+        "I asked how",
+        "Ang tanong ko paano",
+        "That's not what I asked",
+        "How do I message the vehicle owner?"
+      ],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "docs/BOOKING_ELIGIBILITY.md; docs/booking-extension-return-policy.md; backend/controllers/booking.controller.js; backend/utils/lateReturnPolicy.js; frontend/src/data/helpContent.js",
+      "reviewed_at": "2026-10-14",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "policies": {
+          "en": [
+            "RentifyPro guidance covers identity verification and rental requirements, booking limits and schedules, owner approval, payments, cancellation, refunds, extensions, and late returns. Eligible bookings offer a 30% down payment or full payment; walk-in balance payment needs owner approval after a recorded down payment. Approved-booking cancellation and rental extensions require owner review. Refunds and exact late charges depend on the booking; insurance, deposits, and fuel terms need confirmation with the owner. Which policy would you like explained?"
+          ],
+          "fil": [
+            "Saklaw ng mga patakaran ang pagkilala at pagsusuri ng dokumento, mga kailangan sa pagrerenta, bilang at iskedyul ng booking, pag-apruba ng owner, pagbabayad, pagkansela, refund, extension, at late return. Sa mga booking na maaari nang bayaran, puwede ang 30% down payment o buong bayad. Kailangan ng owner approval ang walk-in na pagbabayad ng balanse matapos maitala ang down payment, pagkansela ng approved booking, at extension. Nakadepende sa booking ang refund at eksaktong late charge; kumpirmahin sa owner ang insurance, deposit, at fuel terms. Aling patakaran ang gusto mong ipaliwanag?"
+          ],
+          "taglish": [
+            "RentifyPro policies cover verification, rental requirements, booking limits and schedules, owner approval, payments, cancellation, refunds, extensions, and late returns. Eligible bookings allow a 30% down payment or full payment. Walk-in balance payment needs owner approval after recorded na ang down payment; approved-booking cancellation and extensions also need owner review. Refunds and exact late charges depend on your booking, while insurance, deposits, and fuel terms need owner confirmation. Aling policy ang gusto mong malaman?"
+          ]
+        }
+      }
     },
     {
       "id": "rental_rate",
@@ -635,7 +704,19 @@
         "rate ng sasakyan",
         "Tell me the rental pricing per hour",
         "What does a daily vehicle rental cost?",
-        "Magkano ang renta kada oras?"
+        "Magkano ang renta kada oras?",
+        "Quote this listing for four days",
+        "What is the rental subtotal for eight hours?",
+        "How much does a Honda City cost each day?",
+        "How much for the same SUV with a driver?",
+        "Magkano ang kabuuang presyo sa apat na araw?",
+        "Magkano lahat kung tatlong araw ang renta?",
+        "Paki-quote yung napiling sasakyan for six days",
+        "Magkano yung van per hour without a driver?",
+        "How much for this exact listing without a driver?",
+        "Presyo ng Toyota Hiace bawat araw?",
+        "Total rental cost for the second option please",
+        "Magkano pag may kasamang driver sa limang oras?"
       ],
       "responses": {
         "en": [
@@ -692,13 +773,13 @@
       ],
       "responses": {
         "en": [
-          "Insurance coverage is not guaranteed for every rental. Check the selected vehicle listing and booking terms for the coverage that applies."
+          "It depends on the vehicle and rental terms. I cannot confirm insurance coverage for a specific rental here. Check the listing and ask the owner what coverage and exclusions apply before booking."
         ],
         "fil": [
-          "Hindi guaranteed ang insurance coverage sa bawat rental. I-check ang selected vehicle listing at booking terms para sa applicable coverage."
+          "Depende ito sa sasakyan at rental terms. Hindi ko makukumpirma rito ang insurance coverage ng isang rental. Tingnan ang listing at itanong sa owner ang coverage at mga hindi sakop bago mag-book."
         ],
         "taglish": [
-          "Insurance is not guaranteed for every rental. Check the selected listing and booking terms for the coverage that applies."
+          "It depends on the vehicle and rental terms. Hindi ko ma-confirm ang specific insurance coverage here. Check the listing and ask the owner about coverage and exclusions before booking."
         ]
       },
       "description": "Directs users to the listing and booking terms for applicable insurance coverage.",
@@ -709,10 +790,23 @@
       "hard_negatives": [],
       "requires_live_data": true,
       "live_source": "The selected vehicle listing and booking terms",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/models/Vehicle.js and backend/models/Booking.js do not confirm insurance coverage",
+      "reviewed_at": "2026-10-12",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "explanation": {
+          "en": [
+            "I meant that insurance coverage is not confirmed by the general rental price alone. Coverage and exclusions depend on the selected vehicle and rental terms. Check the listing and ask the owner before booking; I cannot confirm a specific rental's insurance here."
+          ],
+          "fil": [
+            "Ang ibig kong sabihin ay hindi kumpirmado ang insurance coverage mula sa pangkalahatang rental price lang. Depende ang coverage at exclusions sa napiling sasakyan at rental terms. Tingnan ang listing at itanong sa owner bago mag-book; hindi ko makukumpirma rito ang insurance ng isang rental."
+          ],
+          "taglish": [
+            "I meant hindi confirmed ang insurance coverage from the general rental price alone. Coverage and exclusions depend on the selected vehicle and rental terms. Check the listing and ask the owner before booking; hindi ko ma-confirm ang specific rental insurance here."
+          ]
+        }
+      }
     },
     {
       "id": "security_deposit",
@@ -726,17 +820,19 @@
         "How much money is held temporarily and returned after rental",
         "Is a refundable security deposit required?",
         "What is the rental security deposit policy?",
-        "Magkano ang refundable security deposit?"
+        "Magkano ang refundable security deposit?",
+        "Is the deposit the same as the 30% down payment?",
+        "Magkaiba ba ang security deposit at down payment?"
       ],
       "responses": {
         "en": [
-          "Any required security deposit and its refund terms are shown in the selected vehicle's checkout or booking terms. RentifyPro does not use a confirmed universal deposit amount in this chatbot."
+          "I cannot confirm a security-deposit amount or refund terms here. Ask the owner whether a deposit is required and agree on its amount and return conditions before booking. There is no verified universal deposit amount for me to quote."
         ],
         "fil": [
-          "Makikita sa checkout o booking terms ng selected vehicle ang anumang required security deposit at refund terms. Walang confirmed universal deposit amount sa chatbot."
+          "Hindi ko makukumpirma rito ang halaga ng security deposit o refund terms nito. Tanungin ang owner kung kailangan ng deposit at linawin ang halaga at kondisyon ng pagbabalik bago mag-book. Wala akong verified na iisang deposit amount na maibibigay."
         ],
         "taglish": [
-          "Any required security deposit and refund terms appear in the selected vehicle's checkout or booking terms. The chatbot does not assume one fixed amount."
+          "I cannot confirm a deposit amount or refund terms here. Ask the owner if a deposit is required and agree on the amount and return conditions before booking. Walang verified universal amount na puwede kong i-quote."
         ]
       },
       "description": "Directs users to checkout and booking terms for any applicable deposit.",
@@ -756,10 +852,23 @@
       },
       "requires_live_data": true,
       "live_source": "The selected vehicle checkout and booking terms",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/models/Vehicle.js and backend/models/Booking.js have no dedicated security-deposit terms",
+      "reviewed_at": "2026-10-12",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "distinction": {
+          "en": [
+            "A down payment pays part of the rental price: RentifyPro offers 30% upfront on eligible bookings. A security deposit would be a separate amount held under agreed terms. I cannot confirm a universal security-deposit amount or refund conditions; ask the owner before booking."
+          ],
+          "fil": [
+            "Ang down payment ay bahagi ng rental price: may 30% upfront option sa eligible bookings. Hiwalay na halagang hawak ayon sa napagkasunduang terms ang security deposit. Hindi ko makukumpirma ang iisang deposit amount o refund conditions; itanong sa owner bago mag-book."
+          ],
+          "taglish": [
+            "A down payment is part of the rental price; RentifyPro offers 30% upfront on eligible bookings. A security deposit would be a separate amount held under agreed terms. Hindi ko ma-confirm ang universal deposit amount or refund conditions; ask the owner before booking."
+          ]
+        }
+      }
     },
     {
       "id": "payment_methods",
@@ -784,17 +893,20 @@
         "debit card",
         "What online payment options can I choose?",
         "Is Maya accepted for rental payments?",
-        "Anong paraan ng pagbayad ang tinatanggap dito?"
+        "Anong paraan ng pagbayad ang tinatanggap dito?",
+        "Does RentifyPro let renters pay via GCash?",
+        "Can Maya be used for my rental payment?",
+        "Tumatanggap ba ng credit or debit card sa payment?"
       ],
       "responses": {
         "en": [
-          "Online payments are handled through PayMongo using GCash, Maya, or card. An approved walk-in payment may also be available for the remaining balance."
+          "You can pay online with GCash, Maya, or a credit/debit card through PayMongo. Your booking checkout shows the methods currently offered. For a remaining balance after a recorded down payment, you can also request walk-in payment with owner approval."
         ],
         "fil": [
-          "Ang online payment ay through PayMongo gamit ang GCash, Maya, o card. Maaari ring magkaroon ng approved walk-in payment para sa remaining balance."
+          "Puwede kang magbayad online gamit ang GCash, Maya, o credit/debit card sa PayMongo. Makikita sa checkout ng booking ang mga paraang available. Kapag naitala na ang down payment at may natitirang balanse, puwede ring humiling ng walk-in payment na kailangan munang aprubahan ng owner."
         ],
         "taglish": [
-          "For online payment, PayMongo ang gamit with GCash, Maya, or card. May approved walk-in payment option din para sa remaining balance, kapag available."
+          "You can pay online with GCash, Maya, or a credit/debit card through PayMongo. Check your booking checkout for the available methods. For the remaining balance after a recorded down payment, puwede ring mag-request ng walk-in payment with owner approval."
         ]
       },
       "description": "Explains the currently supported online payment methods.",
@@ -809,7 +921,9 @@
         "can I pay 30 percent first",
         "can I pay the remaining balance in person",
         "My GCash payment failed",
-        "The checkout payment option is unavailable"
+        "The checkout payment option is unavailable",
+        "What if my GCash payment fails?",
+        "Where can I get a receipt for my rental payment?"
       ],
       "clarification": {
         "en": "Are you asking about available payment methods, the 30% down payment, or paying the remaining balance?",
@@ -818,10 +932,67 @@
       },
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/utils/paymongo.js; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-14",
       "priority": 20,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "gcash": {
+          "en": [
+            "Yes, RentifyPro supports GCash payments through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, and select E-wallet (GCash / Maya). Continue with GCash when it is offered at checkout."
+          ],
+          "fil": [
+            "Oo, puwedeng magbayad gamit ang GCash sa PayMongo. Sa Bookings, buksan ang eligible na booking, piliin ang Pay Now o Pay Remaining, at piliin ang E-wallet (GCash / Maya). Ituloy gamit ang GCash kung available sa checkout."
+          ],
+          "taglish": [
+            "Yes, puwede ang GCash through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, then select E-wallet (GCash / Maya). Use GCash kapag offered sa checkout."
+          ]
+        },
+        "maya": {
+          "en": [
+            "Yes, RentifyPro supports Maya payments through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, and select E-wallet (GCash / Maya). Continue with Maya when it is offered at checkout."
+          ],
+          "fil": [
+            "Oo, puwedeng magbayad gamit ang Maya sa PayMongo. Sa Bookings, buksan ang eligible na booking, piliin ang Pay Now o Pay Remaining, at piliin ang E-wallet (GCash / Maya). Ituloy gamit ang Maya kung available sa checkout."
+          ],
+          "taglish": [
+            "Yes, puwede ang Maya through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, then select E-wallet (GCash / Maya). Use Maya kapag offered sa checkout."
+          ]
+        },
+        "card": {
+          "en": [
+            "Yes, RentifyPro supports credit/debit card payments through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, and select Credit / Debit Card. Continue with a credit/debit card when it is offered at checkout."
+          ],
+          "fil": [
+            "Oo, puwedeng magbayad gamit ang credit/debit card sa PayMongo. Sa Bookings, buksan ang eligible na booking, piliin ang Pay Now o Pay Remaining, at piliin ang Credit / Debit Card. Ituloy gamit ang credit/debit card kung available sa checkout."
+          ],
+          "taglish": [
+            "Yes, puwede ang credit/debit card through PayMongo. Open your eligible booking in Bookings, choose Pay Now or Pay Remaining, then select Credit / Debit Card. Use a credit/debit card kapag offered sa checkout."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "1. Open Bookings and choose Pay Now or Pay Remaining on an eligible booking. 2. Review the amount and select E-wallet (GCash / Maya) or Credit / Debit Card. 3. Choose Proceed to Pay and complete the PayMongo checkout. If the result is still processing, use Check payment status before paying again."
+          ],
+          "fil": [
+            "1. Buksan ang Bookings at piliin ang Pay Now o Pay Remaining kapag maaari nang bayaran ang booking. 2. Suriin ang halaga at piliin ang E-wallet (GCash / Maya) o Credit / Debit Card. 3. Piliin ang Proceed to Pay at kumpletuhin ang PayMongo checkout. Kung pinoproseso pa ang bayad, gamitin ang Check payment status bago magbayad ulit."
+          ],
+          "taglish": [
+            "1. Open Bookings and choose Pay Now or Pay Remaining kapag eligible ang booking. 2. Review the amount and select E-wallet (GCash / Maya) or Credit / Debit Card. 3. Choose Proceed to Pay and complete PayMongo checkout. Kung processing pa, use Check payment status before paying again."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "After paying through checkout, return to Bookings and check the payment result. If it is still processing, use Check payment status before paying again. For an approved walk-in arrangement, the owner confirms receipt after direct payment. Which payment route do you need help with?"
+          ],
+          "fil": [
+            "Pagkatapos ng checkout, bumalik sa Bookings at tingnan ang payment result. Kung processing pa, gamitin ang Check payment status bago magbayad ulit. Sa approved walk-in arrangement, owner ang magkukumpirma ng natanggap na bayad. Aling paraan ng payment ang kailangan mong malaman?"
+          ],
+          "taglish": [
+            "After checkout, return to Bookings and check the payment result. Kung processing pa, use Check payment status before paying again. For approved walk-in payment, the owner confirms receipt afterward. Which payment route ang kailangan mo?"
+          ]
+        }
+      }
     },
     {
       "id": "rental_requirements",
@@ -841,13 +1012,13 @@
       ],
       "responses": {
         "en": [
-          "You will need the required account and verification information, including a valid government ID and other documents requested by RentifyPro. Driver's License verification may be required for booking."
+          "Complete the account and identity-verification steps shown by RentifyPro, including an accepted government ID and selfie. Open Account Settings > Verification to check your requirements and review status. A passed selfie check alone does not complete document review; follow any additional instructions shown for your account."
         ],
         "fil": [
-          "Kailangan ang account at verification requirements, kabilang ang valid government ID at iba pang dokumentong hinihingi ng RentifyPro. Maaaring kailanganin ang Driver's License para sa booking."
+          "Kumpletuhin ang account at identity verification sa RentifyPro, kasama ang accepted government ID at selfie. Sa Account Settings > Verification, tingnan ang requirements at review status. Hindi pa tapos ang document review dahil lang pumasa ang selfie; sundin ang iba pang instruction para sa account mo."
         ],
         "taglish": [
-          "You’ll need the required account and verification documents, including a valid government ID. Driver's License verification may also be required."
+          "Complete the account and identity-verification steps, including an accepted government ID and selfie. Check Account Settings > Verification for your requirements and status. Passed selfie alone does not finish document review; follow any additional account instructions."
         ]
       },
       "description": "Handles approved RentifyPro guidance for rental requirements.",
@@ -860,8 +1031,8 @@
       "hard_negatives": [],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/middleware/rbac.middleware.js requireKyc; frontend/src/data/helpContent.js verify-identity",
+      "reviewed_at": "2026-10-11",
       "priority": 35,
       "fallback_only": false
     },
@@ -917,13 +1088,13 @@
       ],
       "responses": {
         "en": [
-          "A valid government ID and any required verification documents may be requested. Check the verification step in your account for the exact requirements."
+          "Use an accepted government ID from the list shown in the verification form. Check Account Settings > Verification for any additional documents your account needs; I cannot confirm a separate proof-of-address requirement from a general question."
         ],
         "fil": [
-          "Maaaring kailanganin ang valid government ID at iba pang verification documents. I-check ang verification step sa account mo para sa eksaktong requirements."
+          "Pumili ng accepted government ID mula sa listahan sa verification form. Tingnan ang Account Settings > Verification para sa iba pang dokumentong kailangan ng account mo; hindi ko makukumpirma ang hiwalay na proof-of-address requirement mula sa pangkalahatang tanong."
         ],
         "taglish": [
-          "A valid government ID and other verification documents may be required. Check your account's verification step for the exact list."
+          "Use an accepted government ID from the verification form. Check Account Settings > Verification for any additional account requirements; hindi ko ma-confirm ang separate proof-of-address requirement from a general question."
         ]
       },
       "description": "Handles approved RentifyPro guidance for id or proof of address.",
@@ -935,8 +1106,8 @@
       "hard_negatives": [],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/data/helpContent.js verify-identity; frontend/src/pages/AccountSettings.jsx",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
       "fallback_only": false
     },
@@ -956,7 +1127,22 @@
         "do you have SUVs",
         "Find cars I can rent currently",
         "What vehicles are ready to rent now?",
-        "Ano ang mga sasakyang available ngayon?"
+        "Ano ang mga sasakyang available ngayon?",
+        "Find the least expensive motorcycle rental",
+        "Show me the lowest price motorbike",
+        "Can I hire a minivan for four days?",
+        "I need an SUV around Cebu for the weekend",
+        "Ano ang pinaka-murang motorsiklo na marerentahan?",
+        "May van bang puwedeng rentahan nang dalawang araw?",
+        "Hanap ako ng SUV sa Davao bukas",
+        "May matic na kotse na pasok sa budget kong 1500?",
+        "Show automatic sedans within a 3k daily budget",
+        "Pinakamababang presyo ng motor ang hanap ko",
+        "May motor sa Manila na available ngayon?",
+        "Rentahan sana ng van for six hours",
+        "How do I browse vehicles on RentifyPro?",
+        "Where do I search vehicle listings?",
+        "Paano maghanap ng sasakyan sa Vehicles?"
       ],
       "responses": {
         "en": [
@@ -981,7 +1167,10 @@
       ],
       "hard_negatives": [
         "what vehicle categories do you support",
-        "how many passengers fit"
+        "how many passengers fit",
+        "I had an accident during my rental",
+        "Is there a mileage limit for my rental?",
+        "My rented vehicle was stolen"
       ],
       "clarification": {
         "en": "Are you looking for vehicles available now or asking which vehicle categories RentifyPro supports?",
@@ -991,9 +1180,36 @@
       "requires_live_data": true,
       "live_source": "GET /api/vehicles plus active booking availability",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 35,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "Open Vehicles. Use the vehicle-type filters and the search box to narrow the listings; use the location filter if needed. Select a matching vehicle to open its details, review the rate and specifications, then set pickup and return dates and times before requesting a booking. Listing visibility alone does not reserve the vehicle. Would you like me to search the current vehicle listings?"
+          ],
+          "fil": [
+            "Buksan ang Vehicles. Gamitin ang vehicle-type filters, search box, at location filter kung kailangan. Pumili ng sasakyan para buksan ang details, suriin ang rate at specifications, saka itakda ang pickup at return dates at oras bago mag-request ng booking. Hindi reservation ang paglabas ng listing. Gusto mo bang hanapin ko ang mga kasalukuyang vehicle listing?"
+          ],
+          "taglish": [
+            "Open Vehicles. Use the vehicle-type filters, search box, and location filter if needed. Choose a listing, review its rate and specs, then set pickup and return dates and times before requesting a booking. Hindi reservation ang listing visibility. Would you like me to search the current vehicle listings?"
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Vehicles. The vehicle-type filters and search box are above the listings, alongside the location search. Select a vehicle to open its details. Use Clear search if no listing matches your filters."
+          ],
+          "fil": [
+            "Buksan ang Vehicles. Nasa itaas ng listings ang vehicle-type filters at search box, kasama ang location search. Pumili ng sasakyan para sa details. Gamitin ang Clear search kung walang tugma sa filters."
+          ],
+          "taglish": [
+            "Open Vehicles. Vehicle-type filters and the search box are above the listings, with location search. Select a vehicle for its details. Use Clear search kapag walang match."
+          ]
+        }
+      },
+      "assistant_offers": {
+        "instructions": "search"
+      }
     },
     {
       "id": "vehicle_brand_search",
@@ -1089,7 +1305,11 @@
         "may matic ba kau",
         "Find vehicles with automatic transmission",
         "Are manual transmission rentals available?",
-        "May sasakyang manual transmission ba?"
+        "May sasakyang manual transmission ba?",
+        "Matic lang sana yung hinahanap kong sasakyan",
+        "Do you have vans with an automatic gearbox?",
+        "May manual na motorsiklo ba?",
+        "Automatic rentals only please"
       ],
       "responses": {
         "en": [
@@ -1176,7 +1396,11 @@
         "ilang seats available",
         "Find a rental that seats eight people",
         "What can carry six passengers?",
-        "May sasakyang kasya ang siyam na tao?"
+        "May sasakyang kasya ang siyam na tao?",
+        "SUV na kasya ang pitong pasahero",
+        "A seven-seater van for our family please",
+        "We are 6 people looking for a rental",
+        "May sasakyan para sa walong tao?"
       ],
       "responses": {
         "en": [
@@ -1239,10 +1463,56 @@
       "hard_negatives": [],
       "requires_live_data": true,
       "live_source": "GET /api/vehicles",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/pages/VehiclesPage.jsx; frontend/src/pages/VehicleDetailsPage.jsx; frontend/src/data/helpContent.js request-booking",
+      "reviewed_at": "2026-10-12",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "confirm_policy": {
+          "en": [
+            "Yes. You can browse and select a specific vehicle listing on RentifyPro. That vehicle must be available for your pickup and return schedule, and the owner still needs to approve the booking request."
+          ],
+          "fil": [
+            "Oo. Puwede kang pumili ng specific na vehicle listing sa RentifyPro. Dapat available ito sa pickup at return schedule mo, at kailangan pa ring aprubahan ng owner ang booking request."
+          ],
+          "taglish": [
+            "Yes. You can select a specific vehicle listing on RentifyPro. Dapat available ang unit for your pickup and return schedule, and kailangan pa rin ng owner approval sa booking request."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "Open Vehicles, search or browse for the model you want, and select the matching listing. Review its details, set your pickup and return dates and times, and complete verification if prompted. Choose Book Now to send a request, then follow the owner's decision in Bookings."
+          ],
+          "fil": [
+            "Buksan ang Vehicles, hanapin ang model na gusto mo, at piliin ang matching listing. Suriin ang details, ilagay ang pickup at return dates at oras, at kumpletuhin ang verification kung hinihingi. Piliin ang Book Now para magpadala ng request; tingnan ang desisyon ng owner sa Bookings."
+          ],
+          "taglish": [
+            "Open Vehicles, search or browse for your model, then select the matching listing. Review the details, set pickup and return dates and times, and complete verification if prompted. Choose Book Now to send a request, then check Bookings for the owner's decision."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "After selecting a listing and submitting the request, check Bookings for owner approval. Payment opens when your booking is eligible. Confirm pickup arrangements with the owner through Messages; selecting a model alone does not reserve it."
+          ],
+          "fil": [
+            "Pagkatapos pumili ng listing at magpadala ng request, tingnan sa Bookings kung inaprubahan na ng owner. Magbubukas ang payment kapag eligible ang booking. Kumpirmahin ang pickup sa owner gamit ang Messages; hindi pa reservation ang pagpili lang ng model."
+          ],
+          "taglish": [
+            "After choosing the listing and sending a request, check Bookings for owner approval. Payment opens kapag eligible na. Confirm pickup with the owner through Messages; choosing a model alone does not reserve it."
+          ]
+        },
+        "unavailable": {
+          "en": [
+            "If your preferred model is unavailable, browse Vehicles for available alternatives or choose another pickup and return schedule. A model appearing in the listings does not reserve it or guarantee future availability; owner approval is still required. Tell me the model or vehicle type if you want to search for alternatives."
+          ],
+          "fil": [
+            "Kung unavailable ang gustong model, maghanap ng available na alternatibo sa Vehicles o pumili ng ibang pickup at return schedule. Hindi reservation o garantiya ng future availability ang listing; kailangan pa rin ng owner approval. Sabihin ang model o uri ng sasakyan kung gusto mong maghanap ng alternatibo."
+          ],
+          "taglish": [
+            "If unavailable ang preferred model, browse Vehicles for available alternatives or choose another pickup and return schedule. A listing does not reserve it or guarantee future availability; kailangan pa rin ng owner approval. Tell me the model or vehicle type to search for alternatives."
+          ]
+        }
+      }
     },
     {
       "id": "booking_pickup_time",
@@ -1313,13 +1583,13 @@
       ],
       "responses": {
         "en": [
-          "Open Vehicles, choose a listing, set your pickup and return schedule, and review the rates and fees. Choose Book Now after completing any required verification. Track the request in Bookings; it is confirmed only when the owner approves it. Payment opens for eligible approved bookings."
+          "1. Open Vehicles and choose a listing. 2. Set your pickup and return dates and times, then review the rates and fees. 3. Complete verification if prompted and choose Book Now. 4. Follow your request in Bookings. It is confirmed only after owner approval, and payment opens for eligible approved bookings."
         ],
         "fil": [
-          "Buksan ang Vehicles, pumili ng listing, itakda ang pickup at return schedule, at suriin ang rates at fees. Piliin ang Book Now matapos ang kinakailangang verification. Subaybayan sa Bookings; confirmed lamang ito kapag inaprubahan ng owner. Magbubukas ang payment sa eligible approved bookings."
+          "1. Buksan ang Vehicles at pumili ng listing. 2. Itakda ang pickup at return dates at oras, saka suriin ang rates at fees. 3. Kumpletuhin ang verification kung hinihingi, at piliin ang Book Now. 4. Subaybayan sa Bookings. Confirmed lang kapag inaprubahan ng owner; saka magiging available ang payment sa eligible na booking."
         ],
         "taglish": [
-          "Open Vehicles, choose a listing, set pickup and return, then review rates and fees. Choose Book Now after required verification. Track it in Bookings; confirmed lang kapag owner approved. Payment opens for eligible approved bookings."
+          "1. Open Vehicles and choose a listing. 2. Set pickup and return dates and times, then review rates and fees. 3. Complete verification if prompted and choose Book Now. 4. Track it in Bookings. Confirmed lang after owner approval; payment opens for eligible approved bookings."
         ]
       },
       "description": "Handles approved RentifyPro guidance for how to book.",
@@ -1334,10 +1604,67 @@
       "hard_negatives": [],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/data/helpContent.js request-booking; backend/routes/booking.routes.js",
+      "reviewed_at": "2026-10-12",
       "priority": 40,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "continuation": {
+          "en": [
+            "After submitting the request, check Bookings for the owner's decision. When approved and eligible for payment, review the payment options shown there. Confirm pickup arrangements with the owner through Messages."
+          ],
+          "fil": [
+            "Pagkatapos magpadala ng request, tingnan ang desisyon ng owner sa Bookings. Kapag approved at eligible na sa payment, suriin ang payment options doon. Kumpirmahin ang pickup sa owner gamit ang Messages."
+          ],
+          "taglish": [
+            "After submitting the request, check Bookings for the owner's decision. When approved and payment-eligible, review the options shown there. Confirm pickup through Messages."
+          ]
+        },
+        "confirm_policy": {
+          "en": [
+            "Yes, those are the booking steps. Book Now sends a request; it is confirmed only after owner approval. The site checks verification and the rental schedule, and payment opens for eligible approved bookings."
+          ],
+          "fil": [
+            "Oo, iyon ang booking steps. Nagpapadala ng request ang Book Now; confirmed lang ito matapos ang owner approval. Sinusuri ng site ang verification at rental schedule, at magbubukas ang payment sa eligible approved bookings."
+          ],
+          "taglish": [
+            "Yes, those are the booking steps. Book Now sends a request; confirmed lang after owner approval. The site checks verification and schedule, then opens payment for eligible approved bookings."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Vehicles, choose a listing, and use Book Now on the vehicle details page after setting the pickup and return schedule and completing any required verification. Open Bookings to follow the request and owner decision."
+          ],
+          "fil": [
+            "Buksan ang Vehicles, pumili ng listing, at gamitin ang Book Now sa vehicle details pagkatapos itakda ang pickup at return schedule at kumpletuhin ang verification kung kailangan. Tingnan ang request at desisyon ng owner sa Bookings."
+          ],
+          "taglish": [
+            "Open Vehicles, choose a listing, then use Book Now on vehicle details after setting the schedule and completing required verification. Check Bookings for the request and owner decision."
+          ]
+        },
+        "troubleshooting": {
+          "en": [
+            "Read the reason shown on the vehicle or booking page. Booking can require completed verification, an available vehicle, valid future pickup/return times, no overlapping rental, and room within the existing booking limits. A due balance or finalized unpaid late penalty can affect eligibility. Follow the displayed action; I cannot confirm your account result here or bypass the checks."
+          ],
+          "fil": [
+            "Basahin ang dahilan sa vehicle o booking page. Maaaring kailangan ang completed verification, available na sasakyan, valid future pickup/return times, walang overlapping rental, at pasok sa booking limits. Maaaring makaapekto ang due balance o finalized unpaid late penalty. Sundin ang ipinapakitang hakbang; hindi ko makukumpirma rito ang account result o malalampasan ang checks."
+          ],
+          "taglish": [
+            "Read the reason on the vehicle or booking page. Checks include verification, vehicle availability, valid future times, no overlap, and booking limits. Due balances or finalized unpaid late penalties can affect eligibility. Follow the displayed action; hindi ko ma-confirm ang account result or bypass checks here."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "Book Now sends a request for the selected vehicle and schedule. The site checks verification, availability, dates, and renter eligibility, then the owner reviews the request. A request becomes confirmed only after approval; payment opens when that booking is eligible."
+          ],
+          "fil": [
+            "Nagpapadala ng request ang Book Now para sa napiling sasakyan at schedule. Sinusuri ang verification, availability, dates, at renter eligibility, saka nire-review ng owner. Confirmed lang kapag approved; magbubukas ang payment kapag eligible na ang booking."
+          ],
+          "taglish": [
+            "Book Now sends a request for your selected vehicle and schedule. The site checks verification, availability, dates, and eligibility; the owner then reviews it. Confirmed lang after approval, and payment opens kapag eligible na."
+          ]
+        }
+      }
     },
     {
       "id": "same_day_rental",
@@ -1395,13 +1722,13 @@
       ],
       "responses": {
         "en": [
-          "RentifyPro does not currently have a general advance-booking discount in this chatbot's fixed information. Check any active promo shown on the platform before booking."
+          "I cannot confirm an advance-booking discount. Review the price shown for your selected listing and booking; do not assume a lower rate just because you book early."
         ],
         "fil": [
-          "Wala akong nakalistang general advance-booking discount sa current chatbot information. I-check ang active promos na ipinapakita sa platform bago mag-book."
+          "Hindi ko makukumpirma kung may advance-booking discount. Suriin ang presyong ipinapakita sa listing at booking; hindi awtomatikong mas mura dahil maaga kang nag-book."
         ],
         "taglish": [
-          "Wala akong fixed general advance-booking discount na ma-confirm ngayon. I-check ang active promos sa platform bago mag-book."
+          "I cannot confirm an advance-booking discount. Check the price on your selected listing and booking; hindi automatic na discounted dahil early ka nag-book."
         ]
       },
       "description": "Handles approved RentifyPro guidance for advance booking discount.",
@@ -1412,8 +1739,8 @@
       "hard_negatives": [],
       "requires_live_data": true,
       "live_source": "Active promotions shown by the RentifyPro platform",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/controllers/booking.controller.js pricing; backend/models/Vehicle.js has no advance-booking discount field",
+      "reviewed_at": "2026-10-11",
       "priority": 0,
       "fallback_only": false
     },
@@ -1436,13 +1763,13 @@
       ],
       "responses": {
         "en": [
-          "You can pay a 30% down payment or the full rental amount, depending on the booking option."
+          "Yes, you can choose a 30% down payment or pay in full when payment is available for your booking. Open Bookings > Pay Now to review the amount and choose your option. A down payment leaves a balance to settle; it does not mean the rental is fully paid."
         ],
         "fil": [
-          "Puwede kang magbayad ng 30% down payment o full amount, depende sa booking option."
+          "Oo, puwede ang 30% down payment o buong bayad kapag available na ang payment sa booking mo. Buksan ang Bookings > Pay Now para suriin ang halaga at piliin ang option. May natitirang balanse pa kapag down payment lang ang binayaran."
         ],
         "taglish": [
-          "Yes, may 30% down payment option o full payment, depende sa booking."
+          "Yes, you can choose a 30% down payment or full payment kapag available na sa booking mo. Open Bookings > Pay Now to review the amount and choose. May remaining balance pa after a down payment; hindi pa fully paid ang rental."
         ]
       },
       "description": "Explains the supported 30% down-payment option.",
@@ -1466,10 +1793,56 @@
       },
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/controllers/booking.controller.js createBookingPayment; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-12",
       "priority": 45,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "full_payment": {
+          "en": [
+            "Yes, you can pay in full when your booking allows payment. In Bookings, choose Pay Now and select the full-payment option. If a down payment is already recorded, use Pay Remaining to settle the balance."
+          ],
+          "fil": [
+            "Oo, puwedeng bayaran nang buo kapag pinapayagan na ng booking ang payment. Sa Bookings, piliin ang Pay Now at ang full-payment option. Kung naitala na ang down payment, gamitin ang Pay Remaining para bayaran ang balanse."
+          ],
+          "taglish": [
+            "Yes, puwedeng full payment kapag payment-eligible na ang booking. In Bookings, choose Pay Now and select full payment. If recorded na ang down payment, use Pay Remaining to settle the balance."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "1. Open Bookings and find your eligible approved booking. 2. Choose Pay Now, then the 30% down-payment option. 3. Review the amount, select a payment method, and choose Proceed to Pay. After checkout, use Check payment status if the result is still processing. Settle the remaining balance by the due time shown on your booking."
+          ],
+          "fil": [
+            "1. Sa Bookings, hanapin ang eligible at approved na booking. 2. Piliin ang Pay Now, saka ang 30% down-payment option. 3. Suriin ang halaga, pumili ng payment method, at piliin ang Proceed to Pay. Kung processing pa matapos ang checkout, gamitin ang Check payment status. Bayaran ang balanse ayon sa due time ng booking."
+          ],
+          "taglish": [
+            "1. Open Bookings and find your eligible approved booking. 2. Choose Pay Now, then the 30% down-payment option. 3. Review the amount, select a method, and choose Proceed to Pay. Kung processing pa after checkout, use Check payment status. Settle the remaining balance by the due time sa booking."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "A recorded down payment leaves a remaining balance. Check the amount and due time on your booking, then use Pay Remaining to pay online or request walk-in payment if eligible. Walk-in payment needs owner approval and receipt confirmation."
+          ],
+          "fil": [
+            "May natitirang balanse matapos maitala ang down payment. Tingnan ang halaga at due time sa booking, saka gamitin ang Pay Remaining para magbayad online o humiling ng walk-in payment kung eligible. Kailangan ng owner approval at receipt confirmation ang walk-in payment."
+          ],
+          "taglish": [
+            "After recorded na ang down payment, may remaining balance pa. Check the amount and due time in your booking, then use Pay Remaining to pay online or request walk-in kapag eligible. Kailangan ng owner approval and confirmation of receipt."
+          ]
+        },
+        "full_payment_instructions": {
+          "en": [
+            "Open your eligible approved booking in Bookings, choose Pay Now, and select full payment. Review the amount, choose an offered payment method, and choose Proceed to Pay. If a down payment is already recorded, use Pay Remaining instead. Check payment status after checkout if still processing; do not pay again before checking."
+          ],
+          "fil": [
+            "Sa Bookings, buksan ang eligible at approved na booking, piliin ang Pay Now, saka full payment. Suriin ang halaga, pumili ng available na payment method, at piliin ang Proceed to Pay. Kung naitala na ang down payment, gamitin ang Pay Remaining. Kung processing pa matapos ang checkout, gamitin ang Check payment status bago magbayad ulit."
+          ],
+          "taglish": [
+            "Open the eligible approved booking in Bookings, choose Pay Now, then full payment. Review the amount, select an offered method, and choose Proceed to Pay. If recorded na ang down payment, use Pay Remaining instead. Use Check payment status if processing pa; check before paying again."
+          ]
+        }
+      }
     },
     {
       "id": "walk_in_payment",
@@ -1483,17 +1856,29 @@
         "Could I settle what is left when I collect the car",
         "Is in-person balance payment offered?",
         "Can I settle the remaining rental balance face to face?",
-        "Puwede bang personal bayaran ang natitirang balanse?"
+        "Puwede bang personal bayaran ang natitirang balanse?",
+        "Can the remaining rental bill be settled in cash?",
+        "Do cash balance payments require the owner's permission?",
+        "How can I apply for an in-person balance payment?",
+        "Can I retry a declined walk-in payment request?",
+        "Is a recorded down payment needed before paying the balance in person?",
+        "Saan ko makikita ang walk-in payment request status?",
+        "Paano humiling ng walk-in payment sa owner?",
+        "Puwede bang cash ang natitirang bayad pagkatapos ng down payment?",
+        "What if hindi tanggap ng owner ang walk-in request?",
+        "Kailangan ng owner approval for cash balance payment?",
+        "May walk-in balance payment option dito?",
+        "How is receipt confirmed for a walk-in balance payment?"
       ],
       "responses": {
         "en": [
-          "An approved walk-in payment may be requested for the remaining balance. It still needs to be reviewed and confirmed."
+          "Yes, you can request walk-in payment for the remaining rental balance after your down payment is recorded, if your booking is eligible. The vehicle owner must approve the request first. Once approved, you can pay the balance directly to the owner, who then confirms receipt. Would you like the steps to request it?"
         ],
         "fil": [
-          "Maaaring mag-request ng approved walk-in payment para sa remaining balance. Kailangan pa itong ma-review at ma-confirm."
+          "Oo, puwede kang humiling ng walk-in payment para sa natitirang balanse kapag naitala na ang down payment at eligible ang booking. Kailangan munang aprubahan ng owner ang request. Pagkatapos, puwede kang magbayad nang direkta sa owner, na magkukumpirma ng natanggap na bayad. Gusto mo bang malaman ang mga hakbang?"
         ],
         "taglish": [
-          "You may request an approved walk-in payment for the remaining balance, subject to review and confirmation."
+          "Yes, meron! You can request walk-in payment para sa remaining balance after ma-record ang down payment, if eligible ang booking. Kailangan munang i-approve ng owner. Once approved, pay directly to the owner, who confirms receipt. Gusto mo ng steps para mag-request?"
         ]
       },
       "description": "Explains the reviewed walk-in settlement option for a remaining balance.",
@@ -1514,10 +1899,170 @@
       },
       "requires_live_data": true,
       "live_source": "GET /api/bookings/:id and the booking payment state",
-      "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/controllers/booking.controller.js setBookingBalancePaymentMethod; backend/controllers/ownerDashboard.controller.js reviewOwnerWalkInPaymentRequest/confirmOwnerWalkInPayment; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-12",
       "priority": 30,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "overview": {
+          "en": [
+            "Yes, you can request walk-in payment for the remaining rental balance after your down payment is recorded, if your booking is eligible. The vehicle owner must approve the request first. Once approved, you can pay the balance directly to the owner, who then confirms receipt. Would you like the steps to request it?"
+          ],
+          "fil": [
+            "Oo, puwede kang humiling ng walk-in payment para sa natitirang balanse kapag naitala na ang down payment at eligible ang booking. Kailangan munang aprubahan ng owner ang request. Pagkatapos, puwede kang magbayad nang direkta sa owner, na magkukumpirma ng natanggap na bayad. Gusto mo bang malaman ang mga hakbang?"
+          ],
+          "taglish": [
+            "Yes, meron! You can request walk-in payment para sa remaining balance after ma-record ang down payment, if eligible ang booking. Kailangan munang i-approve ng owner. Once approved, pay directly to the owner, who confirms receipt. Gusto mo ng steps para mag-request?"
+          ]
+        },
+        "instructions": {
+          "en": [
+            "1. Open Bookings and find the eligible booking with a recorded down payment and remaining balance. 2. Choose Pay Remaining. 3. Select Request Walk-in Payment, then Request Walk-in Approval. Wait for owner approval before paying directly. The owner confirms the payment after receiving it; sending the request does not pay the balance."
+          ],
+          "fil": [
+            "1. Sa Bookings, hanapin ang eligible na booking na may naitalang down payment at natitirang balanse. 2. Piliin ang Pay Remaining. 3. Piliin ang Request Walk-in Payment, saka Request Walk-in Approval. Hintayin ang pag-apruba ng owner bago magbayad nang direkta. Ikukumpirma ng owner ang natanggap na bayad; hindi pa bayad ang balanse sa pagpapadala ng request."
+          ],
+          "taglish": [
+            "1. Open Bookings and find the eligible booking with a recorded down payment and remaining balance. 2. Choose Pay Remaining. 3. Select Request Walk-in Payment, then Request Walk-in Approval. Wait for owner approval bago magbayad directly. The owner confirms receipt afterward; sending a request does not settle the balance."
+          ]
+        },
+        "approval": {
+          "en": [
+            "Yes, the vehicle owner must approve your walk-in payment request before you pay the remaining balance directly. Approval allows that payment arrangement; the owner still needs to confirm receipt after you pay."
+          ],
+          "fil": [
+            "Oo, kailangan munang aprubahan ng owner ang walk-in payment request bago ka magbayad nang direkta ng natitirang balanse. Hiwalay ang pag-apruba sa pagkumpirma ng owner na natanggap na ang bayad."
+          ],
+          "taglish": [
+            "Yes, kailangan muna ng owner approval bago ka magbayad directly ng remaining balance. Approval permits the walk-in arrangement; the owner still confirms receipt after you pay."
+          ]
+        },
+        "rejection": {
+          "en": [
+            "If the owner rejects your walk-in request, you can pay the remaining balance online using Pay Remaining or submit a new walk-in request while your booking remains eligible. Rejection does not settle your balance or cancel the booking. You can discuss the arrangement with the owner through Messages."
+          ],
+          "fil": [
+            "Kung tanggihan ng owner ang walk-in request, puwedeng bayaran online ang balanse gamit ang Pay Remaining o magpadala ng bagong walk-in request kung eligible pa ang booking. Hindi nito nababayaran ang balanse o kinakansela ang booking. Makipag-usap sa owner sa Messages tungkol sa arrangement."
+          ],
+          "taglish": [
+            "If rejected ang walk-in request, you can pay online through Pay Remaining or submit a new request kapag eligible pa ang booking. Hindi nito nase-settle ang balance or naca-cancel ang booking. You can discuss the arrangement with the owner through Messages."
+          ]
+        },
+        "no_downpayment": {
+          "en": [
+            "No, walk-in payment is for the remaining balance only after a down payment has been recorded. It cannot replace the initial payment. For an eligible approved booking, use Pay Now to pay the 30% down payment or the full amount online."
+          ],
+          "fil": [
+            "Hindi. Para lang sa natitirang balanse ang walk-in payment matapos maitala ang down payment. Hindi ito kapalit ng unang bayad. Sa eligible at approved na booking, gamitin ang Pay Now para bayaran online ang 30% down payment o buong halaga."
+          ],
+          "taglish": [
+            "No, walk-in payment applies only to the remaining balance after recorded na ang down payment. Hindi ito initial-payment option. Use Pay Now on an eligible approved booking for the 30% down payment or full online payment."
+          ]
+        },
+        "initial_payment": {
+          "en": [
+            "No, walk-in payment is not an initial checkout option. Pay the down payment online first for an eligible approved booking. If a balance remains, you can request walk-in payment and wait for owner approval before paying it directly."
+          ],
+          "fil": [
+            "Hindi puwedeng walk-in payment ang unang bayad sa checkout. Bayaran muna online ang down payment sa eligible at approved na booking. Kung may balanse pa, puwedeng humiling ng walk-in payment at hintayin ang owner approval bago magbayad nang direkta."
+          ],
+          "taglish": [
+            "No, walk-in payment is not offered for the initial checkout. Pay the down payment online first on an eligible approved booking. For the remaining balance, puwede kang mag-request ng walk-in payment and wait for owner approval."
+          ]
+        },
+        "requirements": {
+          "en": [
+            "You need an eligible booking, a recorded down payment, and a remaining balance. The owner must approve the walk-in request before you pay directly and confirm receipt afterward. Check Pay Remaining in Bookings for the option available to your booking; I cannot confirm your eligibility from a general question."
+          ],
+          "fil": [
+            "Kailangan ng eligible na booking, naitalang down payment, at natitirang balanse. Dapat aprubahan muna ng owner ang walk-in request bago ka magbayad nang direkta, saka kumpirmahin ang natanggap na bayad. Tingnan ang Pay Remaining sa Bookings; hindi ko makukumpirma ang eligibility mo mula sa pangkalahatang tanong."
+          ],
+          "taglish": [
+            "You need an eligible booking, a recorded down payment, and a remaining balance. Kailangan ng owner approval before direct payment and confirmation after receipt. Check Pay Remaining in Bookings for your available option; hindi ko ma-confirm ang eligibility mo from a general question."
+          ]
+        },
+        "status": {
+          "en": [
+            "Check the walk-in payment message on your booking in Bookings. Requested means waiting for owner approval; approved means you can pay directly; completed means the owner confirmed receipt. A rejected request can be retried if the booking is still eligible. I cannot confirm your individual request status here."
+          ],
+          "fil": [
+            "Tingnan ang walk-in payment message ng booking sa Bookings. Ang requested ay naghihintay ng owner approval; ang approved ay puwede nang bayaran nang direkta; ang completed ay nakumpirma na ng owner ang natanggap na bayad. Puwedeng subukan ulit ang rejected request kung eligible pa. Hindi ko makukumpirma rito ang sarili mong request status."
+          ],
+          "taglish": [
+            "Check the walk-in payment message in Bookings. Requested means pending owner approval; approved means puwede nang pay directly; completed means confirmed na ang receipt. A rejected request can be retried kapag eligible pa ang booking. I cannot confirm your individual request status here."
+          ]
+        },
+        "confirmation": {
+          "en": [
+            "The owner confirms walk-in payment after receiving the remaining balance. An approved request does not mean you have paid. Check the payment message in Bookings for confirmation, and contact the owner through Messages if you have paid but it has not been recorded."
+          ],
+          "fil": [
+            "Ikukumpirma ng owner ang walk-in payment matapos matanggap ang natitirang balanse. Hindi ibig sabihin ng approved request na bayad ka na. Tingnan ang payment message sa Bookings at kausapin ang owner sa Messages kung nagbayad ka na pero hindi pa naitala."
+          ],
+          "taglish": [
+            "The owner confirms walk-in payment after receiving the balance. Approved request does not mean paid na. Check the payment message in Bookings, and contact the owner through Messages kung paid ka na pero hindi pa recorded."
+          ]
+        },
+        "no_approval": {
+          "en": [
+            "No, you must wait for owner approval before paying the remaining balance through walk-in payment. Submit the request through Pay Remaining in Bookings. After approval and payment, the owner must confirm receipt; approval alone does not settle the balance."
+          ],
+          "fil": [
+            "Hindi. Hintayin muna ang owner approval bago bayaran nang direkta ang natitirang balanse sa walk-in payment. Isumite ang request sa Pay Remaining sa Bookings. Pagkatapos ng approval at pagbabayad, kailangan pang kumpirmahin ng owner ang natanggap na bayad; hindi pa bayad dahil lang approved."
+          ],
+          "taglish": [
+            "No, wait for owner approval before paying the remaining balance through walk-in payment. Submit the request through Pay Remaining in Bookings. After approval and payment, the owner confirms receipt; approval alone does not settle the balance."
+          ]
+        },
+        "confirm_policy": {
+          "en": [
+            "Yes, walk-in payment can be requested for an eligible remaining balance after a recorded down payment. Owner approval comes first, and the owner confirms receipt after you pay. A request or approval alone does not mean the balance is paid."
+          ],
+          "fil": [
+            "Oo, puwedeng humiling ng walk-in payment para sa eligible na natitirang balanse matapos maitala ang down payment. Kailangan muna ng owner approval at pagkumpirma ng natanggap na bayad pagkatapos. Hindi pa bayad dahil lang may request o approval."
+          ],
+          "taglish": [
+            "Yes, walk-in payment is for an eligible remaining balance after recorded na ang down payment. Owner approval comes first, then confirmation of receipt after payment. Request or approval alone does not mean paid na ang balance."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Once you have submitted the walk-in request, wait for owner approval in Bookings. If approved, arrange the balance payment with the owner, who confirms receipt afterward. If rejected, pay online or submit another request while eligible. The request steps are complete; check your booking for what applies next."
+          ],
+          "fil": [
+            "Kapag naipadala na ang walk-in request, hintayin ang owner approval sa Bookings. Kung approved, ayusin ang pagbabayad ng balanse sa owner, na magkukumpirma ng natanggap na bayad. Kung rejected, magbayad online o mag-request ulit kung eligible pa. Tapos na ang request steps; tingnan ang booking para sa susunod na hakbang."
+          ],
+          "taglish": [
+            "After sending the walk-in request, wait for owner approval in Bookings. If approved, arrange payment with the owner, who confirms receipt afterward. If rejected, pay online or request again kapag eligible pa. Complete na ang request steps; check your booking for what applies next."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Bookings and find the eligible booking with a recorded down payment and remaining balance. Choose Pay Remaining, then Request Walk-in Payment and Request Walk-in Approval. Wait for the owner decision; these controls request the arrangement and do not record payment."
+          ],
+          "fil": [
+            "Sa Bookings, hanapin ang eligible na booking na may naitalang down payment at balanse. Piliin ang Pay Remaining, saka Request Walk-in Payment at Request Walk-in Approval. Hintayin ang owner; request lang ito at hindi payment confirmation."
+          ],
+          "taglish": [
+            "Open Bookings and find the eligible booking with recorded down payment and a balance. Choose Pay Remaining > Request Walk-in Payment > Request Walk-in Approval. Wait for the owner decision; request pa lang ito, not recorded payment."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "You need an eligible booking, a recorded down payment, and a remaining balance. The owner must approve the walk-in request before you pay directly and confirm receipt afterward. Check Pay Remaining in Bookings for the option available to your booking; I cannot confirm your eligibility from a general question."
+          ],
+          "fil": [
+            "Kailangan ng eligible na booking, naitalang down payment, at natitirang balanse. Dapat aprubahan muna ng owner ang walk-in request bago ka magbayad nang direkta, saka kumpirmahin ang natanggap na bayad. Tingnan ang Pay Remaining sa Bookings; hindi ko makukumpirma ang eligibility mo mula sa pangkalahatang tanong."
+          ],
+          "taglish": [
+            "You need an eligible booking, a recorded down payment, and a remaining balance. Kailangan ng owner approval before direct payment and confirmation after receipt. Check Pay Remaining in Bookings for your available option; hindi ko ma-confirm ang eligibility mo from a general question."
+          ]
+        }
+      },
+      "assistant_offers": {
+        "base": "instructions",
+        "overview": "instructions"
+      }
     },
     {
       "id": "booking_status",
@@ -1537,17 +2082,19 @@
         "saan makikita status ng booking q",
         "Check the current status of my reservation",
         "Did my own booking get approved?",
-        "Ano na ang kasalukuyang status ng booking ko?"
+        "Ano na ang kasalukuyang status ng booking ko?",
+        "What if the owner rejects my booking after I already paid?",
+        "Paano kung declined ni owner ang booking ko?"
       ],
       "responses": {
         "en": [
-          "You can track pending, confirmed, active, extended, completed, and cancelled bookings from your RentifyPro bookings area."
+          "Open Bookings to see your request status: pending means waiting for owner review, confirmed means approved, and extended means an extension was approved. Completed, cancelled, and rejected describe how the booking ended. Check payment status separately; an approved booking is not necessarily paid."
         ],
         "fil": [
-          "Makikita mo sa RentifyPro bookings area ang pending, confirmed, active, extended, completed, at cancelled bookings."
+          "Sa Bookings, ang pending ay naghihintay ng owner review, confirmed ay approved, at extended ay may approved extension. Ang completed, cancelled, at rejected ay nagsasabi kung paano nagtapos ang booking. Hiwalay ang payment status; hindi ibig sabihin ng approved na bayad na."
         ],
         "taglish": [
-          "You can track your pending, confirmed, active, extended, completed, or cancelled bookings in your bookings area."
+          "Open Bookings to check the status. Pending means waiting for owner review; confirmed means approved; extended means approved ang extension. Completed, cancelled, and rejected show how it ended. Check payment status separately; approved does not mean paid."
         ]
       },
       "description": "Directs users to authenticated live booking status.",
@@ -1570,10 +2117,34 @@
       },
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/me",
-      "policy_source": "backend/models/Booking.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/models/Booking.js; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-12",
       "priority": 35,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "approval_timing": {
+          "en": [
+            "Approval depends on the vehicle owner's review. I cannot promise a turnaround time. Check Bookings for the current status, and contact the owner through Messages if you need to discuss the request."
+          ],
+          "fil": [
+            "Depende sa review ng owner ang approval. Hindi ako makakapangako ng oras ng pag-apruba. Tingnan ang status sa Bookings at kausapin ang owner sa Messages kung kailangan mong talakayin ang request."
+          ],
+          "taglish": [
+            "Approval depends on the owner's review; hindi ako makakapangako ng turnaround time. Check Bookings for status and contact the owner through Messages if needed."
+          ]
+        },
+        "rejection": {
+          "en": [
+            "Check Bookings for the recorded owner decision. A rejected request is not an approved reservation. If you already paid or see an unexpected charge, use Check payment status before paying again, then Report issue on the booking for administrator review. Contact the owner through Messages if needed. Rejection alone does not confirm a refund."
+          ],
+          "fil": [
+            "Tingnan sa Bookings ang naitalang desisyon ng owner. Hindi approved reservation ang rejected request. Kung nagbayad ka na o may hindi inaasahang charge, gamitin muna ang Check payment status, saka Report issue para sa administrator review. Kausapin ang owner sa Messages kung kailangan. Hindi refund confirmation ang rejection."
+          ],
+          "taglish": [
+            "Check Bookings for the owner decision. A rejected request is not an approved reservation. Kung paid ka na or may unexpected charge, use Check payment status before paying again, then Report issue for administrator review. Contact the owner through Messages if needed; rejection alone does not confirm a refund."
+          ]
+        }
+      }
     },
     {
       "id": "my_active_bookings",
@@ -1718,17 +2289,18 @@
         "pde iextend ung renta",
         "How do I add another day to my rental?",
         "May I request a longer rental period?",
-        "Paano dagdagan ang araw ng renta ko?"
+        "Paano dagdagan ang araw ng renta ko?",
+        "Paano magsubmit ng request para palawigin ang rental time?"
       ],
       "responses": {
         "en": [
-          "Request an extension before the booking becomes overdue. The new return time must be later than the current schedule, must not conflict with another booking, and still requires the owner's approval."
+          "You can request an extension from Extend Rental Time in Bookings. Choose a future return time later than the current deadline, with no schedule conflicts. Owner approval is required before the requested time passes. You can withdraw a pending request or request vehicle return. New bookings preserve late time accrued before a late extension request; existing bookings retain their saved pricing policy. Review the separate extension and late-charge estimates before submitting."
         ],
         "fil": [
-          "Mag-request ng extension bago maging overdue ang booking. Dapat mas huli sa current schedule ang bagong return time, walang booking conflict, at kailangan pa rin ng owner approval."
+          "Sa Bookings, piliin ang Extend Rental Time para humiling ng extension. Dapat nasa hinaharap ang bagong return time, mas huli sa kasalukuyang deadline, at walang schedule conflict. Kailangan ng owner approval bago lumampas ang hinihinging oras. Puwedeng bawiin ang pending request o humiling ng vehicle return. Sa bagong bookings, nananatili ang late time bago ang late extension request; sinusunod ng lumang bookings ang naka-save na pricing policy. Suriin ang magkahiwalay na extension at late-charge estimates."
         ],
         "taglish": [
-          "Request the extension before the booking becomes overdue. The new return time must not conflict with another booking and still needs owner approval."
+          "Use Extend Rental Time in Bookings and choose a future return time later than your current deadline, with no schedule conflicts. Kailangan ng owner approval before that time passes. You can withdraw a pending request or request vehicle return. New bookings keep late time accrued before a late extension request; existing bookings retain their saved pricing policy. Review the separate extension and late-charge estimates."
         ]
       },
       "description": "Explains extension requests without claiming a live approval result.",
@@ -1743,7 +2315,9 @@
       "hard_negatives": [
         "what happens if I return late",
         "how much is the late fee",
-        "cancel my booking"
+        "cancel my booking",
+        "Can I shorten the rental period?",
+        "Can I move my pickup date?"
       ],
       "clarification": {
         "en": "Do you want to request an extension, or are you asking what happens after a late return?",
@@ -1752,10 +2326,67 @@
       },
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id",
-      "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/controllers/booking.controller.js requestBookingExtension; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-13",
       "priority": 45,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "1. Open your booking in Bookings and choose Extend Rental Time. 2. Enter a later return date and time that is still in the future, and review the separate extension and late-charge estimates. 3. Choose Send extension request and wait for owner approval. Requests expire at the requested return time. New bookings preserve earlier late time; existing bookings retain their saved pricing policy."
+          ],
+          "fil": [
+            "1. Sa Bookings, piliin ang Extend Rental Time. 2. Ilagay ang mas huling return date at oras na nasa hinaharap pa, at suriin ang magkahiwalay na extension at late-charge estimates. 3. Piliin ang Send extension request at hintayin ang owner approval. Mag-e-expire ang request sa hinihinging return time. Nananatili ang naunang late time sa bagong bookings; ginagamit ng lumang bookings ang naka-save na pricing policy."
+          ],
+          "taglish": [
+            "1. Open Bookings and choose Extend Rental Time. 2. Set a later return date and time that is still in the future; review the separate extension and late-charge estimates. 3. Choose Send extension request and wait for owner approval. Requests expire at the requested return time. New bookings preserve earlier late time; existing bookings keep their saved pricing policy."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Wait for the owner's decision in Bookings and follow the current return deadline until approved. The request expires at the requested return time. You can withdraw it or request vehicle return while it is pending. An approved extension covers its agreed interval; the approval time does not start a fresh extension. Check your booking's itemized charges and saved pricing policy."
+          ],
+          "fil": [
+            "Pagkatapos ng extension request, hintayin ang desisyon ng owner sa Bookings. Sundin muna ang kasalukuyang return schedule hanggang maaprubahan ang extension. Tingnan ang approved return time at updated charges; hindi pa extension ang pagpapadala lang ng request."
+          ],
+          "taglish": [
+            "After sending an extension request, wait for the owner's decision in Bookings. Follow the current return schedule until approved ang extension. Check the approved return time and updated charges; a request alone does not extend the rental."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Bookings, find the rental, and choose Extend Rental Time. Set a future return time later than your current deadline, review the charge estimates, and choose Send extension request. Follow the current return deadline until owner approval."
+          ],
+          "fil": [
+            "Sa Bookings, hanapin ang rental at piliin ang Extend Rental Time. Itakda ang return time na nasa hinaharap at mas huli sa current deadline, suriin ang estimates, saka Send extension request. Sundin muna ang current return deadline hanggang owner approval."
+          ],
+          "taglish": [
+            "Open Bookings, find the rental, then Extend Rental Time. Set a future return time later than the current deadline, review the estimates, and Send extension request. Follow the current deadline until approved."
+          ]
+        },
+        "troubleshooting": {
+          "en": [
+            "An extension needs an eligible approved booking, a later valid return time, no conflicting schedule, and owner approval. Read the reason shown in Bookings. Keep the current return schedule until approval; chat cannot approve the extension or bypass a conflict."
+          ],
+          "fil": [
+            "Nakadepende sa booking state at eligibility ang control. Kailangan ng mas huling valid return time, walang schedule conflict, at owner approval. Basahin ang dahilan sa Bookings at sundin muna ang current return schedule. Hindi kayang aprubahan o lampasan ng chat ang conflict."
+          ],
+          "taglish": [
+            "Check the booking state and eligibility in Bookings. An extension needs a later valid return time, no conflict, and owner approval. Follow the current schedule until approved. Hindi kayang i-approve or bypass ng chat ang conflict."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "An extension needs an eligible approved booking, a later valid return time, no conflicting schedule, and owner approval. Read the reason shown in Bookings. Keep the current return schedule until approval; chat cannot approve the extension or bypass a conflict."
+          ],
+          "fil": [
+            "Nakadepende sa booking state at eligibility ang control. Kailangan ng mas huling valid return time, walang schedule conflict, at owner approval. Basahin ang dahilan sa Bookings at sundin muna ang current return schedule. Hindi kayang aprubahan o lampasan ng chat ang conflict."
+          ],
+          "taglish": [
+            "Check the booking state and eligibility in Bookings. An extension needs a later valid return time, no conflict, and owner approval. Follow the current schedule until approved. Hindi kayang i-approve or bypass ng chat ang conflict."
+          ]
+        }
+      }
     },
     {
       "id": "booking_cancellation",
@@ -1770,17 +2401,18 @@
         "pno icancel ung booking q",
         "I need to cancel my rental reservation",
         "Where can I cancel a booking request?",
-        "Paano kanselahin ang rental request ko?"
+        "Paano kanselahin ang rental request ko?",
+        "What steps do I follow to request cancellation of an approved rental?"
       ],
       "responses": {
         "en": [
-          "You can request cancellation from the booking. Eligibility, charges, refund amount, and refund status depend on that booking and must be checked from its live record."
+          "Yes, you can cancel an eligible pending request in Bookings using Cancel Booking. For an approved or extended booking, that control sends a cancellation request for owner approval. A booking awaiting return confirmation cannot be cancelled. Check your booking and payment details; cancellation does not guarantee a refund."
         ],
         "fil": [
-          "Puwede kang mag-request ng cancellation mula sa booking. Depende sa live booking record ang eligibility, charges, refund amount, at refund status."
+          "Oo, puwedeng kanselahin ang eligible na pending request gamit ang Cancel Booking sa Bookings. Para sa approved o extended na booking, nagpapadala ito ng cancellation request na kailangan ng owner approval. Hindi na puwedeng kanselahin habang naghihintay ng return confirmation. Tingnan ang booking at payment details; hindi garantisado ang refund."
         ],
         "taglish": [
-          "You can request cancellation from the booking. Any charge, refund amount, or refund status must come from that booking's live record."
+          "Yes, you can cancel an eligible pending request through Cancel Booking in Bookings. For approved or extended bookings, cancellation needs owner approval. Hindi puwede habang awaiting return confirmation. Check your booking and payment details; cancellation does not guarantee a refund."
         ]
       },
       "description": "Explains general cancellation steps while reserving exact outcomes for live booking data.",
@@ -1795,10 +2427,67 @@
       ],
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id and its payment state",
-      "policy_source": "backend/controllers/booking.controller.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/controllers/booking.controller.js cancelMyBooking; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-12",
       "priority": 45,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "Open Bookings, find the booking, and choose Cancel Booking when available. Review the confirmation before submitting. A pending request can be cancelled directly; an approved or extended booking needs owner review. Check the result in Bookings and review payment details separately for any refund; chat cannot cancel it for you."
+          ],
+          "fil": [
+            "Buksan ang Bookings at piliin ang Cancel Booking sa booking kung available. Suriin ang confirmation bago isumite. Direktang nakukansela ang pending request; kailangan ng owner review kapag approved o extended na. Tingnan ang resulta sa Bookings at hiwalay na suriin ang payment details para sa refund; hindi ko ito makakansela sa chat."
+          ],
+          "taglish": [
+            "Open Bookings and choose Cancel Booking when available. Review the confirmation before submitting. Pending requests can be cancelled directly; approved or extended bookings need owner review. Check the result and payment details separately for any refund. Chat cannot cancel it for you."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Check Bookings for the cancellation result. Approved or extended bookings need owner review, while an eligible pending request can be cancelled directly. Review payment and refund details separately; a cancellation request does not confirm a refund."
+          ],
+          "fil": [
+            "Tingnan ang cancellation result sa Bookings. Kailangan ng owner review ang approved o extended na booking; direktang makakansela ang eligible na pending request. Hiwalay na tingnan ang payment at refund details; hindi refund confirmation ang cancellation request."
+          ],
+          "taglish": [
+            "Check Bookings for the cancellation result. Approved or extended bookings need owner review; eligible pending requests can be cancelled directly. Review payment and refund details separately; cancellation does not confirm a refund."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Bookings, find the rental, and choose Cancel Booking when available. Pending requests can be cancelled directly; approved or extended bookings submit an owner-reviewed request."
+          ],
+          "fil": [
+            "Sa Bookings, hanapin ang rental at piliin ang Cancel Booking kung available. Direktang cancellation ang pending request; kailangan ng owner review kapag approved o extended."
+          ],
+          "taglish": [
+            "Open Bookings, find the rental, then Cancel Booking kapag available. Pending can cancel directly; approved or extended bookings need owner review."
+          ]
+        },
+        "troubleshooting": {
+          "en": [
+            "A cancellation control depends on the booking state. An eligible pending request can be cancelled directly, while approved or extended bookings need owner review. A booking awaiting return confirmation cannot be cancelled. Check Bookings for the shown controls and payment details; chat cannot override those rules or promise a refund."
+          ],
+          "fil": [
+            "Nakadepende sa booking state at eligibility ang control. Direktang cancellation ang eligible pending request; kailangan ng owner review kapag approved o extended, at hindi puwede habang awaiting return confirmation. Tingnan ang Bookings at payment details; hindi kayang lampasan ng chat ang rules o maggarantiya ng refund."
+          ],
+          "taglish": [
+            "Check the booking state and eligibility in Bookings. Pending cancellation can be direct; approved or extended bookings need owner review. Hindi puwede habang awaiting return confirmation. Chat cannot override the rules or promise a refund."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "A cancellation control depends on the booking state. An eligible pending request can be cancelled directly, while approved or extended bookings need owner review. A booking awaiting return confirmation cannot be cancelled. Check Bookings for the shown controls and payment details; chat cannot override those rules or promise a refund."
+          ],
+          "fil": [
+            "Nakadepende sa booking state at eligibility ang control. Direktang cancellation ang eligible pending request; kailangan ng owner review kapag approved o extended, at hindi puwede habang awaiting return confirmation. Tingnan ang Bookings at payment details; hindi kayang lampasan ng chat ang rules o maggarantiya ng refund."
+          ],
+          "taglish": [
+            "Check the booking state and eligibility in Bookings. Pending cancellation can be direct; approved or extended bookings need owner review. Hindi puwede habang awaiting return confirmation. Chat cannot override the rules or promise a refund."
+          ]
+        }
+      }
     },
     {
       "id": "driver_option",
@@ -1879,9 +2568,22 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 35,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "unsupported_tricycle": {
+          "en": [
+            "Tricycles are not a supported RentifyPro search category. The supported categories are cars, motorcycles, vans, and trucks. I cannot offer a tricycle listing through these filters."
+          ],
+          "fil": [
+            "Hindi supported search category sa RentifyPro ang tricycle. Ang supported categories ay kotse, motorsiklo, van, at truck. Hindi ako makapag-aalok ng tricycle listing gamit ang mga filter na ito."
+          ],
+          "taglish": [
+            "Tricycle is not a supported RentifyPro search category. Supported ang cars, motorcycles, vans, and trucks. Hindi ako makapag-offer ng tricycle listing through these filters."
+          ]
+        }
+      }
     },
     {
       "id": "reviews_ratings",
@@ -1976,17 +2678,25 @@
         "How do I contact the person renting out the vehicle",
         "Where can I send the vehicle owner a message?",
         "How do I chat with my rental owner?",
-        "Paano kausapin ang may-ari sa Messages?"
+        "Paano kausapin ang may-ari sa Messages?",
+        "Can I message the owner?",
+        "How do I message the vehicle owner?",
+        "Where can I access the owner chat?",
+        "Why can't I send a message to the owner?",
+        "Paano mag-message kay owner?",
+        "Saan makaka-chat ang owner?",
+        "How can I message si owner?",
+        "Bakit hindi ako makapag-message sa owner?"
       ],
       "responses": {
         "en": [
-          "You can communicate with the vehicle owner through RentifyPro's real-time messaging feature."
+          "Yes, you can contact the vehicle owner through RentifyPro Messages. Open the conversation for your rental to discuss pickup, return, or payment arrangements. Booking approvals and payment confirmations still need their own controls."
         ],
         "fil": [
-          "Puwede kang makipag-chat sa vehicle owner gamit ang real-time messaging ng RentifyPro."
+          "Oo, puwede mong kausapin ang owner sa RentifyPro Messages tungkol sa pickup, return, o payment arrangement. Buksan ang conversation para sa rental mo. Kailangan pa ring gamitin ang mga hiwalay na control para sa booking approval at payment confirmation."
         ],
         "taglish": [
-          "You can message the vehicle owner through RentifyPro's real-time chat."
+          "Yes, puwede mong contact ang owner through RentifyPro Messages. Open your rental conversation to discuss pickup, return, or payment arrangements. Booking approval and payment confirmation still use their own controls."
         ]
       },
       "description": "Handles approved RentifyPro guidance for messaging.",
@@ -1994,13 +2704,118 @@
         "message owner",
         "chat with owner"
       ],
-      "hard_negatives": [],
+      "hard_negatives": [
+        "How do I cancel my booking?",
+        "How do I pay online?",
+        "How do I contact Netflix support?"
+      ],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/pages/VehicleDetailsPage.jsx handleChatOwner/Chat Owner; frontend/src/pages/BookingsPage.jsx openChat/Chat owner; frontend/src/pages/RealtimeChatPage.jsx composer; backend/controllers/chat.controller.js resolveOwnerRenterPair",
+      "reviewed_at": "2026-10-12",
       "priority": 10,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "overview": {
+          "en": [
+            "Yes. Sign in and use Chat Owner on a vehicle listing, Chat owner on your booking, or an existing conversation in Messages. You cannot chat yourself on your own listing. Messages do not approve a booking or confirm a payment."
+          ],
+          "fil": [
+            "Oo. Mag-sign in at gamitin ang Chat Owner sa vehicle listing, Chat owner sa booking mo, o ang kasalukuyang conversation sa Messages. Hindi puwedeng kausapin ang sarili sa sarili mong listing. Hindi booking approval o payment confirmation ang Messages."
+          ],
+          "taglish": [
+            "Yes. Sign in, then use Chat Owner on a vehicle listing, Chat owner sa booking mo, or an existing conversation in Messages. Hindi puwedeng chat ang sarili mong listing. Messages do not approve bookings or confirm payments."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "1. Sign in, then open Vehicles and select the listing. 2. In its owner section, choose Chat Owner. For a booked rental, open Bookings and choose Chat owner beside the owner name instead. 3. Type your message in the chat and press Send message (the send icon). You can reopen an existing conversation from Messages."
+          ],
+          "fil": [
+            "1. Mag-sign in, buksan ang Vehicles, at piliin ang listing. 2. Sa owner section, piliin ang Chat Owner. Kung may booking ka na, buksan ang Bookings at piliin ang Chat owner sa tabi ng pangalan ng owner. 3. I-type ang mensahe sa chat at pindutin ang Send message o send icon. Puwedeng buksan muli ang conversation sa Messages."
+          ],
+          "taglish": [
+            "1. Sign in, open Vehicles, and choose the listing. 2. Sa owner section, choose Chat Owner. If booked na, open Bookings and choose Chat owner beside the owner name. 3. Type your message in the chat and press Send message (the send icon). Reopen existing conversations through Messages."
+          ]
+        },
+        "instructions_detail": {
+          "en": [
+            "To start from a listing: sign in → Vehicles → open the vehicle → find the owner section → click Chat Owner. In the chat, click the message box, type your message, then press the send icon labeled Send message. If you already booked it, open Bookings, find that booking, and click Chat owner beside the owner name. For a chat you have already started, open Messages and select that owner."
+          ],
+          "fil": [
+            "Para magsimula sa listing: mag-sign in → Vehicles → buksan ang sasakyan → hanapin ang owner section → pindutin ang Chat Owner. Sa chat, pindutin ang message box, i-type ang mensahe, saka pindutin ang send icon na may label na Send message. Kung naka-book na, buksan ang Bookings, hanapin ang booking, at pindutin ang Chat owner sa tabi ng pangalan ng owner. Para sa dati nang chat, buksan ang Messages at piliin ang owner."
+          ],
+          "taglish": [
+            "From a listing: sign in → Vehicles → open the vehicle → owner section → click Chat Owner. Sa chat, click the message box, type your message, then press the send icon labeled Send message. If booked na, open Bookings, find your booking, and click Chat owner beside the owner name. For an existing chat, open Messages and select that owner."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "On the vehicle details page, find the owner section and click Chat Owner. If you have a booking, the Chat owner button is beside the owner name on its Bookings card. Messages opens your existing conversations; select the owner there to continue. Sign in first."
+          ],
+          "fil": [
+            "Sa vehicle details page, hanapin ang owner section at pindutin ang Chat Owner. Kung may booking ka, nasa tabi ng pangalan ng owner sa booking card ang Chat owner. Sa Messages, piliin ang owner para ituloy ang dati nang conversation. Mag-sign in muna."
+          ],
+          "taglish": [
+            "On vehicle details, find the owner section and click Chat Owner. Sa Bookings card, Chat owner is beside the owner name. Messages shows existing conversations; select the owner there to continue. Sign in muna."
+          ]
+        },
+        "troubleshooting": {
+          "en": [
+            "Check the error shown when you open or send the chat. Sign in first, open the intended vehicle listing or booking, and use its Chat Owner or Chat owner control. Chat Owner is disabled on your own listing; missing owner/vehicle details or an unauthorized conversation can also prevent access. If sending fails, read the displayed error and retry when allowed. For a rental-related issue, use Report issue on the booking; I cannot confirm the cause or delivery from chat."
+          ],
+          "fil": [
+            "Basahin ang error kapag binubuksan o ipinapadala ang chat. Mag-sign in, buksan ang tamang listing o booking, at gamitin ang Chat Owner o Chat owner. Disabled ito sa sarili mong listing; maaari ring hindi kumpleto ang owner/vehicle details o hindi authorized ang conversation. Kung hindi maipadala, sundin ang error at subukan muli kapag pinapayagan. Para sa rental issue, gamitin ang Report issue sa booking; hindi ko makukumpirma rito ang dahilan o delivery."
+          ],
+          "taglish": [
+            "Check the error when opening or sending chat. Sign in, open the intended listing or booking, and use Chat Owner or Chat owner. Disabled ito on your own listing; missing details or an unauthorized conversation can also prevent access. If sending fails, follow the error and retry kapag allowed. For a rental issue, use Report issue on the booking; hindi ko ma-confirm ang cause or delivery here."
+          ]
+        },
+        "no_reply": {
+          "en": [
+            "Open Messages and select the owner to check for a reply, or reopen Chat owner on your booking. I cannot promise when the owner will respond. If the silence affects pickup, return, or another booking problem, use Report issue on that booking for administrator review. An unanswered message does not approve a request, cancel a booking, or confirm a refund."
+          ],
+          "fil": [
+            "Buksan ang Messages at piliin ang owner para tingnan kung may sagot, o buksan muli ang Chat owner sa booking. Hindi ko maipapangako kung kailan sasagot ang owner. Kung naapektuhan ang pickup, return, o ibang booking issue, gamitin ang Report issue para sa administrator review. Hindi approval, cancellation, o refund confirmation ang hindi nasagot na mensahe."
+          ],
+          "taglish": [
+            "Open Messages and select the owner to check for a reply, or reopen Chat owner sa booking. Hindi ko ma-promise kung kailan sasagot ang owner. If pickup, return, or another booking problem is affected, use Report issue for administrator review. An unanswered message does not approve, cancel, or confirm a refund."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "Messaging connects you to the owner of the selected listing or booking. Sign-in and the authorized conversation relationship are required; you cannot chat yourself. The owner replies through the conversation, while booking approval and payment confirmation use separate controls."
+          ],
+          "fil": [
+            "Kinokonekta ka ng messaging sa owner ng napiling listing o booking. Kailangan ang sign-in at authorized conversation; hindi puwedeng kausapin ang sarili. Sa conversation sumasagot ang owner, habang hiwalay ang controls para sa booking approval at payment confirmation."
+          ],
+          "taglish": [
+            "Messaging connects you to the selected listing or booking owner. Kailangan ng sign-in and an authorized conversation; you cannot chat yourself. Replies use the conversation, while booking approval and payment confirmation use separate controls."
+          ]
+        },
+        "confirm_policy": {
+          "en": [
+            "Yes, those are the messaging entry points. Sign in and use Chat Owner on the listing or Chat owner on your booking, then send your message in the chat. The owner must reply separately; opening a chat does not approve a booking or payment."
+          ],
+          "fil": [
+            "Oo, iyon ang mga entry point ng messaging. Mag-sign in at gamitin ang Chat Owner sa listing o Chat owner sa booking, saka ipadala ang mensahe. Hiwalay pa ang sagot ng owner; hindi booking o payment approval ang pagbukas ng chat."
+          ],
+          "taglish": [
+            "Yes, those are the messaging entry points. Sign in and use Chat Owner sa listing or Chat owner sa booking, then send your message. The owner replies separately; opening chat does not approve a booking or payment."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "After sending, check the conversation in Messages or reopen Chat owner on your booking for the owner response. If a booking problem needs review, use Report issue on that booking. Booking approval, cancellation, and payment confirmation still use their own controls."
+          ],
+          "fil": [
+            "Pagkatapos magpadala, tingnan ang conversation sa Messages o buksan muli ang Chat owner sa booking para sa sagot. Kung may booking problem na kailangang i-review, gamitin ang Report issue. Hiwalay pa rin ang booking approval, cancellation, at payment confirmation controls."
+          ],
+          "taglish": [
+            "After sending, check Messages or reopen Chat owner sa booking for the owner response. For a booking problem needing review, use Report issue. Booking approval, cancellation, and payment confirmation still have their own controls."
+          ]
+        }
+      }
     },
     {
       "id": "verification_security",
@@ -2016,17 +2831,20 @@
         "paano ang verification",
         "How is my uploaded identity document protected?",
         "Is my verification information kept private?",
-        "Ligtas ba ang dokumentong ipinasa ko sa verification?"
+        "Ligtas ba ang dokumentong ipinasa ko sa verification?",
+        "How do I verify my identity here?",
+        "Where can I start account verification?",
+        "Paano simulan ang identity verification?"
       ],
       "responses": {
         "en": [
-          "RentifyPro may use email verification, CAPTCHA, government ID checks, selfie matching, and liveness checks. Account-specific verification details are private and available only through authorized account flows."
+          "RentifyPro uses email verification and identity checks, including government ID review and selfie checks. Open Account Settings > Verification to see the steps and review status for your account. Would you like the steps for completing verification?"
         ],
         "fil": [
-          "Maaaring gumamit ang RentifyPro ng email verification, CAPTCHA, government ID checks, selfie matching, at liveness checks. Private ang account-specific verification details at makikita lamang sa authorized account flows."
+          "May email verification at identity checks sa RentifyPro, kabilang ang government ID review at selfie checks. Buksan ang Account Settings > Verification para makita ang mga hakbang at review status ng account mo. Gusto mo bang malaman ang mga hakbang sa verification?"
         ],
         "taglish": [
-          "RentifyPro may use email verification, CAPTCHA, government ID checks, selfie matching, and liveness checks. Private ang account-specific verification details."
+          "RentifyPro uses email verification and identity checks, including government ID review and selfie checks. Check Account Settings > Verification for your account's steps and review status. Gusto mo ng steps for completing verification?"
         ]
       },
       "description": "Provides public high-level account and identity-verification guidance.",
@@ -2038,10 +2856,59 @@
       "hard_negatives": [],
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "backend/routes/kyc.routes.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/pages/AccountSettings.jsx Email Verification and ID & Selfie Verification; frontend/src/verification/VerificationStepper.jsx; backend/routes/kyc.routes.js",
+      "reviewed_at": "2026-10-12",
       "priority": 0,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "Open Account Settings > Verification and check the status shown for your account. If email verification is pending, use Send Code and Verify Email; keep the code private. If ID & Selfie Verification is needed, choose Verify now when offered, submit an accepted government ID, and follow the selfie instructions, including Use selfie and continue. If you've already submitted documents, check the review status first. A passed selfie alone does not complete document review. If rejected, read the reason and use Resubmit verification when available."
+          ],
+          "fil": [
+            "Buksan ang Account Settings > Verification at tingnan ang status ng account mo. Kung pending ang email verification, gamitin ang Send Code at Verify Email; panatilihing pribado ang code. Kung kailangan ang ID & Selfie Verification, piliin ang Verify now kung available, magsumite ng accepted government ID, at sundin ang selfie instructions, kasama ang Use selfie and continue. Kung naipasa mo na ang mga dokumento, tingnan muna ang review status. Hindi natatapos ang document review dahil lang pumasa ang selfie. Kung rejected, basahin ang dahilan at gamitin ang Resubmit verification kung available."
+          ],
+          "taglish": [
+            "Open Account Settings > Verification and check your account's status. If pending ang email verification, use Send Code and Verify Email; keep the code private. If needed ang ID & Selfie Verification, choose Verify now when offered, submit an accepted government ID, and follow the selfie instructions, including Use selfie and continue. Kung submitted na ang documents, check the review status first. Passed selfie alone does not complete document review. If rejected, read the reason and use Resubmit verification when available."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Account Settings > Verification. Use Verify now when offered; if the account was rejected, read the reason and use Resubmit verification when available. Owners follow the verification instructions shown for their account."
+          ],
+          "fil": [
+            "Buksan ang Account Settings > Verification. Gamitin ang Verify now kung available; kung rejected, basahin ang dahilan at gamitin ang Resubmit verification kung inaalok. Sundin ng owner ang verification instructions ng account niya."
+          ],
+          "taglish": [
+            "Open Account Settings > Verification. Use Verify now kapag offered; if rejected, read the reason and use Resubmit verification kapag available. Owners follow their account instructions."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "The next step depends on the status in Account Settings > Verification. If you've already submitted your documents, check the review status rather than uploading them again. If rejected, read the reason and use Resubmit verification when offered. Complete any remaining email or ID & Selfie Verification steps shown for your account. A passed selfie alone does not mean document review is approved."
+          ],
+          "fil": [
+            "Depende sa status sa Account Settings > Verification ang susunod na hakbang. Kung naipasa na ang mga dokumento, tingnan ang review status sa halip na mag-upload ulit. Kung rejected, basahin ang dahilan at gamitin ang Resubmit verification kung available. Kumpletuhin ang natitirang email o ID & Selfie Verification na hinihingi ng account mo. Hindi ibig sabihin ng passed selfie na approved na ang document review."
+          ],
+          "taglish": [
+            "The next step depends on your status in Account Settings > Verification. Kung submitted na ang documents, check the review status instead of uploading again. If rejected, read the reason and use Resubmit verification when offered. Complete any remaining email or ID & Selfie Verification steps shown for your account. Passed selfie alone does not mean approved na ang document review."
+          ]
+        },
+        "explanation": {
+          "en": [
+            "Email verification confirms access to your email; identity verification reviews your government ID and selfie checks. These are separate checks. Open Account Settings > Verification for your own requirements and review status. A passed selfie alone does not complete document review."
+          ],
+          "fil": [
+            "Kinukumpirma ng email verification ang access mo sa email; sinusuri naman ng identity verification ang government ID at selfie checks. Magkahiwalay ang mga ito. Tingnan ang Account Settings > Verification para sa requirements at review status mo. Hindi tapos ang document review dahil lang pumasa ang selfie."
+          ],
+          "taglish": [
+            "Email verification confirms access to your email; identity verification reviews your government ID and selfie checks. Separate checks ang mga ito. Check Account Settings > Verification for your requirements and review status. Passed selfie alone does not complete document review."
+          ]
+        }
+      },
+      "assistant_offers": {
+        "base": "instructions"
+      }
     },
     {
       "id": "booking_limits",
@@ -2178,18 +3045,18 @@
       },
       "requires_live_data": true,
       "live_source": "Authenticated GET /api/bookings/:id for an exact snapshotted policy or fee",
-      "policy_source": "backend/utils/lateReturnPolicy.js",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/utils/lateReturnPolicy.js; frontend/src/pages/BookingsPage.jsx",
+      "reviewed_at": "2026-10-13",
       "priority": 40,
       "responses": {
         "en": [
-          "Late-return rules can vary by vehicle and booking. A grace period may apply, and the booking keeps the applicable fee type, value, and hourly penalty rate. Check the live booking for the exact policy or final fee."
+          "Late charges use your booking's saved grace period and penalty rate. For new bookings, an approved late extension preserves late time accrued before the request and bills approved additional rental time separately. Existing bookings retain their saved pricing policy. Final fees use the owner-verified physical handover time, recorded separately from app confirmation time. You can report an incorrect handover time or charge from Bookings. Exact fees require your live booking details."
         ],
         "fil": [
-          "Maaaring mag-iba ang late-return rules ayon sa vehicle at booking. Maaaring may grace period, at naka-record sa booking ang applicable fee type, value, at hourly penalty rate. I-check ang live booking para sa exact policy o final fee."
+          "Ginagamit ng late charges ang naka-save na grace period at penalty rate ng booking. Sa bagong bookings, nananatili ang late time bago ang extension request at hiwalay ang bayad sa approved additional rental time. Sinusunod ng lumang bookings ang naka-save na pricing policy. Ang final fee ay batay sa physical handover time na na-verify ng owner, hiwalay sa oras ng app confirmation. Puwedeng i-report sa Bookings ang maling handover time o charge. Kailangan ng live booking details para sa eksaktong fee."
         ],
         "taglish": [
-          "Late-return rules can vary by vehicle and booking. A grace period may apply, and the exact policy or final fee must come from the live booking."
+          "Late charges use your booking's saved grace period and penalty rate. New bookings preserve late time before an approved late extension and bill approved additional rental time separately. Existing bookings keep their saved pricing policy. Final fees use the owner-verified physical handover time, separate from app confirmation time. You can report an incorrect handover time or charge in Bookings. Kailangan ng live booking details for the exact fee."
         ]
       },
       "fallback_only": false
@@ -2356,7 +3223,10 @@
         "Dalawang beses akong nagbayad sa rental",
         "My GCash was deducted but my rental is unpaid",
         "Why is the payment option unavailable at checkout?",
-        "Ayaw gumana ng Maya sa pagbayad ko"
+        "Ayaw gumana ng Maya sa pagbayad ko",
+        "What if my GCash payment fails?",
+        "Where can I get a receipt for my rental payment?",
+        "Saan makakakuha ng resibo ng bayad sa booking?"
       ],
       "aliases": [],
       "hard_negatives": [],
@@ -2379,9 +3249,22 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "frontend/src/data/helpContent.js booking-payments; frontend/src/pages/BookingsPage.jsx",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "receipt": {
+          "en": [
+            "Check the recorded payment details on your booking in Bookings. If you need a receipt or proof that is not shown, contact the owner through Messages or use Report issue on that booking for administrator review with the payment reference. I cannot issue a receipt or confirm an unrecorded payment in chat. Keep passwords, OTPs, and full card details private."
+          ],
+          "fil": [
+            "Tingnan ang naitalang payment details sa Bookings. Kung kailangan ng resibo o patunay na hindi ipinapakita, kausapin ang owner sa Messages o gamitin ang Report issue kasama ang payment reference para sa administrator review. Hindi ako nagbibigay ng resibo o nagkukumpirma ng hindi naitalang bayad sa chat. Panatilihing pribado ang password, OTP, at buong card details."
+          ],
+          "taglish": [
+            "Check the recorded payment details in Bookings. If you need a receipt or proof that is not shown, contact the owner through Messages or use Report issue with the payment reference for administrator review. Hindi ako makakapag-issue ng receipt or confirm an unrecorded payment in chat. Keep passwords, OTPs, and full card details private."
+          ]
+        }
+      }
     },
     {
       "id": "payment_checkout_expired",
@@ -2466,7 +3349,13 @@
         "Ayaw magmatch ng selfie at ID",
         "What do I do when my ID verification fails?",
         "The selfie check keeps rejecting me",
-        "Bakit rejected ang dokumento ko sa verification?"
+        "Bakit rejected ang dokumento ko sa verification?",
+        "My government ID has expired",
+        "Can I submit a different ID for verification?",
+        "I need to update my verified KYC details",
+        "Paso na ang ID ko sa verification",
+        "Puwede bang ibang ID ang gamitin?",
+        "Paano palitan ang verification details?"
       ],
       "aliases": [],
       "hard_negatives": [],
@@ -2489,9 +3378,66 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "frontend/src/data/helpContent.js verify-identity; backend/controllers/auth.controller.js",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "expired_id": {
+          "en": [
+            "Use a current, valid government ID accepted by the verification form. An expired document can require re-upload. Check Account Settings > Verification for the review reason and use Resubmit verification when available. A passed selfie does not complete document review; chat cannot approve or bypass KYC."
+          ],
+          "fil": [
+            "Gumamit ng kasalukuyan at valid na government ID na tinatanggap ng verification form. Maaaring kailanganing i-upload muli ang expired na dokumento. Tingnan ang dahilan sa Account Settings > Verification at gamitin ang Resubmit verification kung available. Hindi tapos ang document review dahil lang pumasa ang selfie; hindi kayang aprubahan o lampasan ng chat ang KYC."
+          ],
+          "taglish": [
+            "Use a current, valid government ID accepted by the verification form. Expired documents can require re-upload. Check Account Settings > Verification for the reason and use Resubmit verification kapag available. Passed selfie does not finish document review; chat cannot approve or bypass KYC."
+          ]
+        },
+        "different_id": {
+          "en": [
+            "Choose an accepted government ID from the verification form and submit your own matching document and selfie. If replacing a rejected document, read the review reason and use Resubmit verification when available. Changing the ID does not guarantee approval; document review and account verification still apply."
+          ],
+          "fil": [
+            "Pumili ng accepted government ID sa verification form at isumite ang sarili mong katugmang dokumento at selfie. Kung papalitan ang rejected na dokumento, basahin ang dahilan at gamitin ang Resubmit verification kung available. Hindi garantiya ng approval ang ibang ID; kailangan pa rin ng document review at account verification."
+          ],
+          "taglish": [
+            "Choose an accepted government ID from the verification form and submit your own matching ID and selfie. If replacing a rejected document, read the reason and use Resubmit verification kapag available. A different ID does not guarantee approval; document review and account verification still apply."
+          ]
+        },
+        "update": {
+          "en": [
+            "Open Account Settings > Verification to see the review status and available instructions. Use Resubmit verification only when offered. Verified identity details remain tied to verification; use the authorized review process for corrections. Chat cannot edit approved identity records, approve documents, or bypass review."
+          ],
+          "fil": [
+            "Buksan ang Account Settings > Verification para sa status at mga instruction. Gamitin ang Resubmit verification kung inaalok. Nakatali pa rin sa verification ang verified identity details; sundin ang authorized review process para sa corrections. Hindi kayang baguhin ng chat ang approved identity records, aprubahan ang dokumento, o lampasan ang review."
+          ],
+          "taglish": [
+            "Open Account Settings > Verification for status and instructions. Use Resubmit verification only kapag offered. Verified identity details stay tied to verification; follow the authorized review process for corrections. Chat cannot edit approved identity records, approve documents, or bypass review."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "Open Account Settings > Verification and read the review reason. Use Resubmit verification when available, choose an accepted valid government ID, and follow the document and selfie instructions. Submit for review and check the status there. Passing the selfie check alone does not complete document review."
+          ],
+          "fil": [
+            "Buksan ang Account Settings > Verification at basahin ang dahilan ng review. Gamitin ang Resubmit verification kung available, pumili ng accepted at valid na government ID, at sundin ang document at selfie instructions. Isumite para sa review at tingnan ang status doon. Hindi tapos ang document review dahil lang pumasa ang selfie."
+          ],
+          "taglish": [
+            "Open Account Settings > Verification and read the reason. Use Resubmit verification kapag available, choose an accepted valid government ID, and follow the document and selfie instructions. Submit for review and check the status there. Passed selfie alone does not complete document review."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "After submitting the documents and selfie, check Account Settings > Verification for the review result and any requested corrections. A successful selfie check does not mean the documents are approved. Follow the instructions shown; chat cannot speed up or bypass the review."
+          ],
+          "fil": [
+            "Pagkatapos isumite ang dokumento at selfie, tingnan sa Account Settings > Verification ang resulta at anumang corrections. Hindi ibig sabihin ng passed selfie na approved na ang dokumento. Sundin ang mga instruction; hindi kayang pabilisin o lampasan ng chat ang review."
+          ],
+          "taglish": [
+            "After submitting documents and selfie, check Account Settings > Verification for the result and corrections. Passed selfie does not mean approved na ang documents. Follow the instructions shown; chat cannot speed up or bypass review."
+          ]
+        }
+      }
     },
     {
       "id": "rental_problem_support",
@@ -2503,10 +3449,24 @@
         "Hindi dumating ang owner sa pickup",
         "The rented car has broken down during my trip",
         "The owner did not arrive to hand over the vehicle",
-        "Hindi sumipot ang owner sa pagkuha ng sasakyan"
+        "Hindi sumipot ang owner sa pagkuha ng sasakyan",
+        "I had an accident during my rental",
+        "Someone is injured after our rental car crashed",
+        "Naaksidente ako gamit ang nirentahan kong kotse",
+        "May gasgas na ang rental bago pickup",
+        "My rental vehicle differs from the listing photos",
+        "The owner blames me for pre-existing damage",
+        "I lost the keys to my rental",
+        "Nawala ang susi ng nirentahang sasakyan",
+        "My rented vehicle was stolen"
       ],
       "aliases": [],
-      "hard_negatives": [],
+      "hard_negatives": [
+        "what vehicles are available",
+        "how do I list my vehicle",
+        "I need a medical diagnosis",
+        "my own bicycle was stolen"
+      ],
       "responses": {
         "en": [
           "Open the booking and contact the owner through RentifyPro Messages. Use Report issue on that booking to send the problem and relevant evidence for administrator review. For a breakdown, move to a safe place if possible and avoid continuing to use an unsafe vehicle. Keep the booking record; cancellation, replacement, charges, and refunds require review and are not automatically confirmed by chat."
@@ -2525,10 +3485,100 @@
       },
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "frontend/src/pages/BookingsPage.jsx Report issue and Messages",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "frontend/src/pages/BookingsPage.jsx Report issue and Messages; https://pia.gov.ph/press-release/dilg-unified-911-helps-save-lives-through-faster-emergency-response/",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "emergency": {
+          "en": [
+            "If anyone is injured or in immediate danger, get to a safe place if you can and call 911 in the Philippines for emergency help. Once safe, contact the owner through Messages and use Report issue on the booking with relevant evidence. Chat cannot dispatch help or confirm insurance, liability, charges, or refunds."
+          ],
+          "fil": [
+            "Kung may nasaktan o nasa agarang panganib, pumunta sa ligtas na lugar kung kaya at tumawag sa 911 sa Pilipinas para sa emergency help. Kapag ligtas na, kausapin ang owner sa Messages at gamitin ang Report issue sa booking kasama ang ebidensya. Hindi nakakapagpadala ng emergency help o nakakakumpirma ng insurance, pananagutan, singil, o refund ang chat."
+          ],
+          "taglish": [
+            "If anyone is injured or in immediate danger, move to safety if you can and call 911 in the Philippines. Kapag safe na, contact the owner through Messages and use Report issue sa booking with evidence. Chat cannot dispatch help or confirm insurance, liability, charges, or refunds."
+          ]
+        },
+        "damage": {
+          "en": [
+            "Document the damage or mismatch with the listing using photos and the booking record. Contact the owner through Messages and use Report issue on the booking for administrator review if there is a dispute. Avoid using an unsafe vehicle. I cannot determine who is responsible or promise a charge, replacement, or refund."
+          ],
+          "fil": [
+            "Kunan ng larawan ang pinsala o pagkakaiba sa listing at itabi ang booking record. Kausapin ang owner sa Messages at gamitin ang Report issue para sa administrator review kung may dispute. Huwag gamitin ang delikadong sasakyan. Hindi ko matutukoy ang may pananagutan o maipapangako ang singil, kapalit, o refund."
+          ],
+          "taglish": [
+            "Take photos of the damage or listing mismatch and keep the booking record. Contact the owner through Messages; use Report issue sa booking for administrator review if disputed. Avoid an unsafe vehicle. Hindi ko ma-determine ang liability or promise charges, replacement, or refunds."
+          ]
+        },
+        "lost_keys": {
+          "en": [
+            "Contact the owner through Messages about the lost keys and agree on a safe next step. Use Report issue on the booking if you need administrator review. I cannot unlock the vehicle or confirm a replacement-key fee or liability; those terms need review."
+          ],
+          "fil": [
+            "Kausapin ang owner sa Messages tungkol sa nawawalang susi at pag-usapan ang ligtas na susunod na hakbang. Gamitin ang Report issue kung kailangan ng administrator review. Hindi ko mabubuksan ang sasakyan o makukumpirma ang singil sa kapalit na susi at pananagutan."
+          ],
+          "taglish": [
+            "Contact the owner through Messages about the lost keys and agree on a safe next step. Use Report issue sa booking if you need administrator review. Hindi ko ma-unlock ang vehicle or confirm a replacement-key fee or liability."
+          ]
+        },
+        "theft": {
+          "en": [
+            "If there is immediate danger, move to safety if possible and call 911 in the Philippines. Report a suspected vehicle theft to the police and contact the owner through Messages. Keep the booking record and use Report issue for administrator review. Do not confront a suspected thief; chat cannot track the vehicle or determine liability or insurance coverage."
+          ],
+          "fil": [
+            "Kung may agarang panganib, pumunta sa ligtas na lugar kung maaari at tumawag sa 911 sa Pilipinas. I-report sa pulis ang pinaghihinalaang pagnanakaw ng sasakyan at kausapin ang owner sa Messages. Itabi ang booking record at gamitin ang Report issue para sa review. Huwag komprontahin ang pinaghihinalaang magnanakaw; hindi kaya ng chat na i-track ang sasakyan o tukuyin ang pananagutan at insurance."
+          ],
+          "taglish": [
+            "If there is immediate danger, move to safety if possible and call 911 in the Philippines. Report suspected vehicle theft to the police and contact the owner through Messages. Keep the booking record and use Report issue for review. Huwag confront ang suspected thief; chat cannot track the vehicle or confirm liability or insurance."
+          ]
+        },
+        "instructions": {
+          "en": [
+            "Open Bookings and find the affected rental. Contact the owner through Messages, then choose Report issue and provide the problem and relevant evidence for administrator review. For an emergency, seek emergency help first. Reporting does not automatically cancel the booking or confirm a replacement or refund."
+          ],
+          "fil": [
+            "Sa Bookings, hanapin ang rental na may problema. Kausapin ang owner sa Messages, saka piliin ang Report issue at ilahad ang problema at ebidensya para sa administrator review. Kung emergency, humingi muna ng emergency help. Hindi awtomatikong cancellation, kapalit, o refund ang report."
+          ],
+          "taglish": [
+            "Open the affected rental in Bookings. Contact the owner through Messages, then choose Report issue with the problem and evidence for administrator review. Emergency help comes first kapag urgent. Reporting does not automatically cancel the booking or confirm a replacement or refund."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Keep the booking record and relevant evidence, and follow the owner conversation and report outcome. If there is immediate danger or injury, seek emergency help first. Charges, replacement, cancellation, and refunds need review; I cannot confirm a resolution here."
+          ],
+          "fil": [
+            "Itabi ang booking record at ebidensya, at subaybayan ang usapan sa owner at resulta ng report. Kung may agarang panganib o pinsala, humingi muna ng emergency help. Kailangan ng review ang singil, kapalit, cancellation, at refund; hindi ko makukumpirma ang resulta rito."
+          ],
+          "taglish": [
+            "Keep the booking record and evidence, then follow the owner conversation and report outcome. If there is immediate danger or injury, seek emergency help first. Charges, replacement, cancellation, and refunds need review; hindi ko ma-confirm ang resolution here."
+          ]
+        },
+        "breakdown": {
+          "en": [
+            "Avoid using an unsafe vehicle and move to a safe place if possible. If anyone is injured or in immediate danger, call 911 in the Philippines. Once safe, contact the owner through Messages and use Report issue on the booking with relevant evidence for administrator review. Chat cannot dispatch roadside assistance or confirm a replacement, charges, or a refund."
+          ],
+          "fil": [
+            "Huwag gamitin ang delikadong sasakyan at pumunta sa ligtas na lugar kung maaari. Kung may nasaktan o nasa agarang panganib, tumawag sa 911 sa Pilipinas. Kapag ligtas na, kausapin ang owner sa Messages at gamitin ang Report issue sa booking kasama ang ebidensya para sa administrator review. Hindi nakakapagpadala ng roadside assistance o nakakakumpirma ng kapalit, singil, o refund ang chat."
+          ],
+          "taglish": [
+            "Avoid using an unsafe vehicle and move to safety if possible. If anyone is injured or in immediate danger, call 911 in the Philippines. Kapag safe na, contact the owner through Messages and use Report issue sa booking with evidence for administrator review. Chat cannot dispatch roadside assistance or confirm a replacement, charges, or a refund."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Bookings and find the affected rental. Report issue is beside Chat owner on the booking card. Use Report issue to describe the problem and provide relevant evidence; for immediate danger or injury, seek emergency help first."
+          ],
+          "fil": [
+            "Sa Bookings, hanapin ang apektadong rental. Nasa tabi ng Chat owner ang Report issue sa booking card. Ilahad ang problema at ebidensya sa Report issue; kung may agarang panganib o pinsala, humingi muna ng emergency help."
+          ],
+          "taglish": [
+            "Open Bookings and find the affected rental. Report issue is beside Chat owner on the booking card. Describe the problem with relevant evidence; emergency help comes first kapag may danger or injury."
+          ]
+        }
+      }
     },
     {
       "id": "owner_listing_guidance",
@@ -2563,9 +3613,44 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "frontend/src/data/helpContent.js list-vehicle; frontend/src/owner/pages/Vehicles.jsx",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "In the owner workspace, open My Vehicles > Add Vehicle. Enter the required vehicle details, location, rate, availability, and photos, then review and save. To change a listing or price, open its Edit control, review the changes, and confirm Save Changes. Complete the required owner verification first if the site asks for it."
+          ],
+          "fil": [
+            "Sa owner workspace, buksan ang My Vehicles > Add Vehicle. Ilagay ang vehicle details, location, rate, availability, at photos, pagkatapos ay suriin at i-save. Para baguhin ang listing o presyo, buksan ang Edit, suriin ang pagbabago, at kumpirmahin ang Save Changes. Kumpletuhin muna ang owner verification kung hinihingi ng site."
+          ],
+          "taglish": [
+            "Open My Vehicles > Add Vehicle sa owner workspace. Fill in the vehicle details, location, rate, availability, and photos, then review and save. For price or listing edits, choose Edit, review, and confirm Save Changes. Complete owner verification first if required."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "After saving, check the listing in My Vehicles for the details, rate, photos, and availability you intended. Use Edit and Save Changes for supported corrections. Listing a vehicle does not approve a renter booking; manage incoming requests in owner Bookings."
+          ],
+          "fil": [
+            "Pagkatapos mag-save, tingnan sa My Vehicles ang details, rate, photos, at availability. Gamitin ang Edit at Save Changes para sa pinapayagang corrections. Hindi booking approval ang paglista ng sasakyan; pamahalaan ang requests sa owner Bookings."
+          ],
+          "taglish": [
+            "After saving, check My Vehicles for the intended details, rate, photos, and availability. Use Edit and Save Changes for supported corrections. Listing a vehicle does not approve a renter booking; manage requests in owner Bookings."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "In the owner workspace, open My Vehicles. Choose Add Vehicle to create a listing or its Edit control to change details/rates, then review and Save Changes when editing. Complete required owner verification if prompted."
+          ],
+          "fil": [
+            "Sa owner workspace, buksan ang My Vehicles. Piliin ang Add Vehicle para maglista o Edit para baguhin ang details/rates. Suriin at gamitin ang Save Changes kapag nag-edit. Kumpletuhin ang owner verification kung hinihingi."
+          ],
+          "taglish": [
+            "In the owner workspace, open My Vehicles. Choose Add Vehicle or the listing Edit control, then review and Save Changes when editing. Complete owner verification if prompted."
+          ]
+        }
+      }
     },
     {
       "id": "owner_booking_guidance",
@@ -2599,9 +3684,44 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "frontend/src/data/helpContent.js manage-owner-bookings; frontend/src/owner/pages/Bookings.jsx",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "Open Bookings in the owner workspace, review the vehicle and pickup/return schedule, then use Approve or Decline on an eligible request. Extension, cancellation, and walk-in requests have separate review controls. Confirm payment only after receiving the money, and confirm vehicle return only after receiving the vehicle. Chat does not perform these actions."
+          ],
+          "fil": [
+            "Buksan ang Bookings sa owner workspace, suriin ang sasakyan at pickup/return schedule, at gamitin ang Approve o Decline sa eligible request. May hiwalay na review ang extension, cancellation, at walk-in requests. Kumpirmahin lang ang payment kapag natanggap ang pera, at return kapag natanggap ang sasakyan. Hindi ginagawa ng chat ang mga aksyong ito."
+          ],
+          "taglish": [
+            "Open owner Bookings, review the vehicle and pickup/return schedule, then choose Approve or Decline when available. Separate ang extension, cancellation, and walk-in reviews. Confirm payment only after receiving money and vehicle return only after receiving the vehicle. Chat does not perform these actions."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Check the updated status in owner Bookings. Booking approval, extension, cancellation, walk-in approval, payment receipt, and vehicle return use separate controls. Confirm payment only after receiving the money and return only after receiving the vehicle. Contact the renter through Messages for arrangements."
+          ],
+          "fil": [
+            "Tingnan ang updated status sa owner Bookings. Magkakahiwalay ang controls ng booking approval, extension, cancellation, walk-in approval, payment receipt, at vehicle return. Kumpirmahin lang ang payment kapag natanggap ang pera at return kapag natanggap ang sasakyan. Kausapin ang renter sa Messages para sa arrangement."
+          ],
+          "taglish": [
+            "Check the updated status in owner Bookings. Separate controls ang booking approval, extension, cancellation, walk-in approval, payment receipt, and vehicle return. Confirm payment only after receiving money and return only after receiving the vehicle. Contact the renter through Messages for arrangements."
+          ]
+        },
+        "navigation": {
+          "en": [
+            "Open Bookings in the owner workspace. Review the request and schedule, then use Approve or Decline when offered. Later extension, cancellation, return, and walk-in requests have separate review controls."
+          ],
+          "fil": [
+            "Buksan ang Bookings sa owner workspace. Suriin ang request at schedule, saka Approve o Decline kung available. Hiwalay ang review controls ng extension, cancellation, return, at walk-in requests."
+          ],
+          "taglish": [
+            "Open owner Bookings. Review the request and schedule, then Approve or Decline kapag offered. Separate controls ang later extension, cancellation, return, and walk-in reviews."
+          ]
+        }
+      }
     },
     {
       "id": "owner_earnings_guidance",
@@ -2654,13 +3774,13 @@
       "hard_negatives": [],
       "responses": {
         "en": [
-          "Check the vehicle listing location and your booking details, then confirm the exact pickup arrangement with the owner through RentifyPro Messages. I cannot infer a private pickup address from a general question. Which vehicle or booking are you referring to?"
+          "Check the listing location and your booking details, then agree on the exact pickup place with the owner through Messages. A listing location may not be the pickup address; I cannot confirm a private pickup address from a general question."
         ],
         "fil": [
-          "Tingnan ang location sa vehicle listing at detalye ng booking, pagkatapos ay kumpirmahin ang eksaktong lugar ng pagkuha sa owner gamit ang RentifyPro Messages. Hindi ko mahuhulaan ang pribadong pickup address. Aling sasakyan o booking ang tinutukoy mo?"
+          "Tingnan ang location sa listing at booking details, saka kumpirmahin ang eksaktong lugar ng pickup sa owner gamit ang Messages. Maaaring iba ang pickup address sa listing location; hindi ko ito makukumpirma mula sa pangkalahatang tanong."
         ],
         "taglish": [
-          "Check the listing location and booking details, then confirm the exact pickup arrangement with the owner through RentifyPro Messages. Hindi ko mahuhulaan ang private pickup address. Which vehicle or booking do you mean?"
+          "Check the listing location and booking details, then confirm the exact pickup place with the owner through Messages. Listing location may differ from the pickup address; hindi ko ma-confirm ang private address from a general question."
         ]
       },
       "clarification": {
@@ -2670,10 +3790,34 @@
       },
       "requires_live_data": false,
       "live_source": "",
-      "policy_source": "frontend/src/data/helpContent.js request-booking; backend/models/Vehicle.js location",
-      "reviewed_at": "2026-10-02",
+      "policy_source": "backend/models/Vehicle.js location; frontend/src/data/helpContent.js",
+      "reviewed_at": "2026-10-12",
       "priority": 2,
-      "fallback_only": false
+      "fallback_only": false,
+      "response_variants": {
+        "instructions": {
+          "en": [
+            "Open your listing and booking details, then contact the owner through Messages to confirm the exact pickup place and the booked date and time. The listing location may differ from the private pickup address. A message does not change the recorded booking schedule."
+          ],
+          "fil": [
+            "Buksan ang listing at booking details, saka kausapin ang owner sa Messages para kumpirmahin ang eksaktong lugar at naka-book na petsa at oras ng pickup. Maaaring iba ang listing location sa private pickup address. Hindi binabago ng mensahe ang naitalang booking schedule."
+          ],
+          "taglish": [
+            "Open the listing and booking details, then contact the owner through Messages to confirm the exact pickup place and booked date and time. Listing location may differ from the private pickup address. A message does not change the recorded booking schedule."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Follow the confirmed pickup arrangement and the schedule recorded on your booking. If the owner does not arrive, contact them through Messages and use Report issue on the booking if needed. I cannot confirm a private pickup address or change your schedule here."
+          ],
+          "fil": [
+            "Sundin ang napagkasunduang pickup at naitalang schedule sa booking. Kung hindi dumating ang owner, kausapin sa Messages at gamitin ang Report issue kung kailangan. Hindi ko makukumpirma ang private pickup address o mababago ang schedule rito."
+          ],
+          "taglish": [
+            "Follow the agreed pickup arrangement and recorded booking schedule. If the owner does not arrive, contact them through Messages and use Report issue if needed. Hindi ko ma-confirm ang private pickup address or change your schedule here."
+          ]
+        }
+      }
     },
     {
       "id": "rental_refund_guidance",
@@ -2707,8 +3851,107 @@
       "requires_live_data": false,
       "live_source": "",
       "policy_source": "backend/controllers/booking.controller.js cancellation; frontend/src/pages/BookingsPage.jsx",
-      "reviewed_at": "2026-10-02",
+      "reviewed_at": "2026-10-11",
       "priority": 2,
+      "fallback_only": false,
+      "response_variants": {
+        "explanation": {
+          "en": [
+            "A refund needs review because eligibility and recorded payments can differ by booking. Cancellation alone does not confirm a refund amount or payment. Check your booking's cancellation and payment details; use Report issue on that booking if you need administrator review."
+          ],
+          "fil": [
+            "Kailangan ng review ang refund dahil maaaring magkaiba ang eligibility at naitalang bayad sa bawat booking. Hindi refund confirmation ang cancellation lang. Tingnan ang cancellation at payment details; gamitin ang Report issue sa booking kung kailangan ng administrator review."
+          ],
+          "taglish": [
+            "Refunds need review because eligibility and recorded payments differ by booking. Cancellation alone does not confirm a refund amount or payment. Check your booking details and use Report issue if you need administrator review."
+          ]
+        },
+        "continuation": {
+          "en": [
+            "Check the booking for the recorded cancellation and payment result. If you need review or an update, use Report issue on that booking with the relevant payment reference. Keep passwords, OTPs, and full card details private. I cannot confirm a refund amount or completion date here."
+          ],
+          "fil": [
+            "Tingnan sa booking ang naitalang cancellation at payment result. Kung kailangan ng review o update, gamitin ang Report issue at ilakip ang kaugnay na payment reference. Panatilihing pribado ang password, OTP, at buong card details. Hindi ko makukumpirma rito ang refund amount o petsa."
+          ],
+          "taglish": [
+            "Check the booking for its recorded cancellation and payment result. For review or an update, use Report issue with the relevant payment reference. Keep passwords, OTPs, and full card details private. Hindi ko ma-confirm ang refund amount or completion date here."
+          ]
+        }
+      }
+    },
+    {
+      "id": "booking_changes_guidance",
+      "description": "Explains rescheduling and shortening requests without inventing an unsupported booking-edit control.",
+      "aliases": [],
+      "examples": [
+        "How can I move my pickup date after approval?",
+        "Can I reschedule my rental booking?",
+        "Can I shorten the rental period?",
+        "Puwede bang baguhin ang pickup date ng booking?",
+        "Paano kung mas maaga ko ibabalik ang sasakyan?",
+        "Change my collection time after the owner approved",
+        "I need an earlier return date for this booking"
+      ],
+      "hard_negatives": [
+        "can I extend my rental",
+        "how do I cancel my booking",
+        "what is my pickup time",
+        "reschedule my flight"
+      ],
+      "responses": {
+        "en": [
+          "The current booking flow supports extension and cancellation requests, but it does not offer a general reschedule or shorten control. Contact the owner through Messages about a different pickup or earlier return. Messages do not change the recorded schedule or price. Follow the existing booking controls and review any payment or refund outcome separately; I cannot change the booking here."
+        ],
+        "fil": [
+          "May extension at cancellation requests ang kasalukuyang booking flow, pero walang general reschedule o shorten control. Kausapin ang owner sa Messages tungkol sa ibang pickup o mas maagang return. Hindi binabago ng Messages ang naitalang schedule o presyo. Sundin ang existing booking controls at hiwalay na suriin ang payment o refund; hindi ko mababago ang booking rito."
+        ],
+        "taglish": [
+          "The current booking flow supports extension and cancellation requests, pero walang general reschedule or shorten control. Contact the owner through Messages about a different pickup or earlier return. Messages do not change the recorded schedule or price. Follow existing booking controls and review payment or refund outcomes separately; chat cannot change the booking."
+        ]
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "backend/routes/booking.routes.js; backend/controllers/booking.controller.js requestBookingExtension/cancelMyBooking",
+      "reviewed_at": "2026-10-12",
+      "priority": 0,
+      "fallback_only": false
+    },
+    {
+      "id": "rental_terms_guidance",
+      "description": "Qualifies listing-specific mileage, incidental charges, parking, toll, and traffic fine terms with no invented universal policy.",
+      "aliases": [],
+      "examples": [
+        "Is there a mileage limit for my rental?",
+        "Who pays for parking and tolls?",
+        "What happens with a traffic fine during the rental?",
+        "Are there additional rental charges?",
+        "May limit ba sa kilometro ng renta?",
+        "Sino ang magbabayad ng toll at parking?",
+        "May dagdag na singil ba bukod sa rental price?",
+        "Ano ang patakaran sa traffic fine?"
+      ],
+      "hard_negatives": [
+        "how much is the rental per day",
+        "how much is the late fee",
+        "what payment methods are accepted",
+        "how to pay my electricity bill"
+      ],
+      "responses": {
+        "en": [
+          "Check the selected listing, booking price summary, and agreed rental terms. I cannot confirm a universal mileage allowance or who pays parking, tolls, or traffic fines from the current platform rules. Ask the owner through Messages before booking. For disputed additional charges, keep the evidence and use Report issue on the booking for administrator review."
+        ],
+        "fil": [
+          "Tingnan ang listing, booking price summary, at napagkasunduang rental terms. Hindi ko makukumpirma ang iisang mileage allowance o kung sino ang sasagot sa parking, toll, at traffic fines mula sa kasalukuyang platform rules. Itanong sa owner sa Messages bago mag-book. Kung may pinagtatalunang dagdag na singil, itabi ang ebidensya at gamitin ang Report issue para sa administrator review."
+        ],
+        "taglish": [
+          "Check the listing, booking price summary, and agreed rental terms. Walang verified universal mileage allowance or parking, toll, and traffic fine responsibility na ma-confirm ko. Ask the owner through Messages before booking. For disputed extra charges, keep the evidence and use Report issue sa booking for administrator review."
+        ]
+      },
+      "requires_live_data": false,
+      "live_source": "",
+      "policy_source": "backend/models/Vehicle.js and backend/models/Booking.js have no mileage or incidental-charge policy fields; frontend/src/pages/BookingsPage.jsx Report issue and Messages",
+      "reviewed_at": "2026-10-12",
+      "priority": 0,
       "fallback_only": false
     }
   ],

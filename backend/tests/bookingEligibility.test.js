@@ -10,6 +10,7 @@ import { createBooking, getMyBookingEligibility, requestBookingExtension } from 
 import { reviewOwnerBookingExtensionRequest } from "../controllers/ownerDashboard.controller.js";
 import bookingRouter from "../routes/booking.routes.js";
 import { protect } from "../middleware/auth.middleware.js";
+import { approvedAccountFixture } from "./helpers/approvedAccountFixture.js";
 
 const now = new Date("2030-01-01T12:00:00Z");
 const fixture = (overrides = {}) => ({
@@ -115,6 +116,7 @@ test("back-to-back schedules and non-overlapping future bookings are allowed", (
 });
 
 test("eligibility queries are scoped to the signed-in renter and preflight is private/non-cacheable", async (t) => {
+  approvedAccountFixture(t);
   t.mock.method(Booking, "find", (filter) => {
     assert.equal(filter.renter, "renter");
     assert.ok(filter.$or.some((entry) => entry.status === "completed"));
@@ -122,7 +124,7 @@ test("eligibility queries are scoped to the signed-in renter and preflight is pr
   });
   assert.equal((await getRenterBookingEligibility("renter", { now })).eligible, true);
   const res = response();
-  await getMyBookingEligibility({ user: { _id: "renter" }, query: { renter: "someone-else" } }, res);
+  await getMyBookingEligibility({ user: { _id: "renter", isVerified: true, kycStatus: "approved" }, query: { renter: "someone-else" } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers["Cache-Control"], "no-store");
   const invalid = response();
@@ -174,6 +176,7 @@ test("a lost or expired lease prevents a delayed request from writing", async (t
 });
 
 function mockCreation(t, bookings) {
+  approvedAccountFixture(t);
   t.mock.timers.enable({ apis: ["Date"], now });
   const held = mockLease(t);
   let vehicleWrites = 0;

@@ -72,9 +72,13 @@ export function createPrivateOcrServiceManager({ env = process.env, checkHealth 
   let child = null;
   let bootPromise = null;
   let stopped = false;
+  let readyUrl = "";
+  let failedUrl = "";
+  let retryAfter = 0;
 
   const stop = () => {
     stopped = true;
+    readyUrl = "";
     if (child && child.exitCode === null && child.signalCode === null) terminateProcess(child);
     child = null;
   };
@@ -91,12 +95,13 @@ export function createPrivateOcrServiceManager({ env = process.env, checkHealth 
     child = owned;
     let failed = false;
     owned.once("error", () => { failed = true; });
-    owned.once("exit", () => { if (child === owned) child = null; });
+    owned.once("exit", () => { if (child === owned) { child = null; readyUrl = ""; } });
     logger.info("[PrivateOCR] Starting the local OCR service using local models.");
     const deadline = Date.now() + startupTimeoutMs;
     while (!stopped && Date.now() < deadline) {
       if (failed || owned.exitCode !== null || owned.signalCode !== null) break;
       if (await checkHealth(url)) {
+        readyUrl = url.href;
         logger.info("[PrivateOCR] The local OCR service is ready.");
         return true;
       }
@@ -115,7 +120,14 @@ export function createPrivateOcrServiceManager({ env = process.env, checkHealth 
       || String(env.KYC_PRIVATE_SERVICE_AUTOSTART || "").trim().toLowerCase() !== "true") return Promise.resolve(false);
     const url = localUrl(env);
     if (!url) return Promise.resolve(false);
-    if (!bootPromise) bootPromise = start(url).finally(() => { bootPromise = null; });
+    if (readyUrl === url.href && child?.exitCode === null && child?.signalCode === null) return Promise.resolve(true);
+    if (failedUrl === url.href && Date.now() < retryAfter) return Promise.resolve(false);
+    if (!bootPromise) bootPromise = start(url).catch((error) => {
+      // Failed startup should not repeat for every queued document or five-second poll.
+      failedUrl = url.href;
+      retryAfter = Date.now() + 30_000;
+      throw error;
+    }).finally(() => { bootPromise = null; });
     return bootPromise;
   };
   const warmup = async () => {
@@ -125,6 +137,7 @@ export function createPrivateOcrServiceManager({ env = process.env, checkHealth 
   return { ensureReady, warmup, stop };
 }
 
-const manager = createPrivateOcrServiceManager();
+export const privateOcrServiceManager = createPrivateOcrServiceManager();
+const manager = privateOcrServiceManager;
 export const warmupPrivateOcrService = manager.warmup;
 export const stopPrivateOcrService = manager.stop;

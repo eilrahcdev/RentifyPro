@@ -2,6 +2,7 @@ import json
 import hashlib
 import os
 import re
+import math
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
@@ -18,7 +19,15 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from chatbot_routing import (outside_scope, other_person_private_query, practical_intent,
                             split_questions, topic_for_query, topic_for_intent, availability_request,
-                            clarification_selection)
+                            clarification_selection, rental_search_intent,
+                            support_response_route, support_response_variant, short_followup_action,
+                            social_question_intent, conversation_reset_request, conversational_repair,
+                            requested_answer_type, REQUESTED_ANSWER_TYPES, frustration_variant,
+                            vehicle_subject_fragment)
+from chatbot_inventory import INVENTORY_VOCABULARY, validate_inventory_vocabulary, normalize_subtype
+from chatbot_rental_entities import RENTAL_FIELDS, NUMBER_WORDS, extract_rental_preferences, valid_rental_fields, specification_conflict, requested_vehicle_specification
+from chatbot_conversation import (CONTEXTUAL_EXAMPLES, contextual_request, has_indirect_reference,
+                                  offer_response, valid_assistant_state, validate_offers)
 
 
 BASE_DIR = Path(__file__).parent
@@ -35,6 +44,7 @@ def load_config(path: Path) -> Dict[str, Any]:
 
 
 CONFIG = load_config(CONFIG_PATH)
+CONFIG_SHA256 = hashlib.sha256(CONFIG_PATH.read_bytes()).hexdigest()
 TOPICS = CONFIG["topics"]
 STATUS_CONDITIONS = {"vehicle_status_overview", "vehicle_status_unavailable", "vehicle_status_list"}
 CONTEXT_CONDITIONS = STATUS_CONDITIONS | {"payment_option_unavailable"}
@@ -122,6 +132,7 @@ MODEL_BOUNDARY_TOKENS = {
     "currently", "already", "again", "talaga", "pa", "o", "or", "disappear", "visible",
     "be", "become", "will", "right", "and", "can", "could", "how", "what", "does",
     "but", "except", "instead", "kayo", "kau", "mag", "payment", "pay",
+    "magkano", "presyo", "total", "lahat", "subtotal",
 }
 MODEL_CONTEXT_START = re.compile(
     r"\b(?:per|bawat|kada|daily|hourly|today|tomorrow|bukas|ngayon|"
@@ -133,10 +144,11 @@ MODEL_CONTEXT_START = re.compile(
 )
 VEHICLE_CATEGORIES = {
     "suv": "suv", "suvs": "suv", "sedan": "sedan", "sedans": "sedan",
-    "van": "van", "vans": "van", "truck": "pickup", "trucks": "pickup",
+    "van": "van", "vans": "van", "truck": "truck", "trucks": "truck",
     "pickup": "pickup", "motorcycle": "motorcycle", "motorcycles": "motorcycle",
-    "motorbike": "motorcycle", "motorbikes": "motorcycle", "car": "sedan",
-    "cars": "sedan", "kotse": "sedan",
+    "motorbike": "motorcycle", "motorbikes": "motorcycle", "car": "car",
+    "motor": "motorcycle", "motorsiklo": "motorcycle", "minivan": "van",
+    "cars": "car", "kotse": "car",
 }
 AMOUNT_PATTERN = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*k?"
 BUDGET_PATTERN = re.compile(
@@ -204,7 +216,7 @@ FILIPINO_TOKENS = {
     "ako", "ang", "ano", "anong", "at", "ba", "bakit", "balanse", "bayad",
     "dapat", "di", "gamit", "hindi", "ilang", "kailangan", "kaso", "kotse",
     "kaya", "kung", "late", "mag", "magbayad", "magbook", "magkano", "magrenta", "magsalita",
-    "kumusta", "lang", "magsoli", "makapagbook", "may", "mayroon", "meron", "mga", "mo", "muna",
+    "kumusta", "lang", "magsoli", "makapagbook", "makapagbayad", "patakaran", "may", "mayroon", "meron", "mga", "mo", "muna",
     "na", "ng", "ngayon", "paano", "pano", "para", "pasahero", "po", "puwedeng", "pwede",
     "renta", "rentahan", "sabay", "salamat", "sana", "sasakyan", "sige", "sobra", "tulong",
     "wala", "yung", "kasya",
@@ -216,6 +228,7 @@ FILIPINO_TOKENS = {
     "tibo", "tomboy", "femboy", "lesbiyana", "silahis", "kasarian",
     "nahuli", "balik", "utang", "kasalukuyang",
     "marunong", "walang", "sumagot", "suportado",
+    "motor", "motorsiklo", "pinakamura", "pinakamurang", "pinakamababang", "limang", "tatlong", "dalawang",
 }
 ENGLISH_TOKENS = {
     "account", "available", "balance", "book", "booking", "can", "cancel",
@@ -223,7 +236,7 @@ ENGLISH_TOKENS = {
     "automatic", "book", "date", "dates", "fuel", "help", "how", "insurance",
     "late", "level", "methods", "pax", "payment", "pending", "price", "rate", "rent",
     "rental", "requirements", "return", "same", "status", "vehicle", "what", "when",
-    "where", "which", "why",
+    "where", "which", "why", "show", "find",
     "pickup", "time", "hour", "hours", "daily", "hourly", "model", "brand",
     "van", "truck", "motorcycle", "today", "tomorrow", "budget",
     "under", "below", "maximum", "minimum", "refund", "refundable", "due",
@@ -235,6 +248,7 @@ ENGLISH_TOKENS = {
     "sexuality", "straight", "nonbinary", "bisexual", "pansexual", "asexual",
     "queer", "transgender", "trans", "tomboy", "femboy",
     "speak", "reply", "respond", "understand", "know", "good", "fluent", "languages", "support",
+    "days", "total", "quote", "subtotal", "cheapest", "affordable", "lowest",
 }
 FILIPINO_GRAMMAR_PATTERN = re.compile(r"\b(?:may|meron|mayroon)\b.*\b(?:ba|bang)\b|\b(?:yung|ang|ng|ko|kong|mga)\b", re.IGNORECASE)
 ENGLISH_DOMAIN_PATTERN = re.compile(
@@ -271,12 +285,13 @@ class ChatRequest(BaseModel):
     # Retained for backward compatibility. Live recommendations are fulfilled
     # by the Node backend after this service selects the intent.
     vehicles: Optional[List[Dict[str, Any]]] = None
+    inventory_vocabulary: Optional[Dict[str, Any]] = None
 
 
-def clean_text(value: Any) -> str:
+def clean_text(value: Any, max_length: int = MAX_MESSAGE_LENGTH) -> str:
     text = unicodedata.normalize("NFKC", str(value or "")).translate(APOSTROPHE_TRANSLATION)
     text = re.sub(r"\s+", " ", text, flags=re.UNICODE).strip()
-    return text[:MAX_MESSAGE_LENGTH]
+    return text[:max_length]
 
 
 def normalize_for_match(value: Any) -> str:
@@ -334,13 +349,37 @@ def build_vehicle_brand_lookup(values: List[Any]) -> Dict[str, str]:
 
 
 VEHICLE_BRAND_BY_NORMALIZED = build_vehicle_brand_lookup(CONFIGURED_VEHICLE_BRANDS)
+brand_aliases = CONFIG.get("vehicle_brand_aliases", {})
+if not isinstance(brand_aliases, dict):
+    raise RuntimeError("chatbot_config.json vehicle_brand_aliases must be an object")
+for alias, canonical in brand_aliases.items():
+    normalized_alias = normalize_for_match(alias)
+    if (not normalized_alias or normalized_alias in VEHICLE_BRAND_BY_NORMALIZED
+        or canonical not in CONFIGURED_VEHICLE_BRANDS):
+        raise RuntimeError("chatbot_config.json contains an invalid vehicle brand alias")
+    VEHICLE_BRAND_BY_NORMALIZED[normalized_alias] = canonical
 
+
+
+def vehicle_brand_lookup():
+    return {**VEHICLE_BRAND_BY_NORMALIZED, **{
+        normalize_for_match(brand): brand for brand in INVENTORY_VOCABULARY.get().get("brands", [])}}
+
+
+def vehicle_subtypes():
+    types = {parent: list(values) for parent, values in CONFIG["vehicle_category_subtypes"].items()}
+    types["motorcycle"].append("big bike")
+    for item in INVENTORY_VOCABULARY.get().get("subtypes", []):
+        subtype = normalize_subtype(item["name"])
+        if subtype not in types[item["category"]]:
+            types[item["category"]].append(subtype)
+    return types
 
 def find_brand_token_span(message: str) -> Tuple[Optional[str], int, int, List[str]]:
     original_tokens = TOKEN_PATTERN.findall(clean_text(message))
     normalized_tokens = [normalize_for_match(token) for token in original_tokens]
     for normalized_brand, canonical_brand in sorted(
-        VEHICLE_BRAND_BY_NORMALIZED.items(), key=lambda item: len(item[0]), reverse=True
+        vehicle_brand_lookup().items(), key=lambda item: len(item[0]), reverse=True
     ):
         brand_tokens = normalized_brand.split()
         width = len(brand_tokens)
@@ -353,7 +392,7 @@ def find_brand_token_span(message: str) -> Tuple[Optional[str], int, int, List[s
 def mentioned_brands(message: str) -> List[str]:
     tokens = [normalize_for_match(token) for token in TOKEN_PATTERN.findall(clean_text(message))]
     found = set()
-    for normalized_brand, canonical in VEHICLE_BRAND_BY_NORMALIZED.items():
+    for normalized_brand, canonical in vehicle_brand_lookup().items():
         width = len(normalized_brand.split())
         if any(tokens[index:index + width] == normalized_brand.split()
                for index in range(len(tokens) - width + 1)):
@@ -369,6 +408,21 @@ def canonicalize_model_token(token: str) -> str:
 
 def extract_vehicle_entities(message: str) -> Dict[str, Optional[str]]:
     brand, _, brand_end, original_tokens = find_brand_token_span(message)
+    live_models = INVENTORY_VOCABULARY.get().get("models", [])
+    normalized = normalize_for_match(message)
+    generic_models = set(VEHICLE_CATEGORIES) | {subtype for values in vehicle_subtypes().values() for subtype in values}
+    matches = [item for item in live_models if (brand or (normalize_for_match(item["model"]) not in generic_models
+               and re.search(r"[^\W\d_]", item["model"], re.UNICODE)))
+               and (not brand or item["brand"] == brand)
+               and re.search(r"\b" + re.escape(normalize_for_match(item["model"])) + r"\b", normalized)]
+    matches.sort(key=lambda item: len(item["model"]), reverse=True)
+    if matches and (brand or normalized == normalize_for_match(matches[0]["model"])
+                    or re.search(r"\b(?:show|find|rent|rentals|have|may|meron|hanap|how about|what about)\b", normalized)):
+        longest = len(matches[0]["model"])
+        identities = {(item["brand"], item["model"]) for item in matches if len(item["model"]) == longest}
+        if len(identities) == 1:
+            live_brand, model = next(iter(identities))
+            return {"brand": live_brand, "model": model}
     if not brand:
         return {"brand": None, "model": None}
 
@@ -401,16 +455,45 @@ def extract_query_entities(message: str, original_message: Optional[str] = None)
     entities: Dict[str, Any] = extract_vehicle_entities(positive_message)
     if excluded:
         entities["excluded_brands"] = excluded
+    categories = []
     for token in tokenize(normalized):
+        if (token == "pickup" and not re.search(r"\bpickup\s+truck\b", normalized)
+            and re.search(r"\bpickup\s+(?:on|at|today|tomorrow|bukas|ngayon|time|date|schedule|a|the|my|our|\d[\d-]*)\b", normalized)):
+            continue
         category = VEHICLE_CATEGORIES.get(token)
         if category:
-            entities["category"] = category
-            break
+            categories.append(category)
+    if categories:
+        entities["category"] = next((category for category in categories if category not in {"car", "truck"}), categories[0])
+    if re.search(r"\bpick up trucks?\b", normalized):
+        entities["category"] = "pickup"
+    excluded_subtypes = [subtype for subtypes in vehicle_subtypes().values() for subtype in subtypes
+                        if re.search(r"\b(?:no|not|except|exclude|without|ayaw(?: ko)?|huwag|hindi)\s+(?:ng\s+)?"
+                                     + re.escape(subtype) + r"s?\b", normalized)]
+    if excluded_subtypes:
+        entities["excluded_subtypes"] = list(dict.fromkeys(excluded_subtypes))
+    for parent, subtypes in vehicle_subtypes().items():
+        for subtype in subtypes:
+            if subtype == "pickup" and not re.search(r"\bpick ?up trucks?\b", normalized):
+                continue
+            plural = "s?" if not subtype.endswith("s") and subtype not in {"passenger", "cargo", "luxury"} else ""
+            if subtype not in excluded_subtypes and re.search(r"\b" + re.escape(subtype) + plural + r"\b", normalized) and entities.get("category") in (None, parent):
+                unique_parent = sum(subtype in types for types in vehicle_subtypes().values()) <= 1
+                if entities.get("category") or unique_parent:
+                    entities["category"], entities["vehicle_subtype"] = parent, subtype
+                    if normalize_for_match(entities.get("model")) == subtype:
+                        entities.pop("model", None)
+    if not entities.get("brand") and not entities.get("category"):
+        model = re.search(r"\b(?:rent|renta|rental) (?:ng|of|for) ([a-z][a-z0-9-]{1,30})\b", normalized)
+        if model and model.group(1) not in {"a", "the", "my", "it", "this", "that", "today", "tomorrow", "days", "hours"}:
+            entities["model"] = model.group(1)
     day_unit = bool(DAY_UNIT_PATTERN.search(normalized))
     hour_unit = bool(HOUR_UNIT_PATTERN.search(normalized))
     if day_unit != hour_unit:
         entities["rate_unit"] = "day" if day_unit else "hour"
     budget_match = BUDGET_PATTERN.search(clean_text(original_message or message))
+    if budget_match and re.match(r"\s*[- ]?\s*(?:seats?|seater|pax|passengers?|tao|pasahero)\b", clean_text(original_message or message)[budget_match.end():], re.I):
+        budget_match = None
     if budget_match:
         amount = budget_match.group(1).replace(",", "").replace(" ", "").lower()
         multiplier = 1000 if amount.endswith("k") else 1
@@ -432,20 +515,22 @@ def extract_query_entities(message: str, original_message: Optional[str] = None)
         entities["transmission"] = "automatic" if transmission.group(1) in {"automatic", "matic"} else "manual"
     if re.search(r"\b(?:no clutch|without.*clutch|do not need.*clutch)\b", normalized):
         entities["transmission"] = "automatic"
-    pax = re.search(r"\b(\d{1,2})\s*(?:pax|passengers?|persons?|people|katao|tao|seats?|seater)\b|\bfor\s+(\d{1,2})\b", normalized)
-    if pax:
-        entities["pax"] = int(pax.group(1) or pax.group(2))
-    location = re.search(r"\b(?:in|near|around|sa)\s+([a-z][a-z '-]{1,70})", normalized)
-    if location:
+    for location in re.finditer(r"(?=\b(?:in|near|around|sa)\s+([a-z][a-z '-]{1,70}))", normalized):
         words = []
-        stops = {"tomorrow", "today", "bukas", "ngayon", "under", "below", "per", "for", "with", "and", "automatic", "manual", "on", "from", "until", "to", "available", "please", "po", "php", "p", "budget", "bawat", "kada"}
+        stops = {"tomorrow", "today", "bukas", "ngayon", "under", "below", "per", "for", "with", "and", "automatic", "manual", "on", "from", "until", "to", "available", "please", "po", "php", "p", "budget", "bawat", "kada", "ba", "lang", "na", "may", "at", "next", "that", "which", "are", "is", "currently"}
+        stops.update(NUMBER_WORDS)
+        stops.update(VEHICLE_CATEGORIES)
+        stops.update({"payment", "payments", "cash", "person", "balance", "downpayment", "checkout", "account", "booking", "bookings", "english", "filipino", "tagalog", "taglish", "progress", "good", "condition", "loob", "sa", "the", "a", "an", "rental", "rent", "my", "your"})
+        stops.update({"loob", "ilang", "araw", "oras", "day", "days", "hour", "hours", "presyo", "renta", "driver", "pickup", "return"})
+        stops.update({"gasoline", "diesel", "electric", "hybrid", "petrol", "gas", "self", "drive", "mt"})
         for word in location.group(1).split():
             if word in stops or len(words) >= 4:
                 break
             words.append(word)
         place = " ".join(words)
-        if place and place not in {"english", "filipino", "tagalog", "taglish", "progress", "my account", "the booking", "booking ko", "oras ng pagsoli"}:
+        if place and not mentioned_brands(place) and place not in {"english", "filipino", "tagalog", "taglish", "progress", "my account", "the booking", "booking ko", "oras ng pagsoli"}:
             entities["location"] = place
+            break
     schedule_tokens = re.findall(
         r"\b(?:day after tomorrow|tomorrow|today|tonight|bukas|ngayon|weekend|next week|"
         r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"
@@ -454,6 +539,25 @@ def extract_query_entities(message: str, original_message: Optional[str] = None)
     )
     if schedule_tokens:
         entities["requested_schedule"] = " to ".join(dict.fromkeys(schedule_tokens))[:100]
+    preferences = extract_rental_preferences(clean_text(original_message or message))
+    controlled_preferences = extract_rental_preferences(normalized)
+    for key in ("sort_by", "quote_requested", "driver_requested"):
+        if key not in preferences and key in controlled_preferences:
+            preferences[key] = controlled_preferences[key]
+    entities.update(preferences)
+    specification = requested_vehicle_specification(original_message or message)
+    reference = re.search(r"\b(?:(?:this|that|same|selected) (?:one|vehicle|car|listing|suv|motorcycle|truck)|first|second|third|itong|iyang|ito|iyan|it)\b", normalized)
+    identity_search = bool(entities.get("brand") and entities.get("category") and not entities.get("model")
+                           and re.search(r"^(?:do you have|may|meron|mayroon)\b", normalized))
+    if specification and not identity_search and (entities.get("brand") or (reference and (specification != "subtype"
+        or re.search(r"\b(?:vehicle|car|motorcycle|truck|van|listing|subtype)\b", normalized)))):
+        entities["specification_requested"] = specification
+        if entities.get("brand"):
+            entities["model"] = extract_vehicle_entities(normalized).get("model")
+        if entities.get("model"):
+            entities["model"] = re.split(r"\b(?:have|has|use|uses|automatic|manual|transmission|fuel|allow|allows)\b", entities["model"], flags=re.I)[0].strip() or None
+        for field in ("pax", "seat_match", "transmission", "fuel", "driver_requested", "self_drive_only", "driver_included_required", "location"):
+            entities.pop(field, None)
     return entities
 
 
@@ -483,7 +587,7 @@ def validated_pending_search(value: Any) -> Dict[str, Any]:
     brand = value.get("brand")
     category = value.get("category")
     budget = value.get("max_budget")
-    if brand not in VEHICLE_BRAND_BY_NORMALIZED.values() and brand is not None:
+    if brand not in vehicle_brand_lookup().values() and brand is not None:
         return {}
     if category is not None and category not in set(VEHICLE_CATEGORIES.values()):
         return {}
@@ -503,17 +607,33 @@ def validated_pending_search(value: Any) -> Dict[str, Any]:
 
 
 def validated_conversation_context(value: Any) -> Dict[str, Any]:
-    if not isinstance(value, dict) or set(value) - {"intent", "entities", "clarification", "choices", "suggested_brand", "topic", "conditions", "candidate_intents"}:
+    if not isinstance(value, dict) or set(value) - {"intent", "entities", "clarification", "choices", "suggested_brand", "topic", "conditions", "candidate_intents", "response_variant", "requested_answer_type", "idle_turns", "assistant_action", "pending_offer"}:
         return {}
     if not isinstance(value.get("intent"), str) or (value["intent"] not in INTENTS_BY_ID and value["intent"] != "REJECT"):
         return {}
+    if not valid_assistant_state(value, INTENTS_BY_ID):
+        return {}
+    variant = value.get("response_variant")
+    answer_type = value.get("requested_answer_type")
+    if answer_type is not None and (not isinstance(answer_type, str) or answer_type not in REQUESTED_ANSWER_TYPES):
+        return {}
+    if variant is not None and (not isinstance(variant, str) or variant not in INTENTS_BY_ID.get(value["intent"], {}).get("response_variants", {})):
+        return {}
+    idle = value.get("idle_turns", 0)
+    if type(idle) is not int or not 0 <= idle <= 2:
+        return {}
     entities = value.get("entities", {})
-    allowed = {"brand", "model", "category", "max_budget", "currency", "rate_unit", "transmission", "location", "pax", "excluded_brands", "excluded_transmissions", "requested_schedule"}
+    allowed = {"brand", "model", "category", "vehicle_subtype", "max_budget", "currency", "rate_unit", "transmission", "location", "pax", "excluded_brands", "excluded_transmissions", "excluded_subtypes", "requested_schedule"} | RENTAL_FIELDS
     if not isinstance(entities, dict) or set(entities) - allowed:
         return {}
-    if entities.get("brand") is not None and entities["brand"] not in VEHICLE_BRAND_BY_NORMALIZED.values():
+    if not valid_rental_fields(entities):
+        return {}
+    if entities.get("brand") is not None and entities["brand"] not in vehicle_brand_lookup().values():
         return {}
     if entities.get("category") is not None and entities["category"] not in VEHICLE_CATEGORIES.values():
+        return {}
+    parent = "truck" if entities.get("category") == "pickup" else "car" if entities.get("category") in {"suv", "sedan"} else entities.get("category")
+    if entities.get("vehicle_subtype") is not None and entities["vehicle_subtype"] not in vehicle_subtypes().get(parent, []):
         return {}
     for key, options in (("rate_unit", {"day", "hour"}), ("transmission", {"automatic", "manual"}), ("currency", {"PHP"})):
         if entities.get(key) is not None and (not isinstance(entities[key], str) or entities[key] not in options):
@@ -522,28 +642,32 @@ def validated_conversation_context(value: Any) -> Dict[str, Any]:
         if entities.get(key) is not None and (not isinstance(entities[key], str) or len(entities[key]) > limit):
             return {}
     for key, maximum in (("max_budget", 10_000_000), ("pax", 99)):
-        if key in entities and (isinstance(entities[key], bool) or not isinstance(entities[key], (int, float)) or not 0 < entities[key] <= maximum):
+        if key in entities and (isinstance(entities[key], bool) or not isinstance(entities[key], (int, float)) or not math.isfinite(entities[key]) or not 0 < entities[key] <= maximum or (key == "pax" and entities[key] % 1)):
             return {}
     if entities.get("max_budget") and entities.get("currency") != "PHP":
         return {}
     excluded = entities.get("excluded_brands", [])
-    if not isinstance(excluded, list) or len(excluded) > 12 or any(brand not in VEHICLE_BRAND_BY_NORMALIZED.values() for brand in excluded):
+    if not isinstance(excluded, list) or len(excluded) > 12 or any(brand not in vehicle_brand_lookup().values() for brand in excluded):
         return {}
     excluded_transmissions = entities.get("excluded_transmissions", [])
     if not isinstance(excluded_transmissions, list) or len(excluded_transmissions) > 2 or any(not isinstance(item, str) or item not in {"automatic", "manual"} for item in excluded_transmissions):
+        return {}
+    excluded_subtypes = entities.get("excluded_subtypes", [])
+    known_subtypes = {subtype for subtypes in vehicle_subtypes().values() for subtype in subtypes}
+    if not isinstance(excluded_subtypes, list) or len(excluded_subtypes) > 12 or any(not isinstance(item, str) or item not in known_subtypes for item in excluded_subtypes):
         return {}
     choices = value.get("choices", [])
     if not isinstance(choices, list) or len(choices) > 3:
         return {}
     for choice in choices:
-        if not isinstance(choice, dict) or set(choice) - {"brand", "model"}:
+        if not isinstance(choice, dict) or set(choice) - {"brand", "model", "listing_id"} or not valid_rental_fields(choice):
             return {}
-        if choice.get("brand") not in VEHICLE_BRAND_BY_NORMALIZED.values() or not isinstance(choice.get("model"), str) or len(choice["model"]) > 80:
+        if choice.get("brand") not in vehicle_brand_lookup().values() or not isinstance(choice.get("model"), str) or len(choice["model"]) > 80:
             return {}
     clarification = value.get("clarification", {})
     if not isinstance(clarification, dict) or set(clarification) - {"required", "type", "field"}:
         return {}
-    if value.get("suggested_brand") is not None and value["suggested_brand"] not in VEHICLE_BRAND_BY_NORMALIZED.values():
+    if value.get("suggested_brand") is not None and value["suggested_brand"] not in vehicle_brand_lookup().values():
         return {}
     topic = value.get("topic")
     if topic is not None and (not isinstance(topic, str) or topic not in TOPICS):
@@ -558,7 +682,7 @@ def validated_conversation_context(value: Any) -> Dict[str, Any]:
         return {}
     if ("required" in clarification and not isinstance(clarification["required"], bool)
         or clarification.get("type") not in (None, "missing_entity", "ambiguous_entity", "ambiguous_intent", "unknown_intent", "spelling_confirmation")
-        or clarification.get("field") not in (None, "rate_unit", "booking", "brand", "model")):
+        or clarification.get("field") not in (None, "rate_unit", "booking", "brand", "model", "duration", "driver", "fuel", "transmission")):
         return {}
     conditions = value.get("conditions", {})
     if not isinstance(conditions, dict) or set(conditions) - CONTEXT_CONDITIONS or any(item is not True for item in conditions.values()):
@@ -622,12 +746,15 @@ def build_unique_typo_vocabulary(items: List[Dict[str, Any]]) -> Set[str]:
 
 def normalize_unique_known_typos(normalized_text: str) -> str:
     corrected_tokens: List[str] = []
-    brand_tokens = set(VEHICLE_BRAND_BY_NORMALIZED)
+    brand_tokens = set(vehicle_brand_lookup())
     for token in normalized_text.split():
         if (
             len(token) < UNIQUE_TYPO_MIN_LENGTH
             or not token.isalpha()
             or token in UNIQUE_TYPO_VOCABULARY
+            or token in {word for item in INVENTORY_VOCABULARY.get().get("models", []) for word in normalize_for_match(item["model"]).split()}
+            or token in {word for values in vehicle_subtypes().values() for subtype in values for word in subtype.split()}
+            or token == "motors"
             or any(one_edit_apart(token, brand) for brand in brand_tokens)
         ):
             corrected_tokens.append(token)
@@ -657,7 +784,7 @@ def find_safe_brand_typo(message: str) -> Optional[str]:
         canonical
         for token in tokens
         if len(token) >= 5
-        for candidate, canonical in VEHICLE_BRAND_BY_NORMALIZED.items()
+        for candidate, canonical in vehicle_brand_lookup().items()
         if len(candidate) >= 5 and one_edit_apart(token, candidate)
     }
     return next(iter(suggestions)) if len(suggestions) == 1 else None
@@ -671,13 +798,13 @@ def brand_typo_reply(brand: str, style: str) -> str:
     return f"Did you mean {brand}? If so, I can search the current RentifyPro listings."
 
 
-def dedupe_keep_order(values: Any) -> List[str]:
+def dedupe_keep_order(values: Any, max_length: int = MAX_MESSAGE_LENGTH) -> List[str]:
     source = values if isinstance(values, list) else []
     seen: Set[str] = set()
     result: List[str] = []
     for value in source:
-        text = clean_text(value)
-        key = normalize_for_match(text)
+        text = clean_text(value, max_length)
+        key = normalize_for_match(text) if max_length == MAX_MESSAGE_LENGTH else text.casefold()
         if not text or not key or key in seen:
             continue
         seen.add(key)
@@ -687,10 +814,13 @@ def dedupe_keep_order(values: Any) -> List[str]:
 
 def normalize_responses(value: Any) -> Dict[str, List[str]]:
     responses = value if isinstance(value, dict) else {}
+    if any(isinstance(answer, str) and len(answer) > 4000 for style in SUPPORTED_STYLES
+           for answer in (responses.get(style) or [])):
+        raise RuntimeError("Approved chatbot replies must fit the 4000-character response contract")
     return {
-        "en": dedupe_keep_order(responses.get("en")),
-        "fil": dedupe_keep_order(responses.get("fil")),
-        "taglish": dedupe_keep_order(responses.get("taglish")),
+        "en": dedupe_keep_order(responses.get("en"), 4000),
+        "fil": dedupe_keep_order(responses.get("fil"), 4000),
+        "taglish": dedupe_keep_order(responses.get("taglish"), 4000),
     }
 
 
@@ -710,7 +840,18 @@ def parse_dataset_item(item: Dict[str, Any], index: int) -> Dict[str, Any]:
     responses = normalize_responses(item.get("responses"))
     if not intent_id or not examples or any(not responses[style] for style in SUPPORTED_STYLES):
         raise RuntimeError(f"Invalid v6 chatbot intent at index {index}: {DATASET_PATH}")
+    variants = item.get("response_variants", {})
+    if not isinstance(variants, dict) or len(variants) > 16:
+        raise RuntimeError(f"Invalid response variants for {intent_id}")
+    for key, answers in variants.items():
+        if (not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", key) or not isinstance(answers, dict)
+                or set(answers) != SUPPORTED_STYLES
+                or any(not isinstance(answers[style], list) or not answers[style]
+                       or any(not isinstance(answer, str) or not answer.strip() for answer in answers[style])
+                       for style in SUPPORTED_STYLES)):
+            raise RuntimeError(f"Incomplete response variant {intent_id}.{key}")
 
+    offers = validate_offers(intent_id, variants, item.get("assistant_offers", {}))
     return {
         **item,
         "id": intent_id,
@@ -726,6 +867,8 @@ def parse_dataset_item(item: Dict[str, Any], index: int) -> Dict[str, Any]:
         "priority": int(item.get("priority", 0) or 0),
         "fallback_only": bool(item.get("fallback_only", False)),
         "responses": responses,
+        "response_variants": {key: normalize_responses(answers) for key, answers in variants.items()},
+        "assistant_offers": offers,
     }
 
 
@@ -760,17 +903,26 @@ def load_dataset(path: Path) -> List[Dict[str, Any]]:
 
 
 def detect_style(text: str) -> str:
-    normalized = normalize_for_match(text)
+    original = normalize_for_match(text)
+    normalized = normalize_informal_text(text)
     tokens = tokenize(normalized)
     fil_hits = [token for token in tokens if token in FILIPINO_TOKENS and token not in ENGLISH_TOKENS]
-    en_hits = [token for token in tokens if token in ENGLISH_TOKENS and token not in FILIPINO_TOKENS]
+    en_hits = [token for token in tokenize(original) if token in ENGLISH_TOKENS and token not in FILIPINO_TOKENS]
+    if re.fullmatch(r"(?:okay|ok) (?:maraming )?salamat(?: po)?", original):
+        en_hits.append("okay")
     filipino_grammar = bool(FILIPINO_GRAMMAR_PATTERN.search(normalized))
     if not filipino_grammar:
         if en_hits and not any(token not in {"at", "may"} for token in fil_hits):
             fil_hits = [token for token in fil_hits if token != "at"]
         if re.match(r"^may\s+(?:i|we|you|two|a|an|the)\b", normalized):
             fil_hits = [token for token in fil_hits if token != "may"]
-    english_domain = bool(ENGLISH_DOMAIN_PATTERN.search(normalized))
+    # Borrowed payment terms do not change a Filipino question's grammar.
+    filipino_policy_question = re.match(r"^(?:paano|pano|ano ang (?:policy|patakaran)|may refund)\b", original)
+    if filipino_policy_question and filipino_grammar and fil_hits and not re.search(r"\b(?:how|what|why|where|when|can|could|do|does|i|you|please|per|due date)\b", original):
+        neutral_terms = {"booking", "payment", "refund", "policy", "late", "return"}
+        if en_hits and all(token in neutral_terms for token in en_hits):
+            en_hits = []
+    english_domain = bool(ENGLISH_DOMAIN_PATTERN.search(original)) and bool(en_hits)
     if (fil_hits or filipino_grammar) and (en_hits or english_domain):
         return "taglish"
     if fil_hits:
@@ -804,7 +956,7 @@ def resolve_style(requested_language: Optional[str], text: str, previous_languag
     tokens = tokenize(normalized)
     previous = REQUESTED_LANGUAGE_TO_STYLE.get(normalize_for_match(previous_language or ""))
     has_language_signal = any(token in FILIPINO_TOKENS or token in ENGLISH_TOKENS for token in tokens)
-    if previous and len(tokens) <= 2 and (normalized in AMBIGUOUS_SHORT_FOLLOWUPS or not has_language_signal):
+    if previous and (short_followup_action(normalized) or contextual_request(normalized) or conversational_repair(normalized) or (len(tokens) <= 2 and (normalized in AMBIGUOUS_SHORT_FOLLOWUPS or not has_language_signal))):
         return previous
     return detect_style(text)
 
@@ -864,6 +1016,8 @@ def find_controlled_alias_matches(normalized_query: str) -> List[Dict[str, Any]]
     for item in intent_items:
         for alias in item["aliases"]:
             normalized_alias = normalize_for_match(alias)
+            if item["id"] == "chat_acknowledgement" and normalized_alias != normalized_query:
+                continue
             if not phrase_in_query(normalized_alias, normalized_query):
                 continue
             candidate = {
@@ -873,15 +1027,24 @@ def find_controlled_alias_matches(normalized_query: str) -> List[Dict[str, Any]]
                 "specificity": len(tokenize(normalized_alias)) * 100 + len(normalized_alias),
             }
             current = matches.get(item["id"])
-            if current is None or (candidate["priority"], candidate["specificity"]) > (
-                current["priority"], current["specificity"]
+            if current is None or (candidate["specificity"], candidate["priority"]) > (
+                current["specificity"], current["priority"]
             ):
                 matches[item["id"]] = candidate
     return sorted(
         matches.values(),
-        key=lambda candidate: (candidate["priority"], candidate["specificity"], candidate["intent"]),
+        key=lambda candidate: (candidate["specificity"], candidate["priority"], candidate["intent"]),
         reverse=True,
     )
+
+
+def semantic_contextual_action(query):
+    if not has_indirect_reference(query):
+        return None
+    similarities = cosine_similarity(embedder.encode([query], normalize_embeddings=True), CONTEXTUAL_EMBEDDINGS)[0]
+    ranked = sorted(((max(float(similarities[i]) for i, (kind, _) in enumerate(CONTEXTUAL_ROWS) if kind == action), action)
+                     for action in CONTEXTUAL_EXAMPLES), reverse=True)
+    return ranked[0][1] if ranked[0][0] >= 0.72 and ranked[0][0] - ranked[1][0] >= 0.08 else None
 
 
 def retrieve_intents(query: str, top_k: int = TOP_PREDICTIONS) -> List[Dict[str, Any]]:
@@ -926,7 +1089,7 @@ def retrieve_intents(query: str, top_k: int = TOP_PREDICTIONS) -> List[Dict[str,
                     "matched_source": "controlled_alias",
                 }
                 best_by_intent[alias_match["intent"]] = candidate
-            priority_gap = top_priority - alias_match["priority"]
+            priority_gap = max(0, top_priority - alias_match["priority"])
             alias_score = 0.94 if index == 0 else max(0.60, 0.90 - priority_gap * 0.01 - index * 0.03)
             if alias_score > candidate["score"]:
                 candidate["score"] = alias_score
@@ -1103,17 +1266,106 @@ def _classify_single(
     )
     used_controlled_normalization = normalized_query != normalized_message
     entities = extract_query_entities(normalized_query, query_message)
+    current_entities = dict(entities)
     conversation = validated_conversation_context(previous_context)
+    reset_requested = conversation_reset_request(informal_query)
+    if reset_requested or re.search(r"^(?:new (?:chat|conversation|search)|start over|reset|bagong usapan)\b", normalized_query):
+        conversation = {}
+    followup_action = short_followup_action(informal_query) or contextual_request(informal_query)
+    repair = conversational_repair(informal_query)
+    answer_type = requested_answer_type(informal_query)
+    valid_task = conversation.get("intent") in INTENTS_BY_ID and conversation["intent"] not in CONVERSATIONAL_INTENTS
+    frustration = frustration_variant(informal_query)
+    if informal_query in {"huh", "hindi ko gets", "di ko gets"} and not valid_task:
+        followup_action = None
+    support_intent, support_variant = support_response_route(informal_query, conversation)
+    if not support_intent:
+        support_intent, support_variant = support_response_route(normalized_query, conversation)
+    if support_variant == "unsupported_tricycle" and any(
+            item["name"] == "tricycle" for item in INVENTORY_VOCABULARY.get().get("subtypes", [])):
+        support_intent, support_variant = None, None
+    explicit_intent = support_intent or practical_intent(normalized_query)
+    if explicit_intent == "unclear_message" and followup_action:
+        explicit_intent = None
+    explicit_topic = topic_for_query(normalized_query, TOPICS)
+    prior_task_topic = conversation.get("topic") or topic_for_intent(conversation.get("intent"), TOPICS)
+    explicit_new_task = bool(valid_task and (
+        (explicit_intent and explicit_intent != conversation["intent"])
+        or (explicit_topic and prior_task_topic and explicit_topic != prior_task_topic)))
+    if explicit_new_task:
+        followup_action, repair = None, None
+    elif not followup_action and not repair and valid_task:
+        followup_action = semantic_contextual_action(informal_query)
+    pending_offer = conversation.get("pending_offer") if not explicit_new_task else None
+    offer_reply = offer_response(informal_query) if pending_offer else None
+    offer_action = pending_offer["action"] if pending_offer and (offer_reply == "accept" or followup_action in {"continue", "explain", "reference"} or repair) else None
+    if offer_action:
+        followup_action = "offer"
+        answer_type = "instructions" if offer_action == "instructions" else "overview"
+    if repair:
+        answer_type = "instructions" if offer_action == "instructions" else repair if repair != "unspecified" else conversation.get("requested_answer_type")
+        if answer_type is None and valid_task:
+            prior_variant = conversation.get("response_variant")
+            answer_type = prior_variant if prior_variant in REQUESTED_ANSWER_TYPES else None
+            if not prior_variant and conversation["intent"] in {"how_to_book", "owner_listing_guidance", "owner_booking_guidance"}:
+                answer_type = "instructions"
+        followup_action = "offer" if offer_action else "repair"
+    if informal_query == "sure" and valid_task and not offer_action:
+        followup_action = "confirm"
+    contextual_intent = conversation.get("intent") if (followup_action
+        and conversation.get("intent") in INTENTS_BY_ID and conversation["intent"] not in CONVERSATIONAL_INTENTS) else None
+    search_result_explanation = (contextual_intent in {"available_vehicles", "available_transmission", "passenger_capacity", "vehicle_brand_search"}
+        and (followup_action == "explain" or repair == "explanation")
+        and answer_type != "instructions" and informal_query not in {"how", "paano", "pano", "can you show me how"}
+        and conversation.get("response_variant") not in {"instructions", "navigation", "explanation", "troubleshooting", "continuation"})
+    social_intent = social_question_intent(informal_query)
+    if contextual_intent:
+        social_intent = None
+    if (conversation and topic_for_intent(conversation.get("intent"), TOPICS) == "vehicles"
+        and re.search(r"\b(?:this car|that car|same car|this vehicle|that vehicle|this kotse|itong kotse|iyang kotse)\b", normalized_query)
+        and not re.search(r"\b(?:sedans?|suvs?|vans?|trucks?|pickups?|motorcycles?|motor|motorsiklo)\b", normalized_query)):
+        entities.pop("category", None)
+        current_entities.pop("category", None)
     query_topic = topic_for_query(normalized_query, TOPICS)
+    if contextual_intent:
+        query_topic = topic_for_intent(contextual_intent, TOPICS)
+    if support_intent:
+        query_topic = topic_for_intent(support_intent, TOPICS)
     prior_topic = conversation.get("topic") or topic_for_intent(conversation.get("intent"), TOPICS)
+    if (prior_topic == "vehicles" and query_topic == "booking"
+        and any(key in current_entities for key in ("requested_date", "requested_return_date", "pickup_time", "return_time"))
+        and not PICKUP_TIME_PATTERN.search(normalized_query)
+        and not practical_intent(normalized_query)):
+        query_topic = "vehicles"
     topic_changed = bool(query_topic and prior_topic and query_topic != prior_topic)
     clarified_intent = clarification_selection(normalized_query, conversation.get("candidate_intents", [])) if conversation.get("clarification", {}).get("required") else None
     unresolved_choice = False
     vehicle_context_intents = {"available_vehicles", "vehicle_brand_search", "available_transmission", "passenger_capacity", "rental_rate", "vehicle_availability_status", "vehicle_unavailability"}
+    if conversation.get("intent") == "vehicle_categories" and conversation.get("entities", {}).get("category"):
+        vehicle_context_intents.add("vehicle_categories")
     reference_followup = bool(conversation and not topic_changed and conversation["intent"] in vehicle_context_intents and (re.search(
         r"^(?:what about|how about|and|same|that one|the first|first one|second one|third one|it|cheaper|per day|per hour|daily|hourly|tomorrow|bukas|mas mura|yung una|yung pangalawa|how much.*(?:it|that|first|second|third)|magkano.*(?:iyan|ito|una))\b", normalized_query
     ) or (conversation.get("clarification", {}).get("required") and normalized_query in {"yes", "oo", "opo"})
       or (prior_topic == "vehicles" and re.fullmatch(r"(?:the )?(?:unavailable|not available|unavailable vehicles|unavailable listings|which ones|show them|list them|how many|why|bakit|how|paano|tell me more|more details|explain|explain please|hindi ko gets|di ko gets)", normalized_query))))
+    if contextual_intent and prior_topic == "vehicles":
+        reference_followup = True
+    filter_followup = bool(conversation and not topic_changed and prior_topic == "vehicles"
+        and not entities.get("brand") and not entities.get("category")
+        and (any(key in entities for key in ("pax", "specification_requested", "transmission", "fuel", "excluded_fuels", "excluded_subtypes", "self_drive_only", "max_budget", "duration_value", "rate_unit", "sort_by", "driver_requested", "requested_schedule", "requested_date", "requested_return_date", "pickup_time", "return_time", "location"))
+             or RATE_QUERY_PATTERN.search(normalized_query) or entities.get("quote_requested")))
+    reference_followup = reference_followup or filter_followup
+    if (conversation and not topic_changed and prior_topic == "vehicles" and current_entities.get("brand")
+            and re.search(r"\b(?:same (?:filters|requirements|seat requirement|seats|capacity|budget|location|schedule)|parehong (?:filters|upuan))\b", informal_query)):
+        reference_followup = True
+    if (conversation.get("entities", {}).get("specification_requested")
+        and conversation.get("clarification", {}).get("field") == "model"
+        and ((entities.get("brand") and len(tokenize(normalized_query)) <= 5)
+             or re.fullmatch(r"(?:the )?(?:first|second|third)(?: one| option)?", normalized_query))):
+        reference_followup = True
+    if (conversation.get("intent") == "rental_rate" and not topic_changed
+        and conversation.get("clarification", {}).get("field") == "model"
+        and entities.get("brand") and len(tokenize(normalized_query)) <= 5):
+        reference_followup = True
     if (conversation.get("intent") == "vehicle_availability_status" and not topic_changed
         and entities.get("brand") and len(tokenize(normalized_query)) <= 4
         and not RATE_QUERY_PATTERN.search(normalized_query)):
@@ -1129,18 +1381,81 @@ def _classify_single(
         and explicit_followup_intent in {None, "unclear_message", "vehicle_availability_status"})
     if reference_followup:
         prior_entities = conversation.get("entities", {})
+        if current_entities.get("brand") and not re.search(r"\b(?:same (?:filters|requirements|seat requirement|seats|capacity)|parehong (?:filters|upuan))\b", informal_query):
+            prior_entities = ({key: value for key, value in prior_entities.items() if key not in {"pax", "seat_match"}}
+                              if conversation.get("intent") == "rental_rate" else {key: value for key, value in prior_entities.items()
+                              if (key == "category" and value in {"car", "truck", "van", "motorcycle"}
+                                  and not any(prior_entities.get(field) for field in ("brand", "vehicle_subtype", "pax")))
+                              or (key == "specification_requested" and conversation.get("clarification", {}).get("field") == "model")})
+        if (current_entities.get("vehicle_subtype") and current_entities["vehicle_subtype"] != prior_entities.get("vehicle_subtype")
+                and not current_entities.get("brand") and not re.search(r"\b(?:same brand|same filters|parehong brand)\b", informal_query)):
+            prior_entities = {key: value for key, value in prior_entities.items() if key not in {"brand", "model", "listing_id"}}
+        if prior_entities.get("brand") and not entities.get("brand") and not entities.get("model"):
+            refinement = re.fullmatch(r"(?:how about|what about|and) (.+)", normalized_query)
+            models = {choice["model"] for choice in conversation.get("choices", [])
+                      if choice.get("brand") == prior_entities["brand"] and choice.get("model")
+                      and refinement and normalize_for_match(choice["model"]) == refinement.group(1)}
+            if len(models) == 1:
+                entities["model"] = current_entities["model"] = models.pop()
+        if (current_entities.get("category") and current_entities["category"] != prior_entities.get("category")
+            and not re.search(r"\b(?:same filters|same requirements|parehong filters)\b", informal_query)):
+            carried = set()
+            for pattern, keys in (
+                (r"\b(?:same budget|parehong budget)\b", ("max_budget", "currency", "rate_unit")),
+                (r"\b(?:same location|same place|parehong lugar)\b", ("location",)),
+                (r"\b(?:same schedule|same dates|parehong schedule)\b", ("requested_schedule", "requested_date", "requested_return_date", "pickup_time", "return_time")),
+            ):
+                if re.search(pattern, informal_query):
+                    carried.update(keys)
+            prior_entities = {key: value for key, value in prior_entities.items() if key in carried}
         entities = {**prior_entities, **{key: item for key, item in entities.items() if item is not None}}
-        if entities.get("brand") != prior_entities.get("brand"):
+        if entities.get("vehicle_subtype") in entities.get("excluded_subtypes", []):
+            entities.pop("vehicle_subtype", None)
+        if (current_entities.get("category") and current_entities["category"] != prior_entities.get("category")):
+            for key in ("brand", "model", "listing_id", "vehicle_subtype"):
+                if not current_entities.get(key):
+                    entities.pop(key, None)
+        if current_entities.get("brand") and entities.get("brand") != prior_entities.get("brand"):
             entities["model"] = extract_vehicle_entities(normalized_query).get("model")
+            entities.pop("listing_id", None)
+        elif current_entities.get("model") and current_entities["model"] != prior_entities.get("model"):
+            entities.pop("listing_id", None)
+        if current_entities.get("requested_date"):
+            for key in ("requested_return_date", "pickup_time", "return_time"):
+                if key not in current_entities:
+                    entities.pop(key, None)
+            if all(key in current_entities for key in ("requested_return_date", "pickup_time", "return_time")) and "duration_value" not in current_entities:
+                entities.pop("duration_value", None)
+                entities.pop("duration_unit", None)
+        if current_entities.get("transmission"):
+            entities["excluded_transmissions"] = [item for item in entities.get("excluded_transmissions", []) if item != current_entities["transmission"]]
+        if current_entities.get("fuel"):
+            entities["excluded_fuels"] = [item for item in entities.get("excluded_fuels", []) if item != current_entities["fuel"]]
+        if current_entities.get("vehicle_subtype"):
+            entities["excluded_subtypes"] = [item for item in entities.get("excluded_subtypes", []) if item != current_entities["vehicle_subtype"]]
+        if "driver_requested" in current_entities and not current_entities.get("self_drive_only"):
+            entities.pop("self_drive_only", None)
+        if "driver_requested" in current_entities and not current_entities.get("driver_included_required"):
+            entities.pop("driver_included_required", None)
         choice_index = next((index for index, pattern in enumerate((r"\b(?:first|una)\b", r"\b(?:second|pangalawa)\b", r"\b(?:third|pangatlo)\b")) if re.search(pattern, normalized_query)), None)
         if choice_index is not None and choice_index < len(conversation.get("choices", [])):
             entities.update(conversation["choices"][choice_index])
-            entities.pop("category", None)
         elif choice_index is not None:
             unresolved_choice = True
+        elif re.search(r"\b(?:this car|that car|same car|this vehicle|that vehicle|this suv|itong kotse|iyang kotse|this one|that one|same one|it|iyan|ito|yung isa)\b", normalized_query) and not current_entities.get("brand"):
+            if len(conversation.get("choices", [])) == 1:
+                entities.update(conversation["choices"][0])
+            elif len(conversation.get("choices", [])) > 1 and not entities.get("listing_id"):
+                unresolved_choice = True
+        if entities.get("duration_value") and (RATE_QUERY_PATTERN.search(normalized_query)
+            or re.search(r"^(?:how about|what about|paano kung|kung)", normalized_query)
+            or "duration_value" in current_entities
+            or (conversation.get("intent") == "rental_rate" and (conversation.get("clarification", {}).get("required") or "duration_value" in current_entities))):
+            entities["quote_requested"] = True
         if re.search(r"\b(?:cheaper|mas mura)\b", normalized_query):
             entities.pop("brand", None)
             entities.pop("model", None)
+            entities.pop("listing_id", None)
             entities.update({"brand": None, "model": None})
     pending = validated_pending_search(previous_context)
     context_followup = reference_followup or bool(pending and entities.get("rate_unit")
@@ -1149,6 +1464,19 @@ def _classify_single(
                             and "max_budget" not in entities)
     if pending and context_followup:
         entities = {"brand": None, "model": None, **pending, "rate_unit": entities["rate_unit"]}
+    entities.setdefault("brand", None)
+    entities.setdefault("model", None)
+    if current_entities.get("specification_requested"):
+        selector = {key: entities[key] for key in ("brand", "model", "listing_id") if entities.get(key)}
+        entities = {"brand": None, "model": None, **selector,
+                    "specification_requested": current_entities["specification_requested"]}
+    elif reference_followup and any(key in current_entities for key in (
+        "category", "pax", "fuel", "transmission", "driver_requested", "self_drive_only", "duration_value")):
+        entities.pop("specification_requested", None)
+    if (current_entities.get("rate_unit") and RATE_QUERY_PATTERN.search(normalized_query)
+        and not current_entities.get("duration_value") and not current_entities.get("quote_requested")
+        and (entities.get("duration_value") or entities.get("quote_requested"))):
+        entities["quote_requested"] = False
     conditions = extract_conditions(normalized_query)
     if status_followup:
         conditions.update(conversation.get("conditions", {}))
@@ -1167,6 +1495,7 @@ def _classify_single(
             conditions.pop("payment_option_unavailable", None)
         return {
             **result,
+            **({"requested_answer_type": answer_type} if answer_type in REQUESTED_ANSWER_TYPES and result.get("intent") not in CONVERSATIONAL_INTENTS else {}),
             "language": style,
             "reply_lang": style,
             "entities": entities,
@@ -1179,6 +1508,77 @@ def _classify_single(
                 "field": clarification_field,
             },
         }
+
+    if reset_requested:
+        entities, conditions = {"brand": None, "model": None}, {}
+        return with_details({"intent": "chat_greeting", "intent_id": "chat_greeting", "confidence": 0.99, "score": 0.99,
+            "reply": INTENTS_BY_ID["chat_greeting"]["response_variants"]["reset"][style][0], "response_variant": "reset",
+            "requires_clarification": False, "requires_live_data": False, "live_source": "",
+            "alternatives": [], "top_preds": [], "reason_code": "conversation_reset"})
+    if frustration:
+        entities, conditions = {"brand": None, "model": None}, {}
+        variant = frustration + ("_context" if valid_task else "")
+        return with_details({"intent": "chat_acknowledgement", "intent_id": "chat_acknowledgement",
+            "confidence": 0.99, "score": 0.99,
+            "reply": INTENTS_BY_ID["chat_acknowledgement"]["response_variants"][variant][style][0],
+            "response_variant": variant, "requires_clarification": False, "requires_live_data": False,
+            "live_source": "", "alternatives": [], "top_preds": [], "reason_code": "conversational_frustration"})
+    conflict = specification_conflict(query_message)
+    if conflict and (entities.get("category") or re.search(r"\b(?:find|show|looking|need|hanap)\b", informal_query)):
+        return with_details({"intent": "available_vehicles", "confidence": 0.99, "score": 0.99,
+            "reply": TOPICS["vehicles"]["clarification"][style], "requires_clarification": True,
+            "requires_live_data": False, "live_source": "", "alternatives": [], "top_preds": [],
+            "reason_code": "conflicting_vehicle_specifications"}, "ambiguous_entity", conflict)
+    if offer_reply == "decline":
+        entities, conditions = {"brand": None, "model": None}, {}
+        return with_details({"intent": "chat_acknowledgement", "confidence": 0.99,
+            "reply": INTENTS_BY_ID["chat_acknowledgement"]["responses"][style][0],
+            "requires_clarification": False, "requires_live_data": False,
+            "reason_code": "assistant_offer_declined"})
+    if (conversation.get("clarification", {}).get("required") and len(conversation.get("candidate_intents", [])) > 1
+        and re.fullmatch(r"(?:yes|oo|opo)(?: po)?", informal_query)):
+        spec = TOPICS.get(conversation.get("topic"))
+        reply = spec["clarification"][style] if spec else {
+            "en": "Do you mean unavailable vehicles or an unavailable payment option?",
+            "fil": "Unavailable na sasakyan o hindi available na payment option ba ang tinutukoy mo?",
+            "taglish": "Unavailable vehicles or an unavailable payment option ba ang tinutukoy mo?",
+        }[style]
+        entities, conditions = conversation.get("entities", {}), conversation.get("conditions", {})
+        return with_details({"intent": "REJECT", "intent_id": "REJECT", "confidence": 0.99, "score": 0.99,
+            "reply": reply, "topic": conversation.get("topic"),
+            "candidate_intents": conversation["candidate_intents"], "requires_clarification": True,
+            "requires_live_data": False, "live_source": "", "alternatives": [], "top_preds": [],
+            "reason_code": "clarification_selection_required"}, "ambiguous_intent")
+    if repair and (not valid_task or answer_type not in {"instructions", "navigation", "explanation", "troubleshooting"}):
+        entities, conditions = {"brand": None, "model": None}, {}
+        reply = {
+            "en": "Which task do you mean: messaging the owner, booking, payment, or verification?" if not valid_task else "For that task, do you need the steps, where to click, or help with an error?",
+            "fil": "Aling gawain ang tinutukoy mo: pag-message sa owner, booking, pagbabayad, o verification?" if not valid_task else "Para sa gawaing iyon, kailangan mo ba ng mga hakbang, kung saan pipindutin, o tulong sa error?",
+            "taglish": "Which task ang tinutukoy mo: messaging the owner, booking, payment, or verification?" if not valid_task else "For that task, steps, where to click, or help with an error ba ang kailangan mo?",
+        }[style]
+        return with_details({"intent": "REJECT", "intent_id": "REJECT", "confidence": 0.99, "score": 0.99,
+            "reply": reply, "requires_clarification": True, "requires_live_data": False, "live_source": "",
+            "alternatives": [], "top_preds": [], "reason_code": "conversation_repair_clarification"}, "ambiguous_intent")
+    if followup_action and not contextual_intent:
+        spec = TOPICS.get(conversation.get("topic")) if conversation.get("intent") not in CONVERSATIONAL_INTENTS else None
+        entities, conditions = {"brand": None, "model": None}, {}
+        reply = spec["clarification"][style] if spec else {
+            "en": "Which task do you mean: verification, messaging the owner, booking, payment, or finding a vehicle?",
+            "fil": "Aling gawain ang tinutukoy mo: verification, pag-message sa owner, booking, pagbabayad, o paghahanap ng sasakyan?",
+            "taglish": "Which task ang tinutukoy mo: verification, messaging the owner, booking, payment, or finding a vehicle?",
+        }[style]
+        return with_details({"intent": "REJECT", "intent_id": "REJECT", "confidence": 0.99, "score": 0.99,
+            "reply": reply, "requires_clarification": True, "requires_live_data": False, "live_source": "",
+            "topic": conversation.get("topic"), "candidate_intents": spec["candidates"] if spec else [],
+            "alternatives": [], "top_preds": [], "reason_code": "missing_followup_context"}, "ambiguous_intent")
+    if social_intent:
+        entities, conditions = {"brand": None, "model": None}, {}
+        item = INTENTS_BY_ID[social_intent]
+        variant = "working" if social_intent == "chat_wellbeing" else None
+        return with_details({"intent": social_intent, "intent_id": social_intent, "confidence": 0.99, "score": 0.99,
+            "reply": item["response_variants"][variant][style][0] if variant else item["responses"][style][0],
+            **({"response_variant": variant} if variant else {}), "requires_clarification": False,
+            "requires_live_data": False, "live_source": "", "alternatives": [], "top_preds": [], "reason_code": "conversational_question"})
 
     if directive_style and not question:
         reply = {
@@ -1218,6 +1618,13 @@ def _classify_single(
             "requires_clarification": True, "requires_live_data": False, "live_source": "", "alternatives": [], "top_preds": [],
             "reason_code": "missing_vehicle_choice"}, "ambiguous_entity", "model")
 
+    if entities.get("specification_requested"):
+        missing = not (entities.get("listing_id") or (entities.get("brand") and entities.get("model")))
+        return with_details({"intent": "available_vehicles", "confidence": 0.99, "score": 0.99,
+            "reply": {"en": "Which vehicle listing do you mean?", "fil": "Aling vehicle listing ang tinutukoy mo?", "taglish": "Which vehicle listing ang tinutukoy mo?"}[style],
+            "requires_clarification": missing, "requires_live_data": not missing,
+            "live_source": "GET /api/vehicles", "reason_code": "listing_specification_question",
+            "alternatives": [], "top_preds": []}, "missing_entity" if missing else None, "model" if missing else None)
     bare_unavailable = bool(re.fullmatch(r"(?:the )?(?:unavailable|not available)", normalized_query))
     if bare_unavailable and not reference_followup:
         conditions["vehicle_status_unavailable"] = True
@@ -1229,8 +1636,8 @@ def _classify_single(
             "alternatives": [], "top_preds": [], "requires_clarification": True,
             "requires_live_data": False, "live_source": "", "reason_code": "topic_clarification"}, "ambiguous_intent")
 
-    if normalized_query in {"account", "my account", "verification", "owner", "support", "payment", "payments"} and not clarified_intent:
-        topic = {"my account": "account", "payments": "payment"}.get(normalized_query, normalized_query)
+    if normalized_query in {"account", "my account", "verification", "owner", "support", "payment", "payments", "vehicle", "vehicles", "sasakyan"} and not clarified_intent:
+        topic = {"my account": "account", "payments": "payment", "vehicle": "vehicles", "sasakyan": "vehicles"}.get(normalized_query, normalized_query)
         spec = TOPICS[topic]
         return with_details({"intent": "REJECT", "intent_id": "REJECT", "confidence": 0.99, "score": 0.99,
             "reply": spec["clarification"][style], "topic": topic, "candidate_intents": spec["candidates"],
@@ -1240,6 +1647,8 @@ def _classify_single(
     unavailable_intent, status_conditions = availability_request(
         normalized_query, entities, reference_followup and prior_topic == "vehicles"
     )
+    if search_result_explanation or (support_intent == "choose_specific_model" and support_variant == "unavailable"):
+        unavailable_intent, status_conditions = None, {}
     conditions.update(status_conditions)
     if status_followup:
         if re.fullmatch(r"(?:which ones|show them|list them)", normalized_query):
@@ -1371,8 +1780,15 @@ def _classify_single(
     )
     pickup_time = bool(PICKUP_TIME_PATTERN.search(normalized_query))
     vehicle_budget_search = "max_budget" in entities and bool(entities.get("brand") or entities.get("category") or re.search(r"\b(?:vehicles?|sasakyan|rental)\b", normalized_query))
-    practical = practical_intent(informal_query) or practical_intent(normalized_query)
-    if reference_followup and not practical and explicit_followup_intent in BRAND_CONTEXT_POLICY_INTENTS:
+    practical = contextual_intent or support_intent or practical_intent(informal_query) or practical_intent(normalized_query)
+    if not pickup_time and re.search(r"\bpick ?up (?:my|our|the|your|this|that) (?:truck|vehicle|car|van|motorcycle)\b", normalized_query):
+        practical = "pickup_location"
+    rental_intent = rental_search_intent(normalized_query, entities)
+    if rental_intent == "available_vehicles" and practical == "driver_option":
+        practical = None
+    if reference_followup and conversation.get("intent") == "rental_rate" and "driver_requested" in current_entities:
+        rental_intent = "rental_rate"
+    if reference_followup and not practical and not rental_intent and explicit_followup_intent in BRAND_CONTEXT_POLICY_INTENTS:
         practical = explicit_followup_intent
     if practical == "unpaid_balance":
         personal_booking_intent = None
@@ -1404,11 +1820,14 @@ def _classify_single(
     elif practical:
         candidates = prioritize_intent(candidates, practical, "practical_question")
         decision_reason = "practical_question"
+    elif rental_intent:
+        candidates = prioritize_intent(candidates, rental_intent, "rental_search_request")
+        decision_reason = "rental_search_request"
     elif pickup_time:
         candidates = prioritize_intent(candidates, "booking_pickup_time", "pickup_time_context")
         decision_reason = "pickup_time_context"
     elif vehicle_budget_search or context_followup:
-        target = "rental_rate" if reference_followup and RATE_QUERY_PATTERN.search(normalized_query) else "available_vehicles"
+        target = "rental_rate" if reference_followup and (RATE_QUERY_PATTERN.search(normalized_query) or entities.get("quote_requested")) else "available_vehicles"
         candidates = prioritize_intent(candidates, target, "vehicle_budget_context")
         decision_reason = "vehicle_budget_context"
     elif entities["brand"]:
@@ -1416,7 +1835,9 @@ def _classify_single(
         if RATE_QUERY_PATTERN.search(normalized_query):
             target_intent = "rental_rate"
             decision_reason = "brand_rate_context"
-        elif current_intent in BRAND_CONTEXT_POLICY_INTENTS:
+        elif current_intent in BRAND_CONTEXT_POLICY_INTENTS and re.search(
+            r"\b(?:insurance|deposit|deposito|full tank|refill|refuel|fuel|gasolina|driver|chauffeur|drayber)\b", normalized_query
+        ):
             target_intent = current_intent
         else:
             target_intent = "vehicle_brand_search"
@@ -1433,7 +1854,16 @@ def _classify_single(
     margin = top_score - second_score
     exact_ambiguous = exact_reason == "exact_alias" and len(matched_ids) > 1
     low_confidence = top_score < CONFIDENCE_THRESHOLD
-    ambiguous = len(candidates) > 1 and margin < CLARIFICATION_MARGIN and top_score < HIGH_CONFIDENCE_THRESHOLD
+    gender_reference = re.search(
+        rf"\b(?:gender|sex|sexuality|sexual\s+orientation|kasarian|{ASSISTANT_IDENTITY_TERMS})\b", normalized_query)
+    assistant_reference = re.search(r"\b(?:you|your|chatbot|assistant|rentify\s+ai|ikaw|ka|mo)\b", normalized_query)
+    femboy_definition = FEMBOY_PATTERN.search(normalized_query) and re.search(
+        r"\b(?:what\s+(?:is|does)|meaning|mean|definition|define|explain|ano|ibig\s+sabihin|sexual\s+orientation)\b", normalized_query)
+    # Semantic similarity alone cannot establish an assistant gender question.
+    unsupported_gender_match = bool(candidates and candidates[0]["intent"] == "chat_gender_identity"
+        and not (self_gender_question or (gender_reference and assistant_reference) or femboy_definition))
+    ambiguous = (len(candidates) > 1 and margin < CLARIFICATION_MARGIN and top_score < HIGH_CONFIDENCE_THRESHOLD
+                 or unsupported_gender_match)
     missing_brand = bool(
         candidates
         and candidates[0]["intent"] == "vehicle_brand_search"
@@ -1478,6 +1908,49 @@ def _classify_single(
 
     selected_intent = candidates[0]["intent"]
     selected_item = INTENTS_BY_ID[selected_intent]
+    response_variant = (support_variant if support_intent == selected_intent else
+                        support_response_variant(selected_intent, normalized_query, conversation))
+    if contextual_intent == selected_intent:
+        variants = selected_item["response_variants"]
+        if followup_action == "offer":
+            response_variant = "instructions" if offer_action == "instructions" else None
+        elif followup_action == "reference":
+            response_variant = conversation.get("response_variant")
+            answer_type = conversation.get("assistant_action") or conversation.get("requested_answer_type")
+        elif followup_action == "navigation":
+            response_variant, answer_type = "navigation", "navigation"
+        elif followup_action == "repair":
+            response_variant = answer_type
+            if selected_intent == "messaging" and answer_type == "instructions" and conversation.get("response_variant") in {"instructions", "instructions_detail"}:
+                response_variant = "instructions_detail"
+        elif followup_action == "confirm":
+            previous_variant = conversation.get("response_variant")
+            response_variant = previous_variant if previous_variant and previous_variant not in {"overview", "instructions", "continuation"} else "confirm_policy"
+        elif followup_action == "continue":
+            response_variant = "instructions" if selected_intent == "verification_security" and conversation.get("assistant_action") not in {"instructions", "continuation"} else "continuation"
+        else:
+            response_variant = "explanation" if re.fullmatch(r"(?:why|bakit|how so)", informal_query) and "explanation" in variants else "instructions" if "instructions" in variants else "explanation"
+            answer_type = "explanation" if response_variant == "explanation" else "instructions"
+        if search_result_explanation:
+            response_variant, answer_type = None, "explanation"
+        elif followup_action == "explain" and informal_query in {"explain that", "explain it"}:
+            response_variant, answer_type = "explanation", "explanation"
+        if answer_type is None:
+            answer_type = "confirmation" if followup_action == "confirm" else "continuation" if followup_action == "continue" else "explanation" if informal_query in {"why", "bakit"} else "instructions"
+    elif not response_variant and answer_type in {"navigation", "troubleshooting", "explanation", "overview"}:
+        response_variant = answer_type
+    if selected_intent == "payment_methods" and contextual_intent and answer_type == "instructions" and conversation.get("response_variant") in {"gcash", "maya", "card"}:
+        response_variant = conversation["response_variant"]
+    if selected_intent == "payment_downpayment" and contextual_intent and answer_type == "instructions" and conversation.get("response_variant") in {"full_payment", "full_payment_instructions"}:
+        response_variant = "full_payment_instructions"
+    if response_variant not in selected_item["response_variants"]:
+        response_variant = None
+    if answer_type is None:
+        answer_type = response_variant if response_variant in REQUESTED_ANSWER_TYPES else {
+            "instructions_detail": "instructions", "no_reply": "troubleshooting",
+            "gcash": "instructions", "maya": "instructions", "card": "instructions",
+            "full_payment_instructions": "instructions", "approval_timing": "explanation",
+        }.get(response_variant)
     if (selected_intent == "vehicle_availability_status" and not entities.get("brand")
             and not conditions.get("vehicle_status_overview")):
         return with_details({
@@ -1489,7 +1962,7 @@ def _classify_single(
             "matched_alias": "", "reason_code": "missing_vehicle",
             "requires_live_data": False, "live_source": selected_item["live_source"],
         }, "missing_entity", "model")
-    missing_rate_unit = selected_intent == "available_vehicles" and "max_budget" in entities and "rate_unit" not in entities
+    missing_rate_unit = selected_intent == "available_vehicles" and response_variant not in {"instructions", "navigation", "explanation", "troubleshooting", "continuation"} and "max_budget" in entities and "rate_unit" not in entities
     missing_booking = selected_intent == "booking_pickup_time"
     if missing_rate_unit:
         currency_amount = f"PHP {entities['max_budget']:,.0f}"
@@ -1505,7 +1978,8 @@ def _classify_single(
             "taglish": "Pickup time depends on your booking. Aling booking or vehicle ang tinutukoy mo? Check your booking details for the scheduled time.",
         }[style]
     else:
-        reply = select_response(selected_intent, style, normalized_query)
+        reply = (selected_item["response_variants"][response_variant][style][0] if response_variant else
+                 select_response(selected_intent, style, normalized_query))
     return with_details({
         "intent": selected_intent,
         "intent_id": selected_intent,
@@ -1514,6 +1988,7 @@ def _classify_single(
         "language": style,
         "reply_lang": style,
         "reply": reply,
+        **({"response_variant": response_variant} if response_variant and not (missing_rate_unit or missing_booking) else {}),
         "alternatives": build_alternatives(candidates, exclude_intent=selected_intent),
         "top_preds": [
             {"intent_id": candidate["intent"], "id": candidate["intent"], "score": round(float(candidate["score"]), 6)}
@@ -1521,7 +1996,7 @@ def _classify_single(
         ],
         "requires_clarification": missing_rate_unit or missing_booking,
         "matched_alias": candidates[0].get("matched_alias", "") or (clean_message if exact_reason == "exact_alias" else ""),
-        "reason_code": "missing_rate_unit" if missing_rate_unit else "missing_booking" if missing_booking else decision_reason or exact_reason or candidates[0].get("matched_source", "semantic_match"),
+        "reason_code": "missing_rate_unit" if missing_rate_unit else "missing_booking" if missing_booking else "assistant_offer_fulfilled" if offer_action else "conversation_repair" if repair else decision_reason or exact_reason or candidates[0].get("matched_source", "semantic_match"),
         "requires_live_data": selected_item["requires_live_data"] and not (missing_rate_unit or missing_booking),
         "live_source": selected_item["live_source"],
         "entities": entities,
@@ -1529,9 +2004,26 @@ def _classify_single(
         "rate_unit" if missing_rate_unit else "booking" if missing_booking else None)
 
 
-def classify_message(message: str, requested_language: Optional[str] = "auto", previous_language: Optional[str] = None,
+def _classify_message(message: str, requested_language: Optional[str] = "auto", previous_language: Optional[str] = None,
                      previous_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     parts = split_questions(clean_text(message))
+    linked_parts = []
+    for part in parts:
+        query = normalize_informal_text(part)
+        if linked_parts and vehicle_subject_fragment(normalize_informal_text(linked_parts[-1])):
+            prior = extract_query_entities(normalize_informal_text(linked_parts[-1]), linked_parts[-1])
+            current = extract_query_entities(query, part)
+            existence = re.fullmatch(r"(?:do you have(?: any| them| those)?|(?:meron|mayroon)(?: ba)? kayo)", query)
+            same_subject = (current.get("category") == prior.get("category")
+                and re.match(r"(?:do you have|may|meron|mayroon)\b", query)
+                and practical_intent(query) in {None, "available_vehicles", "available_transmission"}
+                and not any(current.get(key) is not None and prior.get(key) is not None and current[key] != prior[key]
+                            for key in current))
+            if existence or same_subject:
+                linked_parts[-1] += " " + part
+                continue
+        linked_parts.append(part)
+    parts = linked_parts
     if not parts:
         return _classify_single(message, requested_language, previous_language, previous_context)
     if len(parts) > 3:
@@ -1540,12 +2032,23 @@ def classify_message(message: str, requested_language: Optional[str] = "auto", p
                        "reply": {"en": "Please ask up to three questions at a time so I can answer each clearly.", "fil": "Magtanong ng hanggang tatlong tanong bawat mensahe para masagot ko ang bawat isa.", "taglish": "Please ask up to three questions at a time para malinaw ang bawat sagot."}[result["language"]]})
         return result
     style = resolve_style(requested_language, clean_text(message), previous_language)
-    results = [_classify_single(part, style, style, previous_context) for part in parts]
+    results = []
+    clause_context = previous_context
+    for index, part in enumerate(parts):
+        if index:
+            previous = results[-1]
+            current = extract_query_entities(normalize_informal_text(part), part)
+            related_vehicle = previous.get("topic") == "vehicles" and (
+                current.get("quote_requested") or RATE_QUERY_PATTERN.search(normalize_for_match(part)))
+            same_vehicle = not any(current.get(key) and current[key] != previous.get("entities", {}).get(key)
+                                   for key in ("brand", "model", "category", "location"))
+            clause_context = {key: previous[key] for key in ("intent", "entities", "topic", "conditions", "clarification", "candidate_intents", "response_variant", "requested_answer_type") if key in previous} if related_vehicle and same_vehicle else None
+        results.append(_classify_single(part, style, style, clause_context))
     distinct = []
     for part, result in zip(parts, results):
         if len(parts) > 1:
             result["question"] = part
-        if not any(item["intent"] == result["intent"] and item["entities"] == result["entities"] for item in distinct):
+        if not any(all(item.get(key) == result.get(key) for key in ("intent", "entities", "conditions", "response_variant", "clarification")) for item in distinct):
             distinct.append(result)
         query = normalize_informal_text(part)
         related = None
@@ -1584,6 +2087,8 @@ embedder = SentenceTransformer(MODEL_NAME)
     EXACT_EXAMPLES,
     EXACT_ALIASES,
 ) = build_indexes(intent_items)
+CONTEXTUAL_ROWS = [(action, example) for action, examples in CONTEXTUAL_EXAMPLES.items() for example in examples]
+CONTEXTUAL_EMBEDDINGS = embedder.encode([example for _, example in CONTEXTUAL_ROWS], normalize_embeddings=True)
 
 app = FastAPI(title="RentifyPro Chatbot Service (Deterministic Multilingual)")
 app.add_middleware(InternalServiceAuthMiddleware)
@@ -1597,13 +2102,31 @@ def root() -> Dict[str, Any]:
         "model": MODEL_NAME,
         "dataset": DATASET_PATH.name,
         "dataset_sha256": DATASET_SHA256,
-        "routing_revision": "topic-followups-2026-10-02",
+        "config_sha256": CONFIG_SHA256,
+        "routing_revision": "search-relevance-limits-2026-10-12",
         "intent_count": len(INTENTS_BY_ID),
         "example_count": len(POSITIVE_ROWS),
         "confidence_threshold": CONFIDENCE_THRESHOLD,
         "high_confidence_threshold": HIGH_CONFIDENCE_THRESHOLD,
         "clarification_margin": CLARIFICATION_MARGIN,
     }
+
+
+
+def classify_message(message, requested_language="auto", previous_language=None, previous_context=None,
+                     inventory_vocabulary=None):
+    token = INVENTORY_VOCABULARY.set(validate_inventory_vocabulary(inventory_vocabulary)) if inventory_vocabulary is not None else None
+    try:
+        result = _classify_message(message, requested_language, previous_language, previous_context)
+        query = normalize_informal_text(message)
+        if (inventory_vocabulary is None and result["intent"] in CONVERSATIONAL_INTENTS
+                and result.get("reason_code") == "example"
+                and not exact_candidates(query)[0] and not social_question_intent(query)):
+            result["inventory_vocabulary_requested"] = True
+        return result
+    finally:
+        if token is not None:
+            INVENTORY_VOCABULARY.reset(token)
 
 
 @app.get("/health")
@@ -1614,4 +2137,4 @@ def health() -> Dict[str, str]:
 
 @app.post("/chat")
 def chat(req: ChatRequest) -> Dict[str, Any]:
-    return classify_message(req.message, req.language, req.previous_language, req.previous_context)
+    return classify_message(req.message, req.language, req.previous_language, req.previous_context, req.inventory_vocabulary)

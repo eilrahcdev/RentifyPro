@@ -5,12 +5,14 @@ import { hasCurrentPrivateAutomatedMatch } from "../services/privateDocumentLayo
 const SELFIE_READY_DOCUMENT_STATUSES = new Set(["pending_review", "verified"]);
 
 export const isIdentityReadyForSelfie = (document) => document?.docType === "id"
+  && (!document.expiresAt || new Date(document.expiresAt).getTime() > Date.now())
   && SELFIE_READY_DOCUMENT_STATUSES.has(document.status)
   && (hasCurrentPrivateAutomatedMatch(document) || (document.detailsMatched === true
     && (document.status === "verified" || !["private-ocr", "manual"].includes(document.provider)
       || hasCurrentManualDocumentComparison(document))));
 
 export const isVerifiedPreKycDocument = (document) => document?.status === "verified"
+  && (!document.expiresAt || new Date(document.expiresAt).getTime() > Date.now())
   && (document.docType !== "id" || document.detailsMatched === true);
 
 const normalizeIdentityText = (value) => String(value || "")
@@ -48,7 +50,7 @@ export async function preKycIdentityMatchesRegistration(email, sessionId, profil
     docType: "id",
     status: "verified",
     detailsMatched: true,
-  }).select("docType status detailsMatched +profileSnapshot");
+  }).select("docType status detailsMatched expiresAt +profileSnapshot");
   return isVerifiedPreKycDocument(document)
     && identityProfileMatchesSnapshot(document.profileSnapshot, profile, options);
 }
@@ -62,7 +64,7 @@ export async function preKycSupportingMatchesRegistration(email, sessionId, prof
     sessionId: normalizedSessionId,
     docType: "supporting",
     status: "verified",
-  }).select("docType status +profileSnapshot");
+  }).select("docType status expiresAt +profileSnapshot");
   return isVerifiedPreKycDocument(document)
     && supportingProfileMatchesSnapshot(document.profileSnapshot, profile);
 }
@@ -78,7 +80,7 @@ export async function getMissingPreKycDocs(email, requiredDocs = [], sessionId =
   };
   if (sessionId) query.sessionId = String(sessionId).trim();
 
-  const verifiedDocs = await PreKycDocument.find(query).select("docType status detailsMatched");
+  const verifiedDocs = await PreKycDocument.find(query).select("docType status detailsMatched expiresAt");
 
   const verifiedSet = new Set(verifiedDocs.filter(isVerifiedPreKycDocument).map((doc) => doc.docType));
   return requiredDocs.filter((docType) => !verifiedSet.has(docType));

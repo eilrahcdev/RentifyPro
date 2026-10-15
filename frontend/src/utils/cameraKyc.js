@@ -191,18 +191,21 @@ export async function validateDocumentImageFile(file) {
     const pixels = context.getImageData(0, 0, size, size).data;
     let luminanceTotal = 0;
     let edgeTotal = 0;
-    let prior = null;
+    const luminances = new Float64Array(size * size);
+    let edgeCount = 0;
     for (let index = 0; index < pixels.length; index += 4) {
       const luminance = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2];
       luminanceTotal += luminance;
-      if (prior !== null) edgeTotal += Math.abs(luminance - prior);
-      prior = luminance;
+      const pixel = index / 4;
+      luminances[pixel] = luminance;
+      if (pixel % size) { edgeTotal += Math.abs(luminance - luminances[pixel - 1]); edgeCount++; }
+      if (pixel >= size) { edgeTotal += Math.abs(luminance - luminances[pixel - size]); edgeCount++; }
     }
     const averageLuminance = luminanceTotal / (pixels.length / 4);
-    const averageEdge = edgeTotal / Math.max((pixels.length / 4) - 1, 1);
+    const averageEdge = edgeTotal / Math.max(edgeCount, 1);
     if (averageLuminance < 22) throw new Error("Document image is too dark. Retake it in better lighting.");
-    if (averageLuminance > 242) throw new Error("Document image is overexposed. Retake it without glare.");
-    if (averageEdge < 1.1) throw new Error("Document image appears too blurry or blank. Upload a sharper photo.");
+    // White paper is bright even when its text is readable; brightness alone cannot establish glare.
+    if (averageEdge < 1.1) throw new Error("Too little text or detail is visible in this image. Upload the complete document with readable text.");
     return { width: bitmap.width, height: bitmap.height };
   } finally {
     bitmap.close?.();

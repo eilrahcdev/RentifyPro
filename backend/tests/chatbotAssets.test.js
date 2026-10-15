@@ -34,7 +34,7 @@ test("chatbot payload loads a backend-only deployment with no sibling Python ser
     await fs.rm(root, { recursive: true, force: true });
   });
   for (const file of [
-    "package.json", "utils/chatbotPayload.js", "utils/pricing.js", "utils/chatModeration.js",
+    "package.json", "utils/chatbotPayload.js", "utils/chatbotRentalQuote.js", "utils/pricing.js", "utils/chatModeration.js",
     "data/rentifypro_profanity_dataset.csv", "data/chatbot/chatbot_config.json",
     "data/chatbot/rentifypro_chatbot_dataset_v6.json",
   ]) {
@@ -49,6 +49,10 @@ test("chatbot payload loads a backend-only deployment with no sibling Python ser
     const payload = buildChatbotPayload("hello", "en");
     const reply = applyChatbotGuardrails({ intent: "chat_greeting", confidence: 0.99, language: "en", entities: {}, conditions: {} }, payload);
     if (!reply.reply || reply.intent !== "chat_greeting") throw new Error("Standalone greeting failed");
+    const entities = { brand: "Toyota", model: "Vios", duration_value: 3, duration_unit: "day" };
+    const vehicles = [{ _id: "vios", name: "Toyota Vios", dailyRentalRate: 2400, pricingUnit: "daily", availabilityStatus: "available", specs: { type: "sedan" } }];
+    const quote = applyChatbotGuardrails({ intent: "rental_rate", confidence: 0.99, language: "en", entities }, buildChatbotPayload("quote", "en", vehicles, entities));
+    if (quote.quote?.rentalSubtotal !== 7200) throw new Error("Standalone quotation failed");
     console.log(JSON.stringify(info));
   `;
   const { stdout } = await run(process.execPath, ["--input-type=module", "--eval", probe], {

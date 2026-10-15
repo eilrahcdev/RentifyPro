@@ -45,7 +45,7 @@ def evaluate():
         classify_message(case["input"], "auto", case.get("previous_language"), case.get("previous_context"))
         for case in cases
     ]
-    requests = [{"message": case["input"], "classifier": result} for case, result in zip(cases, classified)]
+    requests = [{"message": case["input"], "classifier": result, "previous_context": case.get("previous_context")} for case, result in zip(cases, classified)]
     process = subprocess.run(
         ["node", str(FULFILL_PATH)], input=json.dumps(requests + requests, ensure_ascii=False),
         capture_output=True, text=True, encoding="utf-8", timeout=30, check=True,
@@ -65,6 +65,9 @@ def evaluate():
             issues.append({"category": "nondeterministic", "field": "result"})
         if classifier["intent"] != case["intent"] or final["intent"] != case["intent"]:
             issues.append({"category": "wrong_intent", "field": "intent", "actual": classifier["intent"]})
+        for key in ("response_variant", "requested_answer_type"):
+            if key in case and (classifier.get(key) != case[key] or final.get(key) != case[key]):
+                issues.append({"category": "wrong_answer_type", "field": key, "expected": case[key], "actual": final.get(key)})
         if classifier["language"] != case["language"] or final["language"] != case["language"]:
             issues.append({"category": "wrong_language", "field": "language", "actual": classifier["language"]})
         compare_fields(classifier.get("entities"), case.get("entities", {}), "entities", issues, "bad_entity")
@@ -108,7 +111,7 @@ def evaluate():
                 context, language = None, None
             classifier = classify_message(turn["input"], "auto", language, context)
             repeated = classify_message(turn["input"], "auto", language, context)
-            request = {"message": turn["input"], "classifier": classifier}
+            request = {"message": turn["input"], "classifier": classifier, "previous_context": context}
             process = subprocess.run(["node", str(FULFILL_PATH)], input=json.dumps([request, request], ensure_ascii=False),
                 capture_output=True, text=True, encoding="utf-8", timeout=30, check=True)
             final, again = json.loads(process.stdout)
@@ -117,6 +120,11 @@ def evaluate():
                 issues.append({"category": "nondeterministic", "field": "result"})
             if classifier["intent"] != turn["intent"] or final["intent"] != turn["intent"]:
                 issues.append({"category": "wrong_intent", "field": "intent", "actual": classifier["intent"]})
+            for key in ("response_variant", "requested_answer_type"):
+                if key in turn and (classifier.get(key) != turn[key] or final.get(key) != turn[key]):
+                    issues.append({"category": "wrong_answer_type", "field": key, "expected": turn[key], "actual": final.get(key)})
+            if "language" in turn and (classifier["language"] != turn["language"] or final["language"] != turn["language"]):
+                issues.append({"category": "wrong_language", "field": "language", "expected": turn["language"], "actual": final["language"]})
             compare_fields(final.get("clarification"), turn.get("clarification", {}), "clarification", issues, "irrelevant_clarification")
             compare_fields(final.get("entities"), turn.get("entities", {}), "entities", issues, "bad_entity")
             direct_answer_total += turn["intent"] != "REJECT" and not turn.get("clarification", {}).get("required")

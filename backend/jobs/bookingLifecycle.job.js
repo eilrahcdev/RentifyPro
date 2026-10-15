@@ -2,12 +2,8 @@ import Booking from "../models/Booking.js";
 import eventBus from "../events/eventBus.js";
 import { NOTIFICATION_EVENTS } from "../events/notification.events.js";
 import {
-  getDurationMinutes,
-  roundCurrency,
-} from "../utils/pricing.js";
-import {
-  getBookingLateReturnPenaltyRatePerHour,
-  getBookingLateReturnPolicy,
+  expireBookingExtensionRequest,
+  updateBookingLateReturnState,
 } from "../utils/lateReturnPolicy.js";
 
 const ACTIVE_BOOKING_STATUSES = ["confirmed", "extended"];
@@ -21,49 +17,13 @@ const parseLifecycleInterval = () => {
   return Math.floor(raw);
 };
 
-const getReturnBoundaryWithGrace = (returnAt, graceMinutes = 0) => {
-  if (!returnAt || Number.isNaN(returnAt.getTime())) return null;
-  const grace = Math.max(0, Math.floor(Number(graceMinutes || 0)));
-  if (grace <= 0) return returnAt;
-  return new Date(returnAt.getTime() + grace * 60 * 1000);
-};
-
 export const syncOneBookingLifecycle = async (booking, now = new Date()) => {
   const returnAt = booking?.returnAt ? new Date(booking.returnAt) : null;
-  if (!returnAt || Number.isNaN(returnAt.getTime())) return false;
-  if (now.getTime() < returnAt.getTime()) return false;
-  const lateReturnPolicy = getBookingLateReturnPolicy(booking);
-
-  const overdueBoundary = getReturnBoundaryWithGrace(returnAt, lateReturnPolicy.graceMinutes);
-  if (!overdueBoundary || now.getTime() <= overdueBoundary.getTime()) return false;
-  const overdueMinutes = Math.max(0, getDurationMinutes(overdueBoundary, now));
-  let changed = false;
-  if (!booking.lateReturnIsOverdue) {
-    booking.lateReturnIsOverdue = true;
-    changed = true;
-  }
-  if (Number(booking.lateReturnOverdueMinutes || 0) !== overdueMinutes) {
-    booking.lateReturnOverdueMinutes = overdueMinutes;
-    changed = true;
-  }
-  if (!booking.lateReturnDetectedAt) {
-    booking.lateReturnDetectedAt = now;
-    changed = true;
-  }
-  const penaltyRatePerHour = getBookingLateReturnPenaltyRatePerHour(booking);
-  if (roundCurrency(Number(booking.lateReturnPenaltyRatePerHour || 0)) !== penaltyRatePerHour) {
-    booking.lateReturnPenaltyRatePerHour = penaltyRatePerHour;
-    changed = true;
-  }
-
-  let shouldNotify = false;
-  if (!booking.lateReturnNotifiedAt) {
-    booking.lateReturnNotifiedAt = now;
-    shouldNotify = true;
-    changed = true;
-  }
-
-  if (!changed) return false;
+  if (!returnAt || Number.isNaN(returnAt.getTime()) || booking.actualReturnAt || !ACTIVE_BOOKING_STATUSES.includes(booking.status)) return false;
+  const expired = expireBookingExtensionRequest(booking, now);
+  if (now < returnAt && !expired && !booking.lateReturnIsOverdue) return false;
+  const { changed, shouldNotify, overdueMinutes } = updateBookingLateReturnState(booking, now);
+  if (!changed && !expired) return false;
   await booking.save();
 
   if (shouldNotify) {
@@ -82,7 +42,7 @@ const runLifecycleSync = async () => {
     status: { $in: ACTIVE_BOOKING_STATUSES },
     returnAt: { $lte: now },
   }).select(
-    "_id status returnAt renter owner vehicle driverSelected vehicleDailyRate driverDailyRate rentalRateUnit lateReturnFeeType lateReturnFeeValue lateReturnGraceMinutes lateReturnIsOverdue lateReturnOverdueMinutes lateReturnDetectedAt lateReturnNotifiedAt lateReturnPenaltyRatePerHour lateReturnPenaltyFee actualReturnAt"
+    "_id status returnAt renter owner vehicle driverSelected vehicleDailyRate driverDailyRate rentalRateUnit lateReturnFeeType lateReturnFeeValue lateReturnGraceMinutes lateReturnIsOverdue lateReturnOverdueMinutes lateReturnDetectedAt lateReturnNotifiedAt lateReturnPenaltyRatePerHour lateReturnPenaltyFee actualReturnAt bookingPolicyVersion originalReturnAt extensionHistory bookingWorkflowRevision extensionStatus extensionRequestedAt extensionRequestedReturnAt extensionReviewedAt extensionReviewedBy extensionReviewAction extensionReviewNote lateReturnAction"
   );
 
   let touched = 0;

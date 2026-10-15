@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    registrationDraftId: { type: String },
+    ownerDocumentVerificationRequired: { type: Boolean, default: false },
     isDisabled: {
       type: Boolean,
       default: false,

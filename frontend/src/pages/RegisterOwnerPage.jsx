@@ -35,6 +35,7 @@ import AuthShell from "../components/AuthShell";
 import LegalPolicyModal from "../components/LegalPolicyModal";
 import RegistrationDraftNotice from "../components/RegistrationDraftNotice";
 import RegistrationProgress from "../components/RegistrationProgress";
+import RegistrationEmailVerification from "../components/RegistrationEmailVerification";
 import HelpLink from "../components/HelpLink";
 import PasswordStrengthIndicator from "../components/PasswordStrengthIndicator";
 import SelfieCapture from "../components/SelfieCapture";
@@ -44,7 +45,7 @@ import API from "../utils/api";
 import { ALLOWED_EMAIL_DOMAINS, NAME_REGEX } from "../data/registerValidation";
 import { BIR_SUPPORTING_DOCUMENT_TYPES, ID_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES } from "../data/kycDocumentTypes";
 
-const STEP_LABELS = ["Account", "Address", "Business document", "Identity", "Review"];
+const STEP_LABELS = ["Account", "Address", "Business details", "Verification", "Review"];
 const TOTAL_STEPS = STEP_LABELS.length;
 const BIR_DOCUMENT_TYPES = new Set(BIR_SUPPORTING_DOCUMENT_TYPES);
 const DOCUMENT_NUMBER_LABELS = {
@@ -104,12 +105,14 @@ const initialFiles = {
 
 const initialKyc = {
   idType: "",
+  savedDocument: null,
   idCardFile: null,
   idRegistered: false,
   idReadyForSelfie: false,
   selfieVerified: false,
   selfieDataUrl: "",
   selfieBase64Clean: "",
+  selfieDocumentRevision: "",
 };
 
 function friendlyError(msg) {
@@ -158,7 +161,6 @@ function RegisterOwnerForm({
   onBack,
   onNavigateToSignIn,
   onNavigateToHome,
-  onNavigateToRegisterOTP,
   onResetDraft,
   draftResetReason,
 }) {
@@ -167,11 +169,13 @@ function RegisterOwnerForm({
     busy: isLoading, onReset: onResetDraft, resetReason: draftResetReason,
   });
   const { form, setForm } = draft;
+  const { recovery, trackProgress } = draft;
   const { check: checkEmail, cancel: cancelEmailCheck, isChecking: isCheckingEmail } = useRegistrationEmailCheck();
   const [files, setFiles] = useState(initialFiles);
   const [kyc, setKyc] = useState(initialKyc);
   const [supportingDocType, setSupportingDocType] = useState("");
   const [supportingDocStatus, setSupportingDocStatus] = useState({ submitted: false, message: "" });
+  const [savedSupportingDocument, setSavedSupportingDocument] = useState(null);
   const [documentRefreshKey, setDocumentRefreshKey] = useState(0);
   const [idRevision, setIdRevision] = useState("");
   const [supportingRevision, setSupportingRevision] = useState("");
@@ -188,12 +192,38 @@ function RegisterOwnerForm({
   }, []);
 
   const [step, setStep] = useState(1);
+  useEffect(() => {
+    if (!recovery) return;
+    const id = recovery.documents.find(document => document.docType === "id");
+    const supporting = recovery.documents.find(document => document.docType === "supporting");
+    setStep(recovery.step);
+    setVerificationView(recovery.verificationPhase === "email" ? "email" : "");
+    setReviewingId(recovery.verificationPhase === "documents");
+    setSupportingDocType(recovery.fields.supportingDocType || "");
+    setSavedSupportingDocument(supporting?.available ? supporting : null);
+    setSupportingDocStatus({ submitted: Boolean(supporting?.profileMatches), message: supporting?.reason || "" });
+    setSupportingRevision(supporting?.documentRevision || "");
+    setKyc(previous => ({ ...previous, idType: recovery.fields.idType || "", savedDocument: id?.available ? id : null,
+      idRegistered: Boolean(id?.profileMatches), idReadyForSelfie: id?.identityReadyForSelfie === true,
+      selfieVerified: recovery.selfieVerified === true,
+      selfieDataUrl: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieDataUrl : "",
+      selfieBase64Clean: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieBase64Clean : "" }));
+    setStepErrors(previous => ({ ...previous,
+      ...(id?.available && id.profileMatches ? { idRegistered: "" } : {}),
+      ...(recovery.selfieVerified ? { selfieVerified: "" } : {}) }));
+    setIdRevision(id?.documentRevision || "");
+    setDocumentStatuses({ id: id?.status || "not_uploaded", supporting: supporting?.status || "not_uploaded" });
+  }, [recovery]);
+  const handleVerificationChange = useCallback(verified => {
+    setKyc(previous => previous.selfieVerified === verified ? previous : { ...previous, selfieVerified: verified });
+  }, []);
   const { formRef, formId, revealError } = useRegistrationNavigation(step);
   const actionsSpaceRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [touchedStep1, setTouchedStep1] = useState({});
   const [stepErrors, setStepErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
+  const submitting = useRef(false);
   const [formError, setFormError] = useState("");
   const [legalModalType, setLegalModalType] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -206,6 +236,7 @@ function RegisterOwnerForm({
 
   const [kycUi, setKycUi] = useState({ statusText: "" });
   const [reviewingId, setReviewingId] = useState(false);
+  const [verificationView, setVerificationView] = useState("");
   const identityHeadingRef = useRef(null);
   const idPreviewUrl = useMemo(
     () => (kyc.idCardFile ? URL.createObjectURL(kyc.idCardFile) : ""),
@@ -217,17 +248,25 @@ function RegisterOwnerForm({
       ? "id_blocked"
     : !kyc.idReadyForSelfie
       ? "id_checking"
+      : kyc.selfieVerified ? "complete"
       : !kyc.selfieBase64Clean
         ? "camera"
         : !kyc.selfieVerified
           ? "selfie"
           : "complete";
-  const showingSelfie = !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
+  const supportingComplete = supportingDocStatus.submitted && ["pending_review", "verified"].includes(documentStatuses.supporting);
+  const documentsComplete = kyc.idReadyForSelfie && supportingComplete;
+  const showingSelfie = draft.emailVerified && documentsComplete && verificationView !== "email" && !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
+  const verificationPhase = !draft.emailVerified || verificationView === "email" ? "email" : showingSelfie ? "face" : "documents";
   useEffect(() => {
-    if (step === 4) identityHeadingRef.current?.focus();
+    trackProgress(step, { idType: kyc.idType, supportingDocType }, verificationPhase);
+  }, [trackProgress, step, kyc.idType, supportingDocType, verificationPhase]);
+  useEffect(() => {
+    if (step === 4) identityHeadingRef.current?.focus({ preventScroll: true });
   }, [step, showingSelfie]);
   const handleIdStatus = useCallback((status, document) => {
     const ready = document?.identityReadyForSelfie === true;
+    if (ready) setStepErrors(previous => ({ ...previous, idRegistered: "" }));
     setKyc((previous) => {
       if (previous.idReadyForSelfie === ready) return previous;
       return {
@@ -243,7 +282,6 @@ function RegisterOwnerForm({
     }
     setDocumentStatuses((previous) => ({ ...previous, id: status }));
   }, []);
-  const areDocumentsApproved = documentStatuses.id === "verified" && documentStatuses.supporting === "verified";
 
   const idInputRef = useRef(null);
   const emailRef = useRef(null);
@@ -256,12 +294,12 @@ function RegisterOwnerForm({
   const canShowBusinessFields = useMemo(() => form.ownerType === "business", [form.ownerType]);
 
   const canAct = useCallback(() => {
-    if (isLoading) return false;
+    if (isLoading || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
     return true;
-  }, [isLoading]);
+  }, [isLoading, draft.ready, draft.status]);
 
   useEffect(() => () => {
     if (idPreviewUrl) URL.revokeObjectURL(idPreviewUrl);
@@ -477,7 +515,7 @@ function RegisterOwnerForm({
     const composedAddress = [barangayName, cityName, provinceName, regionName].filter(Boolean).join(", ");
 
     const nextForm = { ...form, address: composedAddress };
-    setForm((prev) => (prev.address === composedAddress ? prev : nextForm));
+    setForm((prev) => (prev.address === composedAddress ? prev : { ...prev, address: composedAddress }));
     if (step === 2 && touchedStep1.address) {
       setErrors((prev) => ({ ...prev, address: validateStep1Field("address", nextForm) }));
     }
@@ -519,8 +557,7 @@ function RegisterOwnerForm({
           : type === "checkbox"
             ? checked
             : normalizedPhone;
-      const nextForm = { ...form, [name]: nextValue };
-      setForm(nextForm);
+      setForm(previous => ({ ...previous, [name]: nextValue }));
       setFormError("");
       if ([1, 2, 3, 5].includes(step)) {
         setTouchedStep1((prev) => ({ ...prev, [name]: true }));
@@ -529,12 +566,12 @@ function RegisterOwnerForm({
       if (name === "password") {
         setErrors((prev) => ({ ...prev, confirmPassword: "" }));
       }
-      if (["businessEmail", "firstName", "lastName", "businessName", "permitNumber", "taxIdentificationNumber", "branchCode"].includes(name)) {
+      if (["businessName", "permitNumber", "taxIdentificationNumber", "branchCode"].includes(name)) {
         setSupportingDocStatus({ submitted: false, message: "" });
         setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
         setErrors((prev) => ({ ...prev, supportingDocument: "" }));
       }
-      if (["businessEmail", "firstName", "lastName"].includes(name)) {
+      if (["firstName", "lastName"].includes(name)) {
         setKyc((prev) => ({
           ...prev,
           idRegistered: false,
@@ -547,7 +584,7 @@ function RegisterOwnerForm({
         setKycUi((prev) => ({ ...prev, statusText: "" }));
       }
     },
-    [form, step, setForm, cancelEmailCheck]
+    [step, setForm, cancelEmailCheck]
   );
 
   const handleRegionChange = useCallback((e) => {
@@ -685,6 +722,7 @@ function RegisterOwnerForm({
     setFiles((prev) => ({ ...prev, [name]: file }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
     if (name === "supportingDocument") {
+      setSavedSupportingDocument(null);
       setSupportingDocStatus({ submitted: false, message: "" });
       setDocumentStatuses((previous) => ({ ...previous, supporting: "not_uploaded" }));
     }
@@ -743,7 +781,7 @@ function RegisterOwnerForm({
   }, [form, validateStep1Field]);
 
   const validateAccountStep = useCallback(
-    () => validateFields(["firstName", "lastName", "businessEmail", "phone", "password", "confirmPassword"]),
+    (requirePassword = true) => validateFields(["firstName", "lastName", "businessEmail", "phone", ...(requirePassword ? ["password", "confirmPassword"] : [])]),
     [validateFields]
   );
   const validateAddressStep = useCallback(
@@ -752,7 +790,7 @@ function RegisterOwnerForm({
   );
   const validateReviewStep = useCallback(() => validateFields(["agree"]), [validateFields]);
 
-  const validateSupportingDocumentStep = useCallback(() => {
+  const validateSupportingDocumentStep = useCallback((requireUpload = true) => {
     const next = {};
     const detailFields = ["businessName"];
     if (supportingDocType) {
@@ -761,14 +799,14 @@ function RegisterOwnerForm({
     }
     const detailsValid = validateFields(detailFields);
     if (!supportingDocType) next.supportingDocType = "Please select a document type.";
-    if (!files.supportingDocument) next.supportingDocument = "Please upload a supporting document.";
+    if (requireUpload && !files.supportingDocument && !savedSupportingDocument) next.supportingDocument = "Please upload a supporting document.";
     setErrors((prev) => ({
       ...prev,
       supportingDocType: next.supportingDocType || "",
       supportingDocument: next.supportingDocument || "",
     }));
     return detailsValid && Object.keys(next).length === 0;
-  }, [files.supportingDocument, supportingDocType, validateFields]);
+  }, [files.supportingDocument, savedSupportingDocument, supportingDocType, validateFields]);
 
   const verifySupportingDoc = async () => {
     if (documentUploadInFlight.current) return false;
@@ -777,7 +815,7 @@ function RegisterOwnerForm({
       setErrors((prev) => ({ ...prev, supportingDocType: "Please select a document type." }));
       return false;
     }
-    if (!files.supportingDocument) {
+    if (!files.supportingDocument && !savedSupportingDocument) {
       setErrors((prev) => ({ ...prev, supportingDocument: "Please upload a supporting document." }));
       return false;
     }
@@ -786,7 +824,7 @@ function RegisterOwnerForm({
       return false;
     }
     const maxBytes = 4 * 1024 * 1024;
-    if (files.supportingDocument.size > maxBytes) {
+    if (files.supportingDocument?.size > maxBytes) {
       setErrors((prev) => ({
         ...prev,
         supportingDocument: "Document file is too large. Please upload a smaller file.",
@@ -799,12 +837,14 @@ function RegisterOwnerForm({
     setSuccessMessage("");
     setFormError("");
     try {
-      await validateSupportingDocumentFile(files.supportingDocument);
-      const dataUrl = await fileToBase64(files.supportingDocument);
+      if (!await draft.flush({ force: true })) throw new Error("Save your progress before uploading. Retry saving and then continue.");
+      if (files.supportingDocument) await validateSupportingDocumentFile(files.supportingDocument);
+      const dataUrl = files.supportingDocument ? await fileToBase64(files.supportingDocument) : "";
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
       const result = await preVerifySupportingDocument(form.businessEmail, clean, mime, "owner", {
         documentType: supportingDocType,
+        documentRevision: savedSupportingDocument?.documentRevision || "",
         userProfile: {
           full_name: fullName,
           first_name: form.firstName.trim(),
@@ -830,6 +870,7 @@ function RegisterOwnerForm({
       return true;
     } catch (error) {
       setSupportingDocStatus({ submitted: false, message: "" });
+      void draft.recover();
       setErrors((prev) => ({
         ...prev,
         supportingDocument: error?.message || "Supporting document verification failed.",
@@ -843,20 +884,22 @@ function RegisterOwnerForm({
 
   const validateIdentityStep = useCallback(() => {
     const next = {};
+    if (!draft.emailVerified) next.emailVerified = "Verify your email before continuing.";
+    if (!supportingComplete) next.supportingDocument = "Wait for your business document checks to finish before continuing.";
     if (!kyc.idType) next.idType = "Please select your ID type.";
-    if (!kyc.idCardFile) next.idCardFile = "Please upload your government ID.";
+    if (!kyc.idCardFile && !kyc.savedDocument) next.idCardFile = "Please upload your government ID.";
     if (!kyc.idRegistered) next.idRegistered = "Please upload your ID first.";
     else if (!kyc.idReadyForSelfie) next.idRegistered = "Wait for your ID details to match before taking your selfie.";
     else if (!kyc.selfieVerified) next.selfieVerified = "Please verify your selfie matches the ID.";
     setStepErrors(next);
     return Object.keys(next).length === 0;
-  }, [kyc]);
+  }, [kyc, draft.emailVerified, supportingComplete]);
 
   const goNext = async () => {
     if (!canAct()) return;
     setSuccessMessage("");
     if (step === 1) {
-      if (!validateAccountStep()) { revealError(); return; }
+      if (!validateAccountStep(!draft.recovery)) { revealError(); return; }
       setFormError("");
       setIsLoading(true);
       try {
@@ -877,15 +920,13 @@ function RegisterOwnerForm({
     }
     if (step === 2 && !validateAddressStep()) { revealError(); return; }
     if (step === 3) {
-      if (!validateSupportingDocumentStep()) { revealError(); return; }
-      if (!supportingDocStatus.submitted) {
-        setErrors((previous) => ({ ...previous, supportingDocument: "Upload and check your business document before continuing." }));
-        revealError();
-        return;
-      }
-      if (["reupload_required", "rejected"].includes(documentStatuses.supporting)) return;
+      if (!validateSupportingDocumentStep(false)) { revealError(); return; }
     }
-    if (step === 4 && reviewingId && kyc.idRegistered && kyc.idReadyForSelfie) {
+    if (step === 4 && verificationPhase === "email") {
+      if (!draft.emailVerified) { setStepErrors({ emailVerified: "Verify your email before continuing." }); return; }
+      setVerificationView(""); setStepErrors({}); return;
+    }
+    if (step === 4 && reviewingId && documentsComplete) {
       setReviewingId(false);
       setStepErrors({});
       return;
@@ -900,10 +941,12 @@ function RegisterOwnerForm({
     setSuccessMessage("");
     setStepErrors({});
     setErrors({});
-    if (step === 4 && showingSelfie) {
+    if (step === 4 && verificationPhase === "face") {
       setReviewingId(true);
       return;
     }
+    if (step === 4 && verificationPhase === "documents") { setVerificationView("email"); return; }
+    setVerificationView(""); setReviewingId(false);
     setStep((prev) => Math.max(1, prev - 1));
   };
 
@@ -913,22 +956,27 @@ function RegisterOwnerForm({
       setStepErrors((prev) => ({ ...prev, idType: "Select your ID type first." }));
       return;
     }
-    if (!kyc.idCardFile) {
+    if (!kyc.idCardFile && !kyc.savedDocument) {
       setStepErrors((prev) => ({ ...prev, idCardFile: "Upload your ID image first." }));
       return;
     }
 
     setIsLoading(true);
     setReviewingId(false);
+    setStepErrors(previous => ({ ...previous, idRegistered: "" }));
     setKycUi((prev) => ({ ...prev, statusText: "Uploading ID securely..." }));
 
+    let uploadStarted = false;
     try {
-      await validateDocumentImageFile(kyc.idCardFile);
-      const dataUrl = await fileToBase64(kyc.idCardFile);
+      if (!await draft.flush({ force: true })) throw new Error("Save your progress before uploading. Retry saving and then continue.");
+      if (kyc.idCardFile) await validateDocumentImageFile(kyc.idCardFile);
+      const dataUrl = kyc.idCardFile ? await fileToBase64(kyc.idCardFile) : "";
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
+      uploadStarted = true;
       const result = await preRegisterIdFace(form.businessEmail, fullName, "owner", clean, mime, {
         idType: kyc.idType,
+        documentRevision: kyc.savedDocument?.documentRevision || "",
         userProfile: {
           full_name: fullName,
           first_name: form.firstName.trim(),
@@ -951,7 +999,9 @@ function RegisterOwnerForm({
       setStepErrors((prev) => ({ ...prev, idType: "", idRegistered: "" }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
     } catch (error) {
-      setStepErrors((prev) => ({ ...prev, idRegistered: friendlyError(error.message) }));
+      const recovered = uploadStarted ? await draft.recover() : null;
+      const savedId = recovered?.documents.find(document => document.docType === "id" && document.available && document.profileMatches);
+      setStepErrors((prev) => ({ ...prev, idRegistered: savedId ? "" : friendlyError(error.message) }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
     } finally {
       setIsLoading(false);
@@ -964,6 +1014,7 @@ function RegisterOwnerForm({
       selfieVerified: false,
       selfieDataUrl: dataUrl,
       selfieBase64Clean: base64,
+      selfieDocumentRevision: idRevision,
     }));
     setStepErrors((previous) => ({ ...previous, selfieVerified: "" }));
     setKycUi((previous) => ({ ...previous, statusText: "" }));
@@ -988,17 +1039,21 @@ function RegisterOwnerForm({
     }
 
     setIsLoading(true);
+    setStepErrors(previous => ({ ...previous, selfieVerified: "" }));
     setKycUi((prev) => ({ ...prev, statusText: "Verifying face match..." }));
 
     try {
+      if (!await draft.flush()) throw new Error("Save your progress before verification. Retry saving and then continue.");
       const result = await preSelfieVerify(form.businessEmail, kyc.selfieBase64Clean, "owner");
-      if (!result.verified) throw new Error(result.message || "Face does not match ID.");
+      if (!result.verified) throw Object.assign(new Error(result.message || "Face does not match ID."), { verified: false });
       setKyc((prev) => ({ ...prev, selfieVerified: true }));
       setStepErrors((prev) => ({ ...prev, selfieVerified: "" }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
     } catch (error) {
-      setKyc((prev) => ({ ...prev, selfieVerified: false }));
-      setStepErrors((prev) => ({ ...prev, selfieVerified: friendlyError(error.message) }));
+      const recovered = [401, 403, 409].includes(error.status) || (error.verified !== false && (!error.status || error.status >= 500))
+        ? await draft.recover() : null;
+      setKyc((prev) => ({ ...prev, selfieVerified: recovered?.selfieVerified === true }));
+      setStepErrors((prev) => ({ ...prev, selfieVerified: recovered?.selfieVerified ? "" : friendlyError(error.message) }));
       setKycUi((prev) => ({ ...prev, statusText: "" }));
     } finally {
       setIsLoading(false);
@@ -1007,7 +1062,7 @@ function RegisterOwnerForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isLoading || !canAct()) return;
+    if (submitting.current || draft.completed || draft.registrationComplete || isLoading || !canAct()) return;
     if (!validateAccountStep()) {
       setStep(1);
       return;
@@ -1025,19 +1080,14 @@ function RegisterOwnerForm({
       return;
     }
     if (!validateReviewStep()) return;
-    if (!areDocumentsApproved) {
-      const needsNewUpload = Object.values(documentStatuses).some((status) => ["reupload_required", "rejected"].includes(status));
-      setFormError(needsNewUpload
-        ? "One of your documents needs a new upload. Follow the correction shown under Document review, then try again."
-        : "Your ID and supporting document are still being checked. Refresh their status and submit after both are approved.");
-      return;
-    }
 
+    submitting.current = true;
     setIsLoading(true);
     setSuccessMessage("");
     setFormError("");
 
     try {
+      if (!await draft.flush()) throw new Error("Save your progress before submitting. Retry saving and then continue.");
       const preKycToken = await getPreKycSessionToken(form.businessEmail, "owner");
       const response = await API.register({
         name: fullName,
@@ -1057,14 +1107,15 @@ function RegisterOwnerForm({
         branchCode: form.branchCode,
         preKycToken,
       });
-
-      const registeredEmail = String(response?.user?.email || form.businessEmail || "").trim().toLowerCase();
-      draft.complete();
-      setSuccessMessage(response?.message || "Registration successful. Redirecting to OTP verification...");
-      await API.sendOTP(registeredEmail).catch(() => {});
-      setTimeout(() => onNavigateToRegisterOTP(registeredEmail, form.phone, fullName), 1200);
+      if (response?.success !== true || !response.user?._id || response.user.isVerified !== true || response.user.role !== "owner"
+        || String(response.user.email || "").trim().toLowerCase() !== form.businessEmail.trim().toLowerCase()) {
+        throw new Error("Account creation was not confirmed. Recover your saved progress and try again.");
+      }
+      draft.complete(response.user.kycStatus);
+      setSuccessMessage(response?.message || "Account created. Sign in to continue.");
     } catch (error) {
       const lower = (error?.message || "").toLowerCase();
+      if (!error.status || error.status >= 500) void draft.recover();
       const raw = error?.message || "";
       const serverErrors = error?.details?.errors;
       if (serverErrors && typeof serverErrors === "object") {
@@ -1109,9 +1160,29 @@ function RegisterOwnerForm({
         setFormError(msg);
       }
     } finally {
+      submitting.current = false;
       setIsLoading(false);
     }
   };
+
+  const supportingDocumentUpload = <>
+              <FileInput
+                label="Supporting Business Document"
+                helper="Upload the selected Philippines-issued document showing the business details you entered."
+                name="supportingDocument"
+                onChange={handleFile}
+                error={errors.supportingDocument}
+                file={files.supportingDocument}
+                disabled={isLoading}
+              />
+              {savedSupportingDocument && !files.supportingDocument && <p className="text-sm text-slate-700">Your business document is saved privately. Choose a file to replace it.</p>}
+              <button type="button" onClick={verifySupportingDoc} disabled={isLoading || supportingDocStatus.submitted || !supportingDocType || (!files.supportingDocument && !savedSupportingDocument)}
+                className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
+                {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading document...</>
+                  : ["queued", "processing"].includes(documentStatuses.supporting) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
+                  : supportingDocStatus.submitted ? "Document uploaded" : "Upload and check document"}
+              </button>
+  </>;
 
   const documentReviewNotice = <PreKycReviewNotice
     key={`${idRevision}:${supportingRevision}:${kyc.idRegistered}:${supportingDocStatus.submitted}`}
@@ -1125,6 +1196,7 @@ function RegisterOwnerForm({
     supportingRevision={supportingRevision}
     onDocumentsChange={handleDocumentsChange}
     onIdStatus={handleIdStatus}
+    onVerificationChange={handleVerificationChange}
     onCorrectDetails={(type) => {
       if (type === "id") { setStep(1); return; }
       setSupportingDocStatus({ submitted: false, message: "" });
@@ -1186,9 +1258,9 @@ function RegisterOwnerForm({
           </section>
         )}
 
-        <RegistrationDraftNotice draft={draft} busy={isLoading} />
+        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} />
 
-        {successMessage && (
+        {successMessage && !draft.completed && !draft.registrationComplete && (
           <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 flex items-center gap-2">
             <CircleCheck size={16} strokeWidth={2} aria-hidden="true" /> {successMessage}
           </div>
@@ -1198,7 +1270,7 @@ function RegisterOwnerForm({
           event.preventDefault();
           if (step < TOTAL_STEPS) void goNext();
           else void handleSubmit(event);
-        }} id={formId} ref={formRef} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
+        }} id={formId} ref={formRef} hidden={draft.completed || draft.registrationComplete} tabIndex={-1} aria-label={`Registration step ${step} of ${TOTAL_STEPS}`} className="rp-registration-form space-y-4" noValidate>
           {isCheckingEmail && <p role="status" className="sr-only">Checking email availability.</p>}
           {formError && (
             <div
@@ -1209,7 +1281,7 @@ function RegisterOwnerForm({
             </div>
           )}
 
-          <fieldset disabled={isLoading} className="min-w-0 space-y-4">
+          <fieldset disabled={isLoading || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
           {[1, 2].includes(step) && (
             <>
               <div className="rp-registration-step-intro rounded-2xl border border-gray-200 p-4 bg-white">
@@ -1407,8 +1479,8 @@ function RegisterOwnerForm({
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={20} className="text-[#017FE6]" /></div>
                   <div>
-                    <p className="font-semibold text-gray-900">Step 3 — Business document</p>
-                    <p className="text-sm text-gray-500 mt-1">Enter the details visible on your document, then upload it for review.</p>
+                    <p className="font-semibold text-gray-900">Step 3 — Business details</p>
+                    <p className="text-sm text-gray-500 mt-1">Enter the details visible on your business document. You will upload it after email verification.</p>
                   </div>
                 </div>
               </div>
@@ -1512,32 +1584,19 @@ function RegisterOwnerForm({
                 ) : null}
               </div>
 
-              <FileInput
-                label="Supporting Business Document"
-                helper="Upload the selected Philippines-issued document showing the business details you entered."
-                name="supportingDocument"
-                onChange={handleFile}
-                error={errors.supportingDocument}
-                file={files.supportingDocument}
-                disabled={isLoading}
-              />
-              <button type="button" onClick={verifySupportingDoc} disabled={isLoading || supportingDocStatus.submitted || !supportingDocType || !files.supportingDocument}
-                className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading document...</>
-                  : ["queued", "processing"].includes(documentStatuses.supporting) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
-                  : supportingDocStatus.submitted ? "Document uploaded" : "Upload and check document"}
-              </button>
+
             </>
           )}
 
           {step === 4 && (
             <>
+              {verificationPhase === "email" ? <RegistrationEmailVerification email={form.businessEmail} draft={draft} disabled={isLoading} onVerified={() => setVerificationView("")} /> : <>
               <div data-identity-view={showingSelfie ? "selfie" : "id"} className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><ShieldCheck size={20} className="text-[#017FE6]" /></div>
                   <div>
                     <h2 ref={identityHeadingRef} tabIndex={-1} className="font-semibold text-gray-900">
-                      Step 4 — {showingSelfie ? "Selfie verification" : "Identity verification"}
+                      Step 4 — {showingSelfie ? "Face Recognition" : "ID Verification"}
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">{showingSelfie
                       ? "Your ID check passed. Capture a live selfie to match your ID photo."
@@ -1547,6 +1606,7 @@ function RegisterOwnerForm({
               </div>
 
               {!showingSelfie && <>
+              {supportingDocumentUpload}
               <SelectField
                 label="ID Type"
                 name="idType"
@@ -1579,7 +1639,7 @@ function RegisterOwnerForm({
                         e.target.value = "";
                         return;
                       }
-                      setKyc((prev) => ({ ...prev, idCardFile: file, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
+                      setKyc((prev) => ({ ...prev, savedDocument: null, idCardFile: file, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
                       setDocumentStatuses((previous) => ({ ...previous, id: "not_uploaded" }));
                       setIdRevision("");
                       setKycUi((prev) => ({ ...prev, statusText: "" }));
@@ -1589,7 +1649,7 @@ function RegisterOwnerForm({
 
                   {!kyc.idCardFile ? (
                     <button type="button" onClick={() => idInputRef.current?.click()} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
-                      Upload
+                      {kyc.savedDocument ? "Replace ID" : "Upload"}
                     </button>
                   ) : (
                     <>
@@ -1614,9 +1674,10 @@ function RegisterOwnerForm({
                   )}
                 </div>
                 {stepErrors.idCardFile && <p className="text-red-500 text-sm font-medium mt-2">{stepErrors.idCardFile}</p>}
+                {kyc.savedDocument && !kyc.idCardFile && <p className="mt-2 text-sm text-slate-700">Your government ID is saved privately. Choose a file to replace it.</p>}
               </div>
 
-                <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || !kyc.idCardFile} onClick={registerId} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">
+                <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || (!kyc.idCardFile && !kyc.savedDocument)} onClick={registerId} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">
                   {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
                     : ["queued", "processing"].includes(documentStatuses.id) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
                     : kyc.idRegistered ? "ID uploaded" : "Upload and check ID"}
@@ -1640,13 +1701,21 @@ function RegisterOwnerForm({
               )}
               {kycUi.statusText && <p role="status" className="text-sm font-medium text-slate-600">{kycUi.statusText}</p>}
               {stepErrors.idRegistered && <p className="text-red-500 text-sm font-medium">{stepErrors.idRegistered}</p>}
+              {stepErrors.supportingDocument && <p role="alert" className="text-sm text-red-600">{stepErrors.supportingDocument}</p>}
+              </>}
+              {!draft.emailVerified && stepErrors.emailVerified && <p role="alert" className="text-sm text-red-600">{stepErrors.emailVerified}</p>}
             </>
           )}
 
-          {(step === 3 || step === 5) && documentReviewNotice}
+          {step === 5 && documentReviewNotice}
 
           {step === 5 && (
             <>
+              {draft.recovery && <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-700">Re-enter your password to submit this recovered registration.</p>
+                <PasswordField label="Create Password" name="password" value={form.password} onChange={handleChange} error={errors.password} disabled={isLoading} show={showPw} toggle={() => setShowPw(previous => !previous)} showStrength maxLength={128} />
+                <PasswordField label="Confirm Password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} error={errors.confirmPassword} disabled={isLoading} show={showCpw} toggle={() => setShowCpw(previous => !previous)} maxLength={128} />
+              </div>}
               <div className="rounded-2xl border border-gray-200 p-4 bg-white">
                 <p className="font-semibold text-gray-900">Step 5 — Review & submit</p>
                 <p className="text-sm text-gray-500 mt-1">Confirm your details before creating your account.</p>
@@ -1656,6 +1725,7 @@ function RegisterOwnerForm({
                 {[
                   { label: "Full Name", value: fullName || "-" },
                   { label: "Email", value: form.businessEmail || "-" },
+                  { label: "Email Verification", value: draft.emailVerified ? "Verified" : "Not verified", highlight: draft.emailVerified },
                   { label: "Phone", value: form.phone || "-" },
                   { label: "Address", value: form.address || "-" },
                   { label: "Region", value: regions.find((entry) => entry.code === form.region)?.name || "-" },
@@ -1667,7 +1737,7 @@ function RegisterOwnerForm({
                   { label: BIR_DOCUMENT_TYPES.has(supportingDocType) ? "TIN" : DOCUMENT_NUMBER_LABELS[supportingDocType] || "Document number", value: BIR_DOCUMENT_TYPES.has(supportingDocType) ? `•••-•••-${form.taxIdentificationNumber.slice(-3)}` : form.permitNumber || "Not shown" },
                   ...(BIR_DOCUMENT_TYPES.has(supportingDocType) ? [{ label: "Branch Code", value: form.branchCode || "-" }] : []),
                   { label: "Supporting Document Type", value: supportingDocType || "-" },
-                  { label: "Supporting Document", value: files.supportingDocument ? "Uploaded" : "Missing" },
+                  { label: "Supporting Document", value: files.supportingDocument || savedSupportingDocument ? "Uploaded" : "Missing" },
                   { label: "ID Type", value: kyc.idType || "-" },
                   { label: "Identity verification", value: kyc.selfieVerified ? "Selfie matched" : "Not verified", highlight: kyc.selfieVerified },
                 ].map(({ label, value, highlight }, i, arr) => (
@@ -1692,20 +1762,20 @@ function RegisterOwnerForm({
             </>
           )}
 
-          <RegistrationActions spaceRef={actionsSpaceRef}>
+          {!draft.completed && !draft.registrationComplete && <RegistrationActions spaceRef={actionsSpaceRef}>
             <button type="button" onClick={step === 1 ? onBack : goBack} disabled={isLoading} className="rp-btn-secondary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-              {step === 4 && showingSelfie ? "Back to ID" : step === 1 ? "Register as Renter" : "Back"}
+              {step === 4 && verificationPhase === "face" ? "Back to ID" : step === 4 && verificationPhase === "documents" ? "Back to Email" : step === 1 ? "Register as Renter" : "Back"}
             </button>
             {step < TOTAL_STEPS ? (
               <button type="button" onClick={goNext} disabled={isLoading} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
                 {isCheckingEmail ? <><Loader size={18} className="animate-spin" aria-hidden="true" /> Checking email...</> : "Next"}
               </button>
             ) : (
-              <button type="submit" form={formId} disabled={isLoading || !areDocumentsApproved} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
-                {isLoading ? <><Loader size={18} className="animate-spin" /> Registering...</> : !areDocumentsApproved ? "Waiting for document approval" : "Register as Owner"}
+              <button type="submit" form={formId} disabled={isLoading || draft.completed || !draft.emailVerified || !documentsComplete || !kyc.selfieVerified} className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-70">
+                {isLoading ? <><Loader size={18} className="animate-spin" /> Registering...</> : "Create Account"}
               </button>
             )}
-          </RegistrationActions>
+          </RegistrationActions>}
 
           {step === 1 && (
             <p className="rp-registration-signin text-center text-slate-600 text-sm mt-1">

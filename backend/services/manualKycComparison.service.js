@@ -21,7 +21,7 @@ export async function compareManualKycDocument({ id, input, reviewerId }) {
   const updated = await PreKycDocument.findOneAndUpdate({
     _id: id, status: "pending_review", fileHash: document.fileHash,
     ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}),
-  }, { $set: fields }, { new: true });
+  }, { $set: fields }, { returnDocument: "after" });
   if (!updated) throw Object.assign(new Error("The document changed. Refresh before reviewing."), { status: 409 });
   auditLog.info("KYC", "Manual registration comparison completed", {
     reviewId: String(id), reviewerId: String(reviewerId), fileHash: document.fileHash,

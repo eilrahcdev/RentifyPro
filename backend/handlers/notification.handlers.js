@@ -72,6 +72,8 @@ const getLateReturnPaymentData = (payload = {}, { final = false } = {}) => {
     vehicleName: getVehicleName(payload),
     scheduledReturnAt: booking.returnAt || null,
     actualReturnAt: booking.actualReturnAt || null,
+    returnConfirmedAt: booking.returnConfirmedAt || null,
+    returnReportedHandoverAt: booking.returnReportedHandoverAt || null,
     overdueMinutes,
     graceMinutes: lateReturnPolicy.graceMinutes,
     lateReturnPenaltyRatePerHour: penaltyRatePerHour,
@@ -452,7 +454,7 @@ const handleExtensionRequested = async (payload = {}) => {
   const actorName = displayName(payload.actor || payload.renter, "A renter");
   await sendBookingNotification(payload, getOwnerId(payload), NOTIFICATION_EVENTS.EXTENSION_REQUESTED, {
     title: "Extension request received",
-    message: `${actorName} requested to extend the booking schedule.`,
+    message: `${actorName} requested to extend the booking schedule. Review before the requested return time; approval is required and expired requests cannot be approved.`,
     data: bookingData(payload, {
       status: payload.status || getBooking(payload).status,
       extensionStatus: "requested",
@@ -464,7 +466,9 @@ const handleExtensionRequested = async (payload = {}) => {
 const handleExtensionApproved = async (payload = {}) => {
   await sendBookingNotification(payload, getRenterId(payload), NOTIFICATION_EVENTS.EXTENSION_APPROVED, {
     title: "Extension approved",
-    message: "Your extension request was approved. Booking schedule and price were updated.",
+    message: Number(getBooking(payload).bookingPolicyVersion) === 2
+      ? "Your extension was approved. The requested return time now applies. Additional rental time is charged separately from earlier late time; review the breakdown in My Bookings."
+      : "Your extension request was approved. Booking schedule and price were updated under its existing pricing policy.",
     data: bookingData(payload, {
       status: payload.status || getBooking(payload).status,
       extensionStatus: "approved",

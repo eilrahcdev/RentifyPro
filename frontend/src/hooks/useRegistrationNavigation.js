@@ -8,9 +8,13 @@ export default function useRegistrationNavigation(step) {
     if (previousStep.current === step) return;
     previousStep.current = step;
     const frame = requestAnimationFrame(() => {
-      const target = formRef.current?.querySelector('[data-identity-view] h2') || formRef.current;
+      const card = formRef.current?.closest(".rp-registration-card");
+      const target = card?.querySelector(".rp-registration-header h2") || formRef.current;
+      if (target) target.tabIndex = -1;
       target?.focus({ preventScroll: true });
-      target?.scrollIntoView({ block: "start", behavior: "instant" });
+      const content = card?.closest(".rp-auth-content");
+      content?.scrollTo({ top: 0, behavior: "instant" });
+      window.scrollTo({ top: 0, behavior: "instant" });
     });
     return () => cancelAnimationFrame(frame);
   }, [step]);
