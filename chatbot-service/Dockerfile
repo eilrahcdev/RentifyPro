@@ -26,11 +26,14 @@ COPY --chown=app:app chatbot_rental_entities.py ./
 COPY --chown=app:app chatbot_conversation.py ./
 COPY --chown=app:app service_security.py ./
 COPY --chown=app:app chatbot_config.json ./
+COPY --chown=app:app chatbot_inventory.py ./
 COPY --chown=app:app rentifypro_chatbot_dataset_v6.json ./
 
 USER app
 
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+
+RUN python -c "import app"
 
 EXPOSE 8001
 

@@ -83,8 +83,13 @@ const corsOriginHandler = (origin, callback) => {
 };
 const allowPublicVehicleMedia = (_req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Cache-Control", "no-store");
   next();
+};
+const vehicleMediaStaticOptions = {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  },
 };
 const allowPublicAvatarMedia = (_req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
@@ -127,15 +132,21 @@ app.use("/api/kyc", express.json({ limit: process.env.KYC_JSON_BODY_LIMIT || "8m
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || "1mb" }));
 // Only public vehicle and avatar media are exposed. Private KYC files are never static.
-app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(backendUploadsDir, "vehicles")));
+app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(backendUploadsDir, "vehicles"), vehicleMediaStaticOptions));
 app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(getAvatarUploadDir()));
 if (getAvatarUploadDir() !== path.join(backendUploadsDir, "avatars")) {
   app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(backendUploadsDir, "avatars")));
 }
 if (backendUploadsDir.toLowerCase() !== cwdUploadsDir.toLowerCase()) {
-  app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(cwdUploadsDir, "vehicles")));
+  app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(cwdUploadsDir, "vehicles"), vehicleMediaStaticOptions));
   app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(cwdUploadsDir, "avatars")));
 }
+app.use("/uploads/vehicles", (error, _req, res, next) => {
+  if (!res.headersSent && res.getHeader("Cache-Control") === "public, max-age=31536000, immutable") {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next(error);
+});
 
 // Request body sanitizers
 app.use(noSqlSanitize);
