@@ -283,6 +283,11 @@
 .rp-profile-section__summary { font-size: 0.875rem; color: #475569; overflow-wrap: anywhere; }
 .rp-profile-summary { min-width: 0; overflow-wrap: anywhere; }
 .rp-profile-summary > div:last-child { min-width: 0; }
+.rp-renter-page .rp-profile-photo-action { right: 25%; bottom: 25%; transform: translate(50%, 50%); border: 0; background: transparent; box-shadow: none; }
+.rp-renter-page .rp-profile-photo-action::before { content: ""; position: absolute; inset: 0.5rem; border: 1px solid #e2e8f0; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / 0.1); }
+.rp-renter-page .rp-profile-photo-action:hover::before { background: #f3f4f6; }
+.rp-renter-page .rp-profile-photo-action:focus-visible { outline: 2px solid #075eb9; outline-offset: 2px; }
+.rp-renter-page .rp-profile-photo-action svg { position: relative; }
 .rp-account-selector { display: none; }
 #account-content-title, #owner-verification { scroll-margin-top: 6rem; }
 .rp-editor-navigation { display: flex; gap: 0.5rem; overflow-x: auto; flex-shrink: 0; padding: 0.5rem 1rem; border-bottom: 1px solid #e2e8f0; background: white; }

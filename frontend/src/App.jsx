@@ -4,6 +4,7 @@ import { getCurrentTime, getTodayDate, getTomorrowDate } from "./utils/dateUtils
 // Main pages
 import RentifyPro from "./pages/RentifyPro";
 const SignInPage = lazy(() => import("./components/SignInPage"));
+const EmailVerification = lazy(() => import("./verification/EmailVerification"));
 const VehiclesPage = lazy(() => import("./pages/VehiclesPage"));
 const VehicleDetailsPage = lazy(() => import("./pages/VehicleDetailsPage"));
 const BookingsPage = lazy(() => import("./pages/BookingsPage"));
@@ -59,6 +60,7 @@ const ROUTE_TO_PAGE = {
   "/terms-and-conditions": "terms-and-conditions",
   "/bookings": "booking-history",
   "/signin": "signin",
+  "/verify-email": "verify-email",
   "/register": "register",
   "/register-owner": "register-owner",
   "/registerotp": "registerotp",
@@ -198,6 +200,7 @@ const LEGACY_AUTH_KEYS = ["token"];
 const LEGACY_PROFILE_KEYS = ["user", "ownerProfile", "ownerProfilePhoto", "profilePhoto", "profilePhotoUserId"];
 const AUTH_PAGES = new Set([
   "signin",
+  "verify-email",
   "register",
   "register-owner",
   "registerotp",
@@ -311,6 +314,7 @@ const App = () => {
   const [forgotEmail, setForgotEmail] = useState(() =>
     String(initialFlowState.forgotEmail || "").trim()
   );
+  const [verificationEmail, setVerificationEmail] = useState("");
   const [forgotResetToken, setForgotResetToken] = useState(() =>
     String(initialFlowState.forgotResetToken || "").trim()
   );
@@ -1112,11 +1116,27 @@ const App = () => {
       )}
 
       {/* sign in */}
+      {currentPage === "verify-email" && (
+        <EmailVerification
+          key={verificationEmail}
+          email={verificationEmail}
+          onNavigateToHome={() => setCurrentPage("home")}
+          onNavigateToSignIn={() => {
+            setVerificationEmail("");
+            setCurrentPage("signin");
+          }}
+        />
+      )}
+
       {currentPage === "signin" && (
         <SignInPage
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToRegister={() => setCurrentPage("register")}
           onNavigateToForgotPassword={() => setCurrentPage("forgot-email")}
+          onNavigateToEmailVerification={(email) => {
+            setVerificationEmail(email);
+            setCurrentPage("verify-email");
+          }}
           onLoginSuccess={(userData) => {
             setSessionLoadError("");
             setUser(userData);

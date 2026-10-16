@@ -652,7 +652,8 @@ export const loginUser = async (req, res) => {
         res,
         403,
         "email",
-        "Please verify your email before logging in."
+        "Please verify your email before logging in.",
+        { code: "EMAIL_VERIFICATION_REQUIRED" }
       );
     }
 
@@ -810,8 +811,10 @@ export const verifyOTP = async (req, res) => {
 
     auditLog.info("AUTH", `OTP verified for: ${normalizedEmail}`);
 
-    const token = signToken(user);
-    setAuthCookie(res, token);
+    if (req.body.signIn !== false) {
+      const token = signToken(user);
+      setAuthCookie(res, token);
+    }
 
     res.json({
       success: true,

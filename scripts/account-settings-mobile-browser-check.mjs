@@ -127,14 +127,22 @@ try {
       const distance = Math.hypot(b.x + b.width / 2 - a.x - a.width / 2, b.y + b.height / 2 - a.y - a.height / 2);
       return { cardWidth: card.clientWidth, cardScroll: card.scrollWidth, pageWidth: innerWidth,
         pageScroll: document.documentElement.scrollWidth, photoWidth: a.width,
-        buttonWidth: b.width, buttonHeight: b.height, circleOverlap: a.width / 2 + visualRadius - distance,
+        buttonWidth: b.width, buttonHeight: b.height, cameraDiameter: visualRadius * 2,
+        cameraCenterX: (b.x + b.width / 2 - a.x) / a.width,
+        cameraCenterY: (b.y + b.height / 2 - a.y) / a.height,
+        circleOverlap: a.width / 2 + visualRadius - distance,
         accessibleName: button.getAttribute('aria-label') };
     })()`);
     expect(metrics.cardScroll <= metrics.cardWidth + 1 && metrics.pageScroll <= metrics.pageWidth + 1,
       `${role}/${width}: profile overflows ${JSON.stringify(metrics)}`);
     expect(metrics.buttonWidth >= 44 && metrics.buttonHeight >= 44, `${role}/${width}: undersized photo touch target`);
     expect(Boolean(metrics.accessibleName), `${role}/${width}: photo action has no accessible name`);
-    if (width < 768) expect(metrics.circleOverlap <= 2, `${role}/${width}: camera background obscures photo ${JSON.stringify(metrics)}`);
+    if (role === "user") {
+      assert.ok(Math.abs(metrics.cameraCenterX - 0.75) < 0.02 && Math.abs(metrics.cameraCenterY - 0.75) < 0.02,
+        `user/${width}: camera must stay attached to the photo's lower-right edge ${JSON.stringify(metrics)}`);
+      assert.ok(metrics.cameraDiameter >= 24 && metrics.cameraDiameter <= 32,
+        `user/${width}: camera border must stay compact ${JSON.stringify(metrics)}`);
+    } else if (width < 768) expect(metrics.circleOverlap <= 2, `${role}/${width}: camera background obscures photo ${JSON.stringify(metrics)}`);
     await evaluate("document.querySelector('.rp-profile-summary button').click()");
     await wait("document.querySelector('.rp-profile-summary').textContent.includes('Upload Photo')");
     expect(await evaluate("document.querySelector('.rp-profile-summary').textContent.includes('Remove Photo')"), `${role}/${width}: photo removal unavailable`);

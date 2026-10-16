@@ -150,7 +150,7 @@ const API = {
   },
 
   sendOTP: (email) => request("/auth/send-otp", { method: "POST", body: JSON.stringify({ email }) }),
-  verifyOTP: (email, otp) => request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ email, otp }) }),
+  verifyOTP: (email, otp, { signIn } = {}) => request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ email, otp, signIn }) }),
 
   forgotPassword: (email) => request("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   verifyPasswordResetOTP: (email, otp) =>

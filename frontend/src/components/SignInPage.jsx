@@ -47,11 +47,13 @@ export default function SignInPage({
   onNavigateToHome,
   onNavigateToRegister,
   onNavigateToForgotPassword,
+  onNavigateToEmailVerification,
   onLoginSuccess,
 }) {
   const [form, setForm] = useState({ email: "", password: "", captchaAnswer: "" });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
   const [dirtyFields, setDirtyFields] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -122,6 +124,7 @@ export default function SignInPage({
   const handleChange = (field, value) => {
     const nextForm = { ...form, [field]: value };
     setForm(nextForm);
+    if (field === "email") setUnverifiedEmail("");
     setDirtyFields((prev) => ({ ...prev, [field]: true }));
     if (field === "email" && rateLimitSeconds > 0) return;
     setFormError("");
@@ -229,6 +232,7 @@ export default function SignInPage({
 
     setIsLoading(true);
     setSuccessMessage("");
+    setUnverifiedEmail("");
 
     try {
       const response = await API.login({
@@ -281,7 +285,16 @@ export default function SignInPage({
       const retryAfterAt = error?.retryAfterAt || error?.details?.retryAfterAt || "";
       const isRateLimitError = Number(error?.status) === 429 || msg.includes("Too many");
 
-      if (error.code === "SESSION_CONFIRMATION_FAILED") {
+      const needsEmailVerification = error.code === "EMAIL_VERIFICATION_REQUIRED"
+        || error?.details?.code === "EMAIL_VERIFICATION_REQUIRED"
+        || /verify your email before logging in/i.test(msg);
+
+      if (needsEmailVerification) {
+        setUnverifiedEmail(form.email);
+        setErrors({ email: "Please verify your email before logging in." });
+        setFormError("");
+        focusFirstInvalidField({ email: true });
+      } else if (error.code === "SESSION_CONFIRMATION_FAILED") {
         setErrors({});
         setFormError(error.message);
       } else if (isRateLimitError) {
@@ -388,7 +401,17 @@ export default function SignInPage({
             type="email"
             value={form.email}
             onChange={(e) => handleChange("email", e.target.value.toLowerCase().trim())}
-            error={errors.email}
+            error={unverifiedEmail && onNavigateToEmailVerification ? (
+              <span className="inline-flex max-w-full flex-wrap items-center gap-x-2 text-red-700" role="alert">
+                <span>Please verify your email before logging in.</span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToEmailVerification(unverifiedEmail)}
+                  disabled={isFormLocked}
+                  className="inline-flex min-h-11 items-center rounded-lg px-1 font-semibold text-[#0165B8] underline underline-offset-4 hover:text-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50"
+                >Verify</button>
+              </span>
+            ) : errors.email}
             disabled={isFormLocked}
             placeholder="Enter Email"
             required
