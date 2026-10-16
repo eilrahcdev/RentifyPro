@@ -140,7 +140,7 @@ test("chatbot reads only the authenticated renter's bookings and denies guests, 
     const renter = tokenFor("renter-a");
     const active = await post("active", renter, { renterId: "someone-else" });
     assert.equal(active.status, 200);
-    assert.equal(active.cache, "no-store");
+    assert.equal(active.cache, "private, no-store");
     assert.match(active.body.reply, /1 active booking/);
     assert.equal(active.body.reason_code, "authenticated_renter_booking_status");
     assert.deepEqual(bookedFor, ["renter-a"]);

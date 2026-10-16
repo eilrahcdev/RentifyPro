@@ -8,6 +8,7 @@ import PreKycDocument from "../models/PreKycDocument.js";
 import KycVerification from "../models/KycVerification.js";
 import User from "../models/User.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
+import { canInspectRegistrationDocument } from "../utils/registrationReview.js";
 
 function environment(t, values) {
   for (const [key, value] of Object.entries(values)) {
@@ -98,7 +99,18 @@ test("production document uploads retain private evidence for review with automa
         assert.ok(cases.every((entry) => entry.status === "id_uploaded" && entry.verifiedAt === null));
         if (approved === "false") assert.match(res.body.message, /administrator.*review/i);
 
-        t.mock.method(PreKycDocument, "findById", () => ({ select: async () => document }));
+        let review = document;
+        t.mock.method(PreKycDocument, "findById", () => ({ select: async () => review }));
+        if (flow !== "registerIdFace") {
+          assert.equal(canInspectRegistrationDocument(review), false);
+          const unsubmittedResponse = response();
+          await controller.getKycReviewFile({ params: { id: "507f1f77bcf86cd799439012" } }, unsubmittedResponse);
+          assert.equal(unsubmittedResponse.statusCode, 409);
+          assert.equal(unsubmittedResponse.body.success, false);
+          assert.equal(unsubmittedResponse.file, undefined);
+          review = { ...document, registeredUser: req.user._id, expiresAt: undefined };
+        }
+        assert.equal(canInspectRegistrationDocument(review), true);
         const fileResponse = response();
         await controller.getKycReviewFile({ params: { id: "507f1f77bcf86cd799439012" } }, fileResponse);
         assert.equal(fileResponse.statusCode, 200);
@@ -108,6 +120,47 @@ test("production document uploads retain private evidence for review with automa
       });
     }
   }
+});
+
+test("pre-registration review files require a current manual-assistance ID request", async (t) => {
+  const { controller, provider } = await fixture(t, "false");
+  const document = {
+    sessionId: "registration-fixture", registeredUser: null,
+    registrationDraftId: "registration-draft-fixture", manualReviewRequestedAt: new Date(),
+    registrationExpiresAt: new Date(Date.now() + 3600000), expiresAt: new Date(Date.now() + 3600000),
+    docType: "id", status: "pending_review", fileKey: "fixture-id.png", mimeType: "image/png",
+  };
+  const cases = [
+    ["current ID-assistance request", {}, true],
+    ["no request", { manualReviewRequestedAt: null }, false],
+    ["no registration draft", { registrationDraftId: null }, false],
+    ["supporting document", { docType: "supporting" }, false],
+    ["queued ID", { status: "queued" }, false],
+    ["expired evidence", { expiresAt: new Date(0) }, false],
+    ["missing evidence expiry", { expiresAt: null }, false],
+    ["expired registration", { registrationExpiresAt: new Date(0) }, false],
+    ["cancelled registration", { registrationCancelledAt: new Date() }, false],
+  ];
+  for (const [name, overrides, allowed] of cases) {
+    await t.test(name, async (t) => {
+      const review = { ...document, ...overrides };
+      assert.equal(canInspectRegistrationDocument(review), allowed);
+      t.mock.method(PreKycDocument, "findById", () => ({ select: async () => review }));
+      const res = response();
+      await controller.getKycReviewFile({ params: { id: "507f1f77bcf86cd799439012" } }, res);
+      assert.equal(res.statusCode, allowed ? 200 : 409);
+      if (allowed) {
+        assert.equal(res.headers["Cache-Control"], "private, no-store");
+        assert.equal(res.mimeType, document.mimeType);
+        assert.equal(path.basename(res.file), document.fileKey);
+      } else {
+        assert.equal(res.body.success, false);
+        assert.equal(res.file, undefined);
+        assert.equal(res.mimeType, undefined);
+      }
+    });
+  }
+  assert.equal(provider.mock.callCount(), 0);
 });
 
 test("disabled screening preserves repeated manual uploads and existing approvals", async (t) => {
