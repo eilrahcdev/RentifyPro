@@ -1,4 +1,5 @@
 import { ADMIN_API_CONTRACT_VERSION, ADMIN_API_ROUTES } from "../../../shared/adminApiContract.js";
+import { collectOverviewPages } from "./overviewPages.js";
 
 const configuredApiUrl = String(import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
 const apiBaseUrl = configuredApiUrl || "/api";
@@ -54,6 +55,8 @@ async function getMediaBlob(value, { signal } = {}) {
     throw new Error("The file could not be loaded. Check your connection and try again.");
   }
   if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    if (payload.code === "KYC_STORAGE_UNAVAILABLE") throw new Error(payload.message);
     if (response.status === 401 || response.status === 403) throw new Error("Your admin session cannot access this file. Sign in again and retry.");
     if (response.status === 404) throw new Error("The uploaded file is unavailable in the configured storage.");
     throw new Error("The server could not load this file. Try again.");
@@ -82,17 +85,17 @@ async function request(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   const serverContractVersion = response.headers.get("X-RentifyPro-Admin-Contract");
-  if (serverContractVersion !== ADMIN_API_CONTRACT_VERSION) {
-    const error = new Error("The admin interface and server API versions do not match. Restart both applications from the same project checkout.");
-    error.status = 409;
-    error.code = "ADMIN_API_CONTRACT_MISMATCH";
-    throw error;
-  }
   if (!response.ok) {
     const error = new Error(payload.message || "The request could not be completed.");
     error.status = response.status;
     error.code = payload.code || "REQUEST_FAILED";
     error.errors = payload.errors || {};
+    throw error;
+  }
+  if (serverContractVersion !== ADMIN_API_CONTRACT_VERSION) {
+    const error = new Error("The admin interface and server API versions do not match. Restart both applications from the same project checkout.");
+    error.status = 409;
+    error.code = "ADMIN_API_CONTRACT_MISMATCH";
     throw error;
   }
   return payload;
@@ -111,7 +114,7 @@ const buildQueryString = (params = {}) => {
 
 export const adminDataApi = {
   getMediaBlob,
-  getOverview: async () => normalizeOverview(await request(ADMIN_API_ROUTES.overview)),
+  getOverview: async () => normalizeOverview(await collectOverviewPages(cursor => request(`${ADMIN_API_ROUTES.overview}${buildQueryString({ cursor, limit: 250 })}`))),
   getTransactions: (params = {}) => request(`${ADMIN_API_ROUTES.transactions}${buildQueryString(params)}`),
   getAuditLogs: (params = {}) => request(`${ADMIN_API_ROUTES.auditLogs}${buildQueryString(params)}`),
   getReports: async (params = {}) => {
@@ -144,7 +147,8 @@ export const adminDataApi = {
     method: "PATCH",
     body: JSON.stringify(details),
   }),
-  getDocumentComparison: (id) => request(`/admin/documents/${encodeURIComponent(id)}/comparison`, { cache: "no-store" }),
+  getDocumentComparison: (id) => request(`/admin/documents/${encodeURIComponent(id)}/comparison?mode=visual`, { cache: "no-store" }),
+  getDocumentIdentifierScreening: (id) => request(`/admin/documents/${encodeURIComponent(id)}/comparison?mode=visual&statusOnly=1`, { cache: "no-store" }),
   compareDocument: async (id, details) => {
     const payload = await request(`/admin/documents/${encodeURIComponent(id)}/comparison`, {
       method: "POST", body: JSON.stringify(details),

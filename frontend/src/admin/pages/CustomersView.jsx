@@ -1,10 +1,13 @@
 import { Activity, AlertTriangle, BadgeCheck, Eye, LoaderCircle, MoreVertical, Pencil, Power, PowerOff, Trash2, UserRound, Users, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { percentage } from "../adminAnalytics";
 import { currentMonthKey, monthLabel, monthOptions } from "../analyticsPeriods";
 import { AnalyticsPanel, DistributionList, MetricTile, ProgressRing, TrendBars } from "../components/AdminAnalytics";
-import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
+import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, PaginationFooter } from "../components/AdminUI";
+import { useTablePage } from "../useTablePage";
+import PasswordInput from "../components/PasswordInput";
+import AdminModal from "../components/AdminModal";
 
 const avatarTones = ["bg-blue-50 text-blue-600", "bg-orange-50 text-orange-600", "bg-violet-50 text-violet-600", "bg-cyan-50 text-cyan-700"];
 
@@ -25,6 +28,7 @@ export default function CustomersView({
   const [growthPeriod, setGrowthPeriod] = useState(currentMonthKey);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [actionMenu, setActionMenu] = useState(null);
+  const actionMenuTriggerRef = useRef(null);
   const visibleCustomers = useMemo(
     () => customers.filter((customer) => customer.role !== "Admin" && String(customer.email || "").toLowerCase() !== String(adminEmail || "").toLowerCase()),
     [adminEmail, customers],
@@ -48,13 +52,27 @@ export default function CustomersView({
       return matchesSearch && matchesRole && matchesStatus && matchesJoined;
     });
   }, [joined, role, search, status, visibleCustomers]);
+  const pagination = useTablePage(filtered);
 
   const clearFilters = () => { setSearch(""); setRole("All Roles"); setStatus("All Statuses"); setJoined(""); };
 
   useEffect(() => {
     if (!actionMenu) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => document.querySelector('[data-customer-action-menu][role="menu"] button')?.focus({ preventScroll: true }));
     const closeMenu = (event) => {
-      if (event.type === "keydown" && event.key !== "Escape") return;
+      if (event.type === "keydown") {
+        const controls = [...document.querySelectorAll('[data-customer-action-menu][role="menu"] button')];
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          const index = controls.indexOf(document.activeElement);
+          const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + controls.length) % controls.length;
+          controls[next]?.focus();
+          return;
+        }
+        if (!["Escape", "Tab"].includes(event.key)) return;
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); }
+        actionMenuTriggerRef.current?.focus({ preventScroll: true });
+      }
       if (event.type === "pointerdown" && event.target.closest?.("[data-customer-action-menu]")) return;
       setActionMenu(null);
     };
@@ -63,6 +81,7 @@ export default function CustomersView({
     window.addEventListener("resize", closeMenu);
     window.addEventListener("scroll", closeMenu, true);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener("pointerdown", closeMenu);
       window.removeEventListener("keydown", closeMenu);
       window.removeEventListener("resize", closeMenu);
@@ -71,8 +90,9 @@ export default function CustomersView({
   }, [actionMenu]);
 
   const openActionMenu = (event, customer) => {
+    actionMenuTriggerRef.current = event.currentTarget;
     const rect = event.currentTarget.getBoundingClientRect();
-    const menuHeight = 148;
+    const menuHeight = 164;
     const belowTop = rect.bottom + 6;
     setActionMenu((current) => current?.customer.id === customer.id ? null : {
       customer,
@@ -85,6 +105,7 @@ export default function CustomersView({
     <div className="space-y-5">
       <CustomerEditDialog
         customer={editingCustomer}
+        returnFocusRef={actionMenuTriggerRef}
         onClose={() => setEditingCustomer(null)}
         onSave={async (changes) => {
           await onEdit(editingCustomer, changes);
@@ -97,7 +118,7 @@ export default function CustomersView({
           role="menu"
           aria-label={`Manage ${actionMenu.customer.name}`}
           style={{ top: actionMenu.top, left: actionMenu.left }}
-          className="fixed z-[85] w-44 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl"
+          className="admin-ui fixed z-[85] w-44 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
         >
           <MenuAction icon={Pencil} label="Edit customer" onClick={() => { setActionMenu(null); setEditingCustomer(actionMenu.customer); }} />
           <MenuAction
@@ -146,18 +167,18 @@ export default function CustomersView({
           <button type="button" onClick={clearFilters} className="h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Clear Filters</button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div tabIndex={0} role="region" aria-label="Customer records, scroll horizontally for more columns" className="overflow-x-auto">
           <table className="w-full min-w-[1180px] border-collapse">
             <caption className="sr-only">RentifyPro customer accounts</caption>
             <thead className="bg-slate-50"><tr>{["Customer", "Email", "Phone", "Role", "Status", "Joined", "Actions"].map((heading) => <th key={heading} scope="col" className="border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{heading}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((customer, index) => (
+              {pagination.rows.map((customer, index) => (
                 <tr key={customer.id || customer.email} className="transition-colors hover:bg-blue-50/30">
                   <td className="whitespace-nowrap px-4 py-3.5"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${avatarTones[index % avatarTones.length]}`}>{initials(customer.name)}</span><span className="text-sm font-semibold text-slate-950">{customer.name}</span></div></td>
                   <td className="px-4 py-3.5 text-sm text-slate-600">{customer.email}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{customer.phone}</td>
                   <td className="px-4 py-3.5 text-sm text-slate-600">{customer.role}</td>
-                  <td className="px-4 py-3.5"><StatusBadge value={customer.status} /></td>
+                  <td className="px-4 py-3.5"><StatusBadge value={customer.status} />{customer.status === "Pending Verification" && customer.verification?.pendingReasons?.length ? <p className="mt-1.5 max-w-56 text-xs leading-5 text-slate-600">Needs: {customer.verification.pendingReasons.join(", ")}</p> : null}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm tabular-nums text-slate-600"><time dateTime={customer.created}>{customer.created}</time></td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
@@ -181,7 +202,7 @@ export default function CustomersView({
           </table>
           {!filtered.length ? <EmptyState icon={Users} title="No customers found" description="Try changing your search or filters." /> : null}
         </div>
-        <TableFooter visible={filtered.length} total={visibleCustomers.length} noun="customers" />
+        <PaginationFooter pagination={pagination} noun="customers" />
       </section>
     </div>
   );
@@ -217,12 +238,12 @@ function MenuAction({ icon: Icon, label, onClick, tone = "default" }) {
   );
 }
 
-function CustomerEditDialog({ customer, onClose, onSave }) {
+function CustomerEditDialog({ customer, onClose, onSave, returnFocusRef }) {
   if (!customer) return null;
-  return <CustomerEditForm key={customer.id} customer={customer} onClose={onClose} onSave={onSave} />;
+  return <CustomerEditForm key={customer.id} customer={customer} onClose={onClose} onSave={onSave} returnFocusRef={returnFocusRef} />;
 }
 
-function CustomerEditForm({ customer, onClose, onSave }) {
+function CustomerEditForm({ customer, onClose, onSave, returnFocusRef }) {
   const originalPhone = /\d/.test(String(customer.phone || "")) ? String(customer.phone) : "";
   const [form, setForm] = useState({
     name: String(customer.name || ""),
@@ -260,29 +281,30 @@ function CustomerEditForm({ customer, onClose, onSave }) {
   const sensitiveChange = changes.some(([field]) => ["Email", "Role"].includes(field));
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}>
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="customer-edit-title" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <AdminModal onClose={onClose} busy={saving} returnFocusRef={returnFocusRef}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="customer-edit-title" aria-busy={saving} className="flex w-full max-w-lg flex-col overflow-hidden bg-white">
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600">Customer management</p><h3 id="customer-edit-title" className="mt-1.5 text-xl font-bold text-slate-950">Edit customer</h3></div>
-          <button type="button" onClick={onClose} disabled={saving} aria-label="Close edit dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X size={19} /></button>
+          <button type="button" data-dialog-initial onClick={onClose} disabled={saving} aria-label="Close edit dialog" className="admin-icon-button text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X size={19} /></button>
         </div>
-        <div className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="grid min-h-0 gap-4 overflow-y-auto overscroll-contain p-5 sm:grid-cols-2">
           <EditField label="Full name" value={form.name} onChange={update("name")} maxLength={100} />
           <EditField label="Email address" type="email" value={form.email} onChange={update("email")} maxLength={254} />
           <EditField label="Phone number" value={form.phone} onChange={update("phone")} maxLength={32} placeholder="Optional" />
-          <FilterSelect label="Role" value={form.role} onChange={(value) => setForm((current) => ({ ...current, role: value }))} options={["Renter", "Operator"]} />
+          <FilterSelect label="Role" value={form.role} onChange={(value) => setForm((current) => ({ ...current, role: value }))} options={customer.role === "Renter" ? ["Renter"] : ["Renter", "Operator"]} />
+          {customer.role === "Renter" ? <p className="text-xs leading-5 text-slate-600">Owner upgrades require the customer to complete Become a Vehicle Owner on RentifyPro.</p> : null}
           {changes.length ? <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-600">Changes to be recorded</p><div className="mt-2 space-y-2">{changes.map(([field, before, after]) => <div key={field} className="grid grid-cols-[72px_1fr_18px_1fr] items-center gap-2 text-xs"><span className="font-semibold text-slate-600">{field}</span><span className="truncate rounded bg-white px-2 py-1.5 text-slate-600">{before || "—"}</span><span className="text-center text-slate-400">→</span><span className="truncate rounded bg-blue-50 px-2 py-1.5 font-semibold text-blue-800">{after || "—"}</span></div>)}</div></div> : null}
           {sensitiveChange ? <div className="sm:col-span-2 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><AlertTriangle size={17} className="mt-0.5 shrink-0" /><span>Email changes revoke sessions and require verification. Role changes require the applicable owner verification and must not conflict with existing records.</span></div> : null}
           <label className="block sm:col-span-2"><span className="mb-1.5 block text-xs font-semibold text-slate-700">Administrative reason</span><textarea value={form.reason} onChange={update("reason")} required maxLength={500} rows={3} placeholder="Explain why this correction is necessary" className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /><span className="mt-1 block text-xs text-slate-500">{form.reason.trim().length}/500 characters</span></label>
-          <label className="block sm:col-span-2"><span className="mb-1.5 block text-xs font-semibold text-slate-700">Confirm Super Admin password</span><input type="password" autoComplete="current-password" value={form.adminPassword} onChange={update("adminPassword")} required placeholder="Required for sensitive customer changes" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+          <PasswordInput label="Confirm Super Admin password" labelClassName="mb-1.5 block text-xs font-semibold text-slate-700" wrapperClassName="sm:col-span-2" autoComplete="current-password" value={form.adminPassword} onChange={update("adminPassword")} required placeholder="Required for sensitive customer changes" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
           {error ? <p role="alert" className="sm:col-span-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">{error}</p> : null}
         </div>
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
+        <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} disabled={saving} className="h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-white disabled:opacity-50">Cancel</button>
           <button type="submit" disabled={saving || !changes.length} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? <LoaderCircle size={17} className="animate-spin" /> : <Pencil size={16} />}{saving ? "Saving..." : "Save changes"}</button>
         </div>
       </form>
-    </div>
+    </AdminModal>
   );
 }
 

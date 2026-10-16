@@ -8,7 +8,7 @@
     "admin:sync-credentials": "node scripts/syncAdminCredentials.js",
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node --test tests"
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

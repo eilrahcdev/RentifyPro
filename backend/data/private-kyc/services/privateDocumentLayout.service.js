@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { resolveSupportedDocumentType } from "./documentValidation.service.js";
 
-export const PRIVATE_AUTOMATED_CHECK_VERSION = 2;
+export const PRIVATE_AUTOMATED_CHECK_VERSION = 3;
 const PROFILE_FIELDS = ["full_name", "first_name", "last_name", "date_of_birth", "birth_date", "business_name", "permit_number", "tax_identification_number", "branch_code"];
 
 export function privateScreeningBinding({ profile = {}, sessionId = "", role = "", docType, selectedDocType }) {
@@ -40,14 +40,37 @@ export function strictPrivateBusinessNameMatch(expected, actual) {
   return Boolean(left && right && left === right);
 }
 
-export function strictPrivateIdentityNameMatch(profile, actual) {
+export function strictPrivateIdentityNameMatch(profile, actual, fields = {}) {
   const tokens = (value) => String(value || "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
     .replace(/[^\p{L}]+/gu, " ").trim().split(/\s+/).filter((token) => token && !["jr", "sr", "ii", "iii", "iv"].includes(token));
-  const first = tokens(profile.first_name || profile.firstName).join("");
-  const last = tokens(profile.last_name || profile.lastName).join("");
-  const name = tokens(actual).join("");
-  return Boolean(first.length >= 2 && last.length >= 2 && name.length >= first.length + last.length
-    && ((name.startsWith(first) && name.endsWith(last)) || (name.startsWith(last) && name.endsWith(first))));
+  const firstTokens = tokens(profile.first_name || profile.firstName), lastTokens = tokens(profile.last_name || profile.lastName);
+  const first = firstTokens.join(""), last = lastTokens.join("");
+  if (!firstTokens.length || !lastTokens.length || [...firstTokens, ...lastTokens].some((token) => token.length < 2)) return false;
+  if ((fields.first_name && tokens(fields.first_name).join("") !== first)
+    || (fields.last_name && tokens(fields.last_name).join("") !== last)) return false;
+  if (fields.first_name && fields.last_name) return true;
+  const prefixLength = (name, expected) => {
+    let value = "";
+    for (let index = 0; index < name.length; index++) {
+      value += name[index];
+      if (value === expected) return index + 1;
+      if (!expected.startsWith(value)) break;
+    }
+    return 0;
+  };
+  const comma = String(actual || "").split(",");
+  if (comma.length === 2) return tokens(comma[0]).join("") === last && prefixLength(tokens(comma[1]), first) > 0;
+  const name = tokens(actual);
+  const givenFirst = prefixLength(name, first);
+  let surnameLast = 0;
+  for (let start = name.length - 1; start >= 0; start--) {
+    const value = name.slice(start).join("");
+    if (!last.endsWith(value)) break;
+    if (value === last) { surnameLast = name.length - start; break; }
+  }
+  if (givenFirst && surnameLast && givenFirst + surnameLast <= name.length) return true;
+  const surnameFirst = prefixLength(name, last);
+  return Boolean(surnameFirst && prefixLength(name.slice(surnameFirst), first));
 }
 
 export function publicPrivateScreening(document) {

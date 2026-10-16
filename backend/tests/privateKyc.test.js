@@ -7,7 +7,7 @@ import path from "node:path";
 import { compareAdminKycDocument, validateAdminKycDecision, canReconcileApprovedIdentity } from "../services/privateKycReview.service.js";
 import { createAdminDataRouter } from "../routes/adminData.routes.js";
 
-const document = () => ({ _id: "507f1f77bcf86cd799439012", email: "fixture@example.test", status: "pending_review",
+const document = () => ({ registeredUser: "507f1f77bcf86cd799439011", _id: "507f1f77bcf86cd799439012", email: "fixture@example.test", status: "pending_review",
   provider: "private-ocr", docType: "id", role: "user", selectedDocCategory: "Philippine Passport",
   fileHash: "fixture-hash", reviewVersion: "fixture-version", fileKey: "fixture.jpg", detailsMatched: false,
   profileSnapshot: { first_name: "Sample", last_name: "Applicant", date_of_birth: "1990-05-12" } });
@@ -45,6 +45,7 @@ test("admin approval requires a current comparison and cannot approve queued doc
   assert.doesNotThrow(() => validateAdminKycDecision(doc, "Approved", doc.reviewVersion));
   assert.throws(() => validateAdminKycDecision(doc, "Approved", "old-version"));
   assert.throws(() => validateAdminKycDecision({ ...doc, status: "processing" }, "Rejected", doc.reviewVersion));
+  assert.throws(() => validateAdminKycDecision({ ...doc, expiresAt: new Date(Date.now() - 1000) }, "Approved", doc.reviewVersion), /expired/);
 });
 
 test("private comparison checks file integrity, duplicates and stale writes without approving", async (t) => {

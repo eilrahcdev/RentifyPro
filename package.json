@@ -7,6 +7,9 @@
     "backend"
   ],
   "scripts": {
+    "test": "npm run test --workspace backend && npm run test --workspace frontend",
+    "storage:check": "node backend/scripts/checkStorage.js",
+    "storage:connect-azure": "node backend/scripts/connectAzureKyc.js",
     "admin:sync-credentials": "node backend/scripts/syncAdminCredentials.js",
     "dev": "concurrently -n frontend,backend -c cyan,green \"npm run dev --workspace frontend\" \"npm run dev --workspace backend\"",
     "dev:frontend": "npm run dev --workspace frontend",

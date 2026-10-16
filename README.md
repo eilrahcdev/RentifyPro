@@ -89,6 +89,8 @@ The credential check compares the configured values with the stored system-admin
 
 ## Admin data
 
+For the current Azure/private-file connection, recovery, readiness, and release checks, see [Admin integration corrections](docs/admin-integration-fixes.md). After changing local backend settings, restart the admin backend. The signed Azure Files read credential expires and must be renewed before its reported expiry.
+
 The dashboard reads `users`, `vehicles`, `bookings`, and `prekycdocuments` from the shared database. Customer changes, account restrictions, privacy-preserving archives, and document decisions are written back to that same database. Archiving anonymizes personal data while preserving linked booking history.
 
 ### Uploaded file previews

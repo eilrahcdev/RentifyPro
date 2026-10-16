@@ -4,11 +4,20 @@ import { randomBytes, randomInt } from "node:crypto";
 import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
+import { getAdminStoragePaths, remoteKycConfigured } from "../config/storage.js";
+import { ensureKycEvidence } from "../services/remoteKycStorage.service.js";
+import { getAdminVisualReviewContext } from "../services/adminVisualReview.service.js";
+import { identifierScreeningSummary, identifierRevisionFilter, currentIdentifierFingerprint,
+  identifierDuplicateFilter } from "../services/adminIdentifierScreening.service.js";
+import { buildTransactionPipeline } from "../services/adminTransactionQuery.service.js";
+import { isSubmittedDocument, canInspectRegistrationDocument, registrationReviewFilter } from "../data/private-kyc/utils/registrationReview.js";
+import { documentOwner, documentAccountLink, ownedDocumentFilter, ownedFaceFilter, normalizeCustomerPhone, accountVerification, loadAccountVerifications, bookingActivity } from "../services/adminDomain.service.js";
 import AdminCredential from "../models/AdminCredential.js";
 import AdminAuditLog from "../models/AdminAuditLog.js";
-import { recordAdminAudit } from "../services/adminAudit.service.js";
+import { recordAdminAudit, buildAdminAuditRecord } from "../services/adminAudit.service.js";
 import { createAdminReportsRouter } from "./adminReports.routes.js";
-import { compareAdminKycDocument, validateAdminKycDecision, canReconcileApprovedIdentity } from "../services/privateKycReview.service.js";
+import { compareAdminKycDocument, validateAdminKycDecision, reconcileAdminAccountDocuments, isRepeatedAdminDecision, finishAdminKycDecision, assertCurrentDocument } from "../services/privateKycReview.service.js";
 import { getPrivateKycReviewContext } from "../data/private-kyc/services/privateKycReviewContext.js";
 import { canManuallyCompareDocument, hasCurrentManualDocumentComparison } from "../data/private-kyc/services/manualDocumentComparison.js";
 import { ADMIN_API_CONTRACT_VERSION, ADMIN_API_ROUTES } from "../../shared/adminApiContract.js";
@@ -25,7 +34,6 @@ const DEFAULT_TRANSACTION_LIMIT = 50;
 const MAX_TRANSACTION_LIMIT = 100;
 const CUSTOMER_ROLES = new Set(["user", "owner"]);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[+0-9()\-\s]{7,32}$/;
 
 const asText = (value, fallback = "") => {
   const normalized = String(value ?? "").trim();
@@ -56,23 +64,28 @@ const mapRole = (role) => {
 
 const mapCustomerStatus = (user) => {
   if (user.isDisabled) return "Suspended";
-  if (user.kycStatus === "rejected") return "Inactive";
-  return user.isVerified ? "Active" : "Pending Verification";
+  if (user.isArchived) return "Archived";
+  return user.isVerified && user.kycStatus === "approved" ? "Active" : "Pending Verification";
 };
 
 const mapDocumentStatus = (status) => {
   if (status === "verified") return "Approved";
   if (status === "rejected") return "Rejected";
-  return "Pending";
+  return ({ pending_review: "Pending", queued: "Queued", processing: "Processing", retry_wait: "Waiting to retry",
+    reupload_required: "Replacement required" })[status] || "Unavailable";
 };
 
-const mapUser = (user) => ({
+const mapUser = (user, verification = accountVerification(user, null)) => ({
   id: user._id.toString(),
   name: asText(user.name, "Unnamed customer"),
   email: asText(user.email, "—"),
   phone: asText(user.phone, "—"),
   role: mapRole(user.role),
-  status: mapCustomerStatus(user),
+  status: verification && !user.isDisabled && !user.isArchived
+    ? verification.bookingEligible ? "Active" : "Pending Verification" : mapCustomerStatus(user),
+  emailVerified: user.isVerified === true,
+  documentStatus: user.kycStatus || "not_started",
+  verification: verification || accountVerification(user, null),
   disabled: Boolean(user.isDisabled),
   disabledAt: asTimestamp(user.disabledAt),
   disabledReason: asText(user.disabledReason),
@@ -117,35 +130,42 @@ const mapDocument = (document, usersByEmail, usersById = new Map()) => {
   const emailUser = usersByEmail.get(email);
   const matchedUser = sessionUserId
     ? usersById.get(sessionUserId) || (emailUser?._id?.toString() === sessionUserId ? emailUser : undefined)
-    : emailUser;
+    : undefined;
+  const accountLink = documentAccountLink(document, matchedUser);
   const fallbackType = document.docType === "supporting" ? "Supporting Document" : "Government ID";
 
   return {
     id: document._id.toString(),
-    customerId: sessionUserId || matchedUser?._id?.toString() || "",
+    customerId: accountLink.customerId,
+    ownershipConflict: documentOwner(document).conflict,
     customer: matchedUser?.name || email || "Unknown customer",
+    customerName: asText(matchedUser?.name),
+    accountLink,
     email,
     role: mapRole(matchedUser?.role || document.role),
     document: titleCase(document.selectedDocCategory || document.docCategory, fallbackType),
     fileName: asText(document.fileName, fallbackType),
     submitted: asDate(document.createdAt),
     submittedAt: asTimestamp(document.createdAt),
-    approval: mapDocumentStatus(document.status),
+    approval: document.expiresAt && !(new Date(document.expiresAt) > new Date()) ? "Expired" : mapDocumentStatus(document.status),
     processingStage: asText(document.status, "pending_review"),
     processingAttempts: Number(document.processingAttempts || 0),
     nextAttemptAt: asTimestamp(document.nextAttemptAt),
     mimeType: documentMimeType(document),
     reason: asText(document.reason),
-    confidence: Number.isFinite(Number(document.confidence)) ? Number(document.confidence) : null,
+    confidence: document.confidence != null && Number.isFinite(Number(document.confidence)) ? Number(document.confidence) : null,
     detailsMatched: document.detailsMatched === true,
-    canCompareManually: canManuallyCompareDocument(document),
-    canApprove: document.status === "pending_review" && (document.docType !== "id" || document.detailsMatched === true)
+    reviewPurpose: isSubmittedDocument(document) ? "Final approval" : "Registration assistance",
+    canCompareManually: (!isSubmittedDocument(document) || accountLink.status === "registered") && canInspectRegistrationDocument(document) && !documentOwner(document).conflict && (!document.expiresAt || new Date(document.expiresAt) > new Date()) && canManuallyCompareDocument(document),
+    canApprove: accountLink.status === "registered" && isSubmittedDocument(document) && !documentOwner(document).conflict && (!document.expiresAt || new Date(document.expiresAt) > new Date()) && document.status === "pending_review" && (document.docType !== "id" || document.detailsMatched === true)
       && (!["private-ocr", "manual"].includes(document.provider) || hasCurrentManualDocumentComparison(document)),
     reviewVersion: document.reviewVersion || document.fileHash,
+    reviewHistory: document.reviewHistory || [],
     fileHash: document.fileHash,
     docType: document.docType,
     selectedDocCategory: document.selectedDocCategory,
     privateScreening: document.privateScreening || null,
+    identifierScreening: identifierScreeningSummary(document),
     provider: document.provider,
     mismatchFields: Array.isArray(document.mismatchFields) ? document.mismatchFields.slice(0, 12) : [],
     suspectedTampering: Boolean(document.suspectedTampering),
@@ -157,10 +177,6 @@ const mapBooking = (booking, usersById, vehiclesById) => {
   const vehicle = vehiclesById.get(String(booking.vehicle));
   const renter = usersById.get(String(booking.renter));
   const operator = usersById.get(String(booking.owner));
-  const now = Date.now();
-  const pickupTime = booking.pickupAt ? new Date(booking.pickupAt).getTime() : Number.NaN;
-  const returnTime = booking.returnAt ? new Date(booking.returnAt).getTime() : Number.NaN;
-  const confirmed = booking.status === "confirmed";
 
   return {
     id: booking._id.toString(),
@@ -175,8 +191,7 @@ const mapBooking = (booking, usersById, vehiclesById) => {
     returnAt: asTimestamp(booking.returnAt),
     createdAt: asTimestamp(booking.createdAt),
     status: titleCase(booking.status, "Pending"),
-    isActive: confirmed && Number.isFinite(pickupTime) && Number.isFinite(returnTime) && pickupTime <= now && returnTime >= now,
-    isOverdue: confirmed && Number.isFinite(returnTime) && returnTime < now,
+    ...bookingActivity(booking),
     driverSelected: Boolean(booking.driverSelected),
     reviewRating: Number.isFinite(Number(booking.reviewRating)) ? Number(booking.reviewRating) : null,
     reviewComment: asText(booking.reviewComment),
@@ -218,7 +233,7 @@ const transactionAmounts = (booking) => {
   return { rentalAmount, transactionFee, amountPayable, paymentAmountPaid, paymentAmountDue };
 };
 
-const mapTransaction = (booking, usersById, vehiclesById) => {
+export const mapTransaction = (booking, usersById, vehiclesById) => {
   const vehicle = vehiclesById.get(String(booking.vehicle));
   const renter = usersById.get(String(booking.renter));
   const owner = usersById.get(String(booking.owner));
@@ -257,13 +272,13 @@ const mapTransaction = (booking, usersById, vehiclesById) => {
   };
 };
 
-const transactionMonthlyTrend = (transactions, monthCount = 6, endMonth) => {
+export const transactionMonthlyTrend = (transactions, monthCount = 6, endMonth) => {
   const now = endMonth ? new Date(`${endMonth}-01T00:00:00.000Z`) : new Date();
   const months = [];
   for (let offset = monthCount - 1; offset >= 0; offset -= 1) {
     const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1));
     months.push({
-      key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`,
+      key: `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`,
       label: date.toLocaleDateString("en-PH", { month: "short", timeZone: "UTC" }),
       collected: 0,
       outstanding: 0,
@@ -275,7 +290,7 @@ const transactionMonthlyTrend = (transactions, monthCount = 6, endMonth) => {
   transactions.forEach((transaction) => {
     const createdAt = transaction.createdAt ? new Date(transaction.createdAt) : null;
     if (!createdAt || Number.isNaN(createdAt.getTime())) return;
-    const key = `${createdAt.getUTCFullYear()}-${String(createdAt.getUTCMonth() + 1).padStart(2, "0")}`;
+    const key = `${String(createdAt.getUTCFullYear()).padStart(4, "0")}-${String(createdAt.getUTCMonth() + 1).padStart(2, "0")}`;
     const month = byKey.get(key);
     if (!month) return;
     month.collected += Number(transaction.paymentAmountPaid || 0);
@@ -291,7 +306,7 @@ const transactionMonthlyTrend = (transactions, monthCount = 6, endMonth) => {
   }));
 };
 
-const transactionMatchesSearch = (transaction, rawSearch) => {
+export const transactionMatchesSearch = (transaction, rawSearch) => {
   const search = asText(rawSearch).toLowerCase();
   if (!search) return true;
   return [
@@ -330,7 +345,7 @@ const getCustomerManagementTarget = async (database, id, adminEmail) => {
   const objectId = new mongoose.Types.ObjectId(id);
   const customer = await database.collection("users").findOne(
     { _id: objectId },
-    { projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, isDisabled: 1, isArchived: 1, disabledAt: 1, sessionVersion: 1, kycStatus: 1, createdAt: 1 } },
+    { projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, isDisabled: 1, isArchived: 1, disabledAt: 1, sessionVersion: 1, kycStatus: 1, registrationDraftId: 1, ownerDocumentVerificationRequired: 1, createdAt: 1 } },
   );
   if (!customer) return { error: { status: 404, message: "Customer account not found." } };
   if (customer.isArchived) return { error: { status: 410, message: "This customer account has already been archived." } };
@@ -450,23 +465,37 @@ const getVehicleImageReferences = (vehicle) => {
 };
 
 const getDocumentUserId = (document) => {
-  const session = asText(document.sessionId);
-  const match = /^(?:user:([a-f0-9]{24})|reverify:([a-f0-9]{24}):[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/i.exec(session);
-  return (match?.[1] || match?.[2] || "").toLowerCase();
+  return documentOwner(document).userId;
 };
 
 const documentMimeType = (document) => ({
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".pdf": "application/pdf",
 })[path.extname(asText(document.fileKey) || asText(document.fileName)).toLowerCase()] || asText(document.mimeType, "application/octet-stream");
 
+async function mapDocumentWithCustomer(database, document) {
+  const owner = documentOwner(document);
+  const user = owner.conflict || !owner.userId ? null : await database.collection("users").findOne(
+    { _id: new mongoose.Types.ObjectId(owner.userId) },
+    { projection: { name: 1, email: 1, role: 1, isArchived: 1 } });
+  return addFileAvailability(mapDocument(document, new Map(user ? [[asText(user.email).toLowerCase(), user]] : []), new Map(user ? [[String(user._id), user]] : [])), document, getAdminStoragePaths().kyc);
+}
+
+async function mapCustomerWithVerification(database, user) {
+  const verifications = await loadAccountVerifications(database, [user]);
+  return mapUser(user, verifications.get(String(user._id)));
+}
+
+async function addFileAvailability(mapped, document, directory) {
+  const file = safeFileFromKey(directory, document.fileKey, DOCUMENT_EXTENSIONS);
+  const available = Boolean(file && await resolvePreviewFile(directory, file));
+  const readable = available || remoteKycConfigured();
+  return { ...mapped, fileAvailable: available ? true : remoteKycConfigured() ? null : false, canApprove: mapped.canApprove && readable,
+    canCompareManually: mapped.canCompareManually && readable };
+}
+
 export function createAdminDataRouter({ requireAdminSession }) {
   const router = express.Router();
-  const websiteBackendDirectory = path.resolve(
-    process.env.WEBSITE_BACKEND_DIR || path.join(process.cwd(), "..", "rentifypro", "backend"),
-  );
-  const storageRoot = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : websiteBackendDirectory;
-  const kycDirectory = path.resolve(process.env.KYC_UPLOAD_DIR || path.join(storageRoot, "private_uploads", "kyc"));
-  const publicUploadsDirectory = path.resolve(process.env.PUBLIC_UPLOAD_DIR || path.join(storageRoot, "uploads"));
+  const { kyc: kycDirectory, publicUploads: publicUploadsDirectory, reports: reportEvidenceDirectory } = getAdminStoragePaths();
   const vehicleDirectory = path.join(publicUploadsDirectory, "vehicles");
   const websitePublicUrl = asText(process.env.WEBSITE_PUBLIC_URL);
   let publicVehicleBase;
@@ -477,13 +506,19 @@ export function createAdminDataRouter({ requireAdminSession }) {
     }
     publicVehicleBase = new URL("uploads/vehicles/", `${base.toString().replace(/\/$/, "")}/`);
   }
-  const reportEvidenceDirectory = path.resolve(process.env.REPORT_EVIDENCE_DIR || path.join(websiteBackendDirectory, "private_uploads", "reports"));
 
   router.use((_request, response, next) => {
     response.setHeader("X-RentifyPro-Admin-Contract", ADMIN_API_CONTRACT_VERSION);
     next();
   });
   router.use(requireAdminSession);
+  const criticalActionLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10,
+    skipSuccessfulRequests: true,
+    standardHeaders: "draft-8", legacyHeaders: false,
+    keyGenerator: request => String(request.adminAccount?.key || request.adminSession?.sid || "system-admin"),
+    skip: request => !["POST", "PATCH", "PUT", "DELETE"].includes(request.method),
+    message: { message: "Too many sensitive admin actions. Wait 15 minutes before trying again.", code: "ADMIN_ACTION_RATE_LIMITED" } });
+  router.use(criticalActionLimiter);
 
   router.use("/reports", createAdminReportsRouter({ verifyCriticalAction, recordAdminAudit, evidenceDirectory: reportEvidenceDirectory }));
 
@@ -567,53 +602,30 @@ export function createAdminDataRouter({ requireAdminSession }) {
         : DEFAULT_TRANSACTION_LIMIT;
       const offset = parseTransactionOffset(request.query.cursor);
       const database = mongoose.connection.db;
-      const bookings = await database.collection("bookings").find({}, {
-        projection: {
-          vehicle: 1, renter: 1, owner: 1, status: 1, paymentStatus: 1, paymentMethod: 1,
-          paymentChannel: 1, balancePaymentMethod: 1, paymongoReference: 1,
-          paymongoCheckoutId: 1, paymentIntentId: 1, totalAmount: 1, lateReturnPenaltyFee: 1,
-          transactionFee: 1, paymentAmountPaid: 1, paymentAmountDue: 1, paymentRequestedAt: 1,
-          paymentUpdatedAt: 1, paidAt: 1, createdAt: 1, updatedAt: 1,
-        },
-      }).sort({ createdAt: -1, _id: -1 }).toArray();
-
-      const userIds = [...new Set(bookings.flatMap((booking) => [String(booking.renter || ""), String(booking.owner || "")]).filter(validObjectId))]
-        .map((id) => new mongoose.Types.ObjectId(id));
-      const vehicleIds = [...new Set(bookings.map((booking) => String(booking.vehicle || "")).filter(validObjectId))]
-        .map((id) => new mongoose.Types.ObjectId(id));
-      const [users, vehicles] = await Promise.all([
-        database.collection("users").find({ _id: { $in: userIds } }, { projection: { name: 1, email: 1 } }).toArray(),
-        database.collection("vehicles").find({ _id: { $in: vehicleIds } }, { projection: { name: 1, location: 1 } }).toArray(),
-      ]);
-      const usersById = new Map(users.map((user) => [user._id.toString(), user]));
-      const vehiclesById = new Map(vehicles.map((vehicle) => [vehicle._id.toString(), vehicle]));
-      const allTransactions = bookings.map((booking) => mapTransaction(booking, usersById, vehiclesById));
-      const filteredTransactions = allTransactions.filter((transaction) =>
-        (requestedStatus === "all" || transaction.paymentStatus === requestedStatus) &&
-        transactionMatchesSearch(transaction, asText(request.query.search).slice(0, 100)),
-      );
-      const transactions = filteredTransactions.slice(offset, offset + limit);
+      const months = transactionMonthlyTrend([], 6, trendEndMonth);
+      const [result] = await database.collection("bookings").aggregate(buildTransactionPipeline({
+        paymentStatus: requestedStatus, search: asText(request.query.search).slice(0, 100), offset, limit, months,
+      }), { maxTimeMS: 20_000, allowDiskUse: true }).toArray();
+      const rows = result?.rows || [];
+      const transactions = rows.slice(0, limit).map(booking => mapTransaction(booking,
+        new Map([...(booking._adminRenter || []), ...(booking._adminOwner || [])].map(user => [String(user._id), user])),
+        new Map((booking._adminVehicle || []).map(vehicle => [String(vehicle._id), vehicle]))));
       const nextOffset = offset + transactions.length;
+      const totals = result?.totals?.[0] || {};
+      const trend = new Map((result?.monthlyTrend || []).map(month => [month._id, month]));
 
       return response.json({
         success: true,
         transactions,
         summary: {
-          totalRecords: allTransactions.length,
-          paidBookings: allTransactions.filter((item) => item.paymentStatus === "paid").length,
-          partialPayments: allTransactions.filter((item) => item.paymentStatus === "partial").length,
-          unpaidBookings: allTransactions.filter((item) => item.paymentStatus === "unpaid").length,
-          refundedBookings: allTransactions.filter((item) => item.paymentStatus === "refunded").length,
-          totalCollected: roundCurrency(allTransactions.reduce((sum, item) => sum + item.paymentAmountPaid, 0)),
-          totalOutstanding: roundCurrency(allTransactions.reduce((sum, item) => sum + item.paymentAmountDue, 0)),
-          totalPayable: roundCurrency(allTransactions.reduce((sum, item) => sum + item.amountPayable, 0)),
-          totalTransactionFees: roundCurrency(allTransactions.reduce((sum, item) => sum + item.transactionFee, 0)),
-          monthlyTrend: transactionMonthlyTrend(allTransactions, 6, trendEndMonth),
-          trendStartMonth: allTransactions.reduce((earliest, item) => item.createdAt && (!earliest || item.createdAt.slice(0, 7) < earliest) ? item.createdAt.slice(0, 7) : earliest, null),
+          ...Object.fromEntries(["totalRecords", "paidBookings", "partialPayments", "unpaidBookings", "refundedBookings"].map(key => [key, totals[key] || 0])),
+          ...Object.fromEntries(["totalCollected", "totalOutstanding", "totalPayable", "totalTransactionFees"].map(key => [key, roundCurrency(totals[key])])),
+          monthlyTrend: months.map(month => ({ ...month, ...Object.fromEntries(["collected", "outstanding", "fees", "records"].map(key => [key, roundCurrency(trend.get(month.key)?.[key])])) })),
+          trendStartMonth: asTimestamp(totals.trendStartDate).slice(0, 7) || null,
         },
         page: {
-          hasMore: nextOffset < filteredTransactions.length,
-          nextCursor: nextOffset < filteredTransactions.length ? transactionCursor(nextOffset) : null,
+          hasMore: rows.length > limit,
+          nextCursor: rows.length > limit ? transactionCursor(nextOffset) : null,
           limit,
         },
       });
@@ -632,7 +644,8 @@ export function createAdminDataRouter({ requireAdminSession }) {
 
       const name = asText(request.body?.name);
       const email = asText(request.body?.email).toLowerCase();
-      const phone = asText(request.body?.phone);
+      const rawPhone = asText(request.body?.phone);
+      const phone = normalizeCustomerPhone(rawPhone);
       const requestedRole = asText(request.body?.role).toLowerCase();
       const role = requestedRole === "renter" ? "user" : requestedRole === "operator" ? "owner" : requestedRole;
 
@@ -645,8 +658,11 @@ export function createAdminDataRouter({ requireAdminSession }) {
       if (email === asText(request.adminAccount?.email).toLowerCase()) {
         return response.status(409).json({ message: "The administrator email cannot be assigned to a customer account." });
       }
-      if (phone && !PHONE_PATTERN.test(phone)) {
-        return response.status(400).json({ message: "Enter a valid phone number using 7 to 32 digits and phone symbols." });
+      if (rawPhone && !phone) {
+        return response.status(400).json({ message: "Enter a Philippine mobile number: 10 digits starting with 9.", errors: { phone: "Enter a valid Philippine mobile number." } });
+      }
+      if (phone && await database.collection("users").findOne({ phone, _id: { $ne: target.objectId } }, { projection: { _id: 1 } })) {
+        return response.status(409).json({ message: "That phone number is already in use.", errors: { phone: "This phone number is already registered." } });
       }
       if (!CUSTOMER_ROLES.has(role)) {
         return response.status(400).json({ message: "Customer role must be Renter or Operator." });
@@ -664,16 +680,10 @@ export function createAdminDataRouter({ requireAdminSession }) {
         }
       }
       if (target.customer.role === "user" && role === "owner") {
-        const approvedSupportingDocument = await database.collection("prekycdocuments").findOne({
-          email: asText(target.customer.email).toLowerCase(),
-          docType: "supporting",
-          status: "verified",
-        }, { projection: { _id: 1 } });
-        if (!approvedSupportingDocument) {
-          return response.status(409).json({
+        return response.status(409).json({
             message: "This renter must complete the Become a Vehicle Owner verification workflow before the role can be changed.",
-          });
-        }
+            code: "OWNER_UPGRADE_REQUIRED",
+        });
       }
 
       const duplicateEmail = await database.collection("users").findOne({
@@ -711,6 +721,12 @@ export function createAdminDataRouter({ requireAdminSession }) {
       ].filter(Boolean);
       if (!changedFields.length) return response.status(400).json({ message: "No customer details were changed." });
 
+      const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "customer.updated", targetType: "customer",
+        targetId: String(target.objectId), targetLabel: name, reason: reauthentication.reason, summary: `Updated customer account ${name}.`,
+        metadata: { changedFields, before: { name: asText(target.customer.name), email: previousEmail, phone: asText(target.customer.phone), role: target.customer.role },
+          after: { name, email, phone, role }, emailVerificationRequired: email !== previousEmail } });
+      update.$push = { adminAuditOutbox: auditRecord };
+
       const result = await database.collection("users").findOneAndUpdate(
         { _id: target.objectId },
         update,
@@ -718,9 +734,10 @@ export function createAdminDataRouter({ requireAdminSession }) {
       );
       const updatedCustomer = result?.value ?? result;
       if (email !== previousEmail) {
+        const faceFilter = await ownedFaceFilter(database, target.objectId, previousEmail);
         await Promise.all([
-          database.collection("prekycdocuments").updateMany({ email: previousEmail }, { $set: { email } }),
-          database.collection("prekycfaces").updateMany({ email: previousEmail }, { $set: { email } }),
+          database.collection("prekycdocuments").updateMany(ownedDocumentFilter(target.objectId, previousEmail), { $set: { email } }),
+          database.collection("prekycfaces").updateMany(faceFilter, { $set: { email } }),
           database.collection("otps").deleteMany({ email: { $in: [previousEmail, email] }, purpose: "verification" }),
         ]);
         const otp = String(randomInt(100000, 1000000));
@@ -744,33 +761,16 @@ export function createAdminDataRouter({ requireAdminSession }) {
       await sendCustomerAccountChangeAlert(previousEmail, changedFields).catch((error) => {
         console.error("Customer account-change alert delivery failed:", error.message);
       });
-      const before = {
-        name: asText(target.customer.name),
-        email: previousEmail,
-        phone: asText(target.customer.phone),
-        role: target.customer.role,
-      };
-      const after = { name, email, phone, role };
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: "customer.updated",
-        targetType: "customer",
-        targetId: target.objectId.toString(),
-        targetLabel: name,
-        reason: reauthentication.reason,
-        summary: `Updated customer account ${name}.`,
-        metadata: { changedFields, before, after, emailVerificationRequired: email !== previousEmail },
-      });
+      await recordAdminAudit({ record: auditRecord });
       return response.json({
         message: email !== previousEmail
           ? "Customer updated. Existing sessions were revoked and the new email must be verified."
           : "Customer account updated and the customer was notified.",
-        customer: mapUser(updatedCustomer),
+        customer: await mapCustomerWithVerification(database, updatedCustomer),
         emailVerificationRequired: email !== previousEmail,
       });
     } catch (error) {
-      if (error?.code === 11000) return response.status(409).json({ message: "That email address is already in use." });
+      if (error?.code === 11000) return response.status(409).json({ message: error.keyPattern?.phone ? "That phone number is already in use." : "That email address is already in use." });
       return next(error);
     }
   });
@@ -804,25 +804,21 @@ export function createAdminDataRouter({ requireAdminSession }) {
             $set: { isDisabled: false, updatedAt: now },
             $unset: { disabledAt: "", disabledBy: "", disabledReason: "" },
           };
+      const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount,
+        action: disabled ? "customer.disabled" : "customer.enabled", targetType: "customer", targetId: String(target.objectId),
+        targetLabel: asText(target.customer.name), reason: reauthentication.reason,
+        summary: `${disabled ? "Disabled" : "Enabled"} customer account ${asText(target.customer.name)}.` });
+      update.$push = { adminAuditOutbox: auditRecord };
       const result = await database.collection("users").findOneAndUpdate(
         { _id: target.objectId },
         update,
         { returnDocument: "after" },
       );
       const updatedCustomer = result?.value ?? result;
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: disabled ? "customer.disabled" : "customer.enabled",
-        targetType: "customer",
-        targetId: target.objectId.toString(),
-        targetLabel: asText(target.customer.name),
-        reason: reauthentication.reason,
-        summary: `${disabled ? "Disabled" : "Enabled"} customer account ${asText(target.customer.name)}.`,
-      });
+      await recordAdminAudit({ record: auditRecord });
       return response.json({
         message: disabled ? "Customer account disabled." : "Customer account enabled.",
-        customer: mapUser(updatedCustomer),
+        customer: await mapCustomerWithVerification(database, updatedCustomer),
       });
     } catch (error) {
       return next(error);
@@ -852,13 +848,17 @@ export function createAdminDataRouter({ requireAdminSession }) {
       }
 
       const email = asText(target.customer.email).toLowerCase();
+      const faceFilter = await ownedFaceFilter(database, target.objectId, email);
       const verificationDocuments = await database.collection("prekycdocuments").find(
-        { email },
+        ownedDocumentFilter(target.objectId, email),
         { projection: { fileKey: 1 } },
       ).toArray();
       const now = new Date();
       const archivedEmail = `archived+${target.objectId.toString()}@rentifypro.invalid`;
       const archivedPasswordHash = await bcrypt.hash(randomBytes(32).toString("hex"), 12);
+      const archiveAudit = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "customer.archived", targetType: "customer",
+        targetId: String(target.objectId), targetLabel: asText(target.customer.name), reason: reauthentication.reason,
+        summary: `Archived and anonymized customer account ${asText(target.customer.name)}.`, metadata: { activeBookings: activeBookingCount, linkedVehicles: vehicleCount } });
       const archival = await database.collection("users").updateOne(
         { _id: target.objectId, isArchived: { $ne: true } },
         {
@@ -885,13 +885,14 @@ export function createAdminDataRouter({ requireAdminSession }) {
             emergencyContactRelationship: "", notificationSettings: "",
           },
           $inc: { sessionVersion: 1 },
+          $push: { adminAuditOutbox: archiveAudit },
         },
       );
       if (archival.modifiedCount !== 1) return response.status(409).json({ message: "The customer account changed before it could be archived. Refresh and try again." });
 
       await Promise.all([
-        database.collection("prekycdocuments").deleteMany({ email }),
-        database.collection("prekycfaces").deleteMany({ email }),
+        database.collection("prekycdocuments").deleteMany(ownedDocumentFilter(target.objectId, email)),
+        database.collection("prekycfaces").deleteMany(faceFilter),
         database.collection("kyc_cases").deleteMany({ user: target.objectId }),
         database.collection("otps").deleteMany({ email }),
         database.collection("notifications").deleteMany({ user: target.objectId }),
@@ -906,65 +907,75 @@ export function createAdminDataRouter({ requireAdminSession }) {
         }),
       );
 
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: "customer.archived",
-        targetType: "customer",
-        targetId: target.objectId.toString(),
-        targetLabel: asText(target.customer.name),
-        reason: reauthentication.reason,
-        summary: `Archived and anonymized customer account ${asText(target.customer.name)}.`,
-        metadata: { activeBookings: activeBookingCount, linkedVehicles: vehicleCount },
-      });
+      await recordAdminAudit({ record: archiveAudit });
       return response.json({ message: "Customer account archived and personal data anonymized.", archivedCustomerId: request.params.id });
     } catch (error) {
       return next(error);
     }
   });
 
-  router.get("/data", async (_request, response, next) => {
+  router.get("/data", async (request, response, next) => {
     try {
       const database = mongoose.connection.db;
-      const [users, vehicles, documents, bookings, failedAdminLogins, actionableReportCount] = await Promise.all([
+      const offset = parseTransactionOffset(request.query.cursor);
+      const limit = Math.min(Math.max(Number.parseInt(request.query.limit, 10) || 250, 1), 250);
+      const [userRows, vehicleRows, documentRows, bookingRows, failedAdminLogins, actionableReportCount, pendingNotifications] = await Promise.all([
         database.collection("users").find({}, {
-          projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, isDisabled: 1, isArchived: 1, disabledAt: 1, disabledReason: 1, kycStatus: 1, createdAt: 1 },
-        }).sort({ createdAt: -1 }).toArray(),
+          projection: { name: 1, email: 1, phone: 1, role: 1, isVerified: 1, isDisabled: 1, isArchived: 1, disabledAt: 1, disabledReason: 1, kycStatus: 1, registrationDraftId: 1, ownerDocumentVerificationRequired: 1, createdAt: 1 },
+        }).sort({ createdAt: -1, _id: -1 }).skip(offset).limit(limit + 1).toArray(),
         database.collection("vehicles").find({}, {
           projection: { owner: 1, name: 1, description: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, availabilityHoldReason: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
-        }).sort({ createdAt: -1 }).toArray(),
-        database.collection("prekycdocuments").find({}, {
-          projection: { email: 1, sessionId: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, confidence: 1, reason: 1, detailsMatched: 1, mismatchFields: 1, suspectedTampering: 1, processingAttempts: 1, nextAttemptAt: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, reviewVersion: 1, fileHash: 1, provider: 1, privateScreening: 1, manualComparison: 1, validationChecks: 1 },
-        }).sort({ createdAt: -1 }).toArray(),
+        }).sort({ createdAt: -1, _id: -1 }).skip(offset).limit(limit + 1).toArray(),
+        database.collection("prekycdocuments").find(registrationReviewFilter(), {
+          projection: { registrationDraftId: 1, registrationExpiresAt: 1, manualReviewRequestedAt: 1, registrationCancelledAt: 1, email: 1, registeredUser: 1, expiresAt: 1, sessionId: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, confidence: 1, reason: 1, detailsMatched: 1, mismatchFields: 1, suspectedTampering: 1, processingAttempts: 1, nextAttemptAt: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, reviewVersion: 1, reviewHistory: 1, fileHash: 1, provider: 1, privateScreening: 1, manualComparison: 1, validationChecks: 1, documentNumberFingerprint: 1, adminIdentifierScreening: 1 },
+        }).sort({ createdAt: -1, _id: -1 }).skip(offset).limit(limit + 1).toArray(),
         database.collection("bookings").find({}, {
-          projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, status: 1, paymentStatus: 1, paymentAmountDue: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
-        }).sort({ createdAt: -1 }).toArray(),
+          projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, actualReturnAt: 1, lateReturnGraceMinutes: 1, status: 1, paymentStatus: 1, paymentAmountDue: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
+        }).sort({ createdAt: -1, _id: -1 }).skip(offset).limit(limit + 1).toArray(),
         AdminAuditLog.countDocuments({
           action: { $in: ["admin.login.failed", "admin.mfa.failed", "admin.reauthentication.failed"] },
           outcome: "failure",
           createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         }),
         database.collection("reports").countDocuments({ status: { $in: ["open", "investigating", "awaiting_information", "appealed"] } }),
+        database.collection("prekycdocuments").countDocuments({ "reviewHistory.notificationPending": true }),
+      ]);
+      const hasMore = [userRows, vehicleRows, documentRows, bookingRows].some(rows => rows.length > limit);
+      const users = userRows.slice(0, limit), vehicles = vehicleRows.slice(0, limit), documents = documentRows.slice(0, limit), bookings = bookingRows.slice(0, limit);
+      const referencedIds = [...new Set([...vehicles.map(vehicle => vehicle.owner), ...bookings.flatMap(booking => [booking.owner, booking.renter]),
+        ...documents.map(document => documentOwner(document).userId)].map(String).filter(validObjectId))].map(value => new mongoose.Types.ObjectId(value));
+      const [relatedUsers, relatedVehicles, verifications] = await Promise.all([
+        database.collection("users").find({ _id: { $in: referencedIds } },
+          { projection: { name: 1, email: 1, role: 1, isArchived: 1 } }).limit(limit * 5).toArray(),
+        database.collection("vehicles").find({ _id: { $in: bookings.map(booking => booking.vehicle).filter(Boolean) } }, { projection: { name: 1 } }).limit(limit).toArray(),
+        loadAccountVerifications(database, users),
       ]);
 
-      const usersByEmail = new Map(users.map((user) => [asText(user.email).toLowerCase(), user]));
-      const usersById = new Map(users.map((user) => [user._id.toString(), user]));
-      const vehiclesById = new Map(vehicles.map((vehicle) => [vehicle._id.toString(), vehicle]));
-      const ownerNames = new Map(users.map((user) => [user._id.toString(), asText(user.name, "Unknown operator")]));
+      const usersByEmail = new Map([...relatedUsers, ...users].map((user) => [asText(user.email).toLowerCase(), user]));
+      const usersById = new Map([...relatedUsers, ...users].map((user) => [user._id.toString(), user]));
+      const vehiclesById = new Map([...relatedVehicles, ...vehicles].map((vehicle) => [vehicle._id.toString(), vehicle]));
+      const ownerNames = new Map([...relatedUsers, ...users].map((user) => [user._id.toString(), asText(user.name, "Unknown operator")]));
 
-      const mappedCustomers = users.filter((user) => !user.isArchived).map(mapUser);
+      const mappedCustomers = users.filter((user) => !user.isArchived).map(user => mapUser(user, verifications.get(String(user._id))));
       const mappedVehicles = vehicles.map((vehicle) => mapVehicle(vehicle, ownerNames));
-      const mappedDocuments = documents.map((document) => mapDocument(document, usersByEmail, usersById));
+      const mappedDocuments = [];
+      for (let offset = 0; offset < documents.length; offset += 25) {
+        mappedDocuments.push(...await Promise.all(documents.slice(offset, offset + 25).filter(document => canInspectRegistrationDocument(document)).map(document =>
+          addFileAvailability(mapDocument(document, usersByEmail, usersById), document, kycDirectory))));
+      }
       const mappedBookings = bookings.map((booking) => mapBooking(booking, usersById, vehiclesById));
       const overdueCount = mappedBookings.filter((booking) => booking.isOverdue).length;
-      const pendingDocumentCount = mappedDocuments.filter((document) => document.approval === "Pending").length;
+      const pendingDocumentCount = mappedDocuments.filter((document) => document.approval === "Pending" && document.reviewPurpose === "Final approval").length;
+      const assistanceCount = mappedDocuments.filter((document) => document.approval === "Pending" && document.reviewPurpose === "Registration assistance").length;
       const suspendedCustomerCount = mappedCustomers.filter((customer) => customer.disabled).length;
       const outstandingPaymentCount = mappedBookings.filter((booking) => booking.paymentAmountDue > 0 && !["Cancelled", "Rejected"].includes(booking.status)).length;
       const unavailableVehicleCount = mappedVehicles.filter((vehicle) => vehicle.status !== "Available").length;
       const operationalAlerts = [
+        pendingNotifications ? { id: "pending-verification-notices", severity: "info", title: "Verification notifications pending", description: "Document decisions are saved; customer notification delivery is pending.", count: pendingNotifications, view: "documents", context: {} } : null,
         actionableReportCount ? { id: "actionable-reports", severity: "critical", title: "User reports need review", description: "Submitted reports or appeals are waiting for an administrative decision.", count: actionableReportCount, view: "reports", context: {} } : null,
         overdueCount ? { id: "overdue-returns", severity: "critical", title: "Overdue vehicle returns", description: "Bookings have passed their scheduled return time.", count: overdueCount, view: "bookings", context: { status: "Overdue" } } : null,
         pendingDocumentCount ? { id: "pending-documents", severity: "warning", title: "Documents awaiting review", description: "Identity or permit documents need a Super Admin decision.", count: pendingDocumentCount, view: "documents", context: { status: "Pending Review" } } : null,
+        assistanceCount ? { id: "registration-assistance", severity: "info", title: "Registration assistance requested", description: "Applicants requested an ID comparison before submitting their accounts. Final approval remains unavailable.", count: assistanceCount, view: "documents", context: { status: "Pending Review", purpose: "Registration assistance" } } : null,
         outstandingPaymentCount ? { id: "outstanding-payments", severity: "warning", title: "Outstanding booking balances", description: "Bookings have an unpaid or partially paid balance.", count: outstandingPaymentCount, view: "transactions", context: { paymentStatus: "unpaid" } } : null,
         failedAdminLogins ? { id: "failed-admin-access", severity: "critical", title: "Failed admin security checks", description: "Login, MFA, or password confirmations failed in the last 24 hours.", count: failedAdminLogins, view: "audit", context: { outcome: "failure" } } : null,
         suspendedCustomerCount ? { id: "suspended-customers", severity: "info", title: "Suspended customer accounts", description: "Accounts remain blocked from RentifyPro access.", count: suspendedCustomerCount, view: "customers", context: { status: "Suspended" } } : null,
@@ -977,6 +988,7 @@ export function createAdminDataRouter({ requireAdminSession }) {
         documents: mappedDocuments,
         bookings: mappedBookings,
         operationalAlerts,
+        page: { hasMore, nextCursor: hasMore ? transactionCursor(offset + limit) : null, limit },
         syncedAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -989,9 +1001,11 @@ export function createAdminDataRouter({ requireAdminSession }) {
       if (!validObjectId(request.params.id)) return response.status(400).json({ message: "Invalid document ID." });
       const document = await mongoose.connection.db.collection("prekycdocuments").findOne(
         { _id: new mongoose.Types.ObjectId(request.params.id) },
-        { projection: { fileKey: 1, fileName: 1, mimeType: 1 } },
+        { projection: { fileKey: 1, fileHash: 1, fileName: 1, mimeType: 1, registeredUser: 1, sessionId: 1, registrationDraftId: 1, registrationExpiresAt: 1, manualReviewRequestedAt: 1, registrationCancelledAt: 1, expiresAt: 1, docType: 1, status: 1 } },
       );
       if (!document?.fileKey) return response.status(404).json({ message: "Document file not found." });
+      assertCurrentDocument(document);
+      await ensureKycEvidence(document);
 
       const filePath = safeFileFromKey(kycDirectory, document.fileKey, DOCUMENT_EXTENSIONS);
       if (!filePath) return response.status(400).json({ message: "Invalid document file reference." });
@@ -1049,7 +1063,16 @@ export function createAdminDataRouter({ requireAdminSession }) {
       if (!validObjectId(request.params.id)) return response.status(400).json({ message: "Invalid document ID." });
       const document = await mongoose.connection.db.collection("prekycdocuments").findOne({ _id: new mongoose.Types.ObjectId(request.params.id) });
       if (!document) return response.status(404).json({ message: "Document not found." });
-      const context = await getPrivateKycReviewContext(document, kycDirectory);
+      assertCurrentDocument(document);
+      if (request.query.mode === "visual" && request.query.statusOnly === "1") {
+        response.setHeader("Cache-Control", "private, no-store");
+        return response.json({ fileHash: document.fileHash, reviewVersion: document.reviewVersion || document.fileHash,
+          identifierScreening: identifierScreeningSummary(document),
+          identifierDuplicateCheck: currentIdentifierFingerprint(document) ? "available" : "file_hash_only" });
+      }
+      await ensureKycEvidence(document);
+      const context = request.query.mode === "visual" ? await getAdminVisualReviewContext(document, kycDirectory)
+        : await getPrivateKycReviewContext(document, kycDirectory);
       response.setHeader("Cache-Control", "private, no-store");
       return response.json(context);
     } catch (error) {
@@ -1066,17 +1089,19 @@ export function createAdminDataRouter({ requireAdminSession }) {
       const collection = mongoose.connection.db.collection("prekycdocuments");
       const document = await collection.findOne({ _id: new mongoose.Types.ObjectId(request.params.id) });
       if (!document) return response.status(404).json({ message: "Document not found." });
+      assertCurrentDocument(document);
+      await ensureKycEvidence(document);
+      const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "document.compared",
+        targetType: "document", targetId: request.params.id, reason: reauthentication.reason,
+        summary: "Inspected the original document and compared its registration details; final approval remains pending.",
+        metadata: { fileHash: document.fileHash, reviewVersion: document.reviewVersion } });
       const updated = await compareAdminKycDocument({ collection, document,
         input: { ...request.body, remarks: reauthentication.reason },
         reviewerId: request.adminAccount?.key || request.adminAccount?.email,
-        directory: kycDirectory });
-      await recordAdminAudit({ request, admin: request.adminAccount, action: "document.compared",
-        targetType: "document", targetId: request.params.id, reason: reauthentication.reason,
-        summary: "Inspected the original document and compared its registration details; final approval remains pending.",
-        metadata: { fileHash: document.fileHash, reviewVersion: document.reviewVersion,
-          fieldsCompared: updated.manualComparison.fieldsCompared } });
+        directory: kycDirectory, auditRecord });
+      await recordAdminAudit({ record: auditRecord });
       response.setHeader("Cache-Control", "private, no-store");
-      return response.json({ document: mapDocument(updated, new Map()) });
+      return response.json({ document: await mapDocumentWithCustomer(mongoose.connection.db, updated) });
     } catch (error) {
       if (error.status) return response.status(error.status).json({ message: error.message });
       return next(error);
@@ -1090,27 +1115,88 @@ export function createAdminDataRouter({ requireAdminSession }) {
       if (!["Approved", "Rejected"].includes(approval)) {
         return response.status(400).json({ message: "Approval must be Approved or Rejected." });
       }
-      const reauthentication = await verifyCriticalAction(request, { requireReason: true });
+      const reauthentication = await verifyCriticalAction(request, { requireReason: approval === "Rejected" });
       if (reauthentication.error) return response.status(reauthentication.error.status).json({ message: reauthentication.error.message, code: reauthentication.error.code });
+      const decisionReason = approval === "Approved" ? "Document approved by the Super Admin." : reauthentication.reason;
 
-      const current = await mongoose.connection.db.collection("prekycdocuments").findOne({ _id: new mongoose.Types.ObjectId(request.params.id) });
+      const collection = mongoose.connection.db.collection("prekycdocuments");
+      let current = await collection.findOne({ _id: new mongoose.Types.ObjectId(request.params.id) });
+      if (!isSubmittedDocument(current)) return response.status(409).json({ message: "Final approval requires a submitted registration. Use registration assistance to save a comparison." });
+      const owner = documentOwner(current);
+      const customer = await mongoose.connection.db.collection("users").findOne({ _id: new mongoose.Types.ObjectId(owner.userId) },
+        { projection: { role: 1, isArchived: 1 } });
+      if (documentAccountLink(current, customer).status !== "registered") {
+        return response.status(409).json({ message: "This document is not linked to a current customer account. Resolve the account link before deciding." });
+      }
+      if (isRepeatedAdminDecision(current, approval, request.body?.reviewVersion)) {
+        try {
+          if (current.adminDecisionPending) await finishAdminKycDecision(mongoose.connection.db, current);
+          else await reconcileAdminAccountDocuments(mongoose.connection.db, current);
+        } catch {
+          return response.status(202).json({ document: mapDocument(current, new Map()), reconciliationPending: true,
+            message: "Document decision saved. Account synchronization or audit delivery is pending and will retry automatically." });
+        }
+        return response.json({ document: await mapDocumentWithCustomer(mongoose.connection.db, current), repeated: true });
+      }
+      if (approval === "Approved" && request.body?.inspection) {
+        assertCurrentDocument(current);
+        if (request.body.inspection.reviewMode !== "visual" || request.body.inspection.reviewVersion !== request.body.reviewVersion) {
+          return response.status(400).json({ message: "The inspection must refer to this document's current review." });
+        }
+        await ensureKycEvidence(current);
+        const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "document.compared",
+          targetType: "document", targetId: request.params.id, reason: decisionReason,
+          summary: "Visually inspected the current original and compared the saved registration details.",
+          metadata: { reviewMethod: "visual", fileHash: current.fileHash, reviewVersion: current.reviewVersion } });
+        current = await compareAdminKycDocument({ collection, document: current,
+          input: { ...request.body.inspection, remarks: decisionReason },
+          reviewerId: request.adminAccount?.key || request.adminAccount?.email, directory: kycDirectory, auditRecord });
+        await recordAdminAudit({ record: auditRecord });
+      }
       validateAdminKycDecision(current, approval, request.body?.reviewVersion);
+      if (approval === "Approved") {
+        const fingerprint = currentIdentifierFingerprint(current);
+        if (fingerprint && await collection.findOne(identifierDuplicateFilter(current, fingerprint), { projection: { _id: 1 } })) {
+          return response.status(409).json({ message: "This document identifier is linked to another registration. Investigate before approving." });
+        }
+        await ensureKycEvidence(current);
+        const { readPrivateKycEvidence } = await import("../data/private-kyc/services/privateKycReviewContext.js");
+        await readPrivateKycEvidence(current, kycDirectory);
+      }
       const now = new Date();
+      const auditId = new mongoose.Types.ObjectId();
+      const audit = { admin: { key: request.adminAccount?.key || "system-admin", email: request.adminAccount?.email },
+        action: approval === "Approved" ? "document.approved" : "document.rejected", targetType: "document",
+        targetId: request.params.id, targetLabel: asText(current.fileName), reason: decisionReason,
+        summary: `${approval} verification document.`, occurredAt: now, metadata: { reviewVersion: current.reviewVersion || current.fileHash, fileHash: current.fileHash, docType: current.docType } };
       const setFields = {
+        adminDecisionPending: { auditId, audit, fileHash: current.fileHash, reviewVersion: current.reviewVersion || current.fileHash, queuedAt: now },
         status: approval === "Approved" ? "verified" : "rejected",
-        reason: reauthentication.reason,
+        reason: decisionReason,
         reviewedAt: now,
         decisionSource: "admin_review",
         processingLockedAt: null,
         nextAttemptAt: null,
       };
-      if (approval === "Approved") setFields.verifiedAt = now;
+      if (approval === "Approved") {
+        setFields.verifiedAt = now;
+        const fingerprint = currentIdentifierFingerprint(current);
+        if (fingerprint) setFields.documentNumberFingerprint = fingerprint;
+      }
 
-      const update = { $set: setFields };
+      const update = { $set: setFields, $push: { reviewHistory: {
+        reviewVersion: current.reviewVersion || current.fileHash, fileHash: current.fileHash,
+        action: approval === "Approved" ? "approve" : "reject", reason: decisionReason,
+        reviewedAt: now, reviewedBy: request.adminAccount?.key || request.adminAccount?.email,
+        sessionId: current.sessionId, notificationPending: true,
+      } } };
       if (approval === "Rejected") update.$unset = { verifiedAt: "" };
       const result = await mongoose.connection.db.collection("prekycdocuments").findOneAndUpdate(
-        { _id: new mongoose.Types.ObjectId(request.params.id), status: "pending_review", fileHash: current.fileHash,
-          ...(current.reviewVersion ? { reviewVersion: current.reviewVersion } : {}),
+        { ...registrationReviewFilter(), _id: new mongoose.Types.ObjectId(request.params.id), status: "pending_review", fileHash: current.fileHash,
+          ...(current.registeredUser ? { registeredUser: current.registeredUser } : { sessionId: current.sessionId }),
+          ...(approval === "Approved" ? identifierRevisionFilter(current) : {}),
+          reviewVersion: current.reviewVersion ?? null,
+          $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
           ...(approval === "Approved" && current.docType === "id" ? { detailsMatched: true } : {}) },
         update,
         { returnDocument: "after" },
@@ -1118,44 +1204,13 @@ export function createAdminDataRouter({ requireAdminSession }) {
       const updatedDocument = result?.value ?? result;
       if (!updatedDocument) return response.status(409).json({ message: "This document is no longer awaiting review. Refresh the dashboard." });
 
-      if (approval === "Approved" && asText(updatedDocument.sessionId).startsWith("user:")) {
-        const userId = asText(updatedDocument.sessionId).slice("user:".length);
-        if (validObjectId(userId)) {
-          const objectId = new mongoose.Types.ObjectId(userId);
-          const kycCase = await mongoose.connection.db.collection("kyc_cases").findOne(
-            { user: objectId },
-            { projection: { status: 1, idDocumentHash: 1, challengePassedAt: 1, updatedAt: 1 } },
-          );
-          if (canReconcileApprovedIdentity(updatedDocument, kycCase)) {
-            const verifiedAt = new Date();
-            const reconciled = await mongoose.connection.db.collection("kyc_cases").updateOne(
-                { user: objectId, status: "challenge_passed", updatedAt: kycCase.updatedAt },
-                { $set: { status: "approved", verifiedAt, remarks: "Face match completed and document approved by the Super Admin.", updatedAt: verifiedAt } },
-              );
-            if (reconciled.modifiedCount === 1) await mongoose.connection.db.collection("users").updateOne(
-                { _id: objectId },
-                { $set: { kycStatus: "approved", updatedAt: verifiedAt } },
-              );
-          }
-        }
+      try {
+        await finishAdminKycDecision(mongoose.connection.db, updatedDocument);
+      } catch {
+        return response.status(202).json({ document: mapDocument(updatedDocument, new Map()), reconciliationPending: true,
+          message: "Document decision saved. Account synchronization or audit delivery is pending and will retry automatically." });
       }
-
-      const matchedUser = await mongoose.connection.db.collection("users").findOne(
-        { email: asText(updatedDocument.email).toLowerCase() },
-        { projection: { name: 1, email: 1, role: 1 } },
-      );
-      const usersByEmail = new Map(matchedUser ? [[asText(matchedUser.email).toLowerCase(), matchedUser]] : []);
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: approval === "Approved" ? "document.approved" : "document.rejected",
-        targetType: "document",
-        targetId: request.params.id,
-        targetLabel: asText(updatedDocument.fileName, asText(updatedDocument.email)),
-        reason: reauthentication.reason,
-        summary: `${approval} verification document for ${asText(updatedDocument.email)}.`,
-      });
-      return response.json({ document: mapDocument(updatedDocument, usersByEmail) });
+      return response.json({ document: await mapDocumentWithCustomer(mongoose.connection.db, updatedDocument) });
     } catch (error) {
       if (error.status) return response.status(error.status).json({ message: error.message });
       return next(error);

@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminDataApi } from "../adminDataApi";
 import { DashboardKpiCard as ReportKpiCard } from "./DashboardView";
 import { EmptyState, FilterSelect, SearchField } from "../components/AdminUI";
+import PasswordInput from "../components/PasswordInput";
+import AdminModal from "../components/AdminModal";
 
 const ACTIVE_STATUSES = new Set(["open", "investigating", "awaiting_information", "appealed"]);
 const DURATION_ACTIONS = new Set(["booking_restriction", "listing_restriction", "chat_restriction", "temporary_suspension"]);
@@ -42,7 +44,7 @@ export default function ReportsView({ initialStatus = "all", onFeedback }) {
     } catch (requestError) {
       setError(requestError.message || "Reports could not be loaded.");
       if (!background) setLoadState("error");
-      else onFeedback?.(requestError.message || "Reports could not be refreshed.");
+      else onFeedback?.(requestError.message || "Reports could not be refreshed.", "error");
     } finally {
       setRefreshing(false);
     }
@@ -182,17 +184,16 @@ function ReportReviewDialog({ report, onClose, onTriage, onDecide, onFeedback })
       setRequestingInfo(false);
       setInformationNote("");
     } catch (requestError) {
-      onFeedback?.(requestError.message || "The report could not be updated.");
+      onFeedback?.(requestError.message || "The report could not be updated.", "error");
     } finally { setBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center overflow-y-auto bg-slate-950/55 px-3 py-4 backdrop-blur-sm sm:px-5" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="report-review-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-white/20 bg-white shadow-[0_30px_80px_rgba(2,18,39,0.28)]">
-        <header className="relative flex shrink-0 items-start justify-between gap-4 overflow-hidden bg-[linear-gradient(120deg,#212121_0%,#2b2b2b_72%,#007AFF_180%)] p-5 text-white sm:p-6">
-          <span aria-hidden="true" className="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-cyan-300/10 blur-2xl" />
-          <div className="relative min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200">Trust &amp; safety review</p><PriorityBadge value={report.priority} /><ReportStatusBadge value={report.status} /></div><h2 id="report-review-title" className="mt-2 text-2xl font-bold tracking-[-0.035em] text-white sm:text-3xl">{report.caseReference}</h2><p className="mt-1 text-sm text-blue-100">Submitted {formatDateTime(report.createdAt)} from {sourceLabel(report.sourceType).toLowerCase()}</p></div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Close report review" className="relative shrink-0 rounded-xl border border-white/10 bg-white/10 p-2.5 text-white transition hover:bg-white/20 disabled:opacity-50"><X size={20} /></button>
+    <AdminModal onClose={onClose} busy={busy}>
+      <div role="dialog" aria-modal="true" aria-labelledby="report-review-title" aria-busy={busy} className="flex w-full max-w-6xl flex-col overflow-hidden bg-white">
+        <header className="admin-modal-header">
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="admin-section-label text-blue-700">Trust &amp; safety review</p><PriorityBadge value={report.priority} /><ReportStatusBadge value={report.status} /></div><h2 id="report-review-title" className="mt-2 text-xl font-bold tracking-tight text-slate-950">{report.caseReference}</h2><p className="mt-1 text-sm text-slate-500">Submitted {formatDateTime(report.createdAt)} from {sourceLabel(report.sourceType).toLowerCase()}</p></div>
+          <button type="button" data-dialog-initial onClick={onClose} disabled={busy} aria-label="Close report review" className="admin-icon-button text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X size={20} /></button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#f5f7fb] p-5 sm:p-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.8fr)]">
@@ -210,12 +211,12 @@ function ReportReviewDialog({ report, onClose, onTriage, onDecide, onFeedback })
             </aside>
           </div>
         </div>
-        {active ? <footer className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-8px_25px_rgba(15,23,42,0.035)] sm:px-6">
-          {requestingInfo ? <div className="mb-4 rounded-xl border border-amber-200 bg-white p-4"><label className="block"><span className="text-sm font-semibold text-slate-800">What information should the reporter provide?</span><textarea autoFocus rows={3} maxLength={1000} value={informationNote} onChange={(event) => setInformationNote(event.target.value)} disabled={busy} className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Describe the missing evidence or details (at least 10 characters)" /></label><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setRequestingInfo(false)} disabled={busy} className="h-10 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">Cancel</button><button type="button" onClick={() => void triage({ status: "awaiting_information", note: informationNote.trim() })} disabled={busy || informationNote.trim().length < 10} className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? <LoaderCircle size={16} className="animate-spin" /> : null}Send request</button></div></div> : null}
+        {active ? <footer className="max-h-[50dvh] shrink-0 overflow-y-auto border-t border-slate-200 bg-slate-50 p-4 sm:px-5">
+          {requestingInfo ? <div className="mb-4 rounded-xl border border-amber-200 bg-white p-4"><label className="block"><span className="text-sm font-semibold text-slate-800">What information should the reporter provide?</span><textarea autoFocus rows={3} maxLength={1000} value={informationNote} onChange={(event) => setInformationNote(event.target.value)} disabled={busy} className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Describe the missing evidence or details (at least 10 characters)" /></label><div className="mt-3 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setRequestingInfo(false)} disabled={busy} className="h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">Cancel</button><button type="button" onClick={() => void triage({ status: "awaiting_information", note: informationNote.trim() })} disabled={busy || informationNote.trim().length < 10} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? <LoaderCircle size={16} className="animate-spin" /> : null}Send request</button></div></div> : null}
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between"><div className="flex flex-wrap items-end gap-3"><ReportSelect label="Priority" value={report.priority} onChange={(value) => void triage({ priority: value })} options={PRIORITY_OPTIONS.slice(1)} disabled={busy} compact />{report.status === "open" ? <button type="button" onClick={() => void triage({ status: "investigating" })} disabled={busy} className="h-10 rounded-xl border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">Start investigation</button> : null}{!requestingInfo ? <button type="button" onClick={() => setRequestingInfo(true)} disabled={busy} className="h-10 rounded-xl border border-amber-200 bg-white px-4 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">Request information</button> : null}</div><button type="button" onClick={() => onDecide(report)} disabled={busy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"><Gavel size={17} />{report.status === "appealed" ? "Decide appeal" : "Make decision"}</button></div>
         </footer> : null}
       </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -251,21 +252,21 @@ function DecisionDialog({ report, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center overflow-y-auto bg-slate-950/65 px-3 py-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="decision-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-white/20 bg-white shadow-[0_30px_80px_rgba(2,18,39,0.3)]">
-        <header className="relative flex items-start justify-between overflow-hidden bg-[linear-gradient(120deg,#212121_0%,#2b2b2b_72%,#007AFF_180%)] p-5 text-white sm:p-6"><span aria-hidden="true" className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-blue-300/10 blur-2xl" /><div className="relative"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200">Final moderation decision</p><h2 id="decision-title" className="mt-1.5 text-2xl font-bold tracking-[-0.03em] text-white">{report.caseReference}</h2><p className="mt-1 text-sm text-blue-100">This decision is audited and affected users are notified.</p></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close decision form" className="relative rounded-xl border border-white/10 bg-white/10 p-2.5 text-white transition hover:bg-white/20 disabled:opacity-50"><X size={19} /></button></header>
+    <AdminModal onClose={onClose} busy={busy}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="decision-title" aria-busy={busy} className="flex w-full max-w-2xl flex-col overflow-hidden bg-white">
+        <header className="admin-modal-header"><div className="min-w-0"><p className="admin-section-label text-blue-700">Final moderation decision</p><h2 id="decision-title" className="mt-1.5 text-xl font-bold tracking-tight text-slate-950">{report.caseReference}</h2><p className="mt-1 text-sm text-slate-500">This decision is audited and affected users are notified.</p></div><button type="button" data-dialog-initial onClick={onClose} disabled={busy} aria-label="Close decision form" className="admin-icon-button text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X size={19} /></button></header>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#f8fafc] p-5 sm:p-6">
-          <fieldset><legend className="text-sm font-semibold text-slate-800">Outcome</legend><div className="mt-2 grid gap-3 sm:grid-cols-2"><DecisionChoice checked={outcome === "violation_confirmed"} onChange={() => setOutcome("violation_confirmed")} icon={ShieldAlert} title="Violation confirmed" description="Apply a proportionate moderation action." /><DecisionChoice checked={outcome === "dismissed"} onChange={() => setOutcome("dismissed")} icon={CheckCircle2} title="Dismiss report" description="Close without sanctioning the reported user." /></div></fieldset>
+          <fieldset disabled={busy}><legend className="text-sm font-semibold text-slate-800">Outcome</legend><div className="mt-2 grid gap-3 sm:grid-cols-2"><DecisionChoice checked={outcome === "violation_confirmed"} onChange={() => setOutcome("violation_confirmed")} icon={ShieldAlert} title="Violation confirmed" description="Apply a proportionate moderation action." /><DecisionChoice checked={outcome === "dismissed"} onChange={() => setOutcome("dismissed")} icon={CheckCircle2} title="Dismiss report" description="Close without sanctioning the reported user." /></div></fieldset>
           {outcome === "violation_confirmed" ? <div className="grid gap-4 sm:grid-cols-2"><FieldSelect label="Moderation action" value={action} onChange={setAction} options={actions} disabled={busy} />{durationRequired ? <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-800">Duration in days</span><input type="number" min="1" max="365" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} disabled={busy} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label> : null}</div> : <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600"><CircleAlert size={19} className="mt-0.5 shrink-0" />No sanction will be applied. On appeal, sanctions from the earlier decision will be revoked.</div>}
           <DecisionTextArea label="Policy reason" hint="Visible only to administrators" value={policyReason} onChange={setPolicyReason} maxLength={1000} placeholder="Explain how the evidence supports this decision (at least 10 characters)" busy={busy} />
           <DecisionTextArea label="Message to affected users" hint="Included in the moderation record" value={userVisibleReason} onChange={setUserVisibleReason} maxLength={1000} placeholder="Give a clear, respectful explanation of the outcome" busy={busy} />
           <DecisionTextArea label="Internal note (optional)" value={internalNote} onChange={setInternalNote} maxLength={2000} placeholder="Add context for future administrators" busy={busy} optional />
-          <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-800">Confirm Super Admin password</span><input type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} disabled={busy} required placeholder="Required to issue the decision" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+          <PasswordInput label="Confirm Super Admin password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} disabled={busy} required placeholder="Required to issue the decision" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
           {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">{error}</p> : null}
         </div>
-        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white p-4 shadow-[0_-8px_25px_rgba(15,23,42,0.035)] sm:flex-row sm:justify-end sm:px-6"><button type="button" onClick={onClose} disabled={busy} className="h-11 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50">Cancel</button><button type="submit" disabled={!valid || busy} className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white shadow-lg transition disabled:opacity-50 ${outcome === "dismissed" ? "bg-slate-700 shadow-slate-200 hover:bg-slate-800" : "bg-blue-600 shadow-blue-200 hover:bg-blue-700"}`}>{busy ? <LoaderCircle size={17} className="animate-spin" /> : <Gavel size={17} />}{busy ? "Recording decision..." : outcome === "dismissed" ? "Dismiss report" : "Confirm action"}</button></footer>
+        <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:flex-row sm:justify-end sm:px-5"><button type="button" onClick={onClose} disabled={busy} className="admin-button disabled:opacity-50">Cancel</button><button type="submit" disabled={!valid || busy} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${outcome === "dismissed" ? "bg-slate-700 hover:bg-slate-800" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? <LoaderCircle size={17} className="animate-spin" /> : <Gavel size={17} />}{busy ? "Recording decision..." : outcome === "dismissed" ? "Dismiss report" : "Confirm action"}</button></footer>
       </form>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -278,7 +279,7 @@ function moderationActionsFor(report) {
 }
 
 function DecisionChoice({ checked, onChange, icon: Icon, title, description }) {
-  return <label className={`flex cursor-pointer gap-3 rounded-2xl border bg-white p-4 transition ${checked ? "border-blue-500 ring-2 ring-blue-100 shadow-[0_10px_24px_rgba(37,99,235,0.08)]" : "border-slate-200 hover:border-slate-300 hover:shadow-sm"}`}><input type="radio" checked={checked} onChange={onChange} className="sr-only" /><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${checked ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}><Icon size={18} /></span><span><span className="block text-sm font-bold text-slate-900">{title}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></span></label>;
+  return <label className={`flex cursor-pointer gap-3 rounded-xl border bg-white p-4 transition focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-700 ${checked ? "border-blue-600 bg-blue-50" : "border-slate-300 hover:border-slate-400"}`}><input type="radio" name="moderation-outcome" checked={checked} onChange={onChange} className="sr-only" /><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${checked ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}><Icon size={18} /></span><span><span className="block text-sm font-semibold text-slate-900">{title}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></span></label>;
 }
 
 function DecisionTextArea({ label, hint, value, onChange, maxLength, placeholder, busy, optional = false }) {

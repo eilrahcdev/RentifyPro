@@ -98,7 +98,7 @@ export default function VehiclesView({ vehicles: sourceVehicles, onView }) {
           <p className="mt-1 text-xs leading-5">{status === "Unavailable" ? "Needs Attention counts listings not marked available. A stored hold reason is shown with the vehicle status when recorded." : "Ready to Rent counts listings marked available."}</p>
         </div> : null}
 
-        <div className="overflow-x-auto">
+        <div tabIndex={0} role="region" aria-label="Vehicle records, scroll horizontally for more columns" className="overflow-x-auto">
           <table className="w-full min-w-[980px] border-collapse">
             <caption className="sr-only">Registered RentifyPro vehicles</caption>
             <thead className="bg-slate-50"><tr>{["Vehicle", "Plate No.", "Category", "Operator", "Location", "Rental Rate", "Status", "Actions"].map((heading) => <th key={heading} scope="col" className="border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{heading}</th>)}</tr></thead>

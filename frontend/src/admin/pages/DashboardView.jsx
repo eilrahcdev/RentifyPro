@@ -3,16 +3,12 @@ import {
   Activity,
   CalendarCheck2,
   CalendarDays,
-  Car,
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
   Clock3,
   FileCheck2,
   Gauge,
-  ScrollText,
-  UserRound,
-  Users,
 } from "lucide-react";
 import {
   Area,
@@ -25,26 +21,22 @@ import {
 } from "recharts";
 import { EmptyState, StatusBadge } from "../components/AdminUI";
 
-const bookingColors = ["#f59e0b", "#0b75e7", "#16a34a", "#e11d48", "#64748b"];
+const bookingColors = ["#f59e0b", "#0b75e7", "#16a34a", "#e11d48", "#64748b", "#e11d48"];
 const tooltipStyle = {
   borderRadius: 14,
   border: "1px solid #e2e8f0",
   boxShadow: "0 18px 40px rgba(15,23,42,.12)",
 };
 
-export default function DashboardView({ vehicles, customers, documents, bookings = [], alerts = [], period, periodControl, onSelect, onViewBooking }) {
-  const platformCustomers = customers.filter((customer) => customer.role !== "Admin");
-  const renters = platformCustomers.filter((customer) => customer.role === "Renter").length;
-  const operators = platformCustomers.filter((customer) => customer.role === "Operator").length;
+export default function DashboardView({ vehicles, documents, bookings = [], alerts = [], period, periodControl, onSelect, onViewBooking }) {
   const available = vehicles.filter((vehicle) => vehicle.status === "Available").length;
-  const unavailable = vehicles.length - available;
   const activeRentals = bookings.filter((booking) => booking.isActive).length;
   const overdueRentals = bookings.filter((booking) => booking.isOverdue).length;
-  const pendingDocuments = documents.filter((document) => document.approval === "Pending").length;
+  const pendingDocuments = documents.filter((document) => document.approval === "Pending" && document.reviewPurpose !== "Registration assistance").length;
   const periodBookings = bookings.filter((booking) => dateMonthKey(booking.pickupAt || booking.createdAt) === period);
   const calendarBookings = bookings.filter((booking) => [booking.pickupAt, booking.returnAt].some((value) => dateMonthKey(value) === period));
 
-  const bookingData = ["Pending", "Confirmed", "Completed", "Cancelled", "Rejected"].map((status) => ({
+  const bookingData = ["Pending", "Confirmed", "Extended", "Completed", "Cancelled", "Rejected"].map((status) => ({
     status,
     count: periodBookings.filter((booking) => booking.status === status).length,
   }));
@@ -57,7 +49,6 @@ export default function DashboardView({ vehicles, customers, documents, bookings
   return (
     <div className="space-y-5">
       <section aria-label="Priority platform statistics">
-        <p className="mb-3 text-xs font-semibold text-slate-500">Current operations</p>
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <DashboardKpiCard label="Active rentals" value={activeRentals} helper={activeRentals ? "Currently in progress" : "No active rentals"} status={activeRentals ? "In progress" : "No active rentals"} actionLabel="View active rentals" onAction={() => onSelect("bookings", { status: "Active" })} icon={CalendarCheck2} tone="green" />
         <DashboardKpiCard label="Overdue returns" value={overdueRentals} helper={overdueRentals ? "Need follow-up" : "No overdue returns"} status={overdueRentals ? "Action required" : "All clear"} actionLabel="Inspect overdue returns" onAction={() => onSelect("bookings", { status: "Overdue" })} icon={Clock3} tone={overdueRentals ? "red" : "green"} />
@@ -66,42 +57,13 @@ export default function DashboardView({ vehicles, customers, documents, bookings
         </div>
       </section>
 
-      <section aria-label="Platform operational overview" className="grid items-start gap-5 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
-        <ActionCenter alerts={alerts} pendingDocuments={pendingDocuments} overdueRentals={overdueRentals} unavailable={unavailable} onSelect={onSelect} />
+      <section aria-label="Platform operational overview" className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
+        <ActionCenter alerts={alerts} onSelect={onSelect} />
         <TodayOperations bookings={bookings} onSelect={onSelect} onViewBooking={onViewBooking} />
       </section>
 
       <OperationsWorkspace activityData={activityData} bookingData={bookingData} scheduledCount={periodBookings.length} calendarBookings={calendarBookings} period={period} periodControl={periodControl} recentBookings={recentBookings} onSelect={onSelect} onViewBooking={onViewBooking} />
-      <PlatformSnapshot renters={renters} operators={operators} vehicles={vehicles.length} onSelect={onSelect} />
     </div>
-  );
-}
-
-function PlatformSnapshot({ renters, operators, vehicles, onSelect }) {
-  const stats = [
-    { label: "Renters", value: renters, icon: Users, view: "customers", context: { role: "Renter" } },
-    { label: "Operators", value: operators, icon: UserRound, view: "customers", context: { role: "Operator" } },
-    { label: "Registered vehicles", value: vehicles, icon: Car, view: "vehicles", context: {} },
-  ];
-
-  return (
-    <section aria-label="Platform network snapshot" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-      <div className="grid gap-4 xl:grid-cols-[minmax(180px,.55fr)_minmax(0,1.45fr)] xl:items-center">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Platform totals</h2>
-          <p className="mt-1 text-xs text-slate-500">People and fleet records</p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {stats.map(({ label, value, icon: Icon, view, context }) => (
-            <button key={label} type="button" onClick={() => onSelect(view, context)} className="group flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 text-left transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
-              <Icon size={18} className="shrink-0 text-blue-600" aria-hidden="true" />
-              <span className="min-w-0 flex-1"><span className="block text-2xl font-bold tabular-nums text-slate-900">{value}</span><span className="block text-xs font-medium text-slate-500">{label}</span></span>
-              <ChevronRight size={15} className="text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" />
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -133,14 +95,16 @@ function BookingActivityCard({ activityData, bookingData, period, scheduledCount
         </ResponsiveContainer>
       </div>
       <div className="mt-3 border-t border-slate-100 pt-4">
-        <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Status distribution</p><p className="text-xs text-slate-500">Selected pickup month</p></div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Status distribution</p></div>
+        <div role="region" aria-label="Booking status distribution" tabIndex={0} className="mt-3 overflow-x-auto pb-1">
+        <div className="grid min-w-[720px] grid-cols-6 gap-2">
           {bookingData.map((item, index) => (
             <div key={item.status} className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-100">
               <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: bookingColors[index] }} /><span className="truncate text-xs font-semibold text-slate-600">{item.status}</span></div>
               <p className="mt-1 text-lg font-bold text-slate-900">{item.count}</p>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </DashboardCard>
@@ -157,7 +121,7 @@ function ChartSummary({ label, value, tone }) {
   );
 }
 
-function ActionCenter({ alerts, pendingDocuments, overdueRentals, unavailable, onSelect }) {
+function ActionCenter({ alerts, onSelect }) {
   const [filter, setFilter] = useState("all");
   const filters = [
     { id: "all", label: "All", icon: Activity, tone: "bg-blue-50 text-blue-700", active: "border-blue-500 bg-blue-50/60 ring-1 ring-blue-500" },
@@ -167,12 +131,6 @@ function ActionCenter({ alerts, pendingDocuments, overdueRentals, unavailable, o
   ];
   const visibleAlerts = filter === "all" ? alerts : alerts.filter((alert) => alert.severity === filter);
   const countFor = (id) => id === "all" ? alerts.length : alerts.filter((alert) => alert.severity === id).length;
-  const quickActions = [
-    { label: "Review documents", detail: `${pendingDocuments} pending`, icon: FileCheck2, view: "documents", context: { status: "Pending Review" }, tone: "bg-amber-50 text-amber-700" },
-    { label: "Overdue returns", detail: `${overdueRentals} overdue`, icon: Clock3, view: "bookings", context: { status: "Overdue" }, tone: "bg-rose-50 text-rose-700" },
-    { label: "Fleet availability", detail: `${unavailable} unavailable`, icon: Car, view: "vehicles", context: {}, tone: "bg-blue-50 text-blue-700" },
-    { label: "Audit activity", detail: "Open logs", icon: ScrollText, view: "audit", context: {}, tone: "bg-blue-50 text-blue-700" },
-  ];
 
   return (
     <DashboardCard title="Action center" description="Review the items that need your attention.">
@@ -200,16 +158,6 @@ function ActionCenter({ alerts, pendingDocuments, overdueRentals, unavailable, o
           </div>
         )}
       </div>
-      <details className="mt-4 border-t border-slate-100 pt-3">
-        <summary className="cursor-pointer rounded-lg py-2 text-sm font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Quick actions</summary>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {quickActions.map(({ label, detail, icon: Icon, view, context, tone }) => (
-            <button key={label} type="button" onClick={() => onSelect(view, context)} className="group rounded-xl border border-slate-200 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon size={16} aria-hidden="true" /></span><span className="mt-2.5 block text-sm font-semibold text-slate-900 group-hover:text-blue-700">{label}</span><span className="mt-0.5 block text-xs text-slate-500">{detail}</span>
-            </button>
-          ))}
-        </div>
-      </details>
     </DashboardCard>
   );
 }
@@ -284,23 +232,30 @@ function TodayOperations({ bookings, onSelect, onViewBooking }) {
   const overdue = bookings.filter((booking) => booking.isOverdue).length;
 
   return (
-    <DashboardCard title="Today's operations" description="Pickups and returns scheduled for today." headerActionLabel="View bookings" onHeaderAction={() => onSelect("bookings")}>
+    <DashboardCard title="Today's operations" description="Pickups and returns scheduled for today." headerActionLabel="View bookings" onHeaderAction={() => onSelect("bookings")} className="flex flex-col">
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         <TodaySummary label="Pickups today" value={pickups} tone="bg-blue-50 text-blue-700" />
         <TodaySummary label="Returns today" value={returns} tone="bg-emerald-50 text-emerald-700" />
         <TodaySummary label="Overdue now" value={overdue} tone={overdue ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-700"} />
       </div>
-      {schedule.length ? (
-        <ul className="mt-4 divide-y divide-slate-100">
-          {schedule.slice(0, 8).map(({ booking, event, tone }, index) => (
-            <li key={`${booking.id}-${event}-${index}`}>
-              <button type="button" onClick={() => onViewBooking(booking)} className="group flex w-full flex-wrap items-center gap-3 rounded-xl py-3 text-left transition-colors hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>{event}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{booking.vehicle}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{booking.renter} · #{booking.reference}</span></span><ChevronRight size={15} className="text-slate-400 transition group-hover:translate-x-0.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : <div className="mt-4 rounded-xl bg-slate-50/60"><EmptyState icon={CalendarCheck2} title="No pickups or returns today" description="Check the calendar below for another date." /></div>}
+      <div role="region" aria-label="Today's activities" className="mt-4 flex min-h-48 flex-1 flex-col rounded-xl border border-slate-200 bg-slate-50/60 p-2 sm:p-3">
+        {schedule.length ? (
+          <ul className="space-y-2">
+            {schedule.slice(0, 8).map(({ booking, event, tone }, index) => (
+              <li key={`${booking.id}-${event}-${index}`}>
+                <button type="button" onClick={() => onViewBooking(booking)} className="group flex w-full flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>{event}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{booking.vehicle}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{booking.renter} · #{booking.reference}</span></span><ChevronRight size={15} className="text-slate-400 transition group-hover:translate-x-0.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div role="status" className="flex flex-1 items-center justify-center gap-3 px-4 py-8 text-sm font-medium text-slate-600">
+            <CalendarCheck2 size={20} className="shrink-0" aria-hidden="true" />
+            <p>No operations today.</p>
+          </div>
+        )}
+      </div>
     </DashboardCard>
   );
 }
@@ -401,7 +356,7 @@ export function DashboardKpiCard({ label, value, helper, status, progress, progr
   const theme = tones[tone] || tones.blue;
 
   return (
-    <button type="button" onClick={onAction} aria-label={`${actionLabel}. ${label}: ${value}. ${status}.`} className="group min-h-[116px] min-w-0 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-[0_6px_20px_rgba(33,33,33,0.035)] transition-[border-color,box-shadow] duration-200 hover:border-blue-200 hover:shadow-[0_10px_26px_rgba(33,33,33,0.055)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:p-4">
+    <button type="button" onClick={onAction} aria-label={`${actionLabel}. ${label}: ${value}. ${status}.`} className="group min-h-[132px] min-w-0 rounded-2xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:p-5">
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2.5">
           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${theme.icon}`}><Icon size={16} strokeWidth={1.9} aria-hidden="true" /></span>
@@ -410,7 +365,7 @@ export function DashboardKpiCard({ label, value, helper, status, progress, progr
         <ChevronRight size={14} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600" aria-hidden="true" />
       </span>
       <span className="mt-3 flex items-center gap-2.5">
-        <strong className="truncate text-[28px] font-extrabold leading-none tracking-[-0.045em] text-slate-900 sm:text-[30px]">{value}</strong>
+        <strong className="break-words text-[28px] font-bold leading-tight tabular-nums tracking-tight text-slate-900">{value}</strong>
         {Number.isFinite(progress) ? <span title={progressLabel} className={`shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold tabular-nums ${theme.badge}`}>{progress}%</span> : null}
       </span>
       <span className="mt-2 block text-xs leading-4 text-slate-500">{helper}</span>
@@ -420,10 +375,10 @@ export function DashboardKpiCard({ label, value, helper, status, progress, progr
 
 function DashboardCard({ title, description, children, footerLabel, onFooterClick, headerActionLabel, onHeaderAction, className = "" }) {
   return (
-    <article className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_6px_20px_rgba(33,33,33,0.035)] sm:p-6 ${className}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div><h2 className="text-lg font-bold tracking-[-0.01em] text-slate-900">{title}</h2>{description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}</div>
-        {headerActionLabel ? <button type="button" onClick={onHeaderAction} className="group mt-0.5 inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{headerActionLabel}</span><ChevronRight size={16} className="transition group-hover:translate-x-0.5" /></button> : null}
+    <article className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 ${className}`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1 basis-40"><h2 className="text-lg font-bold tracking-tight text-slate-900">{title}</h2>{description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}</div>
+        {headerActionLabel ? <button type="button" onClick={onHeaderAction} className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg text-sm font-semibold text-blue-700 hover:text-blue-800"><span>{headerActionLabel}</span><ChevronRight size={16} aria-hidden="true" /></button> : null}
       </div>
       {children}
       {footerLabel ? <button type="button" onClick={onFooterClick} className="mt-4 flex w-full items-center justify-between border-t border-slate-100 pt-4 text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span>{footerLabel}</span><ChevronRight size={17} /></button> : null}

@@ -12,6 +12,10 @@ import hpp from "hpp";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { getMongoConnectionConfig } from "./config/mongoConnection.js";
+import { checkAdminStorage } from "./config/storage.js";
+import { startAdminRecoveryJob, recoveryStatus } from "./services/adminRecovery.service.js";
+import { startAdminIdentifierScreeningJob } from "./services/adminIdentifierScreening.service.js";
+import { getAdminSecurityConfiguration, requireCrossSiteAdminOrigin } from "./config/adminSecurity.js";
 import AdminCredential from "./models/AdminCredential.js";
 import AdminMfaChallenge from "./models/AdminMfaChallenge.js";
 import AdminPasswordReset from "./models/AdminPasswordReset.js";
@@ -28,6 +32,7 @@ const websiteBackendDirectory = path.resolve(
 dotenv.config({ path: path.join(websiteBackendDirectory, ".env"), quiet: true });
 
 const app = express();
+const adminSecurity = getAdminSecurityConfiguration();
 const port = Number(process.env.PORT) || 5000;
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5174";
 const isProduction = process.env.NODE_ENV === "production";
@@ -75,6 +80,7 @@ const validateCorsOrigin = (origin, callback) => {
 };
 
 app.use(helmet());
+if (adminSecurity.proxyHops) app.set("trust proxy", adminSecurity.proxyHops);
 app.use(cors({
   origin: validateCorsOrigin,
   credentials: true,
@@ -83,6 +89,7 @@ app.use(cors({
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(requireCrossSiteAdminOrigin({ sameSite: adminSecurity.sameSite, allowedOrigins: configuredClientOrigins, cookieName: sessionCookieName }));
 app.use(hpp());
 
 const adminLoginLimiter = rateLimit({
@@ -163,7 +170,7 @@ const publicAdmin = (account) => ({
 const cookieOptions = (rememberMe = false) => ({
   httpOnly: true,
   secure: isProduction,
-  sameSite: "lax",
+  sameSite: adminSecurity.sameSite,
   path: "/",
   ...(rememberMe ? { maxAge: rememberedSessionSeconds * 1000 } : {}),
 });
@@ -219,6 +226,7 @@ const connectDatabase = async () => {
   if (!uri) throw new Error("MONGODB_URI, MONGO_URI, or MONGO_URI_DIRECT must be configured.");
   if (!databaseConnectionAttempt) {
     databaseConnectionAttempt = mongoose.connect(uri, options)
+      .then(connection => { startAdminRecoveryJob(); startAdminIdentifierScreeningJob(); return connection; })
       .finally(() => { databaseConnectionAttempt = null; });
   }
   return databaseConnectionAttempt;
@@ -826,12 +834,24 @@ app.get("/api/health", (_request, response) => {
   });
 });
 
+app.get("/api/ready", rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false }), async (_request, response) => {
+  const storage = await checkAdminStorage();
+  let database = false;
+  if (mongoose.connection.readyState === 1) {
+    try { await mongoose.connection.db.command({ ping: 1 }, { maxTimeMS: 2000 }); database = true; } catch { /* Readiness is false until MongoDB responds. */ }
+  }
+  const ready = database && storage.ready && !recoveryStatus.failed;
+  response.status(ready ? 200 : 503).json({ status: ready ? "ready" : "unavailable", database, storage,
+    recovery: recoveryStatus, timestamp: new Date().toISOString() });
+});
+
 app.use((_request, response) => response.status(404).json({ message: "Route not found" }));
 
 app.use((error, _request, response, _next) => {
   console.error(error);
   response.status(error.status || 500).json({
-    message: process.env.NODE_ENV === "production" ? "Internal server error" : error.message,
+    message: process.env.NODE_ENV === "production" && !error.expose ? "Internal server error" : error.message,
+    ...(error.expose ? { code: error.code } : {}),
   });
 });
 
@@ -846,6 +866,7 @@ async function startServer() {
     connectDatabase()
       .then(async () => {
         await ensureAdminAccount();
+        startAdminRecoveryJob();
         console.log(`Connected to the shared RentifyPro MongoDB database: ${mongoose.connection.name}`);
       })
       .catch((error) => console.error("MongoDB connection failed:", error.message));

@@ -1,5 +1,6 @@
 import { evaluateDocumentExtraction, isBirSupportingDocumentType, resolveSupportedDocumentType } from "./documentValidation.service.js";
-import { PRIVATE_DOCUMENT_TYPE_CHECK_VERSION } from "./privateDocumentExtraction.service.js";
+import { PRIVATE_DOCUMENT_TYPE_CHECK_VERSION, requiresPrivateDocumentExpiry } from "./privateDocumentExtraction.service.js";
+import { strictPrivateIdentityNameMatch, strictPrivateBusinessNameMatch } from "./privateDocumentLayout.service.js";
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 export const canManuallyCompareDocument = (document) => document?.status === "pending_review"
@@ -78,6 +79,12 @@ export function prepareManualDocumentComparison(document, input, reviewerId, now
       throw fail(400, "Enter valid document dates using year-month-day.");
     }
   }
+  if ((requiresPrivateDocumentExpiry(type) || Object.hasOwn(document.privateScreening?.automatedCheck?.fieldConfidence || {}, "expiration_date")) && !data.expiration_date) {
+    throw fail(409, "Confirm the expiry date printed on this document before saving the comparison. Ask for a current document if it is unavailable.");
+  }
+  if (data.issue_date && (data.issue_date > now.toISOString().slice(0, 10) || (data.expiration_date && data.issue_date > data.expiration_date))) {
+    throw fail(409, "The document issue and expiry dates must establish that it is currently valid.");
+  }
   const decision = evaluateDocumentExtraction({
     docType: document.docType, selectedDocType: document.selectedDocCategory,
     profile: document.profileSnapshot, requireBirthDate: document.docType === "id" && document.role === "user",
@@ -102,6 +109,11 @@ export function prepareManualDocumentComparison(document, input, reviewerId, now
   if (decision.checks.registrationDataCompared !== true || decision.mismatchFields.length
     || !["REVIEW_REQUIRED", "EXTRACTION_UNCERTAIN"].includes(decision.reasonCode)) {
     throw fail(409, decision.reviewReason);
+  }
+  if (document.provider === "private-ocr" && (document.docType === "id"
+    ? !strictPrivateIdentityNameMatch(document.profileSnapshot, data.full_name)
+    : document.profileSnapshot.business_name && !strictPrivateBusinessNameMatch(document.profileSnapshot.business_name, data.business_name))) {
+    throw fail(409, "The complete name on the document does not match the registration details.");
   }
   return {
     detailsMatched: true, mismatchFields: [], reasonCode: "REVIEW_REQUIRED",

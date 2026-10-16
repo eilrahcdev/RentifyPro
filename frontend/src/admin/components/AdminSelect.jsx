@@ -137,14 +137,14 @@ export default function AdminSelect({ label, value, onChange, options, disabled 
 
   return (
     <div className={`min-w-0 ${className}`}>
-      {label ? <label id={`${controlId}-label`} htmlFor={controlId} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{label}</label> : null}
+      {label ? <label id={`${controlId}-label`} htmlFor={controlId} className="admin-field-label">{label}</label> : null}
       <button ref={buttonRef} id={controlId} type="button" role="combobox" aria-haspopup="listbox" aria-expanded={expanded} aria-controls={expanded ? listId : undefined} aria-activedescendant={expanded && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined} aria-label={ariaLabel || (!label ? String(selected?.label || "Select an option") : undefined)} aria-labelledby={!ariaLabel && label ? `${controlId}-label ${controlId}-value` : undefined} disabled={disabled} onKeyDown={handleKeyDown} onClick={() => { typeahead.current = { value: "", time: 0 }; if (expanded) setOpen(false); else showMenu(); }} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-left text-sm font-medium text-slate-800 outline-none transition hover:border-slate-400 focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60">
         {Icon ? <Icon size={18} className="shrink-0 text-slate-500" aria-hidden="true" /> : null}
         <span id={`${controlId}-value`} className="min-w-0 flex-1 break-words">{selected?.label || "Select an option"}</span>
         <ChevronDown size={16} aria-hidden="true" className={`shrink-0 text-slate-500 transition-transform duration-150 motion-reduce:transition-none ${expanded ? "rotate-180" : "rotate-0"}`} />
       </button>
       {expanded && position ? createPortal(
-        <div ref={menuRef} id={listId} role="listbox" aria-label={ariaLabel || label || "Options"} style={position} className="fixed z-[100] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 text-sm text-slate-800 shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
+        <div ref={menuRef} id={listId} role="listbox" aria-label={ariaLabel || label || "Options"} style={position} className="admin-ui fixed z-[100] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 text-sm text-slate-800 shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
           {items.map((option, index) => <div key={option.value} id={`${listId}-${index}`} role="option" aria-selected={option.value === value} aria-disabled={option.disabled || undefined} onPointerDown={(event) => event.preventDefault()} onPointerMove={() => { if (!option.disabled) setActiveIndex(index); }} onClick={() => choose(index)} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 ${option.disabled ? "cursor-not-allowed text-slate-400" : index === activeIndex ? "bg-blue-50 text-blue-800" : "hover:bg-slate-50"} ${option.value === value ? "font-semibold text-blue-700" : "font-medium"}`}>
             <span className="min-w-0 flex-1 break-words">{option.label}</span>{option.value === value ? <Check size={16} className="shrink-0" aria-hidden="true" /> : null}
           </div>)}

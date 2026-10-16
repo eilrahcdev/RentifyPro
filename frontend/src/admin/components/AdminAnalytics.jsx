@@ -11,16 +11,16 @@ const toneStyles = {
 
 export function AnalyticsPanel({ eyebrow, title, description, icon: Icon = Activity, action, children, className = "" }) {
   return (
-    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_6px_20px_rgba(33,33,33,0.035)] ${className}`}>
-      <header className="flex flex-col gap-3 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white ${className}`}>
+      <header className="flex flex-col gap-3 border-b border-slate-200 bg-white p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-blue-600"><Icon size={15} aria-hidden="true" /><p className="text-[10px] font-semibold uppercase tracking-[0.15em]">{eyebrow}</p></div>
+          <div className="flex items-center gap-2 text-blue-700"><Icon size={16} aria-hidden="true" /><p className="admin-section-label">{eyebrow}</p></div>
           <h2 className="mt-1.5 text-lg font-bold tracking-[-0.015em] text-slate-900">{title}</h2>
           {description ? <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{description}</p> : null}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        {action ? <div className="min-w-0 sm:max-w-[50%] sm:shrink-0">{action}</div> : null}
       </header>
-      <div className="p-5">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -105,9 +105,9 @@ export function MetricTile({ label, value, helper, tone = "blue", size = "defaul
   const large = size === "large";
   return (
     <div className={`rounded-xl ${large ? "p-4" : "p-3.5"} ring-1 ring-inset ring-slate-200/70 ${theme.soft}`}>
-      <p className={`${large ? "text-xs leading-5" : "text-[10px]"} font-semibold uppercase tracking-[0.1em] text-slate-500`}>{label}</p>
+      <p className="text-xs font-semibold leading-5 text-slate-600">{label}</p>
       <p className={`mt-1 ${large ? "text-2xl" : "text-xl"} font-bold tracking-[-0.03em] ${theme.text}`}>{value}</p>
-      {helper ? <p className="mt-1 text-[10px] leading-4 text-slate-500">{helper}</p> : null}
+      {helper ? <p className="mt-1 text-xs leading-5 text-slate-500">{helper}</p> : null}
     </div>
   );
 }

@@ -141,8 +141,8 @@ export default function SecurityView({ onCurrentSessionRevoked }) {
 
   return (
     <div className="space-y-5 pb-4">
-      {error ? <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3.5 text-sm font-semibold text-rose-700 shadow-sm">{error}</div> : null}
-      {message ? <div role="status" className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm font-semibold text-emerald-700 shadow-sm"><Check size={17} />{message}</div> : null}
+      {error ? <div role="alert" className="admin-feedback" data-tone="error">{error}</div> : null}
+      {message ? <div role="status" className="admin-feedback" data-tone="success"><Check size={18} className="shrink-0" aria-hidden="true" /><p className="min-w-0 flex-1">{message}</p><button type="button" onClick={() => setMessage("")} aria-label="Dismiss security notification" className="rounded-lg px-2 text-sm font-semibold hover:bg-emerald-100">Dismiss</button></div> : null}
 
       <section className="grid gap-4 sm:grid-cols-3">
         <SecurityStat icon={ShieldCheck} label="Protection mode" value={passkey.enabled ? "Passkey first" : "Email first"} detail={passkey.enabled ? "Strong default enabled" : "Set up your passkey"} tone="blue" />
@@ -204,7 +204,7 @@ export default function SecurityView({ onCurrentSessionRevoked }) {
 const inputClass = "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
 
 function Field({ label, children }) {
-  return <label className="block"><span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">{label}</span>{children}</label>;
+  return <label className="block"><span className="admin-field-label">{label}</span>{children}</label>;
 }
 
 function SecretField({ label, visible, onVisibility, value, onChange, placeholder, autoComplete = "off" }) {

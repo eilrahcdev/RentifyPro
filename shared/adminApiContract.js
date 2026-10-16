@@ -1,4 +1,4 @@
-export const ADMIN_API_CONTRACT_VERSION = "2.1.0";
+export const ADMIN_API_CONTRACT_VERSION = "2.2.0";
 
 export const ADMIN_API_ROUTES = Object.freeze({
   overview: "/admin/data",

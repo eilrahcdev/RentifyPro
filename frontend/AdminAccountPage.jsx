@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, Database, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarDays, Database, Eye, EyeOff, LoaderCircle, RefreshCw } from "lucide-react";
 import { AdminPageHeader, AdminSidebar } from "./src/admin/components/AdminShell";
 import {
   ConfirmationDialog,
@@ -39,7 +39,7 @@ const pageMeta = {
   },
   documents: {
     title: "Documents",
-    description: "Review customer verification files, permits, and IDs in one organized workspace.",
+    description: "Review verification uploads from registered customers and registration applicants.",
   },
   transactions: {
     title: "Transaction Records",
@@ -73,13 +73,14 @@ export default function AdminAccountPage({ user, onLogout }) {
   const [refreshing, setRefreshing] = useState(false);
   const [transactionRefreshSignal, setTransactionRefreshSignal] = useState(0);
   const [transactionRefreshing, setTransactionRefreshing] = useState(false);
+  const [transactionsVisible, setTransactionsVisible] = useState(true);
   const [syncedAt, setSyncedAt] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [viewerItem, setViewerItem] = useState(null);
   const [reviewDocument, setReviewDocument] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedback, setFeedback] = useState(null);
   const feedbackTimerRef = useRef(null);
   const actionLockRef = useRef(false);
   const mobileMenuButtonRef = useRef(null);
@@ -100,10 +101,10 @@ export default function AdminAccountPage({ user, onLogout }) {
     return options.sort((first, second) => second.value.localeCompare(first.value));
   }, [bookings]);
 
-  const showFeedback = useCallback((message) => {
+  const showFeedback = useCallback((message, tone = "success") => {
     window.clearTimeout(feedbackTimerRef.current);
-    setFeedbackMessage(message);
-    feedbackTimerRef.current = window.setTimeout(() => setFeedbackMessage(""), 3200);
+    setFeedback({ message, tone });
+    feedbackTimerRef.current = tone === "error" ? null : window.setTimeout(() => setFeedback(null), 6000);
   }, []);
 
   const closeMobileNav = useCallback(() => {
@@ -111,13 +112,16 @@ export default function AdminAccountPage({ user, onLogout }) {
     window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
   }, []);
 
-  const loadAdminData = useCallback(async ({ background = false } = {}) => {
+  const overviewRequest = useRef(0);
+  const loadAdminData = useCallback(async ({ background = false, notify = true } = {}) => {
+    const requestId = ++overviewRequest.current;
     if (background) setRefreshing(true);
     else setLoadState("loading");
     setLoadError("");
 
     try {
       const payload = await adminDataApi.getOverview();
+      if (requestId !== overviewRequest.current) return;
       setCustomers(Array.isArray(payload.customers) ? payload.customers : []);
       setVehicles(Array.isArray(payload.vehicles) ? payload.vehicles : []);
       setDocuments(Array.isArray(payload.documents) ? payload.documents : []);
@@ -125,15 +129,17 @@ export default function AdminAccountPage({ user, onLogout }) {
       setOperationalAlerts(Array.isArray(payload.operationalAlerts) ? payload.operationalAlerts : []);
       setSyncedAt(payload.syncedAt || new Date().toISOString());
       setLoadState("ready");
-      if (background) showFeedback("Dashboard data refreshed from RentifyPro.");
+      if (background && notify) showFeedback("Dashboard data refreshed from RentifyPro.");
+      return payload;
     } catch (error) {
-      if (background) showFeedback(error.message);
+      if (requestId !== overviewRequest.current) return;
+      if (background) showFeedback(error.message, "error");
       else {
         setLoadError(error.message);
         setLoadState("error");
       }
     } finally {
-      setRefreshing(false);
+      if (requestId === overviewRequest.current) setRefreshing(false);
     }
   }, [showFeedback]);
 
@@ -144,15 +150,11 @@ export default function AdminAccountPage({ user, onLogout }) {
 
   useEffect(() => {
     const handleEscape = (event) => {
-      if (event.key !== "Escape") return;
-      if (confirmation && !actionLoading) setConfirmation(null);
-      else if (reviewDocument) setReviewDocument(null);
-      else if (viewerItem) setViewerItem(null);
-      else if (mobileNavOpen) closeMobileNav();
+      if (event.key === "Escape" && !event.defaultPrevented && mobileNavOpen) closeMobileNav();
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [actionLoading, closeMobileNav, confirmation, mobileNavOpen, reviewDocument, viewerItem]);
+  }, [closeMobileNav, mobileNavOpen]);
 
   useEffect(() => () => window.clearTimeout(feedbackTimerRef.current), []);
 
@@ -177,7 +179,7 @@ export default function AdminAccountPage({ user, onLogout }) {
       await pendingAction.onConfirm(values);
       setConfirmation(null);
     } catch (error) {
-      showFeedback(error.message || "The action could not be completed.");
+      showFeedback(error.message || "The action could not be completed.", "error");
     } finally {
       actionLockRef.current = false;
       setActionLoading(false);
@@ -194,11 +196,9 @@ export default function AdminAccountPage({ user, onLogout }) {
   });
 
   const viewCustomer = (customer) => {
-    const customerEmail = String(customer.email || "").trim().toLowerCase();
     const customerDocuments = documents.filter(
-      (document) => document.customerId
-        ? String(document.customerId) === String(customer.id)
-        : Boolean(customerEmail) && String(document.email || "").trim().toLowerCase() === customerEmail,
+      (document) => !document.ownershipConflict && document.accountLink?.status === "registered"
+        && String(document.accountLink.customerId) === String(customer.id),
     );
 
     setViewerItem({
@@ -213,6 +213,7 @@ export default function AdminAccountPage({ user, onLogout }) {
     const payload = await adminDataApi.updateCustomer(customer.id, changes);
     setCustomers((current) => current.map((item) => item.id === customer.id ? payload.customer : item));
     showFeedback("Customer account updated.");
+    await loadAdminData({ background: true, notify: false });
   };
 
   const requestCustomerStatusChange = (customer) => {
@@ -230,6 +231,7 @@ export default function AdminAccountPage({ user, onLogout }) {
         const payload = await adminDataApi.setCustomerDisabled(customer.id, { disabled: disabling, reason, adminPassword });
         setCustomers((current) => current.map((item) => item.id === customer.id ? payload.customer : item));
         showFeedback(payload.message);
+        await loadAdminData({ background: true, notify: false });
       },
     });
   };
@@ -246,6 +248,7 @@ export default function AdminAccountPage({ user, onLogout }) {
         const payload = await adminDataApi.archiveCustomer(customer.id, { reason, adminPassword });
         setCustomers((current) => current.filter((item) => item.id !== customer.id));
         showFeedback(payload.message);
+        await loadAdminData({ background: true, notify: false });
       },
     });
   };
@@ -256,6 +259,7 @@ export default function AdminAccountPage({ user, onLogout }) {
     subtitle: `${document.customer} submitted this file on ${document.submitted}. Current status: ${document.approval}.`,
     previewUrl: document.previewUrl,
     mimeType: document.mimeType,
+    document,
   });
 
   const viewBooking = (booking) => setViewerItem({
@@ -263,6 +267,36 @@ export default function AdminAccountPage({ user, onLogout }) {
     title: `Booking #${booking.reference}`,
     booking,
   });
+
+  const saveDocumentDecision = async (document, approval, { reason, adminPassword, inspection }) => {
+    const payload = await adminDataApi.updateDocument(document.id, { approval, reason, adminPassword, reviewVersion: document.reviewVersion,
+      ...(inspection ? { inspection } : {}) });
+    setDocuments((current) => current.map((item) => item.id === document.id ? payload.document : item));
+    showFeedback(payload.reconciliationPending ? payload.message : `Document marked as ${approval.toLowerCase()}.`);
+    const overview = await loadAdminData({ background: true, notify: false });
+    if (approval !== "Approved" || payload.reconciliationPending || !overview) return;
+    const link = payload.document.accountLink;
+    const customer = link?.status === "registered" ? overview.customers?.find(item => item.id === link.customerId) : null;
+    showFeedback(link?.status === "registration_incomplete" ? "Document approved. The applicant must finish registration before a customer account can become active."
+      : !customer ? "Document approved. The account link needs review before treating a customer as verified."
+        : customer.status === "Active" ? "Document approved. Customer account is now active."
+          : customer.status === "Suspended" ? "Document approved. Customer account remains suspended."
+            : customer.verification?.pendingReasons?.length ? `Document approved. Customer still needs: ${customer.verification.pendingReasons.join(", ")}.`
+              : "Document approved. Review the customer's remaining verification requirements.");
+  };
+
+  const approveDocument = async (document, details) => {
+    if (actionLoading || actionLockRef.current) return;
+    actionLockRef.current = true;
+    setActionLoading(true);
+    try {
+      await saveDocumentDecision(document, "Approved", details);
+      setReviewDocument(null);
+    } finally {
+      actionLockRef.current = false;
+      setActionLoading(false);
+    }
+  };
 
   const requestDocumentDecision = (document, approval) => {
     setReviewDocument(null);
@@ -273,59 +307,60 @@ export default function AdminAccountPage({ user, onLogout }) {
       confirmLabel: `${approval === "Approved" ? "Approve" : "Reject"} document`,
       requireReason: true,
       requirePassword: true,
-      onConfirm: async ({ reason, adminPassword }) => {
-        const payload = await adminDataApi.updateDocument(document.id, { approval, reason, adminPassword, reviewVersion: document.reviewVersion });
-        setDocuments((current) => current.map((item) => item.id === document.id ? payload.document : item));
-        showFeedback(`Document marked as ${approval.toLowerCase()}.`);
-      },
-    });
-  };
-
-  const requestDocumentComparison = (document, comparison) => {
-    setReviewDocument(null);
-    requestConfirmation({
-      tone: "primary", title: "Save the inspected document comparison?",
-      description: "The backend will compare the entered document fields against registration. Final document approval remains a separate decision.",
-      confirmLabel: "Save comparison", requireReason: true, requirePassword: true,
-      onConfirm: async ({ reason, adminPassword }) => {
-        const payload = await adminDataApi.compareDocument(document.id, { ...comparison, reason, adminPassword });
-        const updated = { ...document, ...payload.document };
-        setDocuments((current) => current.map((item) => item.id === document.id ? updated : item));
-        setReviewDocument(updated);
-        showFeedback("Document comparison saved. Final approval is still required.");
-      },
+      reasonPresets: approval === "Rejected" ? [
+        { label: "Blurry or unreadable", value: "The document is blurry or unreadable. Please upload a clear, complete image of the original document." },
+        { label: "Incomplete document", value: "Part of the document is missing or cropped. Please upload the complete original with all required details visible." },
+        { label: "Registration details differ", value: "The document details do not match your registration. Please correct the registration details or upload the matching document." },
+        { label: "Wrong document type", value: "The uploaded document does not match the selected document type. Please select the correct type and upload its original." },
+        { label: "Expired document", value: "The document has expired. Please upload a current, valid document of an accepted type." },
+      ] : undefined,
+      onConfirm: details => saveDocumentDecision(document, approval, details),
     });
   };
 
   const headerActions = (
     <div className="flex items-center gap-3">
       {activeView === "dashboard" && syncedAt ? <p className="hidden text-xs text-slate-500 xl:block">Updated {formatSyncTime(syncedAt)}</p> : null}
+      {activeView === "transactions" ? <button
+        type="button"
+        onClick={() => setTransactionsVisible(current => !current)}
+        aria-label={transactionsVisible ? "Hide transaction records" : "Show transaction records"}
+        title={transactionsVisible ? "Hide transaction records" : "Show transaction records"}
+        aria-pressed={!transactionsVisible}
+        aria-controls="transaction-records-content"
+        className="admin-icon-button border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+      >{transactionsVisible ? <Eye size={18} aria-hidden="true" /> : <EyeOff size={18} aria-hidden="true" />}</button> : null}
       <button
         type="button"
         onClick={() => activeView === "transactions" ? setTransactionRefreshSignal((current) => current + 1) : void loadAdminData({ background: loadState === "ready" })}
         disabled={activeView === "transactions" ? transactionRefreshing : refreshing || loadState === "loading"}
         aria-label={activeView === "transactions" ? "Refresh transaction records" : "Refresh admin data"}
         title={activeView === "transactions" ? "Refresh transaction records" : syncedAt ? `Last synced ${new Date(syncedAt).toLocaleString()}` : "Refresh dashboard data"}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+        className="admin-button disabled:opacity-60"
       >
         <RefreshCw size={17} className={(activeView === "transactions" ? transactionRefreshing : refreshing) ? "animate-spin" : ""} />
-        <span className="hidden sm:inline">{(activeView === "transactions" ? transactionRefreshing : refreshing) ? "Refreshing…" : "Refresh"}</span>
+        <span>{(activeView === "transactions" ? transactionRefreshing : refreshing) ? "Refreshing…" : "Refresh"}</span>
       </button>
     </div>
   );
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-canvas">
+    <div className="admin-ui min-h-screen w-full max-w-full bg-canvas">
       <a href="#admin-main-content" className="fixed left-4 top-4 z-[10001] -translate-y-24 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl transition-transform focus:translate-y-0">Skip to main content</a>
-      <Toast message={feedbackMessage} />
+      <Toast message={feedback?.message} tone={feedback?.tone} onDismiss={() => { window.clearTimeout(feedbackTimerRef.current); setFeedback(null); }} />
       <ConfirmationDialog confirmation={confirmation} loading={actionLoading} onCancel={() => setConfirmation(null)} onConfirm={confirmAction} />
-      <ViewerDialog item={viewerItem} onClose={() => setViewerItem(null)} />
+      <ViewerDialog item={viewerItem} onClose={() => setViewerItem(null)} onReviewDocument={document => { setViewerItem(null); setReviewDocument(document); }} />
       <DocumentReviewDialog
         document={reviewDocument}
         onClose={() => setReviewDocument(null)}
-        onApprove={() => requestDocumentDecision(reviewDocument, "Approved")}
+        onApprove={details => approveDocument(reviewDocument, details)}
+        onCompare={async details => {
+          const payload = await adminDataApi.compareDocument(reviewDocument.id, details);
+          setDocuments(current => current.map(item => item.id === reviewDocument.id ? payload.document : item));
+          setReviewDocument(null);
+          showFeedback("ID comparison saved. The applicant can refresh verification and continue if all required checks passed. Final approval remains pending.");
+        }}
         onReject={() => requestDocumentDecision(reviewDocument, "Rejected")}
-        onCompare={(comparison) => requestDocumentComparison(reviewDocument, comparison)}
       />
 
       <div className="min-h-screen w-full max-w-full lg:pl-64">
@@ -339,16 +374,18 @@ export default function AdminAccountPage({ user, onLogout }) {
           onLogout={onLogout}
         />
 
-        <main id="admin-main-content" tabIndex={-1} className="w-full min-w-0 max-w-full overflow-hidden">
+        <main id="admin-main-content" tabIndex={-1} inert={mobileNavOpen} className="w-full min-w-0 max-w-full">
           <AdminPageHeader
             {...pageMeta[activeView]}
             onMenuOpen={() => setMobileNavOpen(true)}
             menuButtonRef={mobileMenuButtonRef}
+            menuOpen={mobileNavOpen}
+            stackActionsOnMobile={activeView === "transactions"}
             actions={["reports", "audit", "security"].includes(activeView) ? null : headerActions}
           />
 
           <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-7">
-            {activeView === "transactions" ? <TransactionRecords refreshSignal={transactionRefreshSignal} onRefreshStateChange={setTransactionRefreshing} /> : null}
+            {activeView === "transactions" ? <div id="transaction-records-content"><TransactionRecords visible={transactionsVisible} refreshSignal={transactionRefreshSignal} onRefreshStateChange={setTransactionRefreshing} /></div> : null}
             {activeView === "reports" ? <ReportsView key={`reports-${viewContext.status || "all"}`} initialStatus={viewContext.status || "all"} onFeedback={showFeedback} /> : null}
             {activeView === "audit" ? <AuditLogsView key={`audit-${viewContext.outcome || "all"}`} initialOutcome={viewContext.outcome || "all"} /> : null}
             {activeView === "security" ? <SecurityView onCurrentSessionRevoked={onLogout} /> : null}
@@ -358,7 +395,7 @@ export default function AdminAccountPage({ user, onLogout }) {
             {loadState === "ready" && activeView === "bookings" ? <BookingsView key={`bookings-${viewContext.status || "all"}`} bookings={bookings} initialStatus={viewContext.status} onView={viewBooking} /> : null}
             {loadState === "ready" && activeView === "vehicles" ? <VehiclesView vehicles={vehicles} onView={viewVehicle} /> : null}
             {loadState === "ready" && activeView === "customers" ? <CustomersView key={`customers-${viewContext.role || "all"}-${viewContext.status || "all"}`} customers={customers} adminEmail={displayEmail} initialRole={viewContext.role} initialStatus={viewContext.status} onView={viewCustomer} onEdit={updateCustomer} onToggleDisabled={requestCustomerStatusChange} onDelete={requestCustomerDeletion} /> : null}
-            {loadState === "ready" && activeView === "documents" ? <DocumentsView key={`documents-${viewContext.status || "all"}`} documents={documents} initialStatus={viewContext.status} onView={viewDocument} onReview={setReviewDocument} /> : null}
+            {loadState === "ready" && activeView === "documents" ? <DocumentsView key={`documents-${viewContext.status || "all"}-${viewContext.purpose || "all"}`} documents={documents} initialStatus={viewContext.status} initialPurpose={viewContext.purpose} onView={viewDocument} onReview={setReviewDocument} /> : null}
           </div>
         </main>
       </div>
@@ -368,7 +405,7 @@ export default function AdminAccountPage({ user, onLogout }) {
 
 function DataLoadingState() {
   return (
-    <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div role="status" className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-4">
       <div className="text-center">
         <LoaderCircle size={34} className="mx-auto animate-spin text-blue-600" />
         <p className="mt-4 font-semibold text-slate-900">Loading RentifyPro data</p>
@@ -380,7 +417,7 @@ function DataLoadingState() {
 
 function DataErrorState({ message, onRetry, onLogout }) {
   return (
-    <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
+    <div role="alert" className="flex min-h-[420px] items-center justify-center rounded-2xl border border-rose-200 bg-white p-6">
       <div className="max-w-lg text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600"><Database size={26} /></span>
         <h2 className="mt-5 text-xl font-bold text-slate-950">Could not load the shared database</h2>

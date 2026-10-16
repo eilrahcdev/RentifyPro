@@ -48,7 +48,7 @@ export default function AuditLogsView({ initialOutcome = "all" }) {
         <div className="flex gap-3"><ShieldAlert className="mt-0.5 shrink-0 text-blue-600" size={20} /><p>This immutable-style activity history records security events and Super Admin decisions. Passwords, MFA codes, and session tokens are never stored in log metadata.</p></div>
       </section>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_6px_20px_rgba(33,33,33,0.035)]">
-        <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(260px,1fr)_240px_180px_auto] lg:items-end">
+        <div className="grid gap-4 border-b border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,.8fr)_auto] xl:items-end">
           <SearchField label="Search activity" value={search} onChange={updateFilter(setSearch)} placeholder="Search summary, target, reason, or admin..." />
           <FilterSelect label="Action" value={action} onChange={updateFilter(setAction)} options={actions} />
           <FilterSelect label="Outcome" value={outcome} onChange={updateFilter(setOutcome)} options={["all", "success", "failure"]} />

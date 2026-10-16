@@ -1,6 +1,7 @@
 import path from "node:path";
 import express from "express";
 import mongoose from "mongoose";
+import { buildAdminAuditRecord } from "../services/adminAudit.service.js";
 
 const REPORT_STATUSES = new Set(["open", "investigating", "awaiting_information", "actioned", "dismissed", "appealed", "closed"]);
 const ACTIVE_REPORT_STATUSES = new Set(["open", "investigating", "awaiting_information", "appealed"]);
@@ -319,7 +320,11 @@ export function createAdminReportsRouter({ verifyCriticalAction, recordAdminAudi
         setFields.priorityRank = { low: 1, normal: 2, high: 3, urgent: 4 }[priority];
         activity.push({ action: `priority_${priority}`, actor: request.adminAccount._id, note: "", at: now });
       }
-      await database.collection("reports").updateOne({ _id: reportId }, { $set: setFields, $push: { activity: { $each: activity } } });
+      const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "report.triaged", targetType: "report",
+        targetId: idString(report._id), targetLabel: report.caseReference, reason: note,
+        summary: `Updated ${report.caseReference}${status ? ` to ${status}` : ""}${priority ? ` with ${priority} priority` : ""}.`,
+        metadata: { status: status || report.status, priority: priority || report.priority } });
+      await database.collection("reports").updateOne({ _id: reportId }, { $set: setFields, $push: { activity: { $each: activity }, adminAuditOutbox: auditRecord } });
       if (status === "awaiting_information") {
         await database.collection("notifications").insertOne(notificationForReport(
           report.reporter,
@@ -328,17 +333,7 @@ export function createAdminReportsRouter({ verifyCriticalAction, recordAdminAudi
           `${report.caseReference}: an administrator requested additional information. ${note}`.slice(0, 1000),
         )).catch(() => {});
       }
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: "report.triaged",
-        targetType: "report",
-        targetId: idString(report._id),
-        targetLabel: report.caseReference,
-        reason: note,
-        summary: `Updated ${report.caseReference}${status ? ` to ${status}` : ""}${priority ? ` with ${priority} priority` : ""}.`,
-        metadata: { status: status || report.status, priority: priority || report.priority },
-      });
+      await recordAdminAudit({ record: auditRecord });
       const updated = await database.collection("reports").findOne({ _id: reportId });
       return response.json({ report: (await hydrateReports(database, [updated]))[0] });
     } catch (error) {
@@ -467,9 +462,13 @@ export function createAdminReportsRouter({ verifyCriticalAction, recordAdminAudi
       }
 
       const finalStatus = outcome === "dismissed" ? "dismissed" : "actioned";
+      const auditRecord = buildAdminAuditRecord({ request, admin: request.adminAccount, action: "report.decided", targetType: "report",
+        targetId: idString(report._id), targetLabel: report.caseReference, reason: policyReason,
+        summary: `${outcome === "dismissed" ? "Dismissed" : "Confirmed a violation in"} ${report.caseReference}${outcome === "violation_confirmed" ? ` and applied ${action}` : ""}.`,
+        metadata: { outcome, action: outcome === "dismissed" ? "none" : action, durationDays: DURATION_ACTIONS.has(action) ? durationDays : null, appealDecision: isAppealDecision } });
       const updated = await database.collection("reports").updateOne(
         { _id: reportId, status: report.status },
-        { $set: { status: finalStatus, currentDecision: decisionId, assignedTo: request.adminAccount._id, resolvedAt: now, updatedAt: now }, $push: { activity: { action: isAppealDecision ? "appeal_decided" : `decision_${outcome}`, actor: request.adminAccount._id, note: policyReason, at: now } } },
+        { $set: { status: finalStatus, currentDecision: decisionId, assignedTo: request.adminAccount._id, resolvedAt: now, updatedAt: now }, $push: { activity: { action: isAppealDecision ? "appeal_decided" : `decision_${outcome}`, actor: request.adminAccount._id, note: policyReason, at: now }, adminAuditOutbox: auditRecord } },
       );
       if (!updated.matchedCount) {
         const conflict = new Error("This report was changed while the decision was being recorded. Refresh and try again.");
@@ -482,17 +481,7 @@ export function createAdminReportsRouter({ verifyCriticalAction, recordAdminAudi
       if (outcome === "violation_confirmed") notifications.push(notificationForReport(reportedUser._id, report, "Moderation decision issued", `${report.caseReference}: ${userVisibleReason}`, action === "permanent_ban" ? "urgent" : "important"));
       else if (isAppealDecision) notifications.push(notificationForReport(reportedUser._id, report, "Appeal accepted", `${report.caseReference}: ${userVisibleReason}`));
       await database.collection("notifications").insertMany(notifications, { ordered: false }).catch(() => {});
-      await recordAdminAudit({
-        request,
-        admin: request.adminAccount,
-        action: "report.decided",
-        targetType: "report",
-        targetId: idString(report._id),
-        targetLabel: report.caseReference,
-        reason: policyReason,
-        summary: `${outcome === "dismissed" ? "Dismissed" : "Confirmed a violation in"} ${report.caseReference}${outcome === "violation_confirmed" ? ` and applied ${action}` : ""}.`,
-        metadata: { outcome, action: outcome === "dismissed" ? "none" : action, durationDays: DURATION_ACTIONS.has(action) ? durationDays : null, appealDecision: isAppealDecision },
-      });
+      await recordAdminAudit({ record: auditRecord });
       const finalReport = await database.collection("reports").findOne({ _id: reportId });
       return response.json({ message: "The report decision was recorded and affected users were notified.", report: (await hydrateReports(database, [finalReport]))[0] });
     } catch (error) {

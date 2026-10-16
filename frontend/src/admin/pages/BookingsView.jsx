@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { currentMonthKey, monthLabel, monthOptions } from "../analyticsPeriods";
 import { AnalyticsPanel, DistributionList, MetricTile, TrendBars } from "../components/AdminAnalytics";
-import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
+import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, PaginationFooter } from "../components/AdminUI";
+import { useTablePage } from "../useTablePage";
 
 export default function BookingsView({ bookings, initialStatus = "All Statuses", onView }) {
   const [search, setSearch] = useState("");
@@ -24,7 +25,7 @@ export default function BookingsView({ bookings, initialStatus = "All Statuses",
     .slice(0, 5), [bookings]);
   const statusDistribution = [
     { label: "Pending", value: bookings.filter((booking) => booking.status === "Pending").length, tone: "amber" },
-    { label: "Confirmed / active", value: bookings.filter((booking) => booking.status === "Confirmed" || booking.isActive).length, tone: "blue" },
+    { label: "Confirmed / extended", value: bookings.filter((booking) => ["Confirmed", "Extended"].includes(booking.status)).length, tone: "blue" },
     { label: "Completed", value: completed, tone: "emerald" },
     { label: "Cancelled / rejected", value: bookings.filter((booking) => ["Cancelled", "Rejected"].includes(booking.status)).length, tone: "rose" },
   ];
@@ -38,6 +39,7 @@ export default function BookingsView({ bookings, initialStatus = "All Statuses",
       return matchesSearch && matchesStatus;
     });
   }, [bookings, search, status]);
+  const pagination = useTablePage(filtered);
 
   return (
     <div className="space-y-5">
@@ -104,18 +106,18 @@ export default function BookingsView({ bookings, initialStatus = "All Statuses",
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_6px_20px_rgba(33,33,33,0.035)]">
         <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[minmax(280px,1fr)_220px_auto] lg:items-end">
           <SearchField label="Search Bookings" value={search} onChange={setSearch} placeholder="Search by booking, renter, vehicle, or operator..." />
-          <FilterSelect label="Operational Status" value={status} onChange={setStatus} options={["All Statuses", "Active", "Pending", "Confirmed", "Completed", "Cancelled", "Rejected", "Overdue"]} />
+          <FilterSelect label="Operational Status" value={status} onChange={setStatus} options={["All Statuses", "Active", "Pending", "Confirmed", "Extended", "Completed", "Cancelled", "Rejected", "Overdue"]} />
           <button type="button" onClick={() => { setSearch(""); setStatus("All Statuses"); }} className="h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Clear Filters</button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div tabIndex={0} role="region" aria-label="Booking records, scroll horizontally for more columns" className="overflow-x-auto">
           <table className="w-full min-w-[1060px] border-collapse">
             <caption className="sr-only">RentifyPro booking operations without financial information</caption>
             <thead className="bg-slate-50">
               <tr>{["Booking", "Renter", "Vehicle", "Operator", "Pickup", "Return", "Driver", "Status", "Actions"].map((heading) => <th key={heading} scope="col" className="border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{heading}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((booking) => (
+              {pagination.rows.map((booking) => (
                 <tr key={booking.id} className="transition-colors hover:bg-blue-50/30">
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-blue-700">#{booking.reference}</td>
                   <td className="px-4 py-3.5 text-sm font-semibold text-slate-950">{booking.renter}</td>
@@ -132,7 +134,7 @@ export default function BookingsView({ bookings, initialStatus = "All Statuses",
           </table>
           {!filtered.length ? <EmptyState icon={CalendarCheck2} title="No bookings found" description="Try changing your search or status filter." /> : null}
         </div>
-        <TableFooter visible={filtered.length} total={bookings.length} noun="bookings" />
+        <PaginationFooter pagination={pagination} noun="bookings" />
       </section>
     </div>
   );

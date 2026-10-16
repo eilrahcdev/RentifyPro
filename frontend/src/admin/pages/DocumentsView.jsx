@@ -2,12 +2,16 @@ import { AlertTriangle, Eye, FileImage, FileText, RotateCcw, ScanSearch, ShieldC
 import { useMemo, useState } from "react";
 import { percentage } from "../adminAnalytics";
 import { AnalyticsPanel, DistributionList, MetricTile, ProgressRing } from "../components/AdminAnalytics";
-import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, TableFooter } from "../components/AdminUI";
+import { EmptyState, FilterSelect, SearchField, StatCard, StatusBadge, PaginationFooter } from "../components/AdminUI";
+import { useTablePage } from "../useTablePage";
 
-export default function DocumentsView({ documents, initialStatus = "All Statuses", onView, onReview }) {
+export default function DocumentsView({ documents: allDocuments, initialStatus = "All Statuses", initialPurpose = "Final approval", onView, onReview }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [type, setType] = useState("All Document Types");
+  const [registration, setRegistration] = useState("All uploads");
+  const [purpose, setPurpose] = useState(initialPurpose);
+  const documents = useMemo(() => allDocuments.filter(document => (document.reviewPurpose || "Final approval") === purpose), [allDocuments, purpose]);
   const documentTypes = [...new Set(documents.map((document) => document.document).filter(Boolean))];
   const approved = documents.filter((document) => document.approval === "Approved").length;
   const pending = documents.filter((document) => document.approval === "Pending").length;
@@ -20,17 +24,20 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return documents.filter((document) => {
-      const matchesSearch = !query || [document.customer, document.fileName, document.document].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesSearch = !query || [document.customer, document.email, document.fileName, document.document].some((value) => String(value || "").toLowerCase().includes(query));
       const matchesStatus = status === "All Statuses" || normalizedStatus(document.approval) === status;
       const matchesType = type === "All Document Types" || document.document === type;
-      return matchesSearch && matchesStatus && matchesType;
+      const matchesRegistration = registration === "All uploads" || registration === (document.accountLink?.label || "Account link needs review");
+      return matchesSearch && matchesStatus && matchesType && matchesRegistration;
     });
-  }, [documents, search, status, type]);
+  }, [documents, search, status, type, registration]);
+  const pagination = useTablePage(filtered);
 
-  const clearFilters = () => { setSearch(""); setStatus("All Statuses"); setType("All Document Types"); };
+  const clearFilters = () => { setSearch(""); setStatus("All Statuses"); setType("All Document Types"); setRegistration("All uploads"); };
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap gap-3" role="group" aria-label="Review purpose">{["Final approval", "Registration assistance"].map(value => <button key={value} type="button" aria-pressed={purpose === value} onClick={() => setPurpose(value)} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-900 focus-visible:outline focus-visible:outline-2">{value}</button>)}</div>
       <section aria-label="Document statistics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Documents" value={documents.length} description="All verification files" icon={FileText} />
         <StatCard label="Verified Documents" value={approved} description="Successfully approved" icon={FileText} tone="green" />
@@ -58,24 +65,29 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_6px_20px_rgba(33,33,33,0.035)]">
-        <div className="grid gap-4 border-b border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_220px_230px_auto] xl:items-end">
-          <SearchField label="Search Documents" value={search} onChange={setSearch} placeholder="Search by customer, filename, or document type..." />
-          <FilterSelect label="Approval Status" value={status} onChange={setStatus} options={["All Statuses", "Verified", "Pending Review", "Rejected"]} />
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4">
+          <button type="button" aria-pressed={status === "Pending Review"} onClick={() => { setStatus("Pending Review"); setSearch(""); setType("All Document Types"); setRegistration("All uploads"); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-800 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Pending Review <span className="tabular-nums">({pending})</span></button>
+          <p className="text-sm text-slate-600">{purpose === "Registration assistance" ? "Requested ID comparisons for applicants who have not submitted an account." : "Submitted account documents awaiting final approval."}</p>
+        </div>
+        <div className="grid gap-4 border-b border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+          <SearchField label="Search Documents" value={search} onChange={setSearch} placeholder="Name, email, filename, or document type..." />
+          <FilterSelect label="Approval Status" value={status} onChange={setStatus} options={["All Statuses", "Verified", "Pending Review", "Queued", "Processing", "Waiting to retry", "Replacement required", "Expired", "Rejected"]} />
           <FilterSelect label="Document Type" value={type} onChange={setType} options={["All Document Types", ...documentTypes]} />
+          <FilterSelect label="Account registration" value={registration} onChange={setRegistration} options={["All uploads", "Registered customer", "Registration incomplete", "Account link needs review"]} />
           <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 md:col-span-2 xl:col-span-1"><RotateCcw size={16} />Clear Filters</button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div tabIndex={0} role="region" aria-label="Document records, scroll horizontally for more columns" className="overflow-x-auto">
           <table className="w-full min-w-[940px] border-collapse">
-            <caption className="sr-only">Customer verification documents</caption>
-            <thead className="bg-slate-50"><tr>{["Customer", "Role", "Document Type", "File", "Submitted", "Status", "Actions"].map((heading) => <th key={heading} scope="col" className="border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{heading}</th>)}</tr></thead>
+            <caption className="sr-only">Verification uploads from customers and registration applicants</caption>
+            <thead className="bg-slate-50"><tr>{["Applicant / customer", "Role", "Document Type", "File", "Submitted", "Status", "Actions"].map((heading) => <th key={heading} scope="col" className="border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{heading}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((document) => {
+              {pagination.rows.map((document) => {
                 const DocumentIcon = String(document.fileName || "").toLowerCase().endsWith(".pdf") ? FileText : FileImage;
-                const pendingReview = document.approval === "Pending";
+                const pendingReview = document.processingStage === "pending_review" && document.approval === "Pending";
                 return (
                   <tr key={document.id || document.fileName} className="transition-colors hover:bg-blue-50/30">
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-slate-950">{document.customer}</td>
+                    <td className="px-4 py-3.5"><p className="text-sm font-semibold text-slate-950">{document.customerName || (document.accountLink?.status === "registration_incomplete" ? "Registration applicant" : document.customer)}</p><p className="mt-1 break-all text-xs text-slate-600">{document.email || "Email not available"}</p><p className="mt-1 text-xs font-medium text-slate-700">{document.accountLink?.label || "Account link needs review"}</p></td>
                     <td className="px-4 py-3.5 text-sm text-slate-600">{document.role}</td>
                     <td className="px-4 py-3.5 text-sm text-slate-600">{document.document}</td>
                     <td className="max-w-[260px] px-4 py-3.5"><button type="button" title={document.fileName} onClick={() => onView(document)} className="flex max-w-full items-center gap-2 rounded-lg text-left text-sm font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><DocumentIcon size={16} /></span><span className="truncate">{document.fileName}</span></button></td>
@@ -89,7 +101,7 @@ export default function DocumentsView({ documents, initialStatus = "All Statuses
           </table>
           {!filtered.length ? <EmptyState icon={FileText} title="No verification documents found" description="Try changing your search or filters." /> : null}
         </div>
-        <TableFooter visible={filtered.length} total={documents.length} noun="documents" />
+        <PaginationFooter pagination={pagination} noun="documents" />
       </section>
     </div>
   );

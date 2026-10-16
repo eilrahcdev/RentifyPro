@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
-import { createAdminDataRouter } from "../routes/adminData.routes.js";
+import { createAdminDataRouter, mapTransaction, transactionMonthlyTrend, transactionMatchesSearch } from "../routes/adminData.routes.js";
 
 const id = (value) => String(value).padStart(24, "0");
 const renterId = id(901);
@@ -50,6 +50,33 @@ async function requestTransactions(bookings, query = {}) {
       assert.ok(Object.hasOwn(rows, name), `Unexpected collection: ${name}`);
       collectionReads.push(name);
       return {
+        aggregate(pipeline) {
+          assert.equal(name, "bookings");
+          const facet = pipeline.at(-1).$facet;
+          assert.ok(facet.totals[0].$group, "All-time totals are computed by MongoDB.");
+          const skip = facet.rows.find(stage => stage.$skip !== undefined).$skip;
+          const pageLimit = facet.rows.find(stage => stage.$limit !== undefined).$limit;
+          assert.ok(pageLimit <= 101, "Only a bounded page leaves MongoDB.");
+          const users = new Map(rows.users.map(user => [String(user._id), user]));
+          const vehicles = new Map(rows.vehicles.map(vehicle => [String(vehicle._id), vehicle]));
+          const all = bookings.map(item => mapTransaction(item, users, vehicles));
+          const sums = Object.fromEntries([['totalCollected','paymentAmountPaid'], ['totalOutstanding','paymentAmountDue'],
+            ['totalPayable','amountPayable'], ['totalTransactionFees','transactionFee']].map(([key, field]) => [key, all.reduce((sum, item) => sum + item[field], 0)]));
+          const totals = { ...sums, totalRecords: all.length,
+            ...Object.fromEntries([['paidBookings','paid'], ['partialPayments','partial'], ['unpaidBookings','unpaid'], ['refundedBookings','refunded']]
+              .map(([key, status]) => [key, all.filter(item => item.paymentStatus === status).length])),
+            trendStartDate: all.filter(item => item.createdAt).map(item => item.createdAt).sort()[0] || null };
+          const end = new Date(facet.monthlyTrend[0].$match._adminCreated.$lt); end.setUTCMonth(end.getUTCMonth() - 1);
+          const monthlyTrend = transactionMonthlyTrend(all, 6, end.toISOString().slice(0, 7)).map(month => ({ ...month, _id: month.key }));
+          const match = facet.rows.find(stage => stage.$match?._adminPaymentStatus)?.$match._adminPaymentStatus;
+          const search = query.search || "";
+          const matched = bookings.filter((item, index) => (!match || all[index].paymentStatus === match) && transactionMatchesSearch(all[index], search))
+            .sort((first, second) => (new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()) || String(second._id).localeCompare(String(first._id)))
+            .slice(skip, skip + pageLimit).map(item => ({ ...item,
+              _adminRenter: [users.get(String(item.renter))].filter(Boolean), _adminOwner: [users.get(String(item.owner))].filter(Boolean),
+              _adminVehicle: [vehicles.get(String(item.vehicle))].filter(Boolean) }));
+          return { toArray: async () => [{ rows: matched, totals: [totals], monthlyTrend }] };
+        },
         find(filter, { projection }) {
           const allowedIds = filter?._id?.$in?.map(String);
           const candidates = rows[name].filter((row) => !allowedIds || allowedIds.includes(String(row._id)));
