@@ -14,6 +14,7 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
   const [message, setMessage] = useState("");
   const [ready, setReady] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [completionStatus, setCompletionStatus] = useState("");
   const [remaining, setRemaining] = useState(DRAFT_IDLE_MS);
   const [savedAt, setSavedAt] = useState(null);
@@ -214,16 +215,29 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
   }, [retry]);
 
   const clear = useCallback(async reason => {
-    if (busy || stopped.current) return;
-    if (pending.current) await pending.current;
+    if (busy || stopped.current) return false;
     stopped.current = true;
+    setCancelling(true);
     try {
-      await registrationDraftRequest(role, "DELETE", { complete: reason === "complete" });
-      stopped.current = true;
+      if (pending.current) await pending.current;
+      const result = await registrationDraftRequest(role, "DELETE", { complete: reason === "complete" });
+      if (result.registrationComplete && reason !== "complete") {
+        setCompleted(true);
+        return false;
+      }
       clearRegistrationDraft(getStorage(), role);
       clearPreKycSessionToken(emailOf(role, form), role);
-      if (reason === "complete") setCompleted(true); else onReset(reason);
-    } catch (error) { stopped.current = false; setStatus("unavailable"); setMessage(error.message); }
+      if (reason === "complete") setCompleted(true);
+      else if (reason === "restarted") onReset(reason);
+      else setForm(defaults);
+      return true;
+    } catch (error) {
+      stopped.current = false;
+      setStatus("unavailable"); setMessage(error.message);
+      return false;
+    } finally { if (mounted.current) setCancelling(false); }
+  // Defaults are constant per mounted registration attempt.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, role, form, onReset]);
   const complete = useCallback((kycStatus = "") => {
     stopped.current = true;
@@ -248,13 +262,14 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
     }
   }, [ready]);
 
-  return { form, setForm, recovery, trackProgress, flush, recover, ready, completed, completionStatus, savedAt, emailOtp,
+  return { form, setForm, recovery, trackProgress, flush, recover, ready, completed, cancelling, completionStatus, savedAt, emailOtp,
     emailVerified: Boolean(verification?.verified && verification.email === emailOf(role, form).trim().toLowerCase()),
     otp: verification?.otp, registrationComplete: verification?.registrationComplete,
     storageAvailable: !["unavailable", "conflict"].includes(status), status, message,
     warning: ready && !completed && status !== "expired" && remaining <= DRAFT_WARNING_MS,
     remainingSeconds: Math.ceil(remaining / 1000), complete,
     keepProgress: () => void flush({ force: true }), retry, startOver: () => void clear("restarted"),
+    cancel: () => clear("cancelled"),
     activityProps: { onPointerDownCapture: recordActivity, onKeyDownCapture: recordActivity,
       onInputCapture: recordActivity, onChangeCapture: recordActivity,
       onWheelCapture: recordActivity, onTouchMoveCapture: recordActivity } };

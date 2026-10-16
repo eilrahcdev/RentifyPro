@@ -28,6 +28,7 @@ import { readPrivateKycEvidence } from "../services/privateKycReviewContext.js";
 import { isBoundPreKycFace } from "../utils/preKycFace.js";
 import { assertActiveRegistrationDraft } from "../utils/registrationDraft.js";
 import { discardUnusedPreKycFile } from "../jobs/kycFileCleanup.job.js";
+import { canInspectRegistrationDocument, registrationReviewFilter, supportingDocumentCanContinue } from "../utils/registrationReview.js";
 import { startFaceReverification, getFaceReverificationAttempt, recordFaceReverification,
   cancelFaceReverification, reconcileFaceReverification, reverificationFaceKey } from "../services/kycReverification.service.js";
 
@@ -134,6 +135,8 @@ const queuePreKycDocument = async ({
   fileMeta,
   expectedRevision = "",
   accountUserId = null,
+  registrationDraftId,
+  registrationExpiresAt,
 }) => {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const normalizedSessionId = String(sessionId || "").trim();
@@ -142,6 +145,11 @@ const queuePreKycDocument = async ({
   const existing = await PreKycDocument.findOne({ email: normalizedEmail, docType })
     .select("status reasonCode fileKey fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role expiresAt registeredUser +profileSnapshot");
   const registrationUpload = !/^(user:|reverify:)/.test(normalizedSessionId);
+  if (registrationUpload && existing?.sessionId && existing.sessionId !== normalizedSessionId
+    && existing.expiresAt && new Date(existing.expiresAt) > new Date()) {
+    await discardUnusedPreKycFile(fileMeta.fileKey);
+    throw Object.assign(new Error("Another registration owns these uploads. Resume it in its original browser or wait for its expiry."), { status: 409 });
+  }
   if (registrationUpload && (existing?.registeredUser || /^(user:|reverify:)/.test(existing?.sessionId || ""))) {
     await discardUnusedPreKycFile(fileMeta.fileKey);
     throw Object.assign(new Error("This document belongs to a created account. Sign in to update it."), { status: 409 });
@@ -191,6 +199,9 @@ const queuePreKycDocument = async ({
         email: normalizedEmail,
         sessionId: normalizedSessionId,
         registeredUser: accountUserId,
+        ...(registrationDraftId ? { registrationDraftId, registrationExpiresAt } : {}),
+        manualReviewRequestedAt: null,
+        registrationCancelledAt: null,
         role: role || "user",
         docType,
         status: automatedScreening ? "queued" : "pending_review",
@@ -829,6 +840,8 @@ export const preRegisterIdFace = async (req, res) => {
       profileSnapshot: profileContext,
       fileMeta,
       expectedRevision: saved ? req.body.document_revision : "",
+      registrationDraftId: req.registrationDraft?._id,
+      registrationExpiresAt: req.registrationDraft?.expiresAt,
     });
     // Each document revision gets an isolated biometric template, including concurrent uploads.
     payload.user_id = `pre:${sessionId}:${queuedDocument.reviewVersion}`;
@@ -982,6 +995,8 @@ export const preVerifySupportingDocument = async (req, res) => {
       profileSnapshot: profileContext,
       fileMeta,
       expectedRevision: saved ? req.body.document_revision : "",
+      registrationDraftId: req.registrationDraft?._id,
+      registrationExpiresAt: req.registrationDraft?.expiresAt,
     });
     triggerKycDocumentProcessing();
     return res.json({
@@ -1003,11 +1018,32 @@ export const preVerifySupportingDocument = async (req, res) => {
   }
 };
 
+export const requestRegistrationReview = async (req, res) => {
+  try {
+    const { email, sessionId, role, draftId } = req.preKyc;
+    if (!draftId) return res.status(403).json({ success: false, message: "Recover your registration before requesting manual verification." });
+    const current = await PreKycDocument.findOne({ email, sessionId, role, docType: "id", registeredUser: null }).select("+profileSnapshot");
+    if (!current || current.status !== "pending_review" || isIdentityReadyForSelfie(current)
+      || publicPrivateScreening(current)?.outcome === "correction_needed"
+      || !current.expiresAt || new Date(current.expiresAt) <= new Date()
+      || !req.body?.documentRevision || current.reviewVersion !== req.body.documentRevision) {
+      return res.status(409).json({ success: false, message: "Refresh the current ID result before requesting manual verification." });
+    }
+    const updated = await PreKycDocument.findOneAndUpdate({ _id: current._id, sessionId, role, registeredUser: null,
+      reviewVersion: current.reviewVersion, status: "pending_review", expiresAt: { $gt: new Date() }, registrationCancelledAt: null },
+    { $set: { registrationDraftId: draftId, manualReviewRequestedAt: current.manualReviewRequestedAt || new Date() } }, { returnDocument: "after" });
+    if (!updated) return res.status(409).json({ success: false, message: "Your ID changed. Refresh its status and retry." });
+    return res.json({ success: true, message: "Manual verification requested. We will update this ID status after comparison." });
+  } catch (error) {
+    return sendKycError(res, error, { logMessage: "Manual verification request failed", fallbackMessage: "We couldn't request manual verification. Please retry." });
+  }
+};
+
 export const getPreKycStatus = async (req, res) => {
   try {
     const { email, sessionId } = req.preKyc;
     const documents = await PreKycDocument.find({ email, sessionId })
-      .select("docType status docCategory selectedDocCategory detailsMatched reason reasonCode processingAttempts createdAt updatedAt provider validationChecks manualComparison privateScreening fileHash reviewVersion selfieVerification sessionId role suspectedTampering expiresAt +profileSnapshot")
+      .select("docType status docCategory selectedDocCategory detailsMatched reason reasonCode processingAttempts createdAt updatedAt provider validationChecks manualComparison privateScreening fileHash reviewVersion selfieVerification sessionId role suspectedTampering expiresAt manualReviewRequestedAt +profileSnapshot")
       .sort({ createdAt: 1 })
       .lean();
     const idDocument = documents.find(document => document.docType === "id");
@@ -1017,10 +1053,12 @@ export const getPreKycStatus = async (req, res) => {
       success: true,
       selfieVerified,
       documents: documents.map((document) => {
-        const { provider, validationChecks, manualComparison, privateScreening, fileHash, reviewVersion, selfieVerification, profileSnapshot, sessionId, role, suspectedTampering, expiresAt, ...publicDocument } = document;
+        const { provider, validationChecks, manualComparison, privateScreening, fileHash, reviewVersion, selfieVerification, profileSnapshot, sessionId, role, suspectedTampering, expiresAt, manualReviewRequestedAt, ...publicDocument } = document;
         return { ...publicDocument, expiresAt: expiresAt || null, identityReadyForSelfie: isIdentityReadyForSelfie(document),
           documentRevision: reviewVersion || "",
-          automatedScreening: publicPrivateScreening(document) };
+          manualReviewRequested: Boolean(manualReviewRequestedAt),
+          automatedScreening: publicPrivateScreening(document),
+          canContinue: document.docType === "supporting" ? supportingDocumentCanContinue({ ...document, automatedScreening: publicPrivateScreening(document) }) : isIdentityReadyForSelfie(document) };
       }),
     });
   } catch (error) {
@@ -1033,8 +1071,8 @@ export const getPreKycStatus = async (req, res) => {
 
 export const listPendingKycReviews = async (_req, res) => {
   try {
-    const reviews = await PreKycDocument.find({ status: { $in: ["queued", "processing", "retry_wait", "pending_review"] } })
-      .select("email role sessionId docType status docCategory selectedDocCategory detailsMatched mismatchFields suspectedTampering reason reasonCode documentSurface validationChecks extractedData qualityIssues decisionSource processingAttempts nextAttemptAt fileName mimeType fileSize fileHash reviewVersion createdAt expiresAt")
+    const reviews = await PreKycDocument.find({ ...registrationReviewFilter(), status: { $in: ["queued", "processing", "retry_wait", "pending_review"] } })
+      .select("email role sessionId registeredUser registrationDraftId manualReviewRequestedAt docType status docCategory selectedDocCategory detailsMatched mismatchFields suspectedTampering reason reasonCode documentSurface validationChecks extractedData qualityIssues decisionSource processingAttempts nextAttemptAt fileName mimeType fileSize fileHash reviewVersion createdAt expiresAt")
       .sort({ createdAt: 1 })
       .limit(200)
       .lean();
@@ -1049,7 +1087,8 @@ export const listPendingKycReviews = async (_req, res) => {
 
 export const getKycReviewFile = async (req, res) => {
   try {
-    const review = await PreKycDocument.findById(req.params.id).select("fileKey mimeType fileName");
+    const review = await PreKycDocument.findById(req.params.id).select("fileKey mimeType fileName registeredUser registrationDraftId registrationExpiresAt sessionId docType status manualReviewRequestedAt registrationCancelledAt expiresAt");
+    if (!canInspectRegistrationDocument(review)) return res.status(409).json({ success: false, message: "This registration has not been submitted or requested manual verification." });
     if (!review?.fileKey) return res.status(404).json({ success: false, message: "Review file not found." });
 
     const root = path.resolve(KYC_UPLOAD_DIR);

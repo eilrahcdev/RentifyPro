@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import ReportsCenter from "../components/ReportsCenter";
 import API from "../utils/api";
+import { AccountVerificationNotice } from "../components/AccountVerificationNotice";
 import { normalizeOwnerProfile, persistOwnerProfile } from "./utils/ownerProfile";
 
 const OWNER_ACTIVE_PAGE_STORAGE_KEY = "rentifypro:owner-active-page";
@@ -106,7 +107,7 @@ export default function OwnerLayout({ onLogout }) {
     if (params.get("tab") === activePage) return;
     params.set("tab", activePage);
     const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", nextUrl);
   }, [activePage]);
 
@@ -141,6 +142,10 @@ export default function OwnerLayout({ onLogout }) {
 
         {/* page content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
+          <AccountVerificationNotice className="mb-5" onViewStatus={() => {
+            window.location.hash = "verification-status";
+            navigateToPage("Profile");
+          }} />
           {activePage === "Dashboard" && <Dashboard />}
           {activePage === "Vehicles" && <Vehicles />}
           {activePage === "Bookings" && <Bookings />}

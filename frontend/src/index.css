@@ -3362,6 +3362,45 @@ select:not([multiple]):disabled {
   }
 }
 
+@media (max-height: 400px) {
+  .rp-ai-chat-dialog {
+    height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)));
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-header {
+    padding: 0.5rem;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-header > .relative {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-title {
+    gap: 0.5rem;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-title > div:first-child {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-actions {
+    width: auto;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-body {
+    padding-block: 0.75rem;
+  }
+
+  .rp-ai-chat-dialog .rp-ai-chat-composer {
+    max-height: 50%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.5rem 0.75rem;
+  }
+}
+
 /* Messaging workspace controls */
 .rp-chat-shell,
 .owner-messages-shell {

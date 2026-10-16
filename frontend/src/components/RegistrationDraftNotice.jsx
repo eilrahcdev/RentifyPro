@@ -12,7 +12,7 @@ const DRAFT_MESSAGES = {
   },
   expired: {
     title: "Draft expired",
-    description: "Your draft is no longer recoverable. Start over to continue. Unsaved details remain visible until you clear them.",
+    description: "Your draft is no longer recoverable. Cancel this draft, then begin a new registration. Your entered details remain visible until you cancel.",
   },
   restarted: {
     title: "Draft cleared",
@@ -32,8 +32,16 @@ Object.assign(DRAFT_MESSAGES, {
   conflict: { title: "Progress changed in another tab", description: "Recover the latest saved draft before editing. Recovery replaces the details shown here." },
 });
 
-export default function RegistrationDraftNotice({ draft, busy, onNavigateToSignIn }) {
+export default function RegistrationDraftNotice({ draft, busy: working, onNavigateToSignIn, onNavigateToHome }) {
   const [confirmReset, setConfirmReset] = useState(false);
+  const busy = working || draft.cancelling;
+  const cancelRef = useRef(null);
+  const keepEditingRef = useRef(null);
+  useEffect(() => { if (confirmReset) keepEditingRef.current?.focus(); }, [confirmReset]);
+  const dismissCancellation = () => { setConfirmReset(false); cancelRef.current?.focus(); };
+  const cancelRegistration = async () => {
+    if (await draft.cancel()) onNavigateToHome();
+  };
   const keepRef = useRef(null);
   const wasWarning = useRef(false);
   const previousFocus = useRef(null);
@@ -76,7 +84,7 @@ export default function RegistrationDraftNotice({ draft, busy, onNavigateToSignI
             {draft.savedAt && <p>Last saved at {new Date(draft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.</p>}
           </div>
         </details>
-        <button type="button" disabled={busy} onClick={() => setConfirmReset(true)} className="min-h-11 shrink-0 text-xs font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50 sm:text-sm">Start over</button>
+        <button ref={cancelRef} type="button" disabled={busy} onClick={() => setConfirmReset(true)} className="min-h-11 shrink-0 text-xs font-semibold text-rose-800 underline underline-offset-2 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 sm:text-sm">Cancel registration</button>
       </div> : <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1">
           <p className={`font-semibold ${noticeState === "expired" ? "text-amber-800" : "text-slate-800"}`}>{notice.title}</p>
@@ -90,7 +98,7 @@ export default function RegistrationDraftNotice({ draft, busy, onNavigateToSignI
           {draft.savedAt && ["saved", "restored"].includes(noticeState) && <p className="mt-1 text-slate-600">Saved at {new Date(draft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>}
         </div>
         {["unavailable", "conflict"].includes(noticeState) && <button type="button" disabled={busy} onClick={draft.retry} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">{noticeState === "conflict" ? "Recover saved progress" : "Retry saving and recovery"}</button>}
-        <button type="button" disabled={busy || noticeState === "loading"} onClick={() => setConfirmReset(true)} className="shrink-0 min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">Start over</button>
+        <button ref={cancelRef} type="button" disabled={busy || noticeState === "loading"} onClick={() => setConfirmReset(true)} className="shrink-0 min-h-11 font-semibold text-rose-800 underline underline-offset-2 disabled:opacity-50 focus-visible:outline focus-visible:outline-2">Cancel registration</button>
       </div>}
       {draft.warning && createPortal(
         <div className="rp-floating-alert-position">
@@ -99,18 +107,19 @@ export default function RegistrationDraftNotice({ draft, busy, onNavigateToSignI
             <p className="mt-1 font-normal text-slate-600">
               {draft.remainingSeconds > 0
                 ? <>Saved recovery expires in <span role="timer" aria-live="off">{Math.ceil(draft.remainingSeconds / 60)} {draft.remainingSeconds > 60 ? "minutes" : "minute"}</span>.</>
-                : "Saved recovery has expired. Your entered details remain visible until you start over."}
+                : "Saved recovery has expired. Your entered details remain visible until you cancel registration."}
             </p>
             <button ref={keepRef} type="button" onClick={draft.keepProgress} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Keep my progress</button>
           </div>
         </div>, document.body
       )}
       {confirmReset && (
-        <div className="rounded-xl border border-slate-300 p-3" role="group" aria-label="Confirm starting over">
-          <p>Clear your entered details and restart registration?</p>
+        <div className="rounded-xl border border-slate-300 p-3" role="group" aria-label="Confirm cancellation" onKeyDown={event => { if (event.key === "Escape" && !busy) dismissCancellation(); }}>
+          <p className="font-semibold">Cancel registration and discard saved progress?</p>
+          <p className="mt-1 text-slate-700">Your entered details, temporary document uploads, and verification progress will be discarded. You will return to the home page. File cleanup may finish in the background.</p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <button type="button" disabled={busy} onClick={draft.startOver} className="rounded-lg bg-slate-900 px-3 py-2 font-semibold text-white disabled:opacity-50">Clear and start over</button>
-            <button type="button" onClick={() => setConfirmReset(false)} className="rounded-lg border border-slate-300 px-3 py-2 font-semibold">Keep editing</button>
+            <button type="button" disabled={busy} onClick={() => void cancelRegistration()} className="min-h-11 rounded-lg bg-rose-800 px-3 py-2 font-semibold text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">{draft.cancelling ? "Cancelling..." : "Cancel registration"}</button>
+            <button ref={keepEditingRef} type="button" disabled={busy} onClick={dismissCancellation} className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 font-semibold focus-visible:outline focus-visible:outline-2">Keep registering</button>
           </div>
         </div>
       )}

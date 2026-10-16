@@ -14,7 +14,10 @@ export function verificationGuidance(verification) {
   if (!verification.selfieVerified) return { title: "Selfie verification required", instruction: documents.some(document => document.identityReadyForSelfie)
     ? "Choose Continue selfie verification below. Your saved ID does not need another upload."
     : "Your ID must finish its document checks before you can continue selfie verification. Refresh status or follow any correction instructions below." };
-  if (documents.some(document => ["queued", "processing", "retry_wait", "pending_review"].includes(document.status))) {
+  if (documents.some(document => ["queued", "processing", "retry_wait"].includes(document.status))) {
+    return { title: "Documents being checked", instruction: "Your saved documents are being screened. Check your status for the next step; no repeat upload is needed while screening is in progress." };
+  }
+  if (documents.some(document => document.status === "pending_review")) {
     return { title: "Verification Pending", instruction: "Your account is available. Booking stays restricted until every required document is approved. We will notify you about admin decisions; no repeat upload is needed while review is pending." };
   }
   return { title: "Verification required", instruction: "Booking remains restricted. Refresh status and follow the verification instructions, or contact support if all checks already appear complete." };

@@ -21,7 +21,7 @@ import RegistrationDraft from "../models/RegistrationDraft.js";
 import PreKycDocument from "../models/PreKycDocument.js";
 import { registrationRecoveryState } from "./registrationDraft.controller.js";
 import { createOtpCode, OTP_EXPIRY_MS } from "../utils/emailOtp.js";
-import { finalizeRegistrationAccount } from "../services/registrationFinalization.service.js";
+import { finalizeRegistrationAccount, createRegistrationAccount } from "../services/registrationFinalization.service.js";
 import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
 import { hashAuthToken, revokeSessionToken } from "../utils/authTokenRevocation.js";
 import { disconnectSessionSockets } from "../socket/index.js";
@@ -363,6 +363,10 @@ export const checkRegistrationEmail = async (req, res) => {
 
 async function finalizeDraftAccount(user, draft, res) {
   await finalizeRegistrationAccount(user, draft);
+  return registrationCreatedResponse(user, res);
+}
+
+function registrationCreatedResponse(user, res) {
   clearAuthCookie(res);
   return res.status(201).json({ success: true, message: user.kycStatus === "approved"
     ? "Account created. Sign in to continue." : "Account created. Your documents are Pending Review. Sign in to continue.",
@@ -477,6 +481,8 @@ export const registerUser = async (req, res) => {
       return res.status(409).json({ success: false, message: "Another registration has documents for this email. Recover that registration or choose another email before creating an account." });
     }
     claimedDraft = await RegistrationDraft.findOneAndUpdate({ _id: registrationDraft._id, revision: registrationDraft.revision,
+      cancelledAt: null,
+      $and: [{ $or: [{ evidenceUntil: null }, { evidenceUntil: { $lte: new Date() } }] }],
       verifiedEmail: normalizedEmail, registeredUser: null, expiresAt: { $gt: new Date() }, absoluteExpiresAt: { $gt: new Date() },
       $or: [{ submissionUntil: null }, { submissionUntil: { $lte: new Date() } }] },
     { $set: { submissionUntil: new Date(Date.now() + 120000), submissionDocuments } }, { returnDocument: "after" });
@@ -484,7 +490,7 @@ export const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
     accountCreationStarted = true;
-    const user = await User.create({
+    const user = await createRegistrationAccount({
       name: toText(name),
       email: normalizedEmail,
       password: hashedPassword,
@@ -507,12 +513,12 @@ export const registerUser = async (req, res) => {
       emergencyContactName: toText(emergencyContactName) || undefined,
       emergencyContactPhone: normalizePhilippineMobile(emergencyContactPhone) || undefined,
       emergencyContactRelationship: toText(emergencyContactRelationship) || undefined,
-    });
+    }, claimedDraft);
 
     auditLog.info("AUTH", "Registered account", { userId: user._id.toString() });
-    return await finalizeDraftAccount(user, claimedDraft, res);
+    return registrationCreatedResponse(user, res);
   } catch (error) {
-    if (claimedDraft && (!accountCreationStarted || error.code === 11000 || error.name === "ValidationError")) {
+    if (claimedDraft && (!accountCreationStarted || error.registrationRolledBack || error.code === 11000 || error.name === "ValidationError")) {
       await RegistrationDraft.updateOne({ _id: claimedDraft._id }, { $unset: { submissionUntil: "", submissionDocuments: "" } }).catch(() => {});
     }
     if (error.status) return res.status(error.status).json({ success: false, message: error.message });

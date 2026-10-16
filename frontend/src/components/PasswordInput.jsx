@@ -55,7 +55,7 @@ export default function PasswordInput({
             error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-slate-500"
           }`}
         >
-          <Lock size={16} />
+          <Lock size={16} strokeWidth={2} aria-hidden="true" />
         </div>
 
         <input
@@ -83,8 +83,9 @@ export default function PasswordInput({
           disabled={disabled}
           className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={showPassword ? "Hide password" : "Show password"}
+          aria-pressed={showPassword}
         >
-          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          {showPassword ? <EyeOff size={18} strokeWidth={2} aria-hidden="true" /> : <Eye size={18} strokeWidth={2} aria-hidden="true" />}
         </button>
       </div>
 

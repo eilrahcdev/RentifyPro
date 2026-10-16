@@ -13,14 +13,15 @@ const inferDefaultApiBase = () => {
 };
 
 const isQuickTunnelBuild = import.meta.env.MODE === "quick-tunnel";
-const configuredApiBase = isQuickTunnelBuild
+const sameOriginProxy = !isQuickTunnelBuild && import.meta.env.VITE_SAME_ORIGIN_PROXY === "true";
+const configuredApiBase = isQuickTunnelBuild || sameOriginProxy
   ? ""
   : trimTrailingSlashes(import.meta.env.VITE_API_BASE_URL || "");
-const rawApiBase = isQuickTunnelBuild
+const rawApiBase = isQuickTunnelBuild || sameOriginProxy
   ? (typeof window !== "undefined" ? window.location.origin : "")
   : configuredApiBase || inferDefaultApiBase();
 
-if (!isQuickTunnelBuild && !configuredApiBase && typeof window !== "undefined") {
+if (!isQuickTunnelBuild && !sameOriginProxy && !configuredApiBase && typeof window !== "undefined") {
   const hostname = String(window.location.hostname || "").toLowerCase();
   if (hostname !== "localhost" && hostname !== "127.0.0.1" && hostname !== "::1") {
     console.warn(
@@ -31,6 +32,8 @@ if (!isQuickTunnelBuild && !configuredApiBase && typeof window !== "undefined") 
 
 export const API_ORIGIN = rawApiBase.endsWith("/api") ? rawApiBase.slice(0, -4) : rawApiBase;
 export const API_BASE_URL = rawApiBase.endsWith("/api") ? rawApiBase : `${rawApiBase}/api`;
-export const SOCKET_URL = isQuickTunnelBuild
+export const SOCKET_URL = isQuickTunnelBuild || sameOriginProxy
   ? API_ORIGIN
   : trimTrailingSlashes(import.meta.env.VITE_SOCKET_URL || API_ORIGIN);
+// Netlify's edge carries authenticated polling; direct deployments retain WebSockets.
+export const SOCKET_TRANSPORTS = sameOriginProxy ? ["polling"] : ["websocket"];

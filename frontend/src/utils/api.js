@@ -1,5 +1,6 @@
 import { clearSessionOwnerProfile, clearSessionUser } from "./sessionStore";
 import { API_BASE_URL } from "./runtimeConfig";
+import { readApiResponse } from "./readApiResponse";
 export { API_BASE_URL } from "./runtimeConfig";
 
 function buildQueryString(params = {}) {
@@ -73,7 +74,9 @@ async function request(endpoint, options = {}) {
     error.code = "NETWORK_ERROR";
     throw error;
   }
-  const data = await response.json().catch(() => ({}));
+  const resolved = await readApiResponse(response);
+  response = resolved.response;
+  const data = resolved.data;
 
   if (!response.ok) {
     const msg = data.message || data.errors?.email || `Request failed (${response.status})`;
@@ -117,7 +120,7 @@ const API = {
   register: (body) => request("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   getLoginChallenge: () => request("/auth/login-challenge", { method: "GET" }),
   login: (body) => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-  getProfile: ({ signal } = {}) => request("/auth/me", { signal }),
+  getProfile: ({ signal } = {}) => request("/auth/me", { signal, cache: "no-store" }),
   updateProfile: (body) => request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }),
   changePassword: (body) =>
     request("/auth/change-password", { method: "PATCH", body: JSON.stringify(body) }),
@@ -159,7 +162,7 @@ const API = {
 
   kycRegisterFace: (body) => request("/kyc/id-register", { method: "POST", body: JSON.stringify(body) }),
   kycVerifySelfie: (body) => request("/kyc/selfie/verify", { method: "POST", body: JSON.stringify(body) }),
-  kycGetStatus: () => request("/kyc/me"),
+  kycGetStatus: ({ signal } = {}) => request("/kyc/me", { signal, cache: "no-store" }),
   kycReplaceDocument: (docType, body) => request(`/kyc/documents/${encodeURIComponent(docType)}`, { method: "POST", body: JSON.stringify(body) }),
   kycReverifyId: (body) => request("/kyc/reverify/id-register", { method: "POST", body: JSON.stringify(body) }),
   kycReverifySelfie: (body) => request("/kyc/reverify/selfie/verify", { method: "POST", body: JSON.stringify(body) }),

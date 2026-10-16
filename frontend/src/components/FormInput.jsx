@@ -135,7 +135,7 @@ export default function FormInput({
                 error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-[#017FE6]"
               } ${disabled ? "cursor-not-allowed opacity-60" : "hover:bg-slate-100"}`}
             >
-              <Icon size={16} />
+              <Icon size={16} strokeWidth={2} aria-hidden="true" />
             </button>
           ) : (
             <div
@@ -149,7 +149,7 @@ export default function FormInput({
                   : "border-slate-200 bg-slate-50 text-[#017FE6]"
               }`}
             >
-              <Icon size={16} />
+              <Icon size={16} strokeWidth={2} aria-hidden="true" />
             </div>
           )
         )}

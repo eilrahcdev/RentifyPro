@@ -22,6 +22,10 @@ import { requireRegistrationEmail } from "../middleware/preKycSession.middleware
 import { registrationOtpHash } from "../utils/emailOtp.js";
 import { issuePreKycSession } from "../utils/preKycSession.js";
 import { registerUser } from "../controllers/auth.controller.js";
+import { requestRegistrationReview } from "../controllers/kyc.controller.js";
+import { activeRegistrationDraft } from "../utils/registrationDraft.js";
+import { cleanupCancelledRegistration } from "../services/registrationCleanup.service.js";
+import { supportsRegistrationTransactions, createRegistrationAccount } from "../services/registrationFinalization.service.js";
 
 test("registration rejects a signed draft whose email has not passed OTP", async t => {
   t.mock.method(User, "findOne", async () => { throw new Error("Unverified email reached account lookup"); });
@@ -49,6 +53,7 @@ const equal = (left, right) => left instanceof Date || right instanceof Date ? n
 function matches(object, filter) {
   return Boolean(object) && Object.entries(filter).every(([key, expected]) => {
     if (key === "$or") return expected.some(entry => matches(object, entry));
+    if (key === "$and") return expected.every(entry => matches(object, entry));
     const actual = valueAt(object, key);
     if (expected === null) return actual == null;
     if (expected && typeof expected === "object" && !(expected instanceof Date)) return Object.entries(expected).every(([operator, value]) => {
@@ -119,7 +124,7 @@ async function fixture(t, { role = "user", verified = false, docs = true } = {})
       idDocumentHash: crypto.createHash("sha256").update(bytes).digest("hex"), verifiedAt: new Date(), expiresAt: new Date(Date.now() + 7200000) } } : {}),
   })) : [];
   const users = []; let kyc;
-  t.mock.method(RegistrationDraft, "findOne", async filter => matches(draft, filter) ? structuredClone(draft) : null);
+  t.mock.method(RegistrationDraft, "findOne", filter => query(matches(draft, filter) ? structuredClone(draft) : null));
   t.mock.method(RegistrationDraft, "findOneAndUpdate", async (filter, update) => matches(draft, filter) ? structuredClone(write(draft, update)) : null);
   t.mock.method(RegistrationDraft, "updateOne", async (filter, update) => { const matched = matches(draft, filter); if (matched) write(draft, update); return { matchedCount: Number(matched) }; });
   t.mock.method(PreKycDocument, "find", filter => query(documents.filter(doc => matches(doc, filter)).map(doc => structuredClone(doc))));
@@ -130,6 +135,7 @@ async function fixture(t, { role = "user", verified = false, docs = true } = {})
   });
   t.mock.method(PreKycDocument, "exists", async filter => documents.find(doc => matches(doc, filter)) || null);
   t.mock.method(PreKycDocument, "updateOne", async (filter, update) => { const doc = documents.find(doc => matches(doc, filter)); if (doc) write(doc, update); return { matchedCount: Number(Boolean(doc)) }; });
+  t.mock.method(PreKycDocument, "updateMany", async (filter, update) => { const rows = documents.filter(doc => matches(doc, filter)); rows.forEach(doc => write(doc, update)); return { matchedCount: rows.length }; });
   t.mock.method(User, "exists", async filter => users.find(user => matches(user, filter)) || null);
   t.mock.method(User, "findOne", filter => query(users.find(user => matches(user, filter)) || null));
   t.mock.method(User, "findById", id => query(users.find(user => user._id === id) || null));
@@ -161,7 +167,7 @@ test("clearing a draft ignores a client completion claim and deletes only its un
     return {};
   });
   const faces = t.mock.method(PreKycFace, "deleteMany", async filter => {
-    assert.deepEqual(filter, { sessionId: state.draft.sessionId, role: "user", email: fields.email }); return {};
+    assert.deepEqual(filter, { sessionId: state.draft.sessionId, role: "user", email: { $in: [fields.email] } }); return {};
   });
   const cleared = response(); await deleteRegistrationDraft(state.req({ complete: true }), cleared);
   assert.equal(cleared.statusCode, 200); assert.equal(removed.mock.callCount(), 1); assert.equal(faces.mock.callCount(), 1);
@@ -175,9 +181,9 @@ test("clearing an uncertain submission or an existing account's draft preserves 
   const removed = t.mock.method(PreKycDocument, "deleteMany", async () => { throw new Error("Account evidence must remain"); });
   state.draft.submissionDocuments = state.documents.map(doc => ({ id: doc._id }));
   const uncertain = response(); await deleteRegistrationDraft(state.req({}), uncertain);
-  assert.equal(uncertain.statusCode, 200);
+  assert.equal(uncertain.statusCode, 409);
   delete state.draft.submissionDocuments;
-  state.users.push({ email: fields.email });
+  state.users.push({ email: fields.email, registrationDraftId: state.draft._id });
   const account = response(); await deleteRegistrationDraft(state.req({}), account);
   assert.equal(account.statusCode, 200); assert.equal(removed.mock.callCount(), 0);
   assert.equal(state.documents.length, 1);
@@ -446,4 +452,88 @@ test("legacy owner signup cannot create a second registration or bypass the veri
   const result = await created.json();
   assert.equal(created.status, 201, JSON.stringify(result)); assert.equal(result.user.role, "owner");
   assert.equal(result.user.isVerified, true); assert.equal(result.user.kycStatus, "challenge_passed"); assert.equal(state.users.length, 1);
+});
+
+function mockEvidenceDeletion(t, state) {
+  t.mock.method(PreKycDocument, "deleteMany", async filter => {
+    for (let i = state.documents.length - 1; i >= 0; i--) if (matches(state.documents[i], filter)) state.documents.splice(i, 1);
+    return {};
+  });
+  t.mock.method(PreKycFace, "deleteMany", async () => ({}));
+}
+
+for (const role of ["user", "owner"]) test(`${role} can cancel after all verification without creating an account, and stale submissions fail`, async t => {
+  const state = await fixture(t, { role, verified: true }); mockEvidenceDeletion(t, state);
+  const stale = state.registration(); const savedFields = structuredClone(state.draft.fields);
+  const cancelled = response(); await deleteRegistrationDraft(state.req(), cancelled);
+  assert.equal(cancelled.statusCode, 200); assert.equal(cancelled.body.cancelled, true);
+  assert.equal(state.users.length, 0); assert.equal(state.documents.length, 0);
+  assert.equal(activeRegistrationDraft(state.draft), false); assert.deepEqual(state.draft.fields, {});
+  const submit = response(); await registerUser(stale, submit); assert.equal(submit.statusCode, 401);
+  const save = response(); await saveRegistrationDraft(state.req({ fields: savedFields, revision: 1 }), save); assert.equal(save.statusCode, 410);
+  const again = response(); await deleteRegistrationDraft(state.req(), again); assert.equal(again.body.cancelled, true);
+});
+
+test("active verification and submission claims prevent cancellation before evidence can be removed", async t => {
+  const state = await fixture(t, { verified: true }); mockEvidenceDeletion(t, state);
+  state.draft.evidenceUntil = new Date(Date.now() + 30000);
+  const running = response(); await deleteRegistrationDraft(state.req(), running);
+  assert.equal(running.statusCode, 409); assert.equal(state.documents.length, 1); assert.equal(state.draft.cancelledAt, undefined);
+  delete state.draft.evidenceUntil;
+  state.draft.submissionDocuments = [{}];
+  const submitting = response(); await deleteRegistrationDraft(state.req(), submitting);
+  assert.equal(submitting.statusCode, 409); assert.equal(state.documents.length, 1);
+});
+
+test("a failed private-file deletion keeps retry references on the cancelled draft", async t => {
+  const state = await fixture(t, { verified: true }); mockEvidenceDeletion(t, state);
+  const unlink = fs.unlink;
+  const failure = t.mock.method(fs, "unlink", async () => { throw Object.assign(new Error("Synthetic locked file"), { code: "EBUSY" }); });
+  const cancelled = response(); await deleteRegistrationDraft(state.req(), cancelled);
+  assert.equal(cancelled.body.cancelled, true); assert.equal(cancelled.body.cleanupPending, true);
+  assert.deepEqual(state.draft.cleanupFileKeys, ["review-fixture.jpg"]); assert.equal(state.documents.length, 0);
+  failure.mock.restore();
+  assert.equal(await cleanupCancelledRegistration(state.draft), true);
+  assert.deepEqual(state.draft.cleanupFileKeys, []);
+  await assert.rejects(fs.stat(path.join(process.env.KYC_UPLOAD_DIR, "review-fixture.jpg")), { code: "ENOENT" });
+  assert.equal(fs.unlink, unlink);
+});
+
+test("owner business corrections block final submission while uncertain readings keep final approval pending", async t => {
+  const state = await fixture(t, { role: "owner", verified: true }); const business = state.documents[1];
+  business.privateScreening = { automatedCheck: { version: 1, fileHash: business.fileHash, reviewVersion: business.reviewVersion, outcome: "correction_needed", checks: {} } };
+  const blocked = response(); await registerUser(state.registration(), blocked);
+  assert.equal(blocked.statusCode, 409); assert.equal(state.users.length, 0);
+  business.privateScreening.automatedCheck.outcome = "review_needed";
+  const allowed = response(); await registerUser(state.registration(), allowed);
+  assert.equal(allowed.statusCode, 201); assert.equal(state.users[0].kycStatus, "challenge_passed");
+});
+
+test("manual ID assistance requires a current unresolved ID, is idempotent, and grants no approval", async t => {
+  const state = await fixture(t, { verified: true }); const id = state.documents[0];
+  id.selfieVerification = null; id.detailsMatched = false;
+  const req = { preKyc: { email: id.email, role: id.role, sessionId: id.sessionId, draftId: state.draft._id }, body: { documentRevision: id.reviewVersion } };
+  const first = response(); await requestRegistrationReview(req, first);
+  assert.equal(first.statusCode, 200); assert.ok(state.documents[0].manualReviewRequestedAt);
+  const requested = state.documents[0].manualReviewRequestedAt.getTime();
+  const again = response(); await requestRegistrationReview(req, again);
+  assert.equal(again.statusCode, 200); assert.equal(state.documents[0].manualReviewRequestedAt.getTime(), requested);
+  assert.equal(state.documents[0].status, "pending_review"); assert.equal(state.users.length, 0);
+  const stale = response(); await requestRegistrationReview({ ...req, body: { documentRevision: "old" } }, stale);
+  assert.equal(stale.statusCode, 409);
+});
+
+test("replica-set registration uses one transaction for the account, KYC case, evidence, and draft", async t => {
+  const state = await fixture(t, { verified: true }); const req = state.registration();
+  const documents = state.documents.map(doc => ({ reference: doc._id, docType: doc.docType, documentRevision: doc.reviewVersion, fileHash: doc.fileHash }));
+  state.draft.submissionDocuments = documents; state.draft.submissionUntil = new Date(Date.now() + 120000);
+  let committed = 0, ended = 0;
+  const session = { withTransaction: async fn => { await fn(); committed++; }, endSession: async () => { ended++; } };
+  const connection = { readyState: 1, getClient: () => ({ topology: { description: { type: "ReplicaSetWithPrimary" } } }), startSession: async () => session };
+  const create = User.create;
+  t.mock.method(User, "create", async (input, options) => { assert.equal(options.session, session); assert.ok(Array.isArray(input)); return [await create(input[0])]; });
+  const user = await createRegistrationAccount({ name: "Alice Example", email: req.body.email, registrationDraftId: state.draft._id, role: "user", isVerified: true }, state.draft, connection);
+  assert.equal(committed, 1); assert.equal(ended, 1); assert.equal(state.users.length, 1);
+  assert.equal(state.draft.registeredUser, user._id); assert.equal(state.documents[0].registeredUser, user._id); assert.ok(state.kyc);
+  assert.equal(supportsRegistrationTransactions({ readyState: 1, getClient: () => ({ topology: { description: { type: "Single", servers: new Map() } } }) }), false);
 });

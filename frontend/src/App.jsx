@@ -36,6 +36,7 @@ import { RouteSkeleton, SignOutProgress } from "./components/LoadingSkeletons";
 import { disconnectSocket, getSocket } from "./utils/socket";
 import { dismissActionToasts, showActionToast } from "./utils/actionToast";
 import API from "./utils/api";
+import { AccountVerificationProvider } from "./components/AccountVerificationNotice";
 import { getHelpGuide } from "./data/helpContent";
 import { HELP_ASK_AI_EVENT, HELP_OPEN_EVENT } from "./utils/helpNavigation";
 import {
@@ -614,7 +615,9 @@ const App = () => {
 
     const currentRoute = `${window.location.pathname}${window.location.search}`;
     if (currentRoute === targetRoute) return;
-    window.history.pushState({ page: currentPage }, "", targetRoute);
+    const verificationAnchor = ["account-settings", "owner-dashboard"].includes(currentPage) && window.location.hash === "#verification-status"
+      ? "#verification-status" : "";
+    window.history.pushState({ page: currentPage }, "", targetRoute + verificationAnchor);
   }, [
     currentPage,
     selectedVehicle?._id,
@@ -1022,7 +1025,7 @@ const App = () => {
   }
 
   return (
-    <>
+    <AccountVerificationProvider user={isLoggedIn || isOwnerLoggedIn ? user : null}>
       {/* logout modal */}
       <LogoutModal
         isOpen={showLogoutModal}
@@ -1439,7 +1442,7 @@ const App = () => {
         <AdminLayout user={user} onLogout={requestLogout} />
       )}
       </Suspense>
-    </>
+    </AccountVerificationProvider>
   );
 };
 

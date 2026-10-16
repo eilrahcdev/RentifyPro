@@ -114,8 +114,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Hash the password before saving
-// Works with Mongoose 6 and 7+
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $type: "string" } }, name: "registration_phone_unique" });
+userSchema.index({ registrationDraftId: 1 }, { unique: true, partialFilterExpression: { registrationDraftId: { $type: "string" } }, name: "registration_draft_unique" });
+
+// Hash the password before saving.
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
 

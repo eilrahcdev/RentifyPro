@@ -32,6 +32,7 @@ function env(t, values = {}) {
   }
 }
 const doc = (extra = {}) => ({ _id: "507f1f77bcf86cd799439012", email: "applicant@example.test", sessionId: "registration-fixture",
+  registrationDraftId: "fixture-draft", manualReviewRequestedAt: new Date(), expiresAt: new Date(Date.now() + 3600000),
   provider: "private-ocr", status: "pending_review", docType: "id", role: "user", fileKey: "synthetic.jpg", fileHash: "synthetic-hash",
   mimeType: "image/jpeg",
   reviewVersion: "current-review", selectedDocCategory: "Philippine Passport",
@@ -303,6 +304,9 @@ test("private file integrity, duplicates and replacement races block comparison 
 test("private document approval requires a current recorded comparison and stays separate from selfie", async (t) => {
   env(t);
   const document = doc({ detailsMatched: false });
+  document.sessionId = "user:507f1f77bcf86cd799439011";
+  const { default: KycVerification } = await import("../models/KycVerification.js");
+  t.mock.method(KycVerification, "findOne", async () => null);
   t.mock.method(PreKycDocument, "findById", async () => document);
   const write = t.mock.method(PreKycDocument, "findOneAndUpdate", async (_filter, update) => ({ ...document, ...update.$set }));
   t.mock.method(auditLog, "info", () => {});

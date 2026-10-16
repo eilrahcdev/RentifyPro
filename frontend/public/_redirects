@@ -1,1 +1,3 @@
+/uploads/vehicles/* https://rentifypro-api.azurewebsites.net/uploads/vehicles/:splat 200
+/uploads/avatars/* https://rentifypro-api.azurewebsites.net/uploads/avatars/:splat 200
 /* /index.html 200

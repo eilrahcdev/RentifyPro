@@ -30,6 +30,7 @@ const getTokenFromCookieHeader = (cookieHeader = "") => {
 
 export const initSocket = (httpServer) => {
   ioInstance = new Server(httpServer, {
+    pingInterval: 20000,
     cors: {
       origin: (origin, callback) => {
         if (isAllowedOrigin(origin)) return callback(null, true);
@@ -37,6 +38,9 @@ export const initSocket = (httpServer) => {
       },
       credentials: true,
     },
+  });
+  ioInstance.engine.on("headers", headers => {
+    headers["Cache-Control"] = "private, no-store";
   });
 
   ioInstance.use(async (socket, next) => {

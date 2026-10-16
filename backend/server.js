@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import { receivePayMongoWebhook } from "./controllers/paymentWebhook.controller.js";
 import { startPaymentReconciliationJob, stopPaymentReconciliationJob } from "./jobs/paymentReconciliation.job.js";
 import cookieParser from "cookie-parser";
+import { proxyClient } from "./middleware/proxyClient.middleware.js";
 import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -120,6 +121,7 @@ console.log(
 
 // Reject abusive API traffic before parsing JSON or uploads. The signed webhook
 // above retains its independent budget and original request bytes.
+app.use("/api/", proxyClient);
 app.use("/api/", earlyIpLimiter);
 app.use("/api/", healthReadLimiter);
 app.use(cookieParser());

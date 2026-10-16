@@ -17,8 +17,10 @@ import { getKycUploadDir } from "../utils/storagePaths.js";
 import { activeRegistrationDraft, DRAFT_IDLE_MS, DRAFT_MAX_MS, draftEmail,
   selectRegistrationFields, draftDocumentMatches, validRegistrationStep, validRegistrationPhase, isIdentityReadyForSelfie, isDraftEmailVerified } from "../utils/registrationDraft.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
-import { discardUnusedPreKycFile } from "../jobs/kycFileCleanup.job.js";
 import { finalizeRegistrationAccount } from "../services/registrationFinalization.service.js";
+import { cancelOwnedRegistration } from "../services/registrationCleanup.service.js";
+import { publicPrivateScreening } from "../services/privateDocumentLayout.service.js";
+import { supportingDocumentCanContinue } from "../utils/registrationReview.js";
 
 const cookieName = role => `rentify_registration_${role}`;
 const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production",
@@ -51,7 +53,7 @@ export async function registrationRecoveryState(draft) {
   const email = draft.evidenceEmail || draftEmail(draft.role, fields);
   const documents = email ? await PreKycDocument.find({ email, role: draft.role, sessionId: draft.sessionId,
     ...(draft.registeredUser ? {} : { expiresAt: { $gt: new Date() } }) })
-    .select("email docType role status reason reasonCode selectedDocCategory expiresAt detailsMatched provider validationChecks manualComparison privateScreening fileKey fileHash reviewVersion selfieVerification sessionId +profileSnapshot").lean() : [];
+    .select("email docType role status reason reasonCode selectedDocCategory expiresAt detailsMatched provider validationChecks manualComparison privateScreening fileKey fileHash reviewVersion selfieVerification sessionId manualReviewRequestedAt +profileSnapshot").lean() : [];
   const publicDocuments = [];
   for (const document of documents) {
     let available = true;
@@ -59,6 +61,8 @@ export async function registrationRecoveryState(draft) {
     const profileMatches = available && draftDocumentMatches(document, draft.role, fields);
     publicDocuments.push({ docType: document.docType, reference: String(document._id), documentRevision: document.reviewVersion,
       selectedDocCategory: document.selectedDocCategory, profileMatches, available,
+      automatedScreening: publicPrivateScreening(document), reasonCode: document.reasonCode,
+      manualReviewRequested: Boolean(document.manualReviewRequestedAt),
       status: available && profileMatches ? document.status : "reupload_required",
       reason: !available ? "The saved document is unavailable. Please upload it again." : !profileMatches
         ? "Registration details changed. Recheck the saved document before continuing." : document.reason,
@@ -75,7 +79,7 @@ export async function registrationRecoveryState(draft) {
   const emailVerified = isDraftEmailVerified(draft);
   const documentsComplete = Boolean(publicDocuments.some(doc => doc.docType === "id" && doc.identityReadyForSelfie)
     && (draft.role !== "owner" || publicDocuments.some(doc => doc.docType === "supporting" && doc.profileMatches
-      && ["pending_review", "verified"].includes(doc.status))));
+      && supportingDocumentCanContinue(doc))));
   return { fields, documents: publicDocuments, selfieVerified, emailVerified, documentsComplete,
     verificationPhase: validRegistrationPhase(draft.verificationPhase, emailVerified, documentsComplete),
     otp: { sent: Boolean(draft.emailOtp?.hash), expiresAt: draft.emailOtp?.expiresAt,
@@ -145,6 +149,7 @@ export async function sendRegistrationOtp(req, res) {
       return res.status(429).json({ success: false, message: "A code was recently requested for this email. Wait before requesting another.", retryAfterSeconds: otpCooldownSeconds() });
     }
     const updated = await RegistrationDraft.findOneAndUpdate({ _id: draft._id, revision: draft.revision,
+      cancelledAt: null,
       verifiedEmail: { $ne: email },
       expiresAt: { $gt: now }, absoluteExpiresAt: { $gt: now },
       $or: [{ otpLastSentAt: { $exists: false } }, { otpLastSentAt: null }, { otpLastSentAt: { $lte: new Date(now.getTime() - otpCooldownSeconds() * 1000) } }] },
@@ -168,6 +173,7 @@ export async function verifyRegistrationOtp(req, res) {
     if (typeof code !== "string" || !/^\d{6}$/.test(code)) throw fail(400, "Enter the six-digit code from your email.");
     const now = new Date();
     const attempted = await RegistrationDraft.findOneAndUpdate({ _id: draft._id, revision: draft.revision,
+      cancelledAt: null,
       "emailOtp.hash": draft.emailOtp?.hash || "", "emailOtp.email": draftEmail(draft.role, draft.fields),
       "emailOtp.expiresAt": { $gt: now }, "emailOtp.attempts": { $lt: 5 }, otpAttemptsTotal: { $lt: 25 },
       expiresAt: { $gt: now }, absoluteExpiresAt: { $gt: now } },
@@ -180,6 +186,7 @@ export async function verifyRegistrationOtp(req, res) {
     const expected = registrationOtpHash(attempted, code);
     if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(attempted.emailOtp.hash))) throw fail(400, "The code is incorrect. Check your email and try again.");
     const verified = await RegistrationDraft.findOneAndUpdate({ _id: draft._id, revision: attempted.revision,
+      cancelledAt: null,
       "emailOtp.hash": expected, "emailOtp.expiresAt": { $gt: new Date() }, "emailOtp.email": draftEmail(draft.role, attempted.fields) },
     { $set: { verifiedEmail: draftEmail(draft.role, attempted.fields), emailVerifiedAt: now, emailOtp: null, verificationPhase: "face" } }, { returnDocument: "after" });
     if (!verified) {
@@ -209,6 +216,8 @@ export async function saveRegistrationDraft(req, res) {
       const hasOwnedEvidence = emailChanged && await PreKycDocument.exists({ sessionId: current.sessionId, role,
         expiresAt: { $gt: now } });
       draft = await RegistrationDraft.findOneAndUpdate({ _id: current._id, role, revision: current.revision,
+        cancelledAt: null,
+        $and: [{ $or: [{ evidenceUntil: null }, { evidenceUntil: { $lte: now } }] }],
         registeredUser: null, $or: [{ submissionUntil: null }, { submissionUntil: { $lte: now } }],
         expiresAt: { $gt: now }, absoluteExpiresAt: { $gt: now } }, { $set: { fields, step,
         evidenceEmail: emailChanged && !hasOwnedEvidence ? draftEmail(role, fields)
@@ -245,25 +254,19 @@ export async function saveRegistrationDraft(req, res) {
         revision: 1, expiresAt: new Date(Math.min(now.getTime() + DRAFT_IDLE_MS, absoluteExpiresAt.getTime())), absoluteExpiresAt });
       res.cookie(cookieName(role), token, cookieOptions());
     }
+    await PreKycDocument.updateMany({ sessionId: draft.sessionId, role, registeredUser: null },
+      { $set: { registrationDraftId: draft._id, registrationExpiresAt: draft.expiresAt } });
     return await responseDraft(draft, res);
   } catch (error) { return sendError(res, error); }
 }
 export async function deleteRegistrationDraft(req, res) {
   try {
     const token = String(req.cookies?.[cookieName(req.query.role)] || "");
+    let result = { success: true };
     if (/^[a-f0-9]{64}$/.test(token)) {
-      const draft = await RegistrationDraft.findOneAndDelete({ _id: digest(token), role: req.query.role });
-      const email = draft && (draft.evidenceEmail || draftEmail(draft.role, draft.fields));
-      if (draft && !draft.registeredUser && !draft.submissionDocuments && (!email || !await User.exists({ email }))) {
-        const scope = { sessionId: draft.sessionId, role: draft.role, email };
-        const unsubmitted = { ...scope, registeredUser: null };
-        const documents = await PreKycDocument.find(unsubmitted).select("fileKey").lean();
-        await PreKycDocument.deleteMany(unsubmitted);
-        await PreKycFace.deleteMany(scope);
-        for (const document of documents) await discardUnusedPreKycFile(document.fileKey);
-      }
+      result = await cancelOwnedRegistration(digest(token), req.query.role);
     }
     res.clearCookie(cookieName(req.query.role), { ...cookieOptions(), maxAge: undefined });
-    return res.json({ success: true });
+    return res.json(result);
   } catch (error) { return sendError(res, error); }
 }

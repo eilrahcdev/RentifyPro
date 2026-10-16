@@ -7,6 +7,7 @@ import {
   Plus,
 } from "lucide-react";
 import API from "../../utils/api";
+import { AccountVerificationLink } from "../../components/AccountVerificationNotice";
 import { getSocket } from "../../utils/socket";
 import { LIVE_COUNTERS_REFRESH_EVENT } from "../../utils/liveCounters";
 import { getOwnerProfileFromStorage } from "../utils/ownerProfile";
@@ -110,9 +111,10 @@ export default function Topbar({ onNavigateToNotifications, onToggleSidebar, isS
               <span className="min-[480px]:hidden" aria-hidden="true">Hi, {displayFirstName}!</span>
               <span className="hidden min-[480px]:inline" aria-hidden="true">{greeting}</span>
             </h1>
-            <p className="hidden md:block truncate text-sm text-white/80">
-              Here&apos;s what&apos;s happening with your rentals today.
-            </p>
+            <AccountVerificationLink onClick={() => {
+              window.location.hash = "verification-status";
+              window.dispatchEvent(new CustomEvent("navigate", { detail: "Profile" }));
+            }} className="min-h-11 max-w-full rounded-lg py-2 text-left text-sm font-semibold text-white underline underline-offset-4 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" />
           </div>
         </div>
 

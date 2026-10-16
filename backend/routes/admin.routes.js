@@ -18,6 +18,7 @@ import { getPrivateKycReviewContext } from "../services/privateKycReviewContext.
 import PreKycDocument from "../models/PreKycDocument.js";
 import { getKycUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
 import { getAccountVerification } from "../services/accountVerification.service.js";
+import { isSubmittedDocument, canInspectRegistrationDocument, registrationReviewFilter } from "../utils/registrationReview.js";
 
 const VEHICLE_MEDIA_PREFIX = "uploads/vehicles/";
 const VEHICLE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
@@ -112,7 +113,7 @@ const mapDocument = (document, usersByEmail) => {
   const email = asText(document.email).toLowerCase();
   const matchedUser = usersByEmail.get(email);
   const fallbackType = document.docType === "supporting" ? "Supporting Document" : "Government ID";
-  const reviewReady = document.status === "pending_review";
+  const reviewReady = document.status === "pending_review" && isSubmittedDocument(document);
   const identityComparisonPassed = document.docType !== "id" || document.detailsMatched === true;
 
   return {
@@ -131,7 +132,8 @@ const mapDocument = (document, usersByEmail) => {
     canReview: reviewReady,
     canApprove: reviewReady && identityComparisonPassed && (!["private-ocr", "manual"].includes(document.provider)
       || hasCurrentManualDocumentComparison(document)),
-    canCompareManually: canManuallyCompareDocument(document),
+    canCompareManually: canInspectRegistrationDocument(document) && canManuallyCompareDocument(document),
+    reviewPurpose: isSubmittedDocument(document) ? "Final approval" : "Registration assistance",
     docType: document.docType,
     selectedDocCategory: document.selectedDocCategory,
     fileHash: document.fileHash,
@@ -250,8 +252,8 @@ router.get("/data", async (_request, response, next) => {
         database.collection("vehicles").find({}, {
           projection: { owner: 1, name: 1, coverDisplayMode: 1, dailyRentalRate: 1, pricingUnit: 1, location: 1, availabilityStatus: 1, images: 1, imageUrl: 1, driverOptionEnabled: 1, specs: 1, createdAt: 1 },
         }).sort({ createdAt: -1 }).toArray(),
-        database.collection("prekycdocuments").find({}, {
-          projection: { email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, reviewHistory: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, provider: 1, privateScreening: 1, manualComparison: 1 },
+        database.collection("prekycdocuments").find(registrationReviewFilter(), {
+          projection: { registeredUser: 1, sessionId: 1, registrationDraftId: 1, registrationExpiresAt: 1, manualReviewRequestedAt: 1, registrationCancelledAt: 1, expiresAt: 1, email: 1, role: 1, docType: 1, status: 1, docCategory: 1, selectedDocCategory: 1, detailsMatched: 1, reason: 1, reasonCode: 1, documentSurface: 1, validationChecks: 1, extractedData: 1, mismatchFields: 1, qualityIssues: 1, decisionSource: 1, fileHash: 1, reviewVersion: 1, reviewHistory: 1, fileName: 1, fileKey: 1, mimeType: 1, createdAt: 1, provider: 1, privateScreening: 1, manualComparison: 1 },
         }).sort({ createdAt: -1 }).toArray(),
         database.collection("bookings").find({}, {
           projection: { vehicle: 1, renter: 1, owner: 1, pickupAt: 1, returnAt: 1, status: 1, driverSelected: 1, reviewRating: 1, reviewComment: 1, reviewCreatedAt: 1, createdAt: 1 },
@@ -280,8 +282,11 @@ router.get("/documents/:id/file", async (request, response, next) => {
       if (!validObjectId(request.params.id)) return response.status(400).json({ message: "Invalid document ID." });
       const document = await mongoose.connection.db.collection("prekycdocuments").findOne(
         { _id: new mongoose.Types.ObjectId(request.params.id) },
-        { projection: { fileKey: 1, fileName: 1, mimeType: 1 } },
+        { projection: { fileKey: 1, fileName: 1, mimeType: 1, registeredUser: 1, sessionId: 1, docType: 1,
+          status: 1, expiresAt: 1, registrationDraftId: 1, registrationExpiresAt: 1,
+          registrationCancelledAt: 1, manualReviewRequestedAt: 1 } },
       );
+      if (document && !canInspectRegistrationDocument(document)) return response.status(409).json({ message: "This registration is not available for review." });
       if (!document?.fileKey) return response.status(404).json({ message: "Document file not found." });
 
       const filePath = safeFileFromKey(kycDirectory, document.fileKey, DOCUMENT_EXTENSIONS);
@@ -330,6 +335,7 @@ router.get("/documents/:id/comparison", async (request, response, next) => {
     if (!validObjectId(request.params.id)) return response.status(400).json({ message: "Invalid document ID." });
     const document = await PreKycDocument.findById(request.params.id).select("+profileSnapshot");
     if (!document) return response.status(404).json({ message: "Document not found." });
+    if (!canInspectRegistrationDocument(document)) return response.status(409).json({ message: "This registration is not available for review." });
     const context = await getPrivateKycReviewContext(document, kycDirectory);
     response.setHeader("Cache-Control", "private, no-store");
     return response.json(context);

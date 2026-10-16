@@ -34,7 +34,7 @@ const req = (extra = {}) => ({ query: { role: "user" }, headers: { "x-registrati
 const res = () => ({ statusCode: 200, cookies: [], status(code) { this.statusCode = code; return this; },
   json(body) { this.body = body; return this; }, cookie(...args) { this.cookies.push(args); }, clearCookie(...args) { this.cleared = args; } });
 const query = value => ({ select() { return this; }, sort() { return this; }, async lean() { return value; } });
-function emptyKyc(t) { t.mock.method(PreKycDocument, "find", () => query([])); }
+function emptyKyc(t) { t.mock.method(PreKycDocument, "find", () => query([])); t.mock.method(PreKycDocument, "updateMany", async () => ({ matchedCount: 0 })); }
 function secret(t) { const prior = process.env.PRE_KYC_SESSION_SECRET; process.env.PRE_KYC_SESSION_SECRET = "registration-draft-fixture-only-secret";
   t.after(() => { if (prior === undefined) delete process.env.PRE_KYC_SESSION_SECRET; else process.env.PRE_KYC_SESSION_SECRET = prior; }); }
 async function privateFile(t) {
@@ -159,12 +159,14 @@ test("private cleanup preserves active evidence even past nominal file retention
   await fs.writeFile(expired, "orphan"); const old = new Date(Date.now() - 80 * 60 * 60 * 1000);
   await fs.utimes(expired, old, old); await fs.utimes(path.join(directory, "review-fixture.jpg"), old, old);
   const purge = t.mock.method(RegistrationDraft, "deleteMany", async filter => { assert.ok(filter.$or[0].expiresAt.$lte); return {}; });
+  t.mock.method(RegistrationDraft, "find", () => ({ select() { return this; }, limit() { return this; }, lean: async () => [] }));
+  t.mock.method(PreKycDocument, "find", () => ({ select() { return this; }, limit() { return this; }, lean: async () => [] }));
   t.mock.method(PreKycDocument, "exists", async filter => filter.fileKey === "review-fixture.jpg");
   assert.equal(await purgeExpiredKycFiles(), 1); assert.equal(purge.mock.callCount(), 1);
   await assert.doesNotReject(fs.stat(path.join(directory, "review-fixture.jpg"))); await assert.rejects(fs.stat(expired), { code: "ENOENT" });
 });
 test("a completed registration clears its draft without deleting approved evidence", async t => {
-  t.mock.method(RegistrationDraft, "findOneAndDelete", async filter => { assert.equal(filter._id, id); return draft({ registeredUser: "507f1f77bcf86cd799439011" }); });
+  t.mock.method(RegistrationDraft, "findOne", filter => { assert.equal(filter._id, id); return { select: async () => draft({ registeredUser: "507f1f77bcf86cd799439011" }) }; });
   const documents = t.mock.method(PreKycDocument, "deleteMany", async () => { throw Error("Approved evidence must remain"); });
   const response = res(); await deleteRegistrationDraft(req({ body: { complete: true } }), response);
   assert.equal(response.statusCode, 200); assert.equal(documents.mock.callCount(), 0); assert.equal(response.cleared[0], "rentify_registration_user");
@@ -248,9 +250,14 @@ test("HTTP draft recovery uses private cookies and no-store responses, enforcing
   t.mock.method(PreKycFace, "deleteMany", async () => ({}));
   const records = new Map();
   t.mock.method(RegistrationDraft, "create", async input => { const record = draft({ ...input }); records.set(record._id, record); return record; });
-  t.mock.method(RegistrationDraft, "findOne", async filter => {
-    const record = records.get(filter._id); return record?.role === filter.role ? record : null;
+  t.mock.method(RegistrationDraft, "findOne", filter => ({ select() { return this; }, then(resolve) {
+    const record = records.get(filter._id); return Promise.resolve(record?.role === filter.role ? record : null).then(resolve);
+  } }));
+  t.mock.method(RegistrationDraft, "findOneAndUpdate", async (filter, update) => {
+    const record = records.get(filter._id); if (!record || record.cancelledAt) return null;
+    Object.assign(record, update.$set); return record;
   });
+  t.mock.method(RegistrationDraft, "updateOne", async () => ({ matchedCount: 1 }));
   t.mock.method(RegistrationDraft, "findOneAndDelete", async filter => {
     const record = records.get(filter._id); if (record?.role !== filter.role) return null;
     records.delete(filter._id); return record;
@@ -277,10 +284,14 @@ test("HTTP draft recovery uses private cookies and no-store responses, enforcing
   const expired = await fetch(`${base}?role=user`, { headers: { ...headers, cookie: cookieHeader } }); assert.equal(expired.status, 410);
   const cleared = await fetch(`${base}?role=user`, { method: "DELETE", headers: { ...headers, cookie: cookieHeader }, body: JSON.stringify({ complete: true }) });
   assert.equal(cleared.status, 200); assert.match(cleared.headers.get("set-cookie"), /Expires=Thu, 01 Jan 1970/);
-  assert.equal(records.size, 0);
+  assert.equal(records.size, 1);
+  assert.ok(records.values().next().value.cancelledAt);
+  const cancelled = await fetch(`${base}?role=user`, { headers: { ...headers, cookie: cookieHeader } });
+  assert.equal(cancelled.status, 410);
 });
 
 test("legacy recovery adopts uploads only with their signed session and infers missing document selections", async t => {
+  t.mock.method(PreKycDocument, "updateMany", async () => ({ matchedCount: 1 }));
   secret(t); const { bytes } = await privateFile(t); const doc = document(bytes);
   const session = issuePreKycSession({ email: fields.email, role: "user", sessionId: doc.sessionId });
   t.mock.method(PreKycDocument, "find", filter => { assert.equal(filter.sessionId, doc.sessionId); return query([doc]); });
@@ -298,6 +309,7 @@ test("legacy recovery adopts uploads only with their signed session and infers m
 });
 
 test("draft lifetime respects a shorter existing KYC session renewal policy", async t => {
+  t.mock.method(PreKycDocument, "updateMany", async () => ({ matchedCount: 0 }));
   secret(t); emptyKyc(t);
   const prior = process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS; process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS = "2";
   t.after(() => { if (prior === undefined) delete process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS; else process.env.PRE_KYC_SESSION_MAX_RENEWAL_HOURS = prior; });

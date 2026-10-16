@@ -6,6 +6,7 @@ import { auditLog } from "./auditLogger.middleware.js";
 import { releaseExpiredModerationSuspension } from "../utils/accountModeration.js";
 
 export const protect = async (req, res, next) => {
+  res.setHeader?.("Cache-Control", "private, no-store");
   const token = String(req.cookies?.token || "").trim() || null;
 
   if (!token) {

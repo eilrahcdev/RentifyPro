@@ -2,6 +2,7 @@
 // These hit the /api/kyc/pre/* routes
 
 import { API_BASE_URL } from "./runtimeConfig";
+import { readApiResponse } from "./readApiResponse";
 
 const memorySessions = new Map();
 const normalizeRole = (role) => (String(role || "").toLowerCase() === "owner" ? "owner" : "user");
@@ -52,13 +53,13 @@ const tokenNeedsRenewal = (token) => {
 };
 
 async function postJson(url, body, headers = {}) {
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     credentials: "include",
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
+  const { response: res, data } = await readApiResponse(response);
   if (!res.ok) {
     const error = new Error(data.message || data.detail || `Request failed (${res.status})`);
     error.status = res.status;
@@ -124,6 +125,10 @@ export async function getPreKycStatus(email, role = "user") {
     token = await getPreKycSessionToken(email, normalizedRole, { refresh: true });
     return readStatus(token);
   }
+}
+
+export function requestManualIdReview(email, role, documentRevision) {
+  return postPreKyc("/kyc/pre/manual-review", email, role, { documentRevision });
 }
 
 // Step 1: save the ID face

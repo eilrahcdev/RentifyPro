@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleCheck, Clock3, Loader, ShieldCheck } from "lucide-react";
+import { CircleCheck, Clock3, LoaderCircle as Loader, ShieldCheck } from "lucide-react";
 
 export default function RegistrationEmailVerification({ email, draft, disabled, onVerified }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);

@@ -15,6 +15,7 @@ import {
   getKycReviewFile,
   decideKycReview,
   getPreKycStatus,
+  requestRegistrationReview,
   registerReverificationId,
   verifyReverificationSelfie,
   cancelReverification,
@@ -30,6 +31,7 @@ import {
   otpLimiter,
 } from "../middleware/security.middleware.js";
 import { requirePreKycSession, requireRegistrationEmail } from "../middleware/preKycSession.middleware.js";
+import { lockRegistrationEvidence } from "../middleware/registrationEvidence.middleware.js";
 import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
 import { validateObjectIdParam } from "../middleware/validate.middleware.js";
 import { registrationDraftGuard, registrationDraftLimiter, getRegistrationDraft, saveRegistrationDraft,
@@ -60,8 +62,9 @@ router.delete("/pre/draft", registrationDraftLimiter, registrationDraftGuard, de
 router.post("/pre/draft/otp/send", registrationDraftLimiter, registrationDraftGuard, registrationOtpSendLimiter, otpLimiter, sendRegistrationOtp);
 router.post("/pre/draft/otp/verify", registrationDraftLimiter, registrationDraftGuard, otpLimiter, verifyRegistrationOtp);
 router.post("/pre/session", preKycLimiter, createPreKycSession);
-router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, preRegisterIdFace);
-router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, preSelfieVerify);
+router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, preRegisterIdFace);
+router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, preSelfieVerify);
+router.post("/pre/manual-review", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, requestRegistrationReview);
 const requireSupportingEmail = (req, res, next) => {
   if (req.registrationDraft || req.preKyc?.role !== "owner" || !req.cookies?.token) return requireRegistrationEmail(req, res, next);
   return protect(req, res, () => {
@@ -69,7 +72,7 @@ const requireSupportingEmail = (req, res, next) => {
     return requireKyc(req, res, next);
   });
 };
-router.post("/pre/supporting-doc/verify", preKycUploadIpLimiter, requirePreKycSession, requireSupportingEmail, preKycAttemptLimiter, preVerifySupportingDocument);
+router.post("/pre/supporting-doc/verify", preKycUploadIpLimiter, requirePreKycSession, requireSupportingEmail, preKycAttemptLimiter, lockRegistrationEvidence, preVerifySupportingDocument);
 router.get("/pre/status", preKycStatusIpLimiter, requirePreKycSession, preKycStatusLimiter, getPreKycStatus);
 
 // Internal callback from the Python service

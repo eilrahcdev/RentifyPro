@@ -76,6 +76,11 @@ const claimNextDocument = async () => {
   const staleLock = new Date(Date.now() - processingLockTimeoutMs());
   return PreKycDocument.findOneAndUpdate(
     {
+      registrationCancelledAt: null,
+      $and: [
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+        { $or: [{ registrationExpiresAt: null }, { registrationExpiresAt: { $gt: now } }] },
+      ],
       $or: [
         { status: "queued" },
         { status: "retry_wait", nextAttemptAt: { $lte: now } },
@@ -179,7 +184,9 @@ const processClaimedDocument = async (document) => {
       : decision.reviewReason;
   const now = new Date();
   const updateResult = await PreKycDocument.updateOne(
-    { _id: document._id, status: "processing", fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
+    { _id: document._id, status: "processing", registrationCancelledAt: null,
+      $or: [{ registrationExpiresAt: null }, { registrationExpiresAt: { $gt: now } }],
+      fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
     {
       $set: {
         status,
@@ -245,7 +252,9 @@ const handleProcessingFailure = async (document, error) => {
           ? "We could not securely read the uploaded file. Please upload the document again."
           : "Automated screening was unavailable. A reviewer will check this document manually.";
   const updateResult = await PreKycDocument.updateOne(
-    { _id: document._id, status: "processing", fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
+    { _id: document._id, status: "processing", registrationCancelledAt: null,
+      $or: [{ registrationExpiresAt: null }, { registrationExpiresAt: { $gt: new Date() } }],
+      fileHash: document.fileHash, ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}), processingLockedAt: document.processingLockedAt },
     {
       $set: {
         status,

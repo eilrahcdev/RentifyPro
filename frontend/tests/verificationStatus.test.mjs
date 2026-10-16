@@ -2,6 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { needsIdentityVerification, verificationGuidance } from "../src/utils/verificationStatus.js";
 
+test("screening and manual review have different status guidance", () => {
+  const verification = { accountStatus: "active", emailVerified: true, selfieVerified: true, bookingEligible: false, documents: [] };
+  for (const status of ["queued", "processing", "retry_wait"]) {
+    verification.documents = [{ status }];
+    assert.equal(verificationGuidance(verification).title, "Documents being checked");
+  }
+  verification.documents = [{ status: "pending_review" }];
+  assert.equal(verificationGuidance(verification).title, "Verification Pending");
+});
+
 const state = () => ({ accountStatus: "active", emailVerified: true, selfieVerified: true, bookingEligible: false,
   documents: [{ docType: "id", reference: "saved-id", status: "pending_review" }] });
 test("fresh backend eligibility overrides both stale pending and stale approved account caches", () => {

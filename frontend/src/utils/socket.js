@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-import { SOCKET_URL } from "./runtimeConfig";
+import { SOCKET_URL, SOCKET_TRANSPORTS } from "./runtimeConfig";
 
 let socketInstance = null;
 
@@ -7,7 +7,7 @@ export const getSocket = () => {
   if (!socketInstance) {
     socketInstance = io(SOCKET_URL, {
       autoConnect: true,
-      transports: ["websocket"],
+      transports: SOCKET_TRANSPORTS,
       withCredentials: true,
     });
   } else if (!socketInstance.connected) {

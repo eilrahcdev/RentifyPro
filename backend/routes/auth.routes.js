@@ -30,6 +30,10 @@ import {
 } from "../middleware/security.middleware.js";
 
 const router = express.Router();
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+});
 
 // Public routes
 router.post("/check-registration-email", (_req, res, next) => {

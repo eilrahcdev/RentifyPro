@@ -9,6 +9,7 @@ export default function useRegistrationNavigation(step) {
     previousStep.current = step;
     const frame = requestAnimationFrame(() => {
       const card = formRef.current?.closest(".rp-registration-card");
+      if (card?.querySelector('[aria-label="Confirm cancellation"]')) return;
       const target = card?.querySelector(".rp-registration-header h2") || formRef.current;
       if (target) target.tabIndex = -1;
       target?.focus({ preventScroll: true });

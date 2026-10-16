@@ -4,9 +4,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { selectRegistrationFields, validRegistrationStep, validRegistrationPhase } from "../backend/utils/registrationDraft.js";
+import { supportingDocumentCanContinue } from "../backend/utils/registrationReview.js";
 
 const base = "http://127.0.0.1:4176";
 const uxOnly = process.argv.includes("--ux-only");
+const authUiOnly = process.argv.includes("--auth-ui-only");
+const lifecycleOnly = process.argv.includes("--lifecycle-only");
 const verificationErrorsOnly = process.argv.includes("--verification-errors-only");
 const completionOnly = process.argv.includes("--completion-only");
 const navigationOnly = process.argv.includes("--navigation-only") || completionOnly;
@@ -44,7 +47,7 @@ const reply = (requestId, status, value) => send("Fetch.fulfillRequest", { reque
 const token = `fixture.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 7200 })).toString("base64url")}.signature`;
 const recovery = draft => {
   const documentsComplete = draft.documents.some(doc => doc.docType === "id" && doc.identityReadyForSelfie && doc.profileMatches)
-    && (draft.role !== "owner" || draft.documents.some(doc => doc.docType === "supporting" && doc.profileMatches && ["pending_review", "verified"].includes(doc.status)));
+    && (draft.role !== "owner" || draft.documents.some(doc => doc.docType === "supporting" && doc.profileMatches && supportingDocumentCanContinue(doc)));
   return { ...draft, documentsComplete, verificationPhase: validRegistrationPhase(draft.verificationPhase, draft.emailVerified, documentsComplete),
     step: validRegistrationStep(draft.role, draft.fields, draft.step, draft.documents, draft.selfieVerified, draft.emailVerified), recovered: true };
 };
@@ -61,6 +64,7 @@ async function handle({ requestId, request }) {
   if (url.pathname.startsWith("/api/")) {
     if (request.method === "OPTIONS") return reply(requestId, 200, {});
     if (url.pathname === "/api/auth/me") return reply(requestId, 401, { message: "Synthetic signed-out session" });
+    if (url.pathname === "/api/auth/login-challenge") return reply(requestId, 200, { challengeId: "fixture-challenge", question: "What is 7 + 48?" });
     if (url.pathname === "/api/auth/check-registration-email") return reply(requestId, 200, { success: true, available: true });
     if (url.pathname.startsWith("/api/kyc/pre/draft/otp/")) {
       const draft = drafts.get(url.searchParams.get("role"));
@@ -85,7 +89,10 @@ async function handle({ requestId, request }) {
     }
     if (url.pathname === "/api/kyc/pre/draft") {
       const role = url.searchParams.get("role");
-      if (request.method === "DELETE") { drafts.delete(role); failure = ""; return reply(requestId, 200, { success: true }); }
+      if (request.method === "DELETE") {
+        if (failure === "cancel") return reply(requestId, 503, { message: "Synthetic cancellation failure. Please retry." });
+        drafts.delete(role); failure = ""; return reply(requestId, 200, { success: true, cancelled: true });
+      }
       if (failure === "invalid" && request.method === "POST") return reply(requestId, 200, {});
       if (failure && request.method === "POST") return reply(requestId, failure === "expired" ? 410 : failure === "conflict" ? 409 : 503,
         { success: false, message: `Synthetic ${failure} recovery response.` });
@@ -110,6 +117,10 @@ async function handle({ requestId, request }) {
       drafts.set(role, draft); return reply(requestId, 200, { success: true, draft: recovery(draft), preKycToken: token });
     }
     if (url.pathname === "/api/kyc/pre/session") return reply(requestId, 200, { success: true, preKycToken: token });
+    if (url.pathname === "/api/kyc/pre/manual-review") {
+      drafts.get(currentRole).documents.find(doc => doc.docType === "id").manualReviewRequested = true;
+      return reply(requestId, 200, { success: true });
+    }
     if (url.pathname === "/api/kyc/pre/status") {
       const role = currentRole;
       const draft = drafts.get(role); return reply(requestId, 200, { success: true, documents: draft?.documents || [], selfieVerified: draft?.selfieVerified || false });
@@ -192,12 +203,110 @@ const secretsAbsent = async () => assert.equal(await evaluate(`(() => {
   const values = [sessionStorage, localStorage].flatMap(storage => Object.keys(storage).map(key => storage.getItem(key)));
   return values.some(value => value.includes('MemoryOnly123!'));
 })()`), false);
-const reportPath = path.join(os.tmpdir(), `rentifypro-registration-recovery-browser${verificationErrorsOnly ? "-verification-errors" : uxOnly ? "-ux" : process.argv.includes("--mobile") ? "-mobile" : ""}.json`);
+const reportPath = path.join(os.tmpdir(), `rentifypro-registration-recovery-browser${authUiOnly ? "-auth-ui" : lifecycleOnly ? "-lifecycle" : verificationErrorsOnly ? "-verification-errors" : uxOnly ? "-ux" : process.argv.includes("--mobile") ? "-mobile" : ""}.json`);
+const confirmCancel = () => evaluate("document.querySelector('[aria-label=\"Confirm cancellation\"] button').click()");
 
 try {
   await send("Page.enable"); await send("Runtime.enable"); await send("Fetch.enable", { patterns: [{ urlPattern: "http*" }] });
   await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.registrationDocument = Math.random();" });
-  if (uxOnly) {
+  if (authUiOnly) {
+    const emailIcon = () => evaluate(`(() => { const icon = document.querySelector('input[type=email]').parentElement.querySelector('svg.lucide-mail');
+      const style = getComputedStyle(icon), frame = getComputedStyle(icon.parentElement);
+      return { width: icon.getBoundingClientRect().width, height: icon.getBoundingClientRect().height, stroke: icon.getAttribute('stroke-width'),
+        color: style.color, background: frame.backgroundColor, border: frame.borderColor, radius: frame.borderRadius, padding: frame.padding }; })()`);
+    const assertMobileLayout = async (width, context) => {
+      assert.equal(await evaluate(`(() => { const form = document.querySelector('form'); return form.scrollWidth <= form.clientWidth + 1
+        && [...form.querySelectorAll('input, select, button')].filter(el => el.getClientRects().length).every(el => {
+          const rect = el.getBoundingClientRect(); return rect.left >= -1 && rect.right <= innerWidth + 1; }); })()`), true, `${context} controls must fit at ${width}px`);
+      if (width < 1024) assert.equal(await evaluate(`([...document.querySelectorAll('form input:not([type=checkbox]), form select')]
+        .filter(el => el.getClientRects().length).every(el => parseFloat(getComputedStyle(el).fontSize) >= 16))`), true, `${context} readable mobile inputs`);
+    };
+    for (const [width, height] of [[320, 740], [360, 800], [390, 844], [430, 932], [768, 1024], [844, 390], [1440, 1000]]) {
+      await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 768 });
+      const before = await evaluate("window.registrationDocument");
+      await send("Page.navigate", { url: base + "/signin" });
+      await wait(`window.registrationDocument !== ${JSON.stringify(before)} && document.querySelector('input[type=password]') && !document.querySelector('button[aria-label="Refresh security check"]').disabled`);
+      await assertMobileLayout(width, "Sign-in");
+      assert.equal(await evaluate(`(() => { const answer = document.querySelector('input[placeholder="?"]').getBoundingClientRect();
+        const refresh = document.querySelector('button[aria-label="Refresh security check"]').getBoundingClientRect();
+        return refresh.top >= answer.bottom + 7 || refresh.left >= answer.right + 7; })()`), true, `Security check controls must not overlap at ${width}px`);
+      const commonIcon = await emailIcon();
+      assert.equal(commonIcon.width, 16); assert.equal(commonIcon.stroke, "2");
+      await input('input[type=password]', "MemoryOnly123!"); await evaluate("document.querySelector('button[aria-label=\"Show password\"]').click()");
+      assert.equal(await evaluate("document.querySelector('button[aria-label=\"Hide password\"]').getAttribute('aria-pressed')"), "true");
+      await evaluate("document.querySelector('button[aria-label=\"Hide password\"]').click()"); await evaluate("document.querySelector('button[aria-label=\"Refresh security check\"]').click()");
+      await wait("!document.querySelector('button[aria-label=\"Refresh security check\"]').disabled");
+      await input('input[type=password]', "");
+      if ([320, 1440].includes(width)) await send("Page.captureScreenshot", { format: "png" }).then(result => fs.writeFile(path.join(os.tmpdir(), `rentifypro-signin-icons-${width}.png`), Buffer.from(result.data, "base64")));
+      checks.push(`Sign-in icons, password visibility, security refresh, and layout at ${width}x${height}`);
+      for (const role of ["user", "owner"]) for (const step of [1, 2, 3, 4, 5]) {
+        await seed(role, step); await wait(`${formStep(step)} && !document.querySelector('fieldset').disabled`); await pause(100);
+        await assertMobileLayout(width, `${role} registration step ${step}`);
+        if (step === 1) assert.deepEqual(await emailIcon(), commonIcon, "Email icons must use the same size, stroke, and frame across auth forms");
+        if (role === "owner" && step === 1) {
+          assert.equal(await evaluate("document.body.innerText.includes('Have these ready before you start')"), false);
+          if (width < 1024) { await click("What you’ll need"); await wait("document.querySelector('.rp-registration-preparation button').getAttribute('aria-expanded') === 'true'"); }
+          assert.deepEqual(await evaluate("[...document.querySelectorAll('.rp-registration-preparation li')].map(el => el.textContent)"), [
+            "A readable Philippines-issued business document.", "A government ID and a camera for a live selfie.", "Access to your registration email.",
+          ]);
+          if (width < 1024) { await click("What you’ll need"); assert.equal(await evaluate("document.querySelector('.rp-registration-preparation button').getAttribute('aria-expanded')"), "false"); }
+          if ([390, 1440].includes(width)) await send("Page.captureScreenshot", { format: "png" }).then(result => fs.writeFile(path.join(os.tmpdir(), `rentifypro-owner-checklist-icons-${width}.png`), Buffer.from(result.data, "base64")));
+        }
+        if (step === 5) {
+          assert.equal(await evaluate("[...document.querySelectorAll('input[type=password]')].every(el => el.parentElement.querySelector('svg.lucide-lock'))"), true);
+          await evaluate("document.querySelector('button[aria-label=\"Show password\"]').click()"); await wait("document.querySelector('button[aria-label=\"Hide password\"]')"); await evaluate("document.querySelector('button[aria-label=\"Hide password\"]').click()");
+          assert.equal(await evaluate("[...document.querySelectorAll('button[aria-label=\"Show password\"]')].every(el => el.getBoundingClientRect().width >= 44 && el.getBoundingClientRect().height >= 44)"), true);
+        }
+        if (width < 1024) {
+          await evaluate(`(() => { const inputs = [...document.querySelectorAll('form input, form select')].filter(el => el.getClientRects().length && !el.disabled);
+            const last = inputs.at(-1); last?.focus(); last?.scrollIntoView({ block: 'center' }); })()`); await pause(100);
+          assert.equal(await evaluate("!document.querySelector('.rp-registration-actions') || document.activeElement.getBoundingClientRect().bottom <= document.querySelector('.rp-registration-actions').getBoundingClientRect().top + 1"), true, "Sticky actions must not cover the focused input");
+        }
+        checks.push(`${role} registration step ${step} icons and responsive controls at ${width}x${height}`);
+      }
+    }
+  } else if (lifecycleOnly) {
+    for (const width of [390, 768, 1200]) for (const role of ["user", "owner"]) {
+      await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });
+      for (const step of [1, 4, 5]) {
+        await seed(role, step); await wait(`${formStep(step)} && !document.querySelector('fieldset').disabled`);
+        const beforeAccounts = accounts.length;
+        await click("Cancel registration"); await wait("document.activeElement?.textContent === 'Keep registering'");
+        assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), true);
+        if (step === 5) {
+          await send("Page.captureScreenshot", { format: "png" }).then(result => fs.writeFile(path.join(os.tmpdir(),
+            `rentifypro-${role}-cancel-${width}.png`), Buffer.from(result.data, "base64")));
+        }
+        await click("Keep registering"); assert.equal(await evaluate("document.querySelector('[aria-label=\"Confirm cancellation\"]') === null"), true);
+        assert.equal(await evaluate(`Boolean(${formStep(step)})`), true);
+        await click("Cancel registration"); await confirmCancel(); await wait("location.pathname === '/'");
+        assert.equal(drafts.has(role), false); assert.equal(accounts.length, beforeAccounts);
+        checks.push(`${role} cancel/keep at step ${step}, ${width}px; no account created`);
+      }
+      await seed(role, 5); await wait(formStep(5)); failure = "cancel";
+      await click("Cancel registration"); await confirmCancel();
+      await wait("document.querySelector('[data-draft-state=unavailable]') && !document.querySelector('[aria-label=\"Confirm cancellation\"] button').disabled");
+      assert.equal(await evaluate("location.pathname"), route(role)); assert.equal(drafts.has(role), true);
+      failure = ""; await confirmCancel(); await wait("location.pathname === '/'");
+      checks.push(`${role} failed cancellation preserves progress and retries at ${width}px`);
+      const unresolved = documentsFor(role).map(doc => doc.docType === "id" ? { ...doc, status: "pending_review", identityReadyForSelfie: false,
+        automatedScreening: { outcome: "review_needed" }, reason: "Some details need manual comparison." } : doc);
+      await seed(role, 4, { documents: unresolved, selfieVerified: false }); await wait("document.body.innerText.includes('Request manual verification')");
+      await click("Request manual verification"); await wait("document.body.innerText.includes('Manual ID verification requested')");
+      assert.equal(await evaluate("document.body.innerText.includes('Final approval') || document.body.innerText.includes('final approval')"), true);
+      assert.equal(drafts.get(role).documents[0].status, "pending_review");
+      checks.push(`${role} explicit manual assistance remains pending at ${width}px`);
+      if (role === "owner") {
+        await seed(role, 4, { documents: documentsFor(role).map(doc => doc.docType === "supporting" ? { ...doc, status: "pending_review",
+          automatedScreening: { outcome: "correction_needed" }, reason: "Business name differs from registration." } : doc), selfieVerified: false });
+        await wait("document.body.innerText.includes('Business name differs from registration.')");
+        await click("Next");
+        assert.equal(await evaluate("Boolean(document.querySelector('[data-identity-view=id]'))"), true);
+        assert.equal(await evaluate("document.querySelector('[data-identity-view=selfie]') === null"), true);
+        checks.push(`owner confirmed business correction blocks selfie continuation at ${width}px`);
+      }
+    }
+  } else if (uxOnly) {
     for (const width of [390, 768, 1200, 1920]) for (const role of ["user", "owner"]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });
       await seed(role, 2);
@@ -380,7 +489,7 @@ try {
   failure = "expired"; await input('input[placeholder="John"]', "Expired");
   await wait("document.querySelector('[data-registration-draft]').dataset.draftState === 'expired'");
   assert.equal(await evaluate("document.querySelector('fieldset').disabled"), true); failure = "";
-  await click("Start over"); await click("Clear and start over"); await wait(formStep(1)); checks.push("expired draft cannot revive; confirmed start over clears it");
+  await click("Cancel registration"); await confirmCancel(); await wait("location.pathname === '/'"); checks.push("expired draft cannot revive; confirmed cancellation clears it");
 
   await seed("user", 5, { documents: [], selfieVerified: false }); await wait(formStep(4));
   checks.push("missing uploaded evidence rolls a forged review step back to Identity");

@@ -12,6 +12,10 @@ const preKycDocumentSchema = new mongoose.Schema(
     },
     sessionId: { type: String, required: true, index: true },
     registeredUser: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    registrationDraftId: { type: String },
+    registrationExpiresAt: { type: Date },
+    manualReviewRequestedAt: { type: Date },
+    registrationCancelledAt: { type: Date },
     role: {
       type: String,
       enum: ["user", "owner"],

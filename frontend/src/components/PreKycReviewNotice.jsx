@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { clearPreKycSessionToken, getPreKycStatus } from "../utils/kycApi";
+import { clearPreKycSessionToken, getPreKycStatus, requestManualIdReview } from "../utils/kycApi";
+import { registrationDocumentGuidance, needsManualIdReview } from "../utils/registrationVerification";
 import RequestFeedback from "./RequestFeedback";
 
 const ACTIVE_SCREENING_POLL_MS = 1_250;
@@ -12,22 +13,6 @@ const nextPollDelay = (documents) => {
   if (documents.some((document) => document.status === "retry_wait")) return RETRY_POLL_MS;
   if (documents.some((document) => document.status === "pending_review")) return MANUAL_REVIEW_POLL_MS;
   return 0;
-};
-
-const reviewGuidance = (status, label, document) => {
-  if (status === "rejected") return document?.reason || `${label} was rejected. Upload a corrected document.`;
-  if (["queued", "processing"].includes(status)) return document?.docType === "id"
-    ? "Checking your ID type and registration details..." : "Checking your business document and registration details...";
-  if (status === "retry_wait") return "Screening is taking longer than expected. We will retry automatically.";
-  if (document?.reasonCode === "DOCUMENT_TYPE_MISMATCH") return document.docType === "id"
-    ? "The uploaded ID does not match the selected type. Select the correct type or upload another ID."
-    : "The uploaded business document does not match the selected type. Select the correct type or upload another document.";
-  if (document?.docType === "id" && document?.identityReadyForSelfie) return "ID check passed. You can now proceed to selfie verification.";
-  if (status === "verified") return `${label} approved. You can continue.`;
-  if (document?.docType === "supporting" && document?.automatedScreening?.outcome === "passed") return "Business document check passed. You can continue.";
-  if (["pending_review", "reupload_required"].includes(status)) return document?.reason
-    || `${label} needs admin review before you can continue.`;
-  return `Upload ${label.toLowerCase()} to start its review.`;
 };
 
 const toReviewError = (failure) => {
@@ -51,11 +36,20 @@ const toReviewError = (failure) => {
 };
 
 export default function PreKycReviewNotice({ email, role = "user", enabled, onResubmit, onCorrectDetails, onIdStatus, onDocumentsChange, refreshKey = 0, ignoreSupportingDocument = false,
-  ignoreIdDocument = false, idRevision = "", supportingRevision = "", onVerificationChange }) {
+  ignoreIdDocument = false, idRevision = "", supportingRevision = "", onVerificationChange, selfieComplete = false }) {
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [requestingReview, setRequestingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const requestReview = async document => {
+    if (requestingReview) return;
+    setRequestingReview(true); setReviewError("");
+    try { await requestManualIdReview(email, role, document.documentRevision); refresh(); }
+    catch (failure) { setReviewError(failure.message || "We couldn't request manual verification. Please retry."); }
+    finally { setRequestingReview(false); }
+  };
   const refresh = useCallback(() => {
     setError(null);
     setRefreshSignal((value) => value + 1);
@@ -137,11 +131,15 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
         const detailsMismatch = correction && ["IDENTITY_DATA_MISMATCH", "REGISTRATION_DATA_INCOMPLETE"].includes(document?.reasonCode);
         return <div key={type} data-document-result={type} className="space-y-1">
           <p className={`break-words font-medium ${passed ? "text-emerald-800" : correction ? "text-rose-800" : "text-slate-700"}`}>
-            {reviewGuidance(status, label, document)}
+            {registrationDocumentGuidance(document, label, selfieComplete)}
           </p>
           {correction && <div className="flex flex-wrap gap-x-4">
             {detailsMismatch && <button type="button" onClick={() => onCorrectDetails?.(type)} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Correct registration details</button>}
             <button type="button" onClick={() => onResubmit?.(type)} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Upload another document</button>
+          </div>}
+          {needsManualIdReview(document) && <div className="flex flex-wrap gap-x-4">
+            {!document.manualReviewRequested && <button type="button" disabled={requestingReview} onClick={() => void requestReview(document)} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50 focus-visible:outline focus-visible:outline-2">{requestingReview ? "Requesting verification..." : "Request manual verification"}</button>}
+            <button type="button" onClick={() => onResubmit?.(type)} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Upload a clearer ID</button>
           </div>}
         </div>;
       })}
@@ -149,5 +147,6 @@ export default function PreKycReviewNotice({ email, role = "user", enabled, onRe
         && document.automatedScreening?.outcome !== "passed") && <button type="button" onClick={refresh} disabled={loading}
           className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Refresh status</button>}
     </div>}
+    {reviewError && <p role="alert" className="text-rose-800">{reviewError}</p>}
   </div>;
 }

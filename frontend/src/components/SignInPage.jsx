@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Mail, Loader, RefreshCcw } from "lucide-react";
+import { Mail, LoaderCircle as Loader, RefreshCcw, CircleCheck } from "lucide-react";
 import FormInput from "./FormInput";
 import PasswordInput from "./PasswordInput";
 import AuthShell from "./AuthShell";
 import { SIGN_IN_VALIDATION_RULES } from "../data/signInValidation";
 import API from "../utils/api";
+import { confirmSignIn } from "../utils/confirmSignIn";
 import { setSessionUser } from "../utils/sessionStore";
 import { clearAllRegistrationDrafts } from "../utils/registrationDraft";
 import { normalizeOwnerProfile, persistOwnerProfile } from "../owner/utils/ownerProfile";
@@ -236,28 +237,22 @@ export default function SignInPage({
         captchaId: captcha.id,
         captchaAnswer: form.captchaAnswer,
       });
+      const signedInUser = await confirmSignIn(response.user, API.getProfile);
 
       localStorage.removeItem("token");
       sessionStorage.removeItem("token");
-      if (response.user) {
+      if (signedInUser) {
         // Do not retain abandoned personal-data drafts after authentication succeeds.
         clearAllRegistrationDrafts(sessionStorage);
-        setSessionUser(response.user);
+        setSessionUser(signedInUser);
       }
 
-      const isOwner = response.user?.role === "owner";
+      const isOwner = signedInUser.role === "owner";
 
       if (isOwner) {
-        try {
-          const profileResponse = await API.getProfile();
-          if (profileResponse?.user) {
-            const normalized = normalizeOwnerProfile(profileResponse.user, profileResponse.user);
-            persistOwnerProfile(normalized);
-            window.dispatchEvent(new Event("owner-profile-updated"));
-          }
-        } catch {
-          // Keep going even if profile sync fails.
-        }
+        const normalized = normalizeOwnerProfile(signedInUser, signedInUser);
+        persistOwnerProfile(normalized);
+        window.dispatchEvent(new Event("owner-profile-updated"));
       }
 
       setSuccessMessage(
@@ -267,33 +262,29 @@ export default function SignInPage({
       );
 
       const displayName =
-        response.user?.name?.trim() ||
-        response.user?.email?.split("@")[0] ||
+        signedInUser.name?.trim() ||
+        signedInUser.email?.split("@")[0] ||
         "User";
       const nameParts = displayName.split(" ");
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
-      setTimeout(() => {
-        onLoginSuccess({
-          _id: response.user._id,
-          name: displayName,
-          initials: firstName.charAt(0) + (lastName.charAt(0) || ""),
-          email: response.user.email,
-          avatar: response.user.avatar || "",
-          isVerified: response.user.isVerified,
-          role: response.user.role,
-          kycStatus: response.user.kycStatus,
-        });
-      }, 1500);
       clearRateLimit();
+      onLoginSuccess({
+        ...signedInUser,
+        name: displayName,
+        initials: firstName.charAt(0) + (lastName.charAt(0) || ""),
+      });
     } catch (error) {
       const msg = error.message || "";
       const retryAfterSeconds = Number(error?.retryAfterSeconds || error?.details?.retryAfterSeconds || 0);
       const retryAfterAt = error?.retryAfterAt || error?.details?.retryAfterAt || "";
       const isRateLimitError = Number(error?.status) === 429 || msg.includes("Too many");
 
-      if (isRateLimitError) {
+      if (error.code === "SESSION_CONFIRMATION_FAILED") {
+        setErrors({});
+        setFormError(error.message);
+      } else if (isRateLimitError) {
         const waitSeconds = retryAfterSeconds > 0 ? retryAfterSeconds : RATE_LIMIT_FALLBACK_SECONDS;
         activateRateLimit(waitSeconds, retryAfterAt);
         setErrors({});
@@ -366,10 +357,10 @@ export default function SignInPage({
       contentMaxWidth="max-w-xl"
       contentContainerClassName="items-center py-2 sm:py-4"
     >
-      <div className="rp-surface rp-glass rounded-3xl border-white/70 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
+      <div className="rp-surface rp-glass rounded-3xl border-white/70 p-[min(1.5rem,24px)] shadow-[0_20px_45px_rgba(15,23,42,0.12)] sm:p-8">
         <div className="mb-6 text-center">
           <span className="rp-chip bg-blue-50 text-blue-700 ring-1 ring-blue-100">Sign In</span>
-          <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">Access your account</h2>
+          <h2 className="mt-3 break-words text-3xl font-extrabold text-slate-900 sm:text-4xl">Access your account</h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
             Continue your reservation flow and account activity.
           </p>
@@ -377,7 +368,7 @@ export default function SignInPage({
 
         {successMessage && (
           <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-            <div className="h-6 w-6 flex-shrink-0 rounded-full bg-emerald-500" />
+            <CircleCheck size={18} strokeWidth={2} className="shrink-0 text-emerald-700" aria-hidden="true" />
             <p className="text-sm font-medium text-emerald-700">{successMessage}</p>
           </div>
         )}
@@ -402,7 +393,6 @@ export default function SignInPage({
             placeholder="Enter Email"
             required
             icon={Mail}
-            iconPosition="left"
             inputRef={emailInputRef}
             showEmailHint
             maxLength={254}
@@ -429,8 +419,8 @@ export default function SignInPage({
               const op = match?.[2] || "+";
               const right = match?.[3] || "-";
               return (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:gap-3">
                     <div className="min-w-11 rounded-lg border border-slate-200 bg-white px-2 py-2 text-center text-lg font-semibold text-slate-700 shadow-sm sm:min-w-[56px] sm:px-3">
                       {captchaLoading ? "..." : left}
                     </div>
@@ -451,7 +441,7 @@ export default function SignInPage({
                       pattern="[0-9]*"
                       maxLength={3}
                       aria-invalid={Boolean(errors.captchaAnswer)}
-                      className={`w-16 shrink-0 rounded-lg border px-2 py-2 text-center text-lg font-semibold shadow-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-400 sm:w-[72px] sm:px-3 ${
+                      className={`w-16 max-w-full shrink-0 rounded-lg border px-2 py-2 text-center text-lg font-semibold shadow-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-400 sm:w-[72px] sm:px-3 ${
                         errors.captchaAnswer
                           ? "border-red-300 bg-red-50/80 text-red-900 focus:border-red-400 focus:ring-4 focus:ring-red-100"
                           : "border-slate-200 bg-white text-slate-800 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"
@@ -465,7 +455,7 @@ export default function SignInPage({
                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
                     aria-label="Refresh security check"
                   >
-                    <RefreshCcw size={16} />
+                    <RefreshCcw size={16} strokeWidth={2} aria-hidden="true" />
                   </button>
                 </div>
               );
@@ -492,7 +482,7 @@ export default function SignInPage({
           >
             {isLoading ? (
               <>
-                <Loader size={18} className="animate-spin" />
+                <Loader size={18} className="animate-spin" aria-hidden="true" />
                 Signing In...
               </>
             ) : rateLimitSeconds > 0 ? (

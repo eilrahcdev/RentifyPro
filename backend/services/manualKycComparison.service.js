@@ -4,11 +4,13 @@ import { getKycUploadDir } from "../utils/storagePaths.js";
 import { prepareManualDocumentComparison } from "./manualDocumentComparison.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
 import { readPrivateKycEvidence, refreshPrivateDocumentTypeEvidence } from "./privateKycReviewContext.js";
+import { canInspectRegistrationDocument, registrationReviewFilter } from "../utils/registrationReview.js";
 
 export async function compareManualKycDocument({ id, input, reviewerId }) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw Object.assign(new Error("Invalid document ID."), { status: 400 });
   const document = await PreKycDocument.findById(id).select("+profileSnapshot");
   if (!document) throw Object.assign(new Error("Document not found."), { status: 404 });
+  if (!canInspectRegistrationDocument(document)) throw Object.assign(new Error("This registration has not requested manual verification or submitted an account."), { status: 409 });
   const bytes = await readPrivateKycEvidence(document, getKycUploadDir());
   const checked = await refreshPrivateDocumentTypeEvidence(document, bytes);
   const fields = prepareManualDocumentComparison(checked, input, reviewerId);
@@ -19,7 +21,7 @@ export async function compareManualKycDocument({ id, input, reviewerId }) {
     status: { $in: ["pending_review", "verified", "rejected"] },
   })) throw Object.assign(new Error("This document identifier is already linked to another registration. Investigate before approving."), { status: 409 });
   const updated = await PreKycDocument.findOneAndUpdate({
-    _id: id, status: "pending_review", fileHash: document.fileHash,
+    ...registrationReviewFilter(), _id: id, status: "pending_review", fileHash: document.fileHash,
     ...(document.reviewVersion ? { reviewVersion: document.reviewVersion } : {}),
   }, { $set: fields }, { returnDocument: "after" });
   if (!updated) throw Object.assign(new Error("The document changed. Refresh before reviewing."), { status: 409 });

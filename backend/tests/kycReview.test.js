@@ -123,7 +123,7 @@ test("same-file rescreening after corrected details invalidates the old admin re
 
 test("pre-registration decisions and unchanged legacy cases do not overwrite an existing account", async (t) => {
   const { writes } = fixture(t, { sessionId: "signed-registration-attempt", caseStatus: "approved" });
-  await reviewKycDocument({ id: docId, action: "approve", reviewerId: adminId });
+  await assert.rejects(reviewKycDocument({ id: docId, action: "approve", reviewerId: adminId }), { status: 409 });
   await reconcileUserKyc(userId);
   assert.equal(writes.length, 0);
 });

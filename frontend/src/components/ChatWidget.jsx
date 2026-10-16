@@ -616,7 +616,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
       aria-label="Rentify AI chatbot"
       className="rp-ai-chat-dialog fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[90] flex h-[min(76dvh,620px)] max-h-[620px] w-[calc(100vw-2rem)] max-w-[440px] flex-col overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-[0_20px_48px_rgba(2,32,71,0.2)] sm:bottom-4 sm:right-4 sm:shadow-[0_30px_100px_rgba(2,32,71,0.3)]"
     >
-      <div className="rp-ai-chat-header relative overflow-hidden bg-[linear-gradient(135deg,#0B75E7_0%,#056ED9_55%,#045FC3_100%)] px-4 py-4 text-white">
+      <div className="rp-ai-chat-header relative shrink-0 overflow-hidden bg-[linear-gradient(135deg,#0B75E7_0%,#056ED9_55%,#045FC3_100%)] px-4 py-4 text-white">
         <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full border border-white/10 bg-white/5" />
         <div className="pointer-events-none absolute -bottom-16 right-20 h-28 w-28 rounded-full border border-white/10" />
         <div className="relative flex items-center justify-between gap-3">
@@ -661,7 +661,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
         </div>
       </div>
 
-      <div className="rp-ai-chat-body flex-1 space-y-4 overflow-y-auto px-4 py-5">
+      <div className="rp-ai-chat-body min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
         {[...messages, ...(pendingMessage?.language === language ? [pendingMessage] : [])].map((message) => (
           <div
             key={message.id}
@@ -767,7 +767,7 @@ export default function ChatWidget({ isOpen, onOpen, onClose, onViewAvailableVeh
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-slate-200/80 bg-white/95 p-3.5 backdrop-blur">
+      <div className="rp-ai-chat-composer shrink-0 border-t border-slate-200/80 bg-white/95 p-3.5 backdrop-blur">
         {(feedback || rejectedDraft?.language === language) && (
           <div id="rp-chat-composer-notice" role="status" className="mb-2 px-1 text-sm leading-5 text-slate-700">
             {!feedback ? chatbotFeedbackText("unsent", feedbackStyle)

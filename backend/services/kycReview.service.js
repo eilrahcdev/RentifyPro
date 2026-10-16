@@ -8,6 +8,7 @@ import { repairLegacyKycSummary } from "./kycSummary.service.js";
 import { reconcileFaceReverification } from "./kycReverification.service.js";
 import { currentAccountDocuments } from "./accountVerification.service.js";
 import { evaluateDocumentApprovals } from "../utils/accountVerification.js";
+import { isSubmittedDocument } from "../utils/registrationReview.js";
 
 export const REVIEWABLE_DOCUMENT_STATUSES = ["pending_review"];
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -83,6 +84,9 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
   const now = new Date();
   const current = await PreKycDocument.findById(id);
   if (!current) throw fail(404, "This document is no longer available. Refresh the document list.");
+  if (!isSubmittedDocument(current) || (current.expiresAt && new Date(current.expiresAt) <= new Date())) {
+    throw fail(409, "Final approval requires a submitted registration. Use manual comparison to help an unfinished applicant.");
+  }
   if ((current.reviewVersion || ["private-ocr", "manual"].includes(current.provider)) && !reviewVersion) {
     throw fail(409, "Refresh the document and include its current review version before deciding.");
   }
@@ -105,7 +109,9 @@ export async function reviewKycDocument({ id, action, remarks = "", reviewerId, 
 
   const updated = current.status === status ? null : await PreKycDocument.findOneAndUpdate(
     { _id: id, status: { $in: REVIEWABLE_DOCUMENT_STATUSES },
-      reviewVersion: current.reviewVersion ?? null, ...(current.fileHash ? { fileHash: current.fileHash } : {}) },
+      registrationCancelledAt: null, reviewVersion: current.reviewVersion ?? null,
+      ...(current.registeredUser ? { registeredUser: current.registeredUser } : { sessionId: current.sessionId }),
+      ...(current.fileHash ? { fileHash: current.fileHash } : {}) },
     { $set: {
       status, reason: reason || "Approved by a RentifyPro administrator.",
       decisionSource: "admin_review",

@@ -4,6 +4,7 @@ import { getKycUploadDir } from "../utils/storagePaths.js";
 import PreKycDocument from "../models/PreKycDocument.js";
 import RegistrationDraft from "../models/RegistrationDraft.js";
 import { auditLog } from "../middleware/auditLogger.middleware.js";
+import { purgeAbandonedRegistrations } from "../services/registrationCleanup.service.js";
 
 export async function discardUnusedPreKycFile(key) {
   if (!key || key !== path.basename(key) || /[\\/]/.test(key)) return;
@@ -58,7 +59,8 @@ export const purgeExpiredKycFiles = async () => {
   const cutoff = getCutoff();
   const reviewCutoff = getReviewCutoff();
   const files = await walkFiles(root);
-  await RegistrationDraft.deleteMany({ $or: [{ expiresAt: { $lte: new Date() } }, { absoluteExpiresAt: { $lte: new Date() } }] });
+  await purgeAbandonedRegistrations();
+  await RegistrationDraft.deleteMany({ registeredUser: { $ne: null }, $or: [{ expiresAt: { $lte: new Date() } }, { absoluteExpiresAt: { $lte: new Date() } }] });
   let deleted = 0;
 
   for (const file of files) {

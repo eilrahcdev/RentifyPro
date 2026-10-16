@@ -3,6 +3,7 @@ import { resolveSupportedDocumentType, isBirSupportingDocumentType } from "../se
 import { identityProfileMatchesSnapshot, supportingProfileMatchesSnapshot, isIdentityReadyForSelfie } from "./preKycDocs.js";
 import RegistrationDraft from "../models/RegistrationDraft.js";
 import { getPreKycMaxRenewalMs } from "./preKycSession.js";
+import { supportingDocumentCanContinue } from "./registrationReview.js";
 
 export const DRAFT_IDLE_MS = 60 * 60 * 1000;
 export const DRAFT_MAX_MS = 72 * 60 * 60 * 1000;
@@ -25,6 +26,7 @@ export function selectRegistrationFields(role, fields) {
     ? [[key, fields[key].slice(0, 500)]] : []));
 }
 export const activeRegistrationDraft = (draft, now = Date.now()) => Boolean(draft
+  && !draft.cancelledAt
   && new Date(draft.expiresAt).getTime() > now && new Date(draft.absoluteExpiresAt).getTime() > now
   && (Number(draft.sessionOriginIat) * 1000 || new Date(draft.createdAt).getTime()) + getPreKycMaxRenewalMs() > now);
 export async function assertActiveRegistrationDraft(session) {
@@ -74,7 +76,7 @@ export function validRegistrationStep(role, fields, requested, documents, selfie
       }
       const id = documents.find(doc => doc.docType === "id" && doc.profileMatches && doc.identityReadyForSelfie);
       const supporting = role !== "owner" || documents.some(doc => doc.docType === "supporting" && doc.profileMatches
-        && ["pending_review", "verified"].includes(doc.status));
+        && supportingDocumentCanContinue(doc));
       if (maximum === 4 && emailVerified && id && supporting && selfieVerified) maximum = 5;
     }
   }

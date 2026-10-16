@@ -2,6 +2,8 @@
 // All API responses are intercepted; this creates no registrations or stored documents.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 const base = "http://127.0.0.1:4176";
 const tab = await (await fetch("http://127.0.0.1:9236/json/new?about:blank", { method: "PUT" })).json();
@@ -9,6 +11,7 @@ const ws = new WebSocket(tab.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
 const pending = new Map(), errors = [], checks = [];
 let sequence = 0, role = "user", idUploads = 0, supportingUploads = 0, idReads = 0, staleRead = false, selfieChecks = 0;
+let registrationDraft;
 const send = (method, params = {}) => new Promise((resolve, reject) => {
   const id = ++sequence;
   const timeout = setTimeout(() => { pending.delete(id); reject(Error(`CDP timeout: ${method}`)); }, 15_000);
@@ -19,7 +22,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fulfill(event, data, type = "application/json") {
   await send("Fetch.fulfillRequest", { requestId: event.requestId, responseCode: 200,
     responseHeaders: [{ name: "Content-Type", value: type }, { name: "Access-Control-Allow-Origin", value: base },
-      { name: "Access-Control-Allow-Credentials", value: "true" }, { name: "Access-Control-Allow-Headers", value: "content-type,x-pre-kyc-token" },
+      { name: "Access-Control-Allow-Credentials", value: "true" }, { name: "Access-Control-Allow-Headers", value: "content-type,x-pre-kyc-token,x-registration-draft" },
       { name: "Access-Control-Allow-Methods", value: "GET,POST,OPTIONS" }, { name: "Cache-Control", value: "no-store" }],
     body: Buffer.from(type === "application/json" ? JSON.stringify(data) : data).toString("base64") });
 }
@@ -41,6 +44,8 @@ async function route(event) {
       ...(role === "user" ? { email: "synthetic@gmail.com", dateOfBirth: "1990-05-12", gender: "Female",
         emergencyContactName: "Other Applicant", emergencyContactPhone: "9987654321", emergencyContactRelationship: "Friend" }
         : { businessEmail: "synthetic-owner@gmail.com", ownerType: "business", businessName: "Sample Rentals", permitNumber: "TEST123" }) };
+    registrationDraft = { role, fields, step: 1, revision: 1, emailVerified: true, documents: [], selfieVerified: false,
+      savedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3600000).toISOString() };
     return fulfill(event, `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body data-fixture-role="${role}"><div id="root"></div>
       <script>sessionStorage.clear();localStorage.clear();window.clockOffset=0;const realNow=Date.now.bind(Date);Date.now=()=>realNow()+window.clockOffset;
       sessionStorage.setItem('rentifypro.registrationDraft.v1.${role}',JSON.stringify({version:1,fields:${JSON.stringify(fields)},expiresAt:Date.now()+3600000}));</script>
@@ -51,6 +56,14 @@ async function route(event) {
   }
   if (url.hostname !== "psgc.gitlab.io" && url.pathname.startsWith("/api/")) {
     if (event.request.method === "OPTIONS") return fulfill(event, {});
+    if (url.pathname.endsWith("/pre/draft")) {
+      if (event.request.method === "POST") {
+        const body = JSON.parse(event.request.postData);
+        registrationDraft = { ...registrationDraft, fields: body.fields, step: body.step, verificationPhase: body.phase,
+          revision: registrationDraft.revision + 1, savedAt: new Date().toISOString() };
+      }
+      return fulfill(event, { success: true, draft: registrationDraft, preKycToken: "synthetic-session-token" });
+    }
     if (url.pathname.endsWith("check-registration-email")) return fulfill(event, { success: true, available: true });
     if (url.pathname.endsWith("/pre/session")) return fulfill(event, { success: true, preKycToken: "synthetic-session-token", expiresIn: 3600 });
     if (url.pathname.endsWith("/pre/id-register")) {
@@ -76,7 +89,7 @@ async function route(event) {
         else documents.push(idReads === 1 ? { ...document("id", `id-${idUploads}`), status: "processing", identityReadyForSelfie: false, automatedScreening: null }
           : document("id", `id-${idUploads}`, idUploads === 2));
       }
-      return fulfill(event, { success: true, documents });
+      return fulfill(event, { success: true, documents, selfieVerified: selfieChecks > 1 });
     }
     if (url.pathname.endsWith("/pre/selfie/verify")) {
       selfieChecks++;
@@ -117,13 +130,13 @@ const input = async (selector, value) => {
   assert.equal(await evaluate(`document.querySelector(${JSON.stringify(selector)}).value`), value);
 };
 const click = async (text) => { await evaluate("window.clockOffset+=2100"); await evaluate(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e||e.disabled)throw Error('Missing/disabled button: '+${JSON.stringify(text)});e.click();})()`); await pause(100); };
-async function pickFile() {
+async function pickFile(index = 0) {
   await evaluate(`(async()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=650;const context=canvas.getContext('2d');
     context.fillStyle='#c5cbd2';context.fillRect(0,0,1000,650);context.fillStyle='#273340';
     for(let y=20;y<650;y+=35)for(let x=20;x<1000;x+=45)context.fillRect(x,y,15,12);
     context.fillStyle='white';context.fillRect(20,35,950,70);context.fillStyle='black';context.font='30px Arial';context.fillText('SYNTHETIC TEST - NOT A DOCUMENT',30,80);
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));const transfer=new DataTransfer();transfer.items.add(new File([blob],'synthetic-test.png',{type:'image/png'}));
-    const input=document.querySelector('input[type=file]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const input=document.querySelectorAll('input[type=file]')[${index}];input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await pause(150);
 }
 async function captures(name) {
@@ -134,7 +147,7 @@ async function captures(name) {
     const metrics = await send("Page.getLayoutMetrics");
     const png = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true,
       clip: { x: 0, y: 0, width, height: Math.ceil(metrics.cssContentSize.height), scale: 1 } });
-    await fs.writeFile(`qa/document-checker-${name}-${width}.png`, Buffer.from(png.data, "base64"));
+    await fs.writeFile(path.join(os.tmpdir(), `rentifypro-document-checker-${name}-${width}.png`), Buffer.from(png.data, "base64"));
   }
 }
 try {
@@ -142,7 +155,7 @@ try {
   for (const current of ["user", "owner"]) {
     role = current; idUploads = 0; supportingUploads = 0; selfieChecks = 0;
     await send("Page.navigate", { url: `${base}/qa-document-checker` });
-    await until(`document.body.dataset.fixtureRole===${JSON.stringify(role)} && document.querySelector('input[type=password]') && document.querySelector('input[type=email]')?.value`);
+    await until(`document.body?.dataset.fixtureRole===${JSON.stringify(role)} && document.querySelector('input[type=password]') && document.querySelector('input[type=email]')?.value`);
     await input('input[placeholder="Create Password"]', "Synthetic123!"); await input('input[placeholder="Confirm Password"]', "Synthetic123!");
     await click("Next");
     if (role === "owner") await until("[...document.querySelectorAll('select')].some(e=>e.value==='010101001')");
@@ -153,17 +166,18 @@ try {
     }
     if (role === "owner") {
       await input('select[name="supportingDocType"]', "DTI Business Name Registration");
-      await input('input[name="permitNumber"]', "TEST123"); await pickFile();
+      await input('input[name="permitNumber"]', "TEST123"); await click("Next");
+      await until("document.querySelector('input[type=file]')"); await pickFile();
       await click("Upload and check document");
-      await until("document.body.innerText.includes('Business document check passed. You can continue.')");
-      assert.equal(await evaluate("document.body.innerText.includes('Step 3')"), true);
+      await until("document.body.innerText.includes('Business document details checked. You can continue registration. Final approval is pending.')");
+      assert.equal(await evaluate("document.body.innerText.includes('Step 4')"), true);
       await captures("business");
       checks.push("Business upload checks in the same step and preserves the selected file");
       await click("Next");
     }
     await until("[...document.querySelectorAll('select')].some(e=>[...e.options].some(o=>o.value==='Philippine Passport'))");
     await evaluate(`(()=>{const e=[...document.querySelectorAll('select')].find(e=>[...e.options].some(o=>o.value==='Philippine Passport'));e.value='Philippine Passport';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-    await pickFile(); await click("Upload and check ID");
+    await pickFile(role === "owner" ? 1 : 0); await click("Upload and check ID");
     await until("document.body.innerText.includes('Checking your ID type and registration details...')");
     assert.equal(await evaluate("Boolean(document.querySelector('[data-identity-view=id]'))"), true);
     assert.equal(await evaluate("document.body.innerText.includes('Open camera')"), false);
@@ -201,8 +215,8 @@ try {
     await click("Use selfie and continue");
     await until("document.body.innerText.includes('Selfie matched')");
     await click("Next");
-    await until("document.body.innerText.includes('Waiting for ')");
-    assert.equal(await evaluate("[...document.querySelectorAll('button')].some(button=>button.disabled&&button.textContent.includes('Waiting for '))"), true);
+    await until("document.querySelector('form[aria-label=\"Registration step 5 of 5\"]')");
+    assert.equal(await evaluate("document.querySelector('[data-document-result=id]')?.innerText.includes('Final document approval is pending.')"), true);
     await click("Back");
     await until("document.querySelector('[data-identity-view=selfie]')");
     for (const text of ["Selected document type", "Philippine issuer evidence", "Document features", "Required fields readable", "Needs confirmation"])
@@ -214,13 +228,13 @@ try {
       await pause(100);
       assert.equal(await evaluate("document.body.innerText.includes('ID check passed.')"), false);
       assert.equal(await evaluate("document.body.innerText.includes('Open camera')"), false);
-      await click("Upload and check ID"); await until("document.body.innerText.includes('The uploaded ID does not match the selected type.')");
+      await click("Upload and check ID"); await until("document.body.innerText.includes('The detected document type does not match the selected type.')");
       assert.equal(await evaluate("document.body.innerText.includes('Open camera')"), false);
       assert.equal(await evaluate("document.querySelector('[data-document-result=id]').querySelectorAll('p').length"), 1);
       assert.equal(staleRead, true);
       checks.push("Changing type invalidates confirmation and ignores the previous upload revision");
     }
-    checks.push(`${role}: separate selfie view, heading focus, camera cleanup, ID retained on Back, failed-match retry, and final manual approval gate`);
+    checks.push(`${role}: separate selfie view, heading focus, camera cleanup, ID retained on Back, failed-match retry, and final manual approval pending after review`);
   }
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ simulated: true, checks }, null, 2));

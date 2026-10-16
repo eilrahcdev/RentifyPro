@@ -20,7 +20,7 @@ import {
 } from "../utils/kycApi";
 
 import {
-  Mail, Phone, User, Loader, Upload, CircleCheck,
+  Mail, Phone, User, LoaderCircle as Loader, Upload, CircleCheck,
   ShieldCheck, Check, Calendar, MapPin,
 } from "lucide-react";
 
@@ -298,7 +298,7 @@ function RegisterForm({
   const { formRef, formId, revealError } = useRegistrationNavigation(step);
   const actionsSpaceRef = useRef(null);
   useEffect(() => {
-    if (step === 4) identityHeadingRef.current?.focus({ preventScroll: true });
+    if (step === 4 && !document.querySelector('[aria-label="Confirm cancellation"]')) identityHeadingRef.current?.focus({ preventScroll: true });
   }, [step, showingSelfie]);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -366,7 +366,7 @@ function RegisterForm({
   // Small cooldown to avoid double clicks
   const lastActionRef = useRef(0);
   const canAct = () => {
-    if (isFormLocked || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
+    if (isFormLocked || draft.cancelling || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
@@ -1100,6 +1100,7 @@ function RegisterForm({
     idRevision={idRevision}
     onIdStatus={handleIdStatus}
     onVerificationChange={handleVerificationChange}
+    selfieComplete={kyc.selfieVerified}
     onCorrectDetails={() => setStep(2)}
     onResubmit={() => { resetKyc(); setStep(4); }}
   />;
@@ -1132,7 +1133,7 @@ function RegisterForm({
         <RegistrationProgress currentStep={step} steps={STEP_LABELS} />
         {step === 4 && <HelpLink guide="verify-identity" className="mt-3">Need help with your ID or selfie?</HelpLink>}
 
-        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} />
+        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} onNavigateToHome={onNavigateToHome} />
 
         {/* success message */}
         {successMessage && !draft.completed && !draft.registrationComplete && (
@@ -1159,7 +1160,7 @@ function RegisterForm({
             </div>
           )}
 
-          <fieldset disabled={isFormLocked || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
+          <fieldset disabled={isFormLocked || draft.cancelling || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
                 {/* step 1 */}
                 {[1, 2, 3].includes(step) && (
                   <>
@@ -1406,7 +1407,7 @@ function RegisterForm({
                     </button>
                     </>}
 
-                    <div hidden={showingSelfie}>{documentReviewNotice}</div>
+                    {documentReviewNotice}
 
                     {showingSelfie && (
                       <SelfieCapture

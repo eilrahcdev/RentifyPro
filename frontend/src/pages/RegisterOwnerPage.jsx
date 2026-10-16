@@ -9,7 +9,8 @@ import {
   Eye,
   EyeOff,
   FileText,
-  Loader,
+  LoaderCircle as Loader,
+  Lock,
   Mail,
   Phone,
   MapPin,
@@ -34,6 +35,7 @@ import {
 import AuthShell from "../components/AuthShell";
 import LegalPolicyModal from "../components/LegalPolicyModal";
 import RegistrationDraftNotice from "../components/RegistrationDraftNotice";
+import { supportingDocumentCanContinue } from "../utils/registrationVerification";
 import RegistrationProgress from "../components/RegistrationProgress";
 import RegistrationEmailVerification from "../components/RegistrationEmailVerification";
 import HelpLink from "../components/HelpLink";
@@ -181,7 +183,9 @@ function RegisterOwnerForm({
   const [supportingRevision, setSupportingRevision] = useState("");
   const documentUploadInFlight = useRef(false);
   const [documentStatuses, setDocumentStatuses] = useState({ id: "not_uploaded", supporting: "not_uploaded" });
+  const [supportingResult, setSupportingResult] = useState(null);
   const handleDocumentsChange = useCallback((documents) => {
+    setSupportingResult(documents.find(document => document.docType === "supporting") || null);
     const nextStatuses = { id: "not_uploaded", supporting: "not_uploaded" };
     documents.forEach((document) => {
       if (document.docType === "id" || document.docType === "supporting") {
@@ -196,6 +200,7 @@ function RegisterOwnerForm({
     if (!recovery) return;
     const id = recovery.documents.find(document => document.docType === "id");
     const supporting = recovery.documents.find(document => document.docType === "supporting");
+    setSupportingResult(supporting || null);
     setStep(recovery.step);
     setVerificationView(recovery.verificationPhase === "email" ? "email" : "");
     setReviewingId(recovery.verificationPhase === "documents");
@@ -254,7 +259,7 @@ function RegisterOwnerForm({
         : !kyc.selfieVerified
           ? "selfie"
           : "complete";
-  const supportingComplete = supportingDocStatus.submitted && ["pending_review", "verified"].includes(documentStatuses.supporting);
+  const supportingComplete = supportingDocStatus.submitted && supportingDocumentCanContinue({ ...supportingResult, status: documentStatuses.supporting });
   const documentsComplete = kyc.idReadyForSelfie && supportingComplete;
   const showingSelfie = draft.emailVerified && documentsComplete && verificationView !== "email" && !reviewingId && ["camera", "selfie", "complete"].includes(identityStage);
   const verificationPhase = !draft.emailVerified || verificationView === "email" ? "email" : showingSelfie ? "face" : "documents";
@@ -262,7 +267,7 @@ function RegisterOwnerForm({
     trackProgress(step, { idType: kyc.idType, supportingDocType }, verificationPhase);
   }, [trackProgress, step, kyc.idType, supportingDocType, verificationPhase]);
   useEffect(() => {
-    if (step === 4) identityHeadingRef.current?.focus({ preventScroll: true });
+    if (step === 4 && !document.querySelector('[aria-label="Confirm cancellation"]')) identityHeadingRef.current?.focus({ preventScroll: true });
   }, [step, showingSelfie]);
   const handleIdStatus = useCallback((status, document) => {
     const ready = document?.identityReadyForSelfie === true;
@@ -294,12 +299,12 @@ function RegisterOwnerForm({
   const canShowBusinessFields = useMemo(() => form.ownerType === "business", [form.ownerType]);
 
   const canAct = useCallback(() => {
-    if (isLoading || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
+    if (isLoading || draft.cancelling || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)) return false;
     const now = Date.now();
     if (now - lastActionRef.current < ACTION_COOLDOWN_MS) return false;
     lastActionRef.current = now;
     return true;
-  }, [isLoading, draft.ready, draft.status]);
+  }, [isLoading, draft.cancelling, draft.ready, draft.status]);
 
   useEffect(() => () => {
     if (idPreviewUrl) URL.revokeObjectURL(idPreviewUrl);
@@ -1197,6 +1202,7 @@ function RegisterOwnerForm({
     onDocumentsChange={handleDocumentsChange}
     onIdStatus={handleIdStatus}
     onVerificationChange={handleVerificationChange}
+    selfieComplete={kyc.selfieVerified}
     onCorrectDetails={(type) => {
       if (type === "id") { setStep(1); return; }
       setSupportingDocStatus({ submitted: false, message: "" });
@@ -1247,22 +1253,22 @@ function RegisterOwnerForm({
 
         {step === 1 && (
           <section aria-labelledby="owner-preparation-title" className="rp-registration-preparation mt-5 border-t border-slate-200 pt-4">
-            <h3 id="owner-preparation-title" className="text-sm font-bold text-slate-900">Have these ready before you start</h3>
-            <ResponsiveDisclosure label="Have these ready before you start">
+            <h3 id="owner-preparation-title" className="hidden text-sm font-bold text-slate-900 lg:block">What you’ll need</h3>
+            <ResponsiveDisclosure label="What you’ll need">
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                <li>A readable Philippines-issued business document, such as DTI registration, BIR Form 2303, or a business permit.</li>
-                <li>A government ID, such as a National ID, passport, or driver&apos;s license, and a camera for a live selfie.</li>
-                <li>Access to the email address you will use for the confirmation code.</li>
+                <li>A readable Philippines-issued business document.</li>
+                <li>A government ID and a camera for a live selfie.</li>
+                <li>Access to your registration email.</li>
               </ul>
             </ResponsiveDisclosure>
           </section>
         )}
 
-        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} />
+        <RegistrationDraftNotice draft={draft} busy={isLoading} onNavigateToSignIn={onNavigateToSignIn} onNavigateToHome={onNavigateToHome} />
 
         {successMessage && !draft.completed && !draft.registrationComplete && (
           <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 flex items-center gap-2">
-            <CircleCheck size={16} strokeWidth={2} aria-hidden="true" /> {successMessage}
+            <CircleCheck size={18} strokeWidth={2} aria-hidden="true" /> {successMessage}
           </div>
         )}
 
@@ -1281,7 +1287,7 @@ function RegisterOwnerForm({
             </div>
           )}
 
-          <fieldset disabled={isLoading || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
+          <fieldset disabled={isLoading || draft.cancelling || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
           {[1, 2].includes(step) && (
             <>
               <div className="rp-registration-step-intro rounded-2xl border border-gray-200 p-4 bg-white">
@@ -1684,7 +1690,7 @@ function RegisterOwnerForm({
                 </button>
               </>}
 
-              <div hidden={showingSelfie}>{documentReviewNotice}</div>
+              {documentReviewNotice}
 
               {showingSelfie && (
                 <SelfieCapture
@@ -1879,9 +1885,11 @@ function Field({
           maxLength={maxLength}
           inputMode={onlyNumbers ? "numeric" : undefined}
           autoComplete={["taxIdentificationNumber", "branchCode"].includes(name) ? "off" : undefined}
-          className={`relative z-0 w-full h-11 rounded-xl border px-4 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${Icon ? "pr-11" : ""} ${prefixText ? "pl-14" : ""} ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
+          className={`relative z-0 w-full h-11 rounded-xl border px-4 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${Icon ? "pr-14" : ""} ${prefixText ? "pl-14" : ""} ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
-        {Icon && <Icon size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
+        {Icon && <div aria-hidden="true" className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-[#017FE6]"}`}>
+          <Icon size={16} strokeWidth={2} />
+        </div>}
       </div>
       {error && <p className={`text-xs text-red-500 ${horizontal ? "sm:col-start-2 sm:row-start-3" : ""}`}>{error}</p>}
     </div>
@@ -1981,6 +1989,9 @@ function PasswordField({
         <div className="min-h-8" />
       )}
       <div className="relative">
+        <div aria-hidden="true" className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 rounded-lg border p-1.5 ${error ? "border-red-200 bg-red-50 text-red-500" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+          <Lock size={16} strokeWidth={2} />
+        </div>
         <input
           type={show ? "text" : "password"}
           name={name}
@@ -1993,10 +2004,11 @@ function PasswordField({
           disabled={disabled}
           placeholder={placeholder}
           maxLength={maxLength}
-          className={`w-full h-11 rounded-xl border px-4 pr-11 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
+          className={`w-full h-11 rounded-xl border px-4 pl-12 pr-12 text-[15px] placeholder:text-gray-400 outline-none shadow-sm transition ${error ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100" : "border-gray-300 hover:border-gray-400 focus:border-[#017FE6] focus:ring-4 focus:ring-blue-100"} ${disabled ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-white"}`}
         />
-        <button type="button" onClick={toggle} disabled={disabled} className="rp-icon-button absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
-          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        <button type="button" onClick={toggle} disabled={disabled} aria-label={show ? "Hide password" : "Show password"} aria-pressed={show}
+          className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+          {show ? <EyeOff size={18} strokeWidth={2} aria-hidden="true" /> : <Eye size={18} strokeWidth={2} aria-hidden="true" />}
         </button>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}

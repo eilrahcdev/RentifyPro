@@ -1,0 +1,15 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  VITE_SAME_ORIGIN_PROXY = "true"
+
+[[edge_functions]]
+  function = "backend"
+  path = "/api/*"
+
+[[edge_functions]]
+  function = "backend"
+  path = "/socket.io/*"

@@ -7,6 +7,7 @@ import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
 import { getSessionUser } from "../utils/sessionStore";
 import { openHelp } from "../utils/helpNavigation";
 import ChatLauncher from "./ChatLauncher";
+import { AccountVerificationLink, AccountVerificationNotice } from "./AccountVerificationNotice";
 
 const linkClassName = (activePage, itemKey) =>
   `rp-link-pill whitespace-nowrap ${
@@ -374,6 +375,11 @@ export default function Navbar({
         </div>
       </nav>
 
+      {isLoggedIn && <AccountVerificationNotice className="mx-auto max-w-7xl px-4 pt-24 sm:px-6" onViewStatus={() => {
+        window.location.hash = "verification-status";
+        onNavigateToAccountSettings?.();
+      }} />}
+
       {showMobileMenu && (
         <div className="fixed inset-0 z-[60] lg:hidden">
           <button
@@ -383,8 +389,8 @@ export default function Navbar({
             className="absolute inset-0 bg-slate-900/35 backdrop-blur-[1px]"
           />
 
-          <div className="absolute right-3 top-20 w-[min(92vw,352px)] overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_30px_80px_rgba(15,23,42,0.28)] backdrop-blur">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div className="absolute right-3 top-20 flex max-h-[calc(100dvh-5rem-max(1rem,env(safe-area-inset-bottom)))] w-[min(92vw,352px)] flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_30px_80px_rgba(15,23,42,0.28)] backdrop-blur">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
               <p className="text-sm font-semibold text-slate-900">Navigation</p>
               <button
                 type="button"
@@ -396,7 +402,7 @@ export default function Navbar({
               </button>
             </div>
 
-            <div className="p-2">
+            <div className="min-h-0 overflow-y-auto overscroll-contain p-2">
               {mobileNavItems.map((item) => (
                 <button
                   key={item.key}
@@ -426,7 +432,7 @@ export default function Navbar({
         </div>
       )}
 
-      {onShowAI && <ChatLauncher isOpen={isAIOpen} onOpen={onShowAI} />}
+      {onShowAI && !showMobileMenu && <ChatLauncher isOpen={isAIOpen} onOpen={onShowAI} />}
     </>
   );
 }
@@ -511,6 +517,10 @@ function ProfileMenu({
           >
             Account Settings
           </button>
+          <AccountVerificationLink onClick={() => {
+            window.location.hash = "verification-status";
+            onAccountSettings();
+          }} className="flex min-h-11 w-full items-center px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-amber-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset" />
           <button
             onClick={onBookingHistory}
             className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#017FE6]/10"
