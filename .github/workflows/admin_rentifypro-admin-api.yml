@@ -66,5 +66,5 @@ jobs:
         with:
           app-name: 'rentifypro-admin-api'
           slot-name: 'Production'
-          package: .
+          package: admin-api.zip
           
