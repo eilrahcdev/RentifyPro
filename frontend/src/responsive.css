@@ -276,9 +276,9 @@
 .rp-list-reveal { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1rem; padding: 1rem; font-size: 0.875rem; color: #475569; }
 .rp-profile-section { padding: 1.5rem; }
 .rp-profile-section__header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
-.rp-profile-section__header h3 { min-width: 0; font-weight: 600; }
+.rp-profile-section__header h3 { min-width: 0; flex: 1; font-weight: 600; }
 .rp-profile-section__header > button { min-width: 4rem; min-height: 2.75rem; padding-inline: 1rem; flex-shrink: 0; }
-.rp-profile-section__toggle { display: flex; align-items: center; gap: 0.5rem; text-align: left; }
+.rp-profile-section__toggle { display: flex; width: 100%; align-items: center; gap: 0.5rem; text-align: left; }
 .rp-profile-section__toggle svg { flex-shrink: 0; }
 .rp-profile-section__summary { font-size: 0.875rem; color: #475569; overflow-wrap: anywhere; }
 .rp-profile-summary { min-width: 0; overflow-wrap: anywhere; }
@@ -341,10 +341,15 @@
   .rp-account-selector { display: block; }
   .rp-account-content { gap: 1rem; }
   .rp-account-content > * + * { margin-top: 1rem; }
-  .rp-profile-summary { padding: 1rem; }
+  .rp-profile-summary { gap: 1.5rem; padding: 1rem; }
+  .rp-profile-summary > div:first-child { flex-shrink: 0; }
   .rp-profile-summary .w-24 { width: 4rem; height: 4rem; }
+  .rp-profile-summary .rp-profile-photo-action { transform: translate(50%, 50%); border: 0; background: transparent; box-shadow: none; }
+  .rp-profile-photo-action::before { content: ""; position: absolute; inset: 0.5rem; border: 1px solid #e2e8f0; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / 0.1); }
+  .rp-profile-photo-action svg { position: relative; }
   .rp-profile-section { padding: 1rem; }
   .rp-profile-section__header { margin-bottom: 0.5rem; }
+  .rp-profile-section__header:has(button[aria-label^="Cancel "]) h3 { flex-basis: 100%; }
   .rp-vehicle-editor > fieldset > div:first-child { padding: 0.75rem 1rem; }
   .rp-vehicle-editor > fieldset > div:first-child h2 { font-size: 1.125rem; }
   .rp-vehicle-editor > fieldset > div:first-child p:last-child { font-size: 0.875rem; }

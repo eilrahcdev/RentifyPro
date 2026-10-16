@@ -916,7 +916,10 @@ const AccountSettings = ({
         onNavigateToAbout={onNavigateToAbout}
         onNavigateToChat={onNavigateToChat}
         onNavigateToNotifications={onNavigateToNotifications}
-        onNavigateToAccountSettings={onNavigateToAccountSettings}
+        onNavigateToAccountSettings={() => {
+          if (window.location.hash === "#verification-status") setActiveTab("Verification");
+          onNavigateToAccountSettings?.();
+        }}
         onNavigateToReports={onNavigateToReports}
         isAIOpen={showAI}
         onShowAI={() => setShowAI(true)}
@@ -1000,8 +1003,11 @@ const AccountSettings = ({
                       </div>
 
                       <button
+                        type="button"
+                        aria-label="Change profile photo"
+                        aria-expanded={showPhotoMenu}
                         onClick={() => setShowPhotoMenu((prev) => !prev)}
-                        className="absolute bottom-0 right-0 bg-white border rounded-full p-1.5 shadow hover:bg-gray-100"
+                        className="rp-profile-photo-action absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center bg-white border rounded-full shadow hover:bg-gray-100"
                       >
                         <Camera size={18} className="text-[#017FE6]" />
                       </button>

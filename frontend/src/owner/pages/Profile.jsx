@@ -468,7 +468,7 @@ export default function Profile() {
               aria-controls={photoMenuId}
               disabled={busy || Boolean(editingSection)}
               onClick={() => setShowPhotoMenu((prev) => !prev)}
-              className="absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center rounded-full border bg-white shadow hover:bg-gray-100 disabled:opacity-60"
+              className="rp-profile-photo-action absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center rounded-full border bg-white shadow hover:bg-gray-100 disabled:opacity-60"
             >
               <Camera size={18} className="text-[#017FE6]" />
             </button>

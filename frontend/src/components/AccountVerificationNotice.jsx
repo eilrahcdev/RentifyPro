@@ -95,6 +95,8 @@ export function AccountVerificationNotice({ onViewStatus, className = "" }) {
 export function AccountVerificationLink({ onClick, className = "" }) {
   const state = useContext(VerificationContext);
   if (!state) return null;
+  if (!state.loading && !state.error && state.verification?.bookingEligible
+    && (!state.owner || state.verification.listingEligible)) return null;
   const title = state.loading ? "Checking verification" : state.error ? "Verification status unavailable" : verificationGuidance(state.verification).title;
   return <button type="button" onClick={onClick} className={className} data-verification-link>{title}</button>;
 }
