@@ -1,0 +1,487 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-10-20",
+  "scope": "Public reference collection and local regression evidence only. No runtime catalog, approval policy, model or provider changes.",
+  "latestCoverageEstablished": false,
+  "issuerIntegrationsActivated": 0,
+  "independentEvaluation": {
+    "status": "not_available",
+    "consentedGenuineSamples": 0,
+    "independentlyVerifiedNegativeSamples": 0,
+    "authenticityAccuracy": null,
+    "userConfirmedNoSeparateDataset": true
+  },
+  "sources": [
+    {
+      "id": "psa-digital-advisory-2024",
+      "title": "PSA illustrated Digital National ID and National ID Check advisory",
+      "url": "https://philsys.gov.ph/wp-content/uploads/2024/06/Public-Advisory-on-the-acceptance-of-digital-National-ID.pdf",
+      "evidenceKinds": [
+        1,
+        2,
+        3
+      ],
+      "publication": "11 June 2024",
+      "latestVersionConfirmed": false,
+      "file": "psa-digital-id-advisory-2024.pdf",
+      "limitations": "Illustrated dummy digital-ID sample and authentication guidance; not every current format.",
+      "retrieval": {
+        "status": "unavailable",
+        "attemptedAt": "2026-10-20T13:24:01.948Z",
+        "reason": "HTTP 403"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "psa-rebranding-2025",
+      "title": "PSA National ID rebranding notice",
+      "url": "https://rsso04a.psa.gov.ph/sites/default/files/attachment-dir/PR_2025-065_National%20ID%20Rebranding%20Philippine%20Identification%20Now%20Officially%20the%20National%20ID.pdf",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "21 February 2025",
+      "latestVersionConfirmed": false,
+      "file": "psa-national-id-rebranding-2025.pdf",
+      "limitations": "Format terminology and version context, not a full specimen collection.",
+      "retrieval": {
+        "status": "unavailable",
+        "attemptedAt": "2026-10-20T13:24:02.088Z",
+        "reason": "HTTP 403"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "passport-version-index",
+      "title": "PRADO Philippine ordinary-passport versions",
+      "url": "https://www.consilium.europa.eu/prado/en/prado-documents/phl/A/O/docs-per-type.html",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "Live index; retrieved separately from version dates",
+      "latestVersionConfirmed": false,
+      "limitations": "Lists 04001 (first issued 1 August 2016), 03001 and 02001; index is not an exhaustive validity decision.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "passport-2016-specimen",
+      "title": "PRADO PHL-AO-04001",
+      "url": "https://www.consilium.europa.eu/prado/en/PHL-AO-04001/index.html",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "First issued 1 August 2016 according to PRADO index",
+      "latestVersionConfirmed": false,
+      "limitations": "Specimen target identified from index; direct specimen page was not retrievable in browser.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "prc-revision-2104",
+      "title": "PRC Resolution 2104 series 2025",
+      "url": "https://www.prc.gov.ph/sites/default/files/Reso.%202104-2025%20PIC%20Layout_0.pdf",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "15 October 2025; landing page posted 26 February 2026",
+      "latestVersionConfirmed": false,
+      "file": "prc-pic-resolution-2104-2025.pdf",
+      "limitations": "Two-page layout-revision approval; mentions annexes but does not include a full illustrated specimen set.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:03.282Z",
+        "bytes": 877466,
+        "sha256": "878b23afe6ef45362dda0195875500a0181c9732a183ac70afce13961f779a5a",
+        "inspection": "not_yet_visually_reviewed"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "prc-materials-2026-2028",
+      "title": "PRC PIC technical specifications for 2026-2028 procurement",
+      "url": "https://www.prc.gov.ph/sites/default/files/itb2026_16EPA_PICs_ITequipCentral/7.%20VII.%20Technical%20Specifications_ITB%20No.%202026-16_PICs%202026-2028-FINAL.pdf",
+      "evidenceKinds": [
+        1,
+        2
+      ],
+      "publication": "Procurement for 2026-2028; landing page posted 5 December 2025",
+      "latestVersionConfirmed": false,
+      "file": "prc-pic-specifications-2026-2028.pdf",
+      "limitations": "Procurement specification only; does not prove actual issuance, latest deployed design or specimen evaluation.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:04.945Z",
+        "bytes": 1881990,
+        "sha256": "6343c4e933439a62021c30a06da78bb7348f0a3f3237b808f37955547a688dc2",
+        "inspection": "Embedded images inspected were agency logos/signature graphics; full PDF pages not visually rendered. Procurement text available from official search index."
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "lto-edl-2025",
+      "title": "LTO MC GGP-2025-4530 eDL via eGovPH",
+      "url": "https://lto.gov.ph/wp-content/uploads/2025/07/MC-GGP-2025-4530.pdf",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "7 July 2025",
+      "latestVersionConfirmed": false,
+      "file": "lto-edl-circular-2025.pdf",
+      "limitations": "Digital-presentation guidance; not a complete physical-card specimen library.",
+      "retrieval": {
+        "status": "unavailable",
+        "attemptedAt": "2026-10-20T13:24:05.043Z",
+        "reason": "HTTP 403"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "sss-card-circular-2025",
+      "title": "SSS Circular 2025-008 MySSS Card",
+      "url": "https://www.sss.gov.ph/wp-content/uploads/2025/10/CI2025-008-External.pdf",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "25 September 2025",
+      "latestVersionConfirmed": false,
+      "file": "sss-mysss-card-circular-2025.pdf",
+      "limitations": "Successor product and legacy-card context; does not expand RentifyPro's supported categories.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:05.249Z",
+        "bytes": 1345984,
+        "sha256": "686d68593afd3a4d3f62a93df668535155120b93f0ff841229ba994b508192ce",
+        "inspection": "not_yet_visually_reviewed"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "sss-mysss-guidance",
+      "title": "SSS MySSS Card official guidance",
+      "url": "https://www.sss.gov.ph/mysss-card/",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "Undated live guidance",
+      "latestVersionConfirmed": false,
+      "limitations": "Distinguish MySSS from legacy digitized SSS ID, generic UMID and UMID Pay Card.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "gsis-digital-transition",
+      "title": "GSIS circular index including 054-2024",
+      "url": "https://www.gsis.gov.ph/memorandum-circulars/",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "054-2024 listed in live index",
+      "latestVersionConfirmed": false,
+      "limitations": "Transition to digital ID identified in search index; direct site rejected browser retrieval. Exact digital layout and integration remain unconfirmed.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "cda-standardization-pdf",
+      "title": "CDA MC 2010-09 certificate standardization",
+      "url": "https://cda.gov.ph/wp-content/uploads/2021/01/MC2010-09-Guidelines-on-the-Standardization-of-Certificate-of-Registration.pdf",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "2010 series; URL upload date is not issue date",
+      "latestVersionConfirmed": false,
+      "file": "cda-certificate-standardization-2010.pdf",
+      "limitations": "Historical guidelines and a blank certificate-replacement notification letter (PDF page 3), not an issued certificate specimen; later versions unconfirmed.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:05.766Z",
+        "bytes": 340740,
+        "sha256": "298e7231229bfceb5be0a171c608ea4fd47890cec61f8c0bcb017304a2c2e47f",
+        "inspection": "Embedded scan images of PDF pages 2 and 3 visually inspected; page 3 is a replacement letter."
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "bir-minor-forms-2024",
+      "title": "BIR minor forms procurement including 2303e and Notice to Issue Invoice",
+      "url": "https://bir-cdn.bir.gov.ph/BIR/pdf/MINOR%20FORMS_merged_compressed.pdf",
+      "evidenceKinds": [
+        1,
+        2
+      ],
+      "publication": "Posted 7 May 2024",
+      "latestVersionConfirmed": false,
+      "file": "bir-minor-forms-2024.pdf",
+      "limitations": "Procurement specifications and manuscripts, not proof of every issued COR/notice design; inspect annex pages before calling them specimens.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:06.409Z",
+        "bytes": 2172097,
+        "sha256": "dabdee13c4532da231a2ef70accf8eff5fec6eb4369e1cc0d8d4ada2fd42f2e3",
+        "inspection": "not_yet_visually_reviewed"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "bir-cor-sample-listing-2026",
+      "title": "BIR Region 2 procurement listing",
+      "url": "https://www.bir.gov.ph/bid-opportunities-region2",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "Sample attachment listed under 29 September 2026 procurement",
+      "latestVersionConfirmed": false,
+      "limitations": "Search index lists a sample picture of Form 2303; attachment bytes not obtained. JS page may show Loading.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "sec-zero-guide",
+      "title": "SEC ZERO Regular Processing user guide",
+      "url": "https://esparc.sec.gov.ph/docs/SEC%20ZERO%20Regular_User%20Guide.pdf",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "Guide includes 2024 example screens; publication date unconfirmed",
+      "latestVersionConfirmed": false,
+      "file": "sec-zero-regular-guide.pdf",
+      "limitations": "Workflow illustrations and digital certificate procedure; guide images are not held-out customer samples.",
+      "retrieval": {
+        "status": "downloaded",
+        "retrievedAt": "2026-10-20T13:24:06.926Z",
+        "bytes": 3205927,
+        "sha256": "beda02b394d0756d76d9eb5ed24d493c0b4fb4272232e97b2c082b8caae7540a",
+        "inspection": "not_yet_visually_reviewed"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "sec-zero-current",
+      "title": "SEC eSPARC ZERO official overview",
+      "url": "https://esparc.sec.gov.ph/application/index",
+      "evidenceKinds": [
+        3
+      ],
+      "publication": "Undated live guidance",
+      "latestVersionConfirmed": false,
+      "limitations": "Digital signatures are distinct from image recognition; no certificate signatures verified for RentifyPro.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "psa-private-onboarding-2025",
+      "title": "PSA 2025 registry-office charter, private-sector eVerify onboarding",
+      "url": "https://psa.gov.ph/system/files/citizens-charter/5-PSA-2025-Citizens-Charter-Philippine-Identification-System-Registry%20Office-External-Services.pdf",
+      "evidenceKinds": [
+        3
+      ],
+      "publication": "2025 edition",
+      "latestVersionConfirmed": false,
+      "file": "psa-everify-onboarding-2025.pdf",
+      "limitations": "Private-sector regulatory onboarding starts at PDF page 26; this download does not enroll RentifyPro.",
+      "retrieval": {
+        "status": "unavailable",
+        "attemptedAt": "2026-10-20T13:24:07.032Z",
+        "reason": "HTTP 403"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "prc-epic-policy",
+      "title": "PRC e-PIC verification policy",
+      "url": "https://www.prc.gov.ph/index.php/node/6109",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "Posted 1 February 2023",
+      "latestVersionConfirmed": false,
+      "limitations": "Describes profile/barcode verification route; no supported public API access established.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "postal-charter-2026",
+      "title": "PHLPost Citizen's Charter 2026",
+      "url": "https://phlpost.gov.ph/wp-content/uploads/2026/04/APPROVED-PHLPost-Citizens-Charter-Series-of-2026.pdf",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "2026 edition",
+      "latestVersionConfirmed": false,
+      "limitations": "Current issuance-service guidance, not every card generation or evidence of digital-ID rollout.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "voter-generation-hold",
+      "title": "COMELEC voter ID generation/distribution announcement",
+      "url": "https://www.comelec.gov.ph/?r=VoterRegistration%2FPressReleases%2F20Dec2017pr",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "20 December 2017",
+      "latestVersionConfirmed": false,
+      "limitations": "Historical notice indexed in search; current page body may omit notice. Does not establish 2026 issuance policy.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "qc-business-2026",
+      "title": "Quezon City business-permit issuance guidance",
+      "url": "https://quezoncity.gov.ph/qcitizen-guides/how-to-register-as-a-nano-enterprise-in-qc/",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "Updated 23 April 2026",
+      "latestVersionConfirmed": false,
+      "limitations": "Local guidance; not a nationwide permit template or a substitute for issued specimens.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "qc-barangay-2026",
+      "title": "Quezon City barangay business-clearance update",
+      "url": "https://quezoncity.gov.ph/qc-waives-barangay-business-clearance-fees-for-newly-registered-nano-enterprises/",
+      "evidenceKinds": [
+        1
+      ],
+      "publication": "2 September 2026",
+      "latestVersionConfirmed": false,
+      "limitations": "Local process context; not a specimen for all barangays.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "bir-charter-2026",
+      "title": "BIR Citizen's Charter 2026",
+      "url": "https://bir-cdn.bir.gov.ph/BIR/pdf/BIR%20Citizen%27s%20Charter%20%282026%20Edition%29v2.pdf",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "2026 edition",
+      "latestVersionConfirmed": false,
+      "limitations": "COR/electronic COR and Notice to Issue Invoice references; no newly accepted category enabled.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "cda-charter-2026",
+      "title": "CDA Citizen's Charter 2026",
+      "url": "https://cda.gov.ph/wp-content/uploads/2022/01/CDA-Citizens-Charter-Handbook-2026-1st-Edition.pdf",
+      "evidenceKinds": [
+        1,
+        3
+      ],
+      "publication": "2026 first edition",
+      "latestVersionConfirmed": false,
+      "limitations": "Registration procedures start at printed page 19; not latest certificate specimen proof.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "dti-certificate-rules",
+      "title": "DTI BNRS published business-name certificate requirements",
+      "url": "https://bnrs.dti.gov.ph/pdf/registration/business_law.pdf",
+      "evidenceKinds": [
+        1,
+        2
+      ],
+      "publication": "2018 rules; latest visual revision unconfirmed",
+      "latestVersionConfirmed": false,
+      "limitations": "Rule VIII specifies fields; registry lookup is limited to exact-name queries and is not image authentication.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "icao-part-3",
+      "title": "ICAO Doc 9303 Part 3",
+      "url": "https://www.icao.int/sites/default/files/publications/DocSeries/9303_p3_cons_en.pdf",
+      "evidenceKinds": [
+        2
+      ],
+      "publication": "Eighth edition 2021; consolidated corrigenda through 20 March 2024 observed",
+      "latestVersionConfirmed": false,
+      "limitations": "Section 4.9 and Appendix A check digits. Link retained; no redistribution permission inferred.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    },
+    {
+      "id": "icao-part-4",
+      "title": "ICAO Doc 9303 Part 4",
+      "url": "https://www.icao.int/sites/default/files/publications/DocSeries/9303_p4_cons_en.pdf",
+      "evidenceKinds": [
+        2
+      ],
+      "publication": "Eighth edition 2021; consolidated amendment 2 dated 20 February 2026 observed",
+      "latestVersionConfirmed": false,
+      "limitations": "TD3 MRZ structure and data zones; not ePassport chip authentication.",
+      "retrieval": {
+        "status": "link_only"
+      },
+      "reviewedOn": "2026-10-20",
+      "sourceInstructionsAreExecutable": false
+    }
+  ]
+}

@@ -39,3 +39,18 @@ test("signed-in document updates without a registration draft retain their exist
   await lockRegistrationEvidence({}, response(), () => { proceeded = true; });
   assert.equal(proceeded, true); assert.equal(claim.mock.callCount(), 0);
 });
+
+test("only document upload routes can label a lease with a bounded cancellation attempt ID", async t => {
+  const attemptId = "12345678-1234-4321-9876-123456789abc";
+  const draft = { _id: "draft", role: "owner", sessionId: "session", revision: 4 };
+  for (const [route, value, expected] of [["/pre/id-register", attemptId, attemptId],
+    ["/pre/supporting-doc/verify", attemptId, attemptId], ["/pre/selfie/verify", attemptId, ""],
+    ["/pre/id-register", "x".repeat(1000), ""]]) {
+    t.mock.method(RegistrationDraft, "findOneAndUpdate", async (_filter, update) => {
+      assert.equal(update.$set.evidenceAttemptId, expected); return draft;
+    });
+    let proceeded = false;
+    await lockRegistrationEvidence({ registrationDraft: draft, route: { path: route }, body: { upload_attempt_id: value } }, response(), () => { proceeded = true; });
+    assert.equal(proceeded, true);
+  }
+});

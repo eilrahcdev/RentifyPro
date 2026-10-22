@@ -13,6 +13,7 @@ import { showActionToast } from "../../utils/actionToast";
 import OwnerPageHeader from "../components/OwnerPageHeader";
 import RefreshButton from "../../components/RefreshButton";
 import ReturnReviewModal from "../components/ReturnReviewModal";
+import WalkInRejectionModal from "../components/WalkInRejectionModal";
 import BookingPolicyDetails from "../../components/BookingPolicyDetails";
 import { getBookingLateReturnInfo as getLateReturnInfo } from "../../utils/bookingPolicy";
 import HelpLink from "../../components/HelpLink";
@@ -172,6 +173,9 @@ const getPayableAmount = (booking) => {
 
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
+  const knownBookingIds = useRef(new Set());
+  const selectedViewRef = useRef(null);
+  const [newBookingRequestIds, setNewBookingRequestIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -187,6 +191,7 @@ export default function Bookings() {
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
   const [returnReview, setReturnReview] = useState(null);
   const [returnReviewNote, setReturnReviewNote] = useState("");
+  const [walkInRejectionBooking, setWalkInRejectionBooking] = useState(null);
   const [partialPaymentDraft, setPartialPaymentDraft] = useState(null);
 
   useEffect(() => {
@@ -208,6 +213,8 @@ export default function Bookings() {
       });
       const mapped = (response.bookings || []).map(normalizeBookingStatus);
       if (sequence !== requestSequence.current) return;
+      mapped.forEach((booking) => knownBookingIds.current.add(booking._id));
+      setNewBookingRequestIds((previous) => previous.filter((id) => !mapped.some((booking) => booking._id === id && booking.status !== "pending")));
       setBookings((previous) => {
         const current = new Map(previous.map((booking) => [booking._id, booking]));
         const incoming = mapped.map((booking) => latestBooking(current.get(booking._id), booking));
@@ -236,6 +243,13 @@ export default function Bookings() {
     if (!socket) return;
 
     const handleBookingUpdate = (booking) => {
+      if (!booking?._id) return;
+      if (booking.status === "pending" && !knownBookingIds.current.has(booking._id)) {
+        setNewBookingRequestIds((previous) => previous.includes(booking._id) ? previous : [...previous, booking._id]);
+      } else if (booking.status !== "pending") {
+        setNewBookingRequestIds((previous) => previous.filter((id) => id !== booking._id));
+      }
+      knownBookingIds.current.add(booking._id);
       setBookings((prev) => {
         const normalized = normalizeBookingStatus(booking);
         const exists = prev.some((item) => item._id === normalized._id);
@@ -264,13 +278,17 @@ export default function Bookings() {
     try {
       const response = await action();
       if (response?.success === false) throw new Error(response.message || "The update could not be completed.");
-      if (response.booking) setBookings((previous) => previous.map((booking) => booking._id === bookingId ? latestBooking(booking, response.booking) : booking));
+      if (response.booking) {
+        setBookings((previous) => previous.map((booking) => booking._id === bookingId ? latestBooking(booking, response.booking) : booking));
+        if (response.booking.status !== "pending") setNewBookingRequestIds((previous) => previous.filter((id) => id !== bookingId));
+      }
       if (onSuccess) onSuccess(response);
       else showActionToast(fallback, { id: `owner-booking-${bookingId}` });
       return true;
     } catch (error) {
       if (error?.details?.booking) {
         setBookings((previous) => previous.map((booking) => booking._id === bookingId ? latestBooking(booking, error.details.booking) : booking));
+        if (error.details.booking.status !== "pending") setNewBookingRequestIds((previous) => previous.filter((id) => id !== bookingId));
       }
       setActionErrors((previous) => ({ ...previous, [bookingId]: error.message || "The update could not be completed. Refresh this booking and try again." }));
       return false;
@@ -308,8 +326,11 @@ export default function Bookings() {
   const reviewCancellationRequest = (id, action) => runBookingAction(id,
     () => API.reviewOwnerBookingCancellationRequest(id, action, { expectedRequestedAt: getCancellationRequestInfo(bookings.find((booking) => booking._id === id)).requestedAt }), "Reviewing cancellation...", action === "approve" ? "Cancellation approved. Booking cancelled." : "Cancellation declined. Booking remains active.");
 
-  const reviewWalkInRequest = (id, action) => runBookingAction(id,
-    () => API.reviewOwnerWalkInPaymentRequest(id, action), "Reviewing walk-in payment...", action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.");
+  const reviewWalkInRequest = async (id, action, note) => {
+    const saved = await runBookingAction(id,
+      () => API.reviewOwnerWalkInPaymentRequest(id, action, { note }), "Reviewing walk-in payment...", action === "approve" ? "Walk-in request approved. Waiting for renter payment." : "Walk-in request declined.");
+    if (saved) setWalkInRejectionBooking(null);
+  };
 
   const confirmWalkInPayment = (id) => runBookingAction(id,
     () => API.confirmOwnerWalkInPayment(id), "Confirming payment...", "Walk-in payment confirmed.",
@@ -362,6 +383,7 @@ export default function Bookings() {
         {statusFilters.map((status) => (
           <button
             key={status.id}
+            ref={statusFilter === status.id ? selectedViewRef : null}
             type="button"
             aria-pressed={statusFilter === status.id}
             onClick={() => setStatusFilter(status.id)}
@@ -375,6 +397,19 @@ export default function Bookings() {
           </button>
         ))}
       </div>
+
+      {newBookingRequestIds.length > 0 && (
+        <div className="flex flex-col items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 sm:flex-row sm:items-center">
+          <p role="status" className="min-w-0 font-semibold sm:flex-1">{newBookingRequestIds.length === 1 ? "New booking request received." : `${newBookingRequestIds.length} new booking requests received.`}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => statusFilter === "action" ? loadBookings({ background: true }) : setStatusFilter("action")} className="min-h-11 rounded-lg px-3 py-2 font-semibold hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">View requests</button>
+            <button type="button" onClick={() => {
+              selectedViewRef.current?.focus();
+              setNewBookingRequestIds([]);
+            }} className="min-h-11 rounded-lg px-3 py-2 font-semibold hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Dismiss notice</button>
+          </div>
+        </div>
+      )}
 
       <RequestFeedback loading={refreshing} label="Refreshing bookings..." error={error} onRetry={() => loadBookings({ background: bookings.length > 0 })} />
       {loading && <BookingListSkeleton />}
@@ -400,7 +435,7 @@ export default function Bookings() {
           const canReviewRequests = ["pending", "confirmed", "extended"].includes(String(booking.status || "").trim().toLowerCase());
 
           return (
-          <article key={booking._id} className="rp-booking-card group overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <article key={booking._id} id={`booking-${booking._id}`} className="rp-booking-card group overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 gap-4">
                 <VehicleThumbnail vehicle={booking.vehicle} className="rp-booking-thumbnail h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
@@ -467,6 +502,11 @@ export default function Bookings() {
               </div>
             </div>
 
+            {booking.status === "pending" && (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                {newBookingRequestIds.includes(booking._id) ? "New booking request" : "Booking request"}. Awaiting your review.
+              </p>
+            )}
             <p className="mt-3 text-sm text-slate-600">{bookingGuidance(booking, "owner")}</p>
             <RequestFeedback error={actionErrors[booking._id]} />
             {bookingActions[booking._id] && <p role="status" className="mt-2 text-sm text-blue-700">{bookingActions[booking._id]}</p>}
@@ -619,7 +659,10 @@ export default function Bookings() {
                       Approve Walk-in
                     </button>
                     <button
-                      onClick={() => reviewWalkInRequest(booking._id, "reject")}
+                      onClick={() => {
+                        setActionErrors((previous) => ({ ...previous, [booking._id]: "" }));
+                        setWalkInRejectionBooking(booking);
+                      }}
                       disabled={Boolean(bookingActions[booking._id])}
                       className="px-3 py-2 rounded-lg bg-rose-600 text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -707,6 +750,18 @@ export default function Bookings() {
       )}
       <ReportIssueModal booking={reportBooking} perspective="owner" onClose={() => setReportBooking(null)} />
       <PaymentSuccessToast notice={paymentSuccessToast} />
+      {walkInRejectionBooking && (
+        <WalkInRejectionModal
+          key={walkInRejectionBooking._id}
+          booking={walkInRejectionBooking}
+          loading={Boolean(bookingActions[walkInRejectionBooking._id])}
+          error={actionErrors[walkInRejectionBooking._id]}
+          onClose={() => {
+            if (!bookingActions[walkInRejectionBooking._id]) setWalkInRejectionBooking(null);
+          }}
+          onSubmit={(note) => reviewWalkInRequest(walkInRejectionBooking._id, "reject", note)}
+        />
+      )}
       <ReturnReviewModal
         review={returnReview}
         note={returnReviewNote}

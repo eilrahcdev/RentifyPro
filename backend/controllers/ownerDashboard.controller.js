@@ -525,7 +525,21 @@ export const getOwnerBookings = async (req, res) => {
     let sortField = "updatedAt";
     let direction = "desc";
 
-    if (status === "cancelled") {
+    if (view === "calendar") {
+      const start = typeof req.query.calendarStart === "string" ? toDate(req.query.calendarStart) : null;
+      const end = typeof req.query.calendarEnd === "string" ? toDate(req.query.calendarEnd) : null;
+      if (
+        !start || !end || start.toISOString() !== req.query.calendarStart || end.toISOString() !== req.query.calendarEnd ||
+        end <= start || end - start > 43 * 24 * 60 * 60 * 1000
+      ) {
+        return res.status(400).json({ success: false, message: "Provide a valid calendar date range of at most six weeks." });
+      }
+      query.status = "completed";
+      query.pickupAt = { $lt: end };
+      query.returnAt = { $gte: start };
+      sortField = "pickupAt";
+      direction = "asc";
+    } else if (status === "cancelled") {
       query.status = { $in: ["cancelled", "rejected"] };
     } else if (status !== "all" && STATUSES.has(status)) {
       query.status = status;
@@ -1309,6 +1323,14 @@ export const reviewOwnerWalkInPaymentRequest = async (req, res) => {
     const action = String(req.body?.action || "").trim().toLowerCase();
     if (!WALK_IN_REVIEW_ACTIONS.has(action)) {
       return res.status(400).json({ success: false, message: "Invalid walk-in review action." });
+    }
+    if (action === "reject") {
+      if (typeof req.body?.note !== "string" || !req.body.note.trim()) {
+        return res.status(400).json({ success: false, message: "Provide a reason for rejecting the walk-in payment request." });
+      }
+      if (req.body.note.trim().length > 500) {
+        return res.status(400).json({ success: false, message: "The rejection reason must be 500 characters or fewer." });
+      }
     }
 
     const booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate(populateFields);

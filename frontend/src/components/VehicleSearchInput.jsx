@@ -8,6 +8,7 @@ export default function VehicleSearchInput({ value, onChange, onSelectVehicle, l
   const [active, setActive] = useState(-1);
   const [result, setResult] = useState(null);
   const inputRef = useRef(null);
+  const optionsRef = useRef(null);
   const search = value.trim();
   const queryKey = `${search}\u0000${location}\u0000${vehicleType}`;
   const resultKey = result?.key;
@@ -18,6 +19,16 @@ export default function VehicleSearchInput({ value, onChange, onSelectVehicle, l
   const hintItems = !search && resultKey === queryKey
     ? suggestions.map((entry) => entry.name)
     : [];
+
+  useEffect(() => {
+    const menu = optionsRef.current;
+    const option = menu?.querySelector('[aria-selected="true"]');
+    if (!option) return;
+    const menuBounds = menu.getBoundingClientRect();
+    const optionBounds = option.getBoundingClientRect();
+    if (optionBounds.top < menuBounds.top) menu.scrollTop -= menuBounds.top - optionBounds.top;
+    else if (optionBounds.bottom > menuBounds.bottom) menu.scrollTop += optionBounds.bottom - menuBounds.bottom;
+  }, [active, open]);
 
   useEffect(() => {
     if (!shouldFetch || resultKey === queryKey) return undefined;
@@ -93,7 +104,7 @@ export default function VehicleSearchInput({ value, onChange, onSelectVehicle, l
         {error || "Search by name, type, or vehicle details."}
       </span>
       {open && (
-        <div className="rp-vehicle-search__options">
+        <div ref={optionsRef} className="rp-vehicle-search__options">
           <p role="status">{status}</p>
           <ul id="vehicle-search-options" role="listbox" aria-label="Vehicle search suggestions">
             {suggestions.map((entry, index) => (

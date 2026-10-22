@@ -64,7 +64,7 @@ There is no provider API-credit allowance for local inference. Azure compute, re
 
 ## Limits and review behavior
 
-One extraction runs at a time. Concurrent authenticated requests receive 429 for the existing Node queue to retry. Images are resized to a maximum 1400-pixel edge; input files are limited to 4 MiB, images to 20 million pixels, PDFs to five pages, and OCR output to 1200 lines. PDFs render one page at a time and close native resources explicitly. [PDFium's API](https://pypdfium2.readthedocs.io/en/stable/python_api.html) documents those resources.
+One extraction runs at a time. Concurrent authenticated requests receive 429 for the existing Node queue to retry. Images are resized to a maximum 1400-pixel edge; input files are limited to 5 MiB, images to 20 million pixels, PDFs to five pages, and OCR output to 1200 lines. The JSON request limit is 8 MiB to accommodate Base64 encoding of a 5 MiB file. PDFs render one page at a time and close native resources explicitly. [PDFium's API](https://pypdfium2.readthedocs.io/en/stable/python_api.html) documents those resources.
 
 Node defaults to a 30-second request timeout. Python checks a 25-second elapsed budget between pages; this does not interrupt an individual native inference call. Requests beyond supported limits become manual-review cases without deleting the original stored document. The service has no unbounded internal work queue. Documents must be upright and legible; orientation/unwarping models are disabled to reduce memory. Uncertain OCR, unfamiliar layouts, screenshots, and suspected alterations need human inspection.
 

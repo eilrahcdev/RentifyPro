@@ -104,7 +104,7 @@ function fixture(t, { attempt = 1, fetch = async () => providerResponse(), env =
   t.mock.method(auditLog, "warn", (_category, _message, metadata) => alerts.push(metadata));
   t.mock.method(auditLog, "error", (_category, _message, metadata) => alerts.push(metadata));
   const provider = t.mock.method(globalThis, "fetch", fetch);
-  return { writes, alerts, provider };
+  return { writes, alerts, provider, document };
 }
 
 test("production opt-in still screens documents without automatically approving them", async (t) => {
@@ -263,6 +263,22 @@ test("a bad timeout setting retains the 30-second default and successful request
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].delay, 30_000);
   assert.ok(cleared.includes(scheduled[0].handle));
+});
+
+test("a worker result arriving after a document check was cancelled cannot update that document", async t => {
+  let cancelled = false;
+  const { document } = fixture(t, { fetch: async () => { cancelled = true; return providerResponse(); } });
+  t.mock.method(PreKycDocument, "updateOne", async (filter, update) => {
+    assert.equal(cancelled, true);
+    assert.equal(filter._id, document._id);
+    assert.equal(filter.status, "processing");
+    assert.equal(filter.reviewVersion, document.reviewVersion);
+    assert.equal(filter.registrationCancelledAt, null);
+    assert.notEqual(update.$set.status, "reupload_required");
+    // Cancellation has already moved this version out of processing.
+    return { matchedCount: 0, modifiedCount: 0 };
+  });
+  assert.equal(await processNextKycDocument(), true);
 });
 
 test("explicit document model configuration still overrides the default", async (t) => {

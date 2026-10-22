@@ -16,6 +16,8 @@ const preKycDocumentSchema = new mongoose.Schema(
     registrationExpiresAt: { type: Date },
     manualReviewRequestedAt: { type: Date },
     registrationCancelledAt: { type: Date },
+    uploadAttemptId: { type: String },
+    uploadCancelledAt: { type: Date },
     role: {
       type: String,
       enum: ["user", "owner"],

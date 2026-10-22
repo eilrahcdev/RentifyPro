@@ -637,6 +637,7 @@ test("same-file submissions refresh legacy screening without overwriting approve
 test("admin KYC assets load from an isolated backend and match source when the admin checkout is available", async (t) => {
   const backend = fileURLToPath(new URL("..", import.meta.url));
   const files = ["services/documentValidation.service.js", "services/manualDocumentComparison.js",
+    "data/documentReferences.js", "services/documentReference.service.js",
     "services/privateDocumentExtraction.service.js", "services/privateDocumentLayout.service.js", "services/privateKycReviewContext.js",
     "services/privateKycOcr.service.js", "utils/kycScreeningProvider.js", "utils/geminiDataPolicy.js"];
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "isolated-admin-kyc-"));

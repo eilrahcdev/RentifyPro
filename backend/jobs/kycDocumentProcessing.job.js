@@ -223,6 +223,8 @@ const processClaimedDocument = async (document) => {
     queueWaitMs: document.queuedAt ? Math.max(0, new Date(document.processingLockedAt) - new Date(document.queuedAt)) : null,
     throttleWaitMs: providerStartedAt - throttleStartedAt,
     providerMs: providerFinishedAt - providerStartedAt,
+    ...(provider === "private_ocr" ? { referenceAssessmentMs: decision.privateScreening?.referenceAssessment?.assessmentMs,
+      referenceMode: "shadow", referenceCoverage: decision.privateScreening?.referenceAssessment?.coverage } : {}),
     totalMs: document.queuedAt ? Math.max(0, Date.now() - new Date(document.queuedAt)) : null,
   });
   const sessionId = String(document.sessionId || "");

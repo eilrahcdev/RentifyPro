@@ -222,6 +222,13 @@ export const preKycAttemptLimiter = createLimiter({
   keyGenerator: (req) => `session:${req.preKyc.sessionId}`,
 });
 
+// Preparing or cancelling must not consume the budget for actual verification attempts.
+export const preKycDocumentControlIpLimiter = createLimiter({ max: 60,
+  messagePrefix: "Too many document control requests from this network." });
+export const preKycDocumentControlLimiter = createLimiter({ max: 36,
+  messagePrefix: "Too many document control requests in this session.",
+  keyGenerator: (req) => `session:${req.preKyc.sessionId}` });
+
 export const preKycStatusIpLimiter = createLimiter({
   max: configuredLimit("RATE_LIMIT_KYC_STATUS_IP_MAX", 1200),
   messagePrefix: "Too many verification status checks from this network.",

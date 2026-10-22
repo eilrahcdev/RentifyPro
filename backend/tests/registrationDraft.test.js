@@ -18,6 +18,7 @@ import { isBoundPreKycFace, isPreKycFaceVerified } from "../utils/preKycFace.js"
 import { verifyPreKycSession, issuePreKycSession, renewPreKycSession } from "../utils/preKycSession.js";
 import { requirePreKycSession } from "../middleware/preKycSession.middleware.js";
 import { purgeExpiredKycFiles } from "../jobs/kycFileCleanup.job.js";
+import { readPrivateKycEvidence } from "../services/privateKycReviewContext.js";
 
 const fields = { firstName: "Alice", lastName: "Example", email: "alice@gmail.com", phone: "9123456789", dateOfBirth: "1995-01-01",
   gender: "Female", region: "01", province: "0101", city: "010101", barangay: "010101001",
@@ -207,6 +208,52 @@ test("repeated uploads retain one private file, stored-reference rescreening cre
   assert.equal(stale.statusCode, 409);
   failWrite = true; const failed = res(); await preVerifySupportingDocument(request({ user_profile: { ...profile, permit_number: "NEW" } }), failed);
   assert.equal(failed.statusCode, 500); assert.equal((await fs.readdir(directory)).length, before + 1);
+});
+
+test("5 MB IDs and business documents survive upload and private recovery while selfies retain their 4 MB limit", async t => {
+  const { directory } = await privateFile(t);
+  const prior = { KYC_DOCUMENT_PROVIDER: process.env.KYC_DOCUMENT_PROVIDER, KYC_DOCUMENT_QUEUE_ENABLED: process.env.KYC_DOCUMENT_QUEUE_ENABLED,
+    KYC_DOC_MAX_BYTES: process.env.KYC_DOC_MAX_BYTES, KYC_IMAGE_MAX_BYTES: process.env.KYC_IMAGE_MAX_BYTES,
+    INTERNAL_API_KEY: process.env.INTERNAL_API_KEY, FACE_SERVICE_URL: process.env.FACE_SERVICE_URL };
+  process.env.KYC_DOCUMENT_PROVIDER = "manual"; process.env.KYC_DOCUMENT_QUEUE_ENABLED = "false";
+  process.env.INTERNAL_API_KEY = "document-upload-test-only-key"; process.env.FACE_SERVICE_URL = "http://face-service.example.test";
+  delete process.env.KYC_DOC_MAX_BYTES; delete process.env.KYC_IMAGE_MAX_BYTES;
+  t.after(() => { for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  const { preVerifySupportingDocument, preRegisterIdFace, preSelfieVerify } = await import("../controllers/kyc.controller.js?five-mb-documents");
+  const bytes = Buffer.alloc(5 * 1024 * 1024);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  let stored;
+  const result = value => ({ select() { return this; }, lean: async () => value, then(resolve) { return Promise.resolve(value).then(resolve); } });
+  t.mock.method(PreKycDocument, "findOne", () => result(null));
+  t.mock.method(PreKycDocument, "findOneAndUpdate", async (_filter, update) => (stored = { _id: "fixture-upload", ...update.$set }));
+  t.mock.method(axios, "post", async () => ({ data: { success: true } }));
+  const preKyc = { email: "owner@gmail.com", role: "owner", sessionId: "fixture-session" };
+  const profile = { full_name: "Alice Example", business_name: "Example Transport", permit_number: "TEST123" };
+  for (const type of ["supporting", "id"]) {
+    const handler = type === "supporting" ? preVerifySupportingDocument : preRegisterIdFace;
+    const body = type === "supporting" ? { doc_image_base64: bytes.toString("base64"), doc_image_mime: "image/png",
+      supporting_doc_type: ownerFields.supportingDocType, user_profile: profile }
+      : { id_image_base64: bytes.toString("base64"), id_image_mime: "image/png", id_type: fields.idType, full_name: "Alice Example", user_profile: profile };
+    const accepted = res(); await handler({ preKyc, body }, accepted);
+    assert.equal(accepted.statusCode, 200, JSON.stringify(accepted.body));
+    assert.equal(stored.fileSize, bytes.length);
+    assert.deepEqual(await readPrivateKycEvidence(stored, directory), bytes);
+    const rejected = res(); await handler({ preKyc, body: { ...body,
+      [type === "supporting" ? "doc_image_base64" : "id_image_base64"]: Buffer.concat([bytes, Buffer.from([0])]).toString("base64") } }, rejected);
+    assert.equal(rejected.statusCode, 413);
+  }
+  const selfie = res(); await preSelfieVerify({ preKyc, body: { selfie_image_base64: bytes.toString("base64") } }, selfie);
+  assert.equal(selfie.statusCode, 413);
+  assert.match(selfie.body.message, /4 MB/);
+  const forged = { ...stored, fileHash: "incorrect" };
+  await assert.rejects(readPrivateKycEvidence(forged, directory), /integrity/);
+  const oversized = Buffer.concat([bytes, Buffer.from([0])]);
+  await fs.writeFile(path.join(directory, "oversized.png"), oversized);
+  for (const invalidLimit of ["not-a-size", "Infinity", "-1", "10000000"]) {
+    process.env.KYC_DOC_MAX_BYTES = invalidLimit;
+    await assert.rejects(readPrivateKycEvidence({ ...stored, fileKey: "oversized.png",
+      fileHash: crypto.createHash("sha256").update(oversized).digest("hex") }, directory), /cannot be reviewed securely/);
+  }
 });
 
 test("a document replacement during face matching cannot persist an approved selfie", async t => {

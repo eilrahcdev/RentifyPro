@@ -17,6 +17,7 @@ import { canManuallyCompareDocument, hasCurrentManualDocumentComparison } from "
 import { getPrivateKycReviewContext } from "../services/privateKycReviewContext.js";
 import PreKycDocument from "../models/PreKycDocument.js";
 import { getKycUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
+import { readSharedVehicleImage, vehicleImageContentType } from "../services/vehicleImageStorage.service.js";
 import { getAccountVerification } from "../services/accountVerification.service.js";
 import { isSubmittedDocument, canInspectRegistrationDocument, registrationReviewFilter } from "../utils/registrationReview.js";
 
@@ -320,9 +321,19 @@ router.get("/vehicles/:id/image", async (request, response, next) => {
       const imagePath = safeFileFromKey(vehicleDirectory, reference.value, VEHICLE_EXTENSIONS);
       if (!imagePath) return response.status(400).json({ message: "Invalid vehicle image reference." });
       response.setHeader("Cache-Control", "private, max-age=3600");
-      return response.sendFile(imagePath, (error) => {
+      return response.sendFile(imagePath, async (error) => {
         if (!error) return;
-        if (error.code === "ENOENT") return response.status(404).json({ message: "Vehicle image is missing from storage." });
+        if (error.code === "ENOENT" && !response.headersSent) {
+          try {
+            const bytes = await readSharedVehicleImage(reference.value);
+            if (bytes) return response.type(vehicleImageContentType(reference.value)).send(bytes);
+            response.setHeader("Cache-Control", "no-store");
+            return response.status(404).json({ message: "Vehicle image is missing from storage." });
+          } catch {
+            response.setHeader("Cache-Control", "no-store");
+            return response.status(503).json({ message: "Vehicle image storage is temporarily unavailable." });
+          }
+        }
         return next(error);
       });
     } catch (error) {

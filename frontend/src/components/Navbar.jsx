@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bell, CircleHelp, Menu, MessageCircle, X } from "lucide-react";
 import API from "../utils/api";
 import { getSocket } from "../utils/socket";
@@ -6,6 +6,7 @@ import { LIVE_COUNTERS_REFRESH_EVENT } from "../utils/liveCounters";
 import { formatDisplayName, getInitialsFromName } from "../utils/dateUtils";
 import { getSessionUser } from "../utils/sessionStore";
 import { openHelp } from "../utils/helpNavigation";
+import { scrollPageToTop } from "../utils/pageScroll";
 import ChatLauncher from "./ChatLauncher";
 import { AccountVerificationLink, AccountVerificationNotice } from "./AccountVerificationNotice";
 
@@ -48,6 +49,24 @@ export default function Navbar({
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const currentUserId = String(user?._id || getStoredUserId() || "");
   const mobileUnreadTotal = unreadMessages + unreadNotifications;
+  const navbarRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const updateHeight = () => {
+      root.style.setProperty("--rp-navbar-height", `${Math.ceil(navbarRef.current.getBoundingClientRect().height)}px`);
+    };
+    updateHeight();
+    root.classList.add("rp-fixed-navbar-layout");
+    document.body.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(navbarRef.current);
+    return () => {
+      observer.disconnect();
+      root.classList.remove("rp-fixed-navbar-layout");
+      root.style.removeProperty("--rp-navbar-height");
+    };
+  }, []);
 
   const syncUnreadCounts = useCallback(async () => {
     if (!isLoggedIn) {
@@ -138,7 +157,7 @@ export default function Navbar({
 
   const handleHomeClick = () => {
     if (activePage === "home") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollPageToTop();
       return;
     }
     onNavigateToHome?.();
@@ -212,7 +231,7 @@ export default function Navbar({
 
   return (
       <>
-      <nav className="rp-site-navbar fixed inset-x-0 top-0 z-50 px-3 sm:px-5 pt-3">
+      <nav ref={navbarRef} className="rp-site-navbar fixed inset-x-0 top-0 z-50 px-3 sm:px-5 pt-3">
         <div className="rp-glass mx-auto max-w-7xl rounded-3xl border border-white/70 shadow-[0_18px_40px_rgba(2,20,46,0.12)]">
           <div className="rp-site-navbar__bar flex min-h-[4.25rem] items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6">
             <button
@@ -375,7 +394,7 @@ export default function Navbar({
         </div>
       </nav>
 
-      {isLoggedIn && <AccountVerificationNotice className="mx-auto max-w-7xl px-4 pt-24 sm:px-6" onViewStatus={() => {
+      {isLoggedIn && <AccountVerificationNotice className="mx-auto max-w-7xl px-4 pt-4 sm:px-6" onViewStatus={() => {
         window.location.hash = "verification-status";
         onNavigateToAccountSettings?.();
       }} />}

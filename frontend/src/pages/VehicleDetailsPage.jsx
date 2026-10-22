@@ -1,5 +1,6 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   BadgeCheck,
   ChevronDown,
   ChevronLeft,
@@ -11,6 +12,7 @@ import API from "../utils/api";
 import { needsIdentityVerification as requiresIdentityVerification, verificationGuidance } from "../utils/verificationStatus";
 import { getSocket } from "../utils/socket";
 import Navbar from "../components/Navbar";
+import { scrollPageToTop } from "../utils/pageScroll";
 import HelpLink from "../components/HelpLink";
 import { showActionToast } from "../utils/actionToast";
 import {
@@ -121,6 +123,7 @@ export default function VehicleDetailsPage({
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [sortOption, setSortOption] = useState("recent");
   const [bookingLoading, setBookingLoading] = useState(false);
+  const bookingSubmission = useRef(false);
   const [bookingError, setBookingError] = useState("");
   const [eligibilityState, setEligibilityState] = useState(null);
   const [eligibilityRetry, setEligibilityRetry] = useState(0);
@@ -223,7 +226,7 @@ export default function VehicleDetailsPage({
   }, [setBookingData]);
 
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    scrollPageToTop({ behavior: "instant" });
   }, [vehicleId]);
 
   const galleryImages = useMemo(() => {
@@ -314,6 +317,7 @@ export default function VehicleDetailsPage({
   };
 
   const handleContinueBooking = async () => {
+    if (bookingSubmission.current) return;
     setBookingError("");
 
     if (!isLoggedIn) {
@@ -342,7 +346,9 @@ export default function VehicleDetailsPage({
       return;
     }
 
+    bookingSubmission.current = true;
     setBookingLoading(true);
+    let submitted = false;
     try {
       const response = await API.createBooking({
         vehicleId,
@@ -351,8 +357,9 @@ export default function VehicleDetailsPage({
         driverSelected,
       });
       if (response?.success === false) throw new Error(response.message || "Booking could not be submitted.");
+      submitted = true;
       showActionToast("Booking request sent. Waiting for owner approval.", { id: `renter-booking-${response?.booking?._id || vehicleId}`, tone: "info" });
-      setTimeout(() => onNavigateToBookingHistory?.(), 900);
+      setTimeout(() => onNavigateToBookingHistory?.({ bookingId: response?.booking?._id }), 900);
     } catch (error) {
       if (error?.details?.eligibility) {
         setEligibilityState({ key: eligibilityKey, data: error.details.eligibility });
@@ -370,9 +377,24 @@ export default function VehicleDetailsPage({
         );
       } else {
         setBookingError(error.message || "Failed to submit booking.");
+        if (error.status === 409 && !error.code) {
+          setVehicleData(previous => ({ ...previous, availabilityStatus: "unavailable" }));
+          showActionToast("This vehicle is currently unavailable.", { id: `renter-vehicle-unavailable-${vehicleId}`, tone: "info" });
+          try {
+            const refreshed = await API.getPublicVehicleById(vehicleId);
+            if (String(refreshed?.vehicle?._id || refreshed?.vehicle?.id || "") === String(vehicleId)) {
+              setVehicleData(refreshed.vehicle);
+            }
+          } catch {
+            setBookingError("This vehicle's availability could not be refreshed. Reload this page or browse other vehicles before trying again.");
+          }
+        }
       }
     } finally {
-      setBookingLoading(false);
+      if (!submitted) {
+        bookingSubmission.current = false;
+        setBookingLoading(false);
+      }
     }
   };
 
@@ -455,7 +477,8 @@ export default function VehicleDetailsPage({
       />
 
       <main className="rp-renter-main mx-auto max-w-[1380px] px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
-        <button type="button" onClick={onBack} aria-label="Go back" className="rp-detail-back">
+        <button type="button" onClick={onBack} aria-label="Back to vehicles" className="rp-detail-back">
+          <ArrowLeft size={16} className="shrink-0" aria-hidden="true" />
           Back to vehicles
         </button>
         <div className="rp-vehicle-details-layout">
@@ -533,6 +556,18 @@ export default function VehicleDetailsPage({
                   ))}
                 </div>
               )}
+            </section>
+
+            <section className="rp-detail-specifications rp-surface p-4">
+              <h2 className="rp-detail-section-title">Vehicle Specifications</h2>
+              <dl className="rp-detail-specification-grid">
+                <SpecItem label="Type" value={vehicleTypeLabel} />
+                <SpecItem label="Seats" value={`${seats}`} />
+                <SpecItem label="Transmission" value={transmission} />
+                <SpecItem label="Fuel" value={fuel} />
+                <SpecItem label="Plate number" value={plateNumber} />
+                <SpecItem label="Driver option" value={driverOptionEnabled ? "With driver available" : "Self-drive only"} />
+              </dl>
             </section>
 
             <section id="booking-form" aria-labelledby="booking-form-title" className="rp-vehicle-booking rp-surface p-4">
@@ -712,17 +747,6 @@ export default function VehicleDetailsPage({
             </section>
 
             <div className="rp-detail-information">
-              <section className="rp-detail-specifications rp-surface p-4">
-                <h2 className="rp-detail-section-title">Vehicle Specifications</h2>
-                <dl className="rp-detail-specification-grid">
-                  <SpecItem label="Type" value={vehicleTypeLabel} />
-                  <SpecItem label="Seats" value={`${seats}`} />
-                  <SpecItem label="Transmission" value={transmission} />
-                  <SpecItem label="Fuel" value={fuel} />
-                  <SpecItem label="Plate number" value={plateNumber} />
-                  <SpecItem label="Driver option" value={driverOptionEnabled ? "With driver available" : "Self-drive only"} />
-                </dl>
-              </section>
               <div className="rp-detail-secondary rp-surface">
               <details key={`${vehicleId}-about`} className="rp-detail-disclosure">
                 <summary><h2>About This Vehicle</h2><ChevronDown size={18} aria-hidden="true" /></summary>

@@ -15,6 +15,7 @@ const schema = new mongoose.Schema({
   submissionUntil: { type: Date },
   evidenceUntil: { type: Date },
   evidenceToken: { type: String, select: false },
+  evidenceAttemptId: { type: String, select: false },
   cancelledAt: { type: Date },
   cleanupFileKeys: { type: [String], default: undefined, select: false },
   cleanupEmails: { type: [String], default: undefined },

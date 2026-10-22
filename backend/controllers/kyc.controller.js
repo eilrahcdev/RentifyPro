@@ -28,6 +28,7 @@ import { readPrivateKycEvidence } from "../services/privateKycReviewContext.js";
 import { isBoundPreKycFace } from "../utils/preKycFace.js";
 import { assertActiveRegistrationDraft } from "../utils/registrationDraft.js";
 import { discardUnusedPreKycFile } from "../jobs/kycFileCleanup.job.js";
+import { assertRegistrationUpload } from "./registrationDocument.controller.js";
 import { canInspectRegistrationDocument, registrationReviewFilter, supportingDocumentCanContinue } from "../utils/registrationReview.js";
 import { startFaceReverification, getFaceReverificationAttempt, recordFaceReverification,
   cancelFaceReverification, reconcileFaceReverification, reverificationFaceKey } from "../services/kycReverification.service.js";
@@ -42,6 +43,9 @@ const INTERNAL_KEY = process.env.INTERNAL_API_KEY || "";
 const PRE_KYC_DOC_TTL_HOURS = Number(process.env.PREKYC_DOC_TTL_HOURS || 3);
 const PRE_KYC_FACE_TTL_HOURS = Number(process.env.PREKYC_FACE_TTL_HOURS || PRE_KYC_DOC_TTL_HOURS || 3);
 const MAX_KYC_IMAGE_BYTES = Number(process.env.KYC_IMAGE_MAX_BYTES || 4 * 1024 * 1024);
+const configuredDocumentBytes = Number(process.env.KYC_DOC_MAX_BYTES);
+const MAX_KYC_DOCUMENT_BYTES = Number.isSafeInteger(configuredDocumentBytes) && configuredDocumentBytes > 0
+  ? Math.min(configuredDocumentBytes, 5 * 1024 * 1024) : 5 * 1024 * 1024;
 const KYC_UPLOAD_DIR = getKycUploadDir();
 const DEFAULT_KYC_ERROR_MESSAGE = "We couldn't complete verification right now. Please try again.";
 
@@ -108,7 +112,7 @@ const ensureUploadDir = async () => {
   await fs.mkdir(KYC_UPLOAD_DIR, { recursive: true });
 };
 
-const decodeKycBase64 = (base64, { maxBytes = MAX_KYC_IMAGE_BYTES } = {}) => {
+const decodeKycBase64 = (base64, { maxBytes = MAX_KYC_DOCUMENT_BYTES } = {}) => {
   const raw = String(base64 || "").trim();
   const cleanBase64 = raw.includes("base64,") ? raw.slice(raw.indexOf("base64,") + 7) : raw;
   if (!cleanBase64 || !/^[A-Za-z0-9+/=\s]+$/.test(cleanBase64)) {
@@ -137,14 +141,19 @@ const queuePreKycDocument = async ({
   accountUserId = null,
   registrationDraftId,
   registrationExpiresAt,
+  uploadAttemptId = "",
 }) => {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedEmail || !normalizedSessionId || !docType || !fileMeta?.fileHash) return null;
 
   const existing = await PreKycDocument.findOne({ email: normalizedEmail, docType })
-    .select("status reasonCode fileKey fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role expiresAt registeredUser +profileSnapshot");
+    .select("status reasonCode fileKey fileHash reviewVersion sessionId selectedDocCategory provider privateScreening manualComparison detailsMatched validationChecks docType role expiresAt registeredUser uploadAttemptId uploadCancelledAt +profileSnapshot");
   const registrationUpload = !/^(user:|reverify:)/.test(normalizedSessionId);
+  if (uploadAttemptId && (existing?.uploadAttemptId !== uploadAttemptId || existing.uploadCancelledAt)) {
+    await discardUnusedPreKycFile(fileMeta.fileKey);
+    throw Object.assign(new Error("This upload was cancelled or replaced. Start a new upload to retry."), { status: 409 });
+  }
   if (registrationUpload && existing?.sessionId && existing.sessionId !== normalizedSessionId
     && existing.expiresAt && new Date(existing.expiresAt) > new Date()) {
     await discardUnusedPreKycFile(fileMeta.fileKey);
@@ -169,7 +178,7 @@ const queuePreKycDocument = async ({
       || existingCheck.profileBinding !== privateScreeningBinding({ profile: profileSnapshot, sessionId: normalizedSessionId,
         role: role || "user", docType, selectedDocType: selectedDocCategory }));
   if (
-    existing?.fileHash === fileMeta.fileHash &&
+    !uploadAttemptId && existing?.fileHash === fileMeta.fileHash &&
     existing.sessionId === normalizedSessionId &&
     existing.selectedDocCategory === String(selectedDocCategory || "").trim() &&
     screeningProfileMatchesSnapshot(existing.profileSnapshot, profileSnapshot) &&
@@ -192,7 +201,7 @@ const queuePreKycDocument = async ({
   let updated;
   try {
   updated = await PreKycDocument.findOneAndUpdate(
-    { email: normalizedEmail, docType, ...(registrationUpload ? { registeredUser: null } : {}), ...(existing ? { _id: existing._id, reviewVersion: { $eq: existing.reviewVersion ?? null } }
+    { email: normalizedEmail, docType, ...(uploadAttemptId ? { uploadAttemptId, uploadCancelledAt: null } : {}), ...(registrationUpload ? { registeredUser: null } : {}), ...(existing ? { _id: existing._id, reviewVersion: { $eq: existing.reviewVersion ?? null } }
       : { reviewVersion: { $exists: false } }) },
     {
       $set: {
@@ -206,7 +215,7 @@ const queuePreKycDocument = async ({
         docType,
         status: automatedScreening ? "queued" : "pending_review",
         queuedAt: now,
-        reviewVersion: crypto.randomUUID(),
+        reviewVersion: uploadAttemptId || crypto.randomUUID(),
         selfieVerification: null,
         selectedDocCategory: String(selectedDocCategory || "").trim(),
         provider: automatedScreening ? getKycScreeningProvider() === "private_ocr" ? "private-ocr" : "gemini-queued" : "manual",
@@ -278,12 +287,12 @@ const getKycFileType = (buffer, suppliedMime = "") => {
   throw error;
 };
 
-const validateKycDocument = (base64, mimeType = "") => {
-  const buffer = decodeKycBase64(base64);
+const validateKycDocument = (base64, mimeType = "", maxBytes = MAX_KYC_DOCUMENT_BYTES) => {
+  const buffer = decodeKycBase64(base64, { maxBytes });
   return getKycFileType(buffer, mimeType);
 };
 
-const validateKycImage = (base64) => validateKycDocument(base64, "");
+const validateKycImage = (base64, maxBytes = MAX_KYC_DOCUMENT_BYTES) => validateKycDocument(base64, "", maxBytes);
 
 const saveKycBase64File = async ({ base64, mimeType = "image/jpeg", prefix = "doc" }) => {
   const buffer = decodeKycBase64(base64);
@@ -423,7 +432,7 @@ export const faceDetect = async (req, res) => {
   try {
     const { image_base64 } = req.body;
     if (!image_base64) return res.status(400).json({ message: "image_base64 is required" });
-    validateKycImage(image_base64);
+    validateKycImage(image_base64, MAX_KYC_IMAGE_BYTES);
 
     const result = await proxyToFaceService("/api/kyc/face/detect", { image_base64 });
     res.json(result);
@@ -624,7 +633,7 @@ export const selfieVerify = async (req, res) => {
     const { selfie_image_base64 } = req.body;
     if (!selfie_image_base64)
       return res.status(400).json({ message: "selfie_image_base64 is required" });
-    validateKycImage(selfie_image_base64);
+    validateKycImage(selfie_image_base64, MAX_KYC_IMAGE_BYTES);
 
     const current = await KycVerification.findOne({ user: req.user._id });
     if (current?.identityUploadAttemptId && !current.idRegisteredAt) throw Object.assign(new Error("Your ID is saved, but its face setup is incomplete. Retry saved ID setup before taking a selfie."), { status: 409 });
@@ -668,7 +677,7 @@ export const verifyReverificationSelfie = async (req, res) => {
   try {
     const { attemptId, selfie_image_base64 } = req.body;
     if (!selfie_image_base64) throw Object.assign(new Error("Take a selfie before continuing."), { status: 400 });
-    validateKycImage(selfie_image_base64);
+    validateKycImage(selfie_image_base64, MAX_KYC_IMAGE_BYTES);
     await getFaceReverificationAttempt(req.user._id, attemptId);
     const result = await proxyToFaceService("/api/kyc/selfie/verify", {
       user_id: reverificationFaceKey(attemptId), selfie_image_base64,
@@ -783,6 +792,7 @@ export const getMyKyc = async (req, res) => {
 // Pre-registration ID upload
 export const preRegisterIdFace = async (req, res) => {
   try {
+    const uploadAttemptId = await assertRegistrationUpload(req, "id");
     const { full_name, id_type, user_profile } = req.body;
     const saved = !req.body.id_image_base64 ? await savedPreKycUpload(req, "id") : null;
     const id_image_base64 = req.body.id_image_base64 || saved?.base64;
@@ -842,12 +852,14 @@ export const preRegisterIdFace = async (req, res) => {
       expectedRevision: saved ? req.body.document_revision : "",
       registrationDraftId: req.registrationDraft?._id,
       registrationExpiresAt: req.registrationDraft?.expiresAt,
+      uploadAttemptId,
     });
     // Each document revision gets an isolated biometric template, including concurrent uploads.
     payload.user_id = `pre:${sessionId}:${queuedDocument.reviewVersion}`;
     triggerKycDocumentProcessing();
     auditLog.info("KYC", "Pre-registration ID register requested");
     const result = await proxyToFaceService("/api/kyc/id/register", payload);
+    await assertRegistrationUpload(req, "id");
     let latestDocument = null;
     if (queuedDocument?._id) {
       try {
@@ -888,7 +900,7 @@ export const preSelfieVerify = async (req, res) => {
     if (!email || !selfie_image_base64) {
       return res.status(400).json({ success: false, message: "email and selfie_image_base64 are required" });
     }
-    validateKycImage(selfie_image_base64);
+    validateKycImage(selfie_image_base64, MAX_KYC_IMAGE_BYTES);
 
     const idDocument = await PreKycDocument.findOne({ email, sessionId, docType: "id" })
       .select("email docType status detailsMatched provider selectedDocCategory validationChecks manualComparison privateScreening fileKey mimeType fileHash reviewVersion sessionId role suspectedTampering expiresAt +profileSnapshot")
@@ -931,6 +943,7 @@ export const preSelfieVerify = async (req, res) => {
 // Pre-registration supporting document verification (owner)
 export const preVerifySupportingDocument = async (req, res) => {
   try {
+    const uploadAttemptId = await assertRegistrationUpload(req, "supporting");
     const { supporting_doc_type, user_profile } = req.body;
     const saved = !req.body.doc_image_base64 ? await savedPreKycUpload(req, "supporting") : null;
     const doc_image_base64 = req.body.doc_image_base64 || saved?.base64;
@@ -997,7 +1010,9 @@ export const preVerifySupportingDocument = async (req, res) => {
       expectedRevision: saved ? req.body.document_revision : "",
       registrationDraftId: req.registrationDraft?._id,
       registrationExpiresAt: req.registrationDraft?.expiresAt,
+      uploadAttemptId,
     });
+    await assertRegistrationUpload(req, "supporting");
     triggerKycDocumentProcessing();
     return res.json({
       success: true,

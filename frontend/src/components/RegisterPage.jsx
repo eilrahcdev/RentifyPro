@@ -33,6 +33,9 @@ import RegistrationProgress from "./RegistrationProgress";
 import RegistrationEmailVerification from "./RegistrationEmailVerification";
 import HelpLink from "./HelpLink";
 import SelfieCapture from "./SelfieCapture";
+import DocumentCapture from "./DocumentCapture";
+import RegistrationDocumentActions from "./RegistrationDocumentActions";
+import useRegistrationDocumentUpload from "../hooks/useRegistrationDocumentUpload";
 import useRegistrationDraft from "../hooks/useRegistrationDraft";
 import useRegistrationEmailCheck from "../hooks/useRegistrationEmailCheck";
 import { getMinBirthDate, getMaxBirthDate, RELATIONSHIP_OPTIONS, VALIDATION_RULES } from "../data/registerValidation";
@@ -110,12 +113,14 @@ const FileCard = ({ title, description, file, saved, previewUrl, onPick, onRemov
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-gray-900">{title}</p>
         <p className="text-sm text-gray-600 mt-1">{description}</p>
+        <p className="mt-1 text-xs text-slate-600">JPG or PNG, up to 5 MB.</p>
         {previewUrl && (
           <img src={previewUrl} alt="Selected government ID preview" className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input ref={inputRef} type="file" accept={accept} className="hidden"
+          <input ref={inputRef} type="file" accept={accept} disabled={disabled} className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
+          <DocumentCapture onPick={onPick} disabled={disabled} />
           {!file ? (
             <button type="button" onClick={() => inputRef?.current?.click()} disabled={disabled}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:opacity-95 transition disabled:opacity-60">
@@ -230,6 +235,19 @@ function RegisterForm({
   const [kycUi, setKycUi] = useState({ statusText: "" });
   const [documentReviewStatus, setDocumentReviewStatus] = useState("not_uploaded");
   const [idRevision, setIdRevision] = useState("");
+  const documentUpload = useRegistrationDocumentUpload(form.email, "user", async (_docType, revision) => {
+    setKyc(previous => ({ ...previous, idRegistered: false, idReadyForSelfie: false, selfieVerified: false,
+      selfieDataUrl: "", selfieBase64Clean: "",
+      savedDocument: previous.savedDocument && revision ? { ...previous.savedDocument, documentRevision: revision } : previous.savedDocument }));
+    setDocumentReviewStatus("reupload_required");
+    setIdRevision("");
+    setStepErrors(previous => ({ ...previous, idRegistered: "" }));
+    setKycUi(previous => ({ ...previous, statusText: "" }));
+  }, () => draft.recover());
+  const cancelDocument = async (docType, revision) => {
+    setIsLoading(true);
+    try { await documentUpload.cancel(docType, revision); } finally { setIsLoading(false); }
+  };
   const [reviewingId, setReviewingId] = useState(false);
   const [verificationView, setVerificationView] = useState("");
   const identityHeadingRef = useRef(null);
@@ -279,7 +297,7 @@ function RegisterForm({
     setVerificationView(recovery.verificationPhase === "email" ? "email" : "");
     setReviewingId(recovery.verificationPhase === "documents");
     setKyc(previous => ({ ...previous, idType: recovery.fields.idType || "", savedDocument: id?.available ? id : null,
-      idRegistered: Boolean(id?.profileMatches), idReadyForSelfie: id?.identityReadyForSelfie === true,
+      idRegistered: Boolean(id?.profileMatches && id.reasonCode !== "DOCUMENT_CHECK_CANCELLED"), idReadyForSelfie: id?.identityReadyForSelfie === true,
       selfieVerified: recovery.selfieVerified === true,
       selfieDataUrl: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieDataUrl : "",
       selfieBase64Clean: id?.identityReadyForSelfie && previous.selfieDocumentRevision === id.documentRevision ? previous.selfieBase64Clean : "" }));
@@ -861,14 +879,18 @@ function RegisterForm({
     setStepErrors(previous => ({ ...previous, idRegistered: "" }));
     setKycUi((p) => ({ ...p, statusText: "Uploading ID securely..." }));
     let uploadStarted = false;
+    const attempt = documentUpload.begin("id");
     try {
       if (kyc.idCardFile) await validateDocumentImageFile(kyc.idCardFile);
+      if (documentUpload.wasCancelled(attempt)) return;
       if (!await draft.flush({ force: true })) throw new Error("Save your progress before uploading. Retry saving and then continue.");
+      const uploadOptions = await documentUpload.prepare(attempt);
       const dataUrl = kyc.idCardFile ? await fileToBase64(kyc.idCardFile) : "";
       const clean = stripDataUrlPrefix(dataUrl);
       const mime = getMimeFromDataUrl(dataUrl);
       uploadStarted = true;
       const result = await preRegisterIdFace(form.email, fullName, "user", clean, mime, {
+        ...uploadOptions,
         idType: kyc.idType,
         documentRevision: kyc.savedDocument?.documentRevision || "",
         userProfile: {
@@ -878,6 +900,7 @@ function RegisterForm({
           date_of_birth: form.dateOfBirth,
         },
       });
+      if (documentUpload.wasCancelled(attempt)) return;
       if (!result.success) throw new Error(result.message || "We couldn't register your ID. Please try a clearer photo.");
       setKyc((prev) => ({
         ...prev,
@@ -892,12 +915,14 @@ function RegisterForm({
       setStepErrors((p) => ({ ...p, idType: "", idRegistered: "" }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } catch (e) {
+      if (documentUpload.wasCancelled(attempt)) return;
       const recovered = uploadStarted ? await draft.recover() : null;
       const savedId = recovered?.documents.find(document => document.docType === "id" && document.available && document.profileMatches);
       const msg = friendlyError(e.message);
       setStepErrors((p) => ({ ...p, idRegistered: savedId ? "" : msg }));
       setKycUi((p) => ({ ...p, statusText: "" }));
     } finally {
+      await documentUpload.finish(attempt);
       setIsLoading(false);
     }
   };
@@ -1160,7 +1185,7 @@ function RegisterForm({
             </div>
           )}
 
-          <fieldset disabled={isFormLocked || draft.cancelling || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
+          <fieldset disabled={isRateLimited || (isLoading && !documentUpload.active) || draft.cancelling || draft.completed || draft.registrationComplete || !draft.ready || ["expired", "conflict", "loading"].includes(draft.status)} className="min-w-0 space-y-4">
                 {/* step 1 */}
                 {[1, 2, 3].includes(step) && (
                   <>
@@ -1386,28 +1411,31 @@ function RegisterForm({
                         } catch (validationError) {
                           setStepErrors((prev) => ({ ...prev, idCardFile: validationError.message || "Please choose a valid ID image." }));
                           if (idInputRef.current) idInputRef.current.value = "";
-                          return;
+                          return false;
                         }
                         setKyc((prev) => ({ ...prev, savedDocument: null, idCardFile: f, idRegistered: false, idReadyForSelfie: false, selfieVerified: false, selfieDataUrl: "", selfieBase64Clean: "" }));
                         setDocumentReviewStatus("not_uploaded");
                         setIdRevision("");
                         setKycUi((p) => ({ ...p, statusText: "" }));
                         setStepErrors({});
+                        return true;
                       }}
                       onRemove={resetKyc}
                       accept="image/jpeg,image/png" inputRef={idInputRef} icon={Upload}
                       error={stepErrors.idCardFile}
                     />
                     {kyc.savedDocument && !kyc.idCardFile && <p className="text-sm text-slate-700">Your government ID is saved privately. Choose Upload to replace it.</p>}
+                    <RegistrationDocumentActions upload={documentUpload} docType="id" revision={idRevision} status={documentReviewStatus} busy={isLoading} onCancel={cancelDocument}>
                     <button type="button" disabled={isLoading || kyc.idRegistered || !kyc.idType || (!kyc.idCardFile && !kyc.savedDocument)} onClick={registerId}
                       className="rp-btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isLoading ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
+                      {documentUpload.active?.docType === "id" && documentUpload.active.phase === "uploading" ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Uploading ID...</>
                         : ["queued", "processing"].includes(documentReviewStatus) ? <><Loader size={16} className="animate-spin" aria-hidden="true" /> Checking document...</>
                         : kyc.idRegistered ? "ID uploaded" : "Upload and check ID"}
                     </button>
+                    </RegistrationDocumentActions>
                     </>}
 
-                    {documentReviewNotice}
+                    <div inert={isLoading}>{documentReviewNotice}</div>
 
                     {showingSelfie && (
                       <SelfieCapture

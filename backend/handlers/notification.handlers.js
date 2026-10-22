@@ -574,6 +574,7 @@ const handleWalkInPaymentRequested = async (payload = {}) => {
 
 const handleWalkInPaymentReviewed = (action) => async (payload = {}) => {
   const approved = action === "approved";
+  const reason = toOptionalText(getBooking(payload).walkInReviewNote).slice(0, 500);
   await sendPaymentNotification(
     payload,
     getRenterId(payload),
@@ -582,7 +583,8 @@ const handleWalkInPaymentReviewed = (action) => async (payload = {}) => {
       title: approved ? "Walk-in payment approved" : "Walk-in payment rejected",
       message: approved
         ? "Your walk-in payment request was approved by the owner."
-        : "Your walk-in payment request was rejected by the owner.",
+        : `Your walk-in payment request was rejected by the owner.${reason ? `\nReason: ${reason}` : ""}`,
+      dedupeSuffix: approved ? "" : toOptionalText(getBooking(payload).walkInRequestedAt || getBooking(payload).walkInReviewedAt),
       data: bookingData(payload, { walkInPaymentStatus: action }),
     }
   );

@@ -26,12 +26,15 @@ import {
   preKycLimiter,
   preKycUploadIpLimiter,
   preKycAttemptLimiter,
+  preKycDocumentControlIpLimiter,
+  preKycDocumentControlLimiter,
   preKycStatusLimiter,
   preKycStatusIpLimiter,
   otpLimiter,
 } from "../middleware/security.middleware.js";
 import { requirePreKycSession, requireRegistrationEmail } from "../middleware/preKycSession.middleware.js";
 import { lockRegistrationEvidence } from "../middleware/registrationEvidence.middleware.js";
+import { prepareRegistrationDocument, cancelRegistrationDocument } from "../controllers/registrationDocument.controller.js";
 import { authorize, requireKyc } from "../middleware/rbac.middleware.js";
 import { validateObjectIdParam } from "../middleware/validate.middleware.js";
 import { registrationDraftGuard, registrationDraftLimiter, getRegistrationDraft, saveRegistrationDraft,
@@ -62,6 +65,8 @@ router.delete("/pre/draft", registrationDraftLimiter, registrationDraftGuard, de
 router.post("/pre/draft/otp/send", registrationDraftLimiter, registrationDraftGuard, registrationOtpSendLimiter, otpLimiter, sendRegistrationOtp);
 router.post("/pre/draft/otp/verify", registrationDraftLimiter, registrationDraftGuard, otpLimiter, verifyRegistrationOtp);
 router.post("/pre/session", preKycLimiter, createPreKycSession);
+router.post("/pre/documents/:docType/prepare", preKycDocumentControlIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycDocumentControlLimiter, prepareRegistrationDocument);
+router.post("/pre/documents/:docType/cancel", preKycDocumentControlIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycDocumentControlLimiter, cancelRegistrationDocument);
 router.post("/pre/id-register", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, preRegisterIdFace);
 router.post("/pre/selfie/verify", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, preSelfieVerify);
 router.post("/pre/manual-review", preKycUploadIpLimiter, requirePreKycSession, requireRegistrationEmail, preKycAttemptLimiter, lockRegistrationEvidence, requestRegistrationReview);

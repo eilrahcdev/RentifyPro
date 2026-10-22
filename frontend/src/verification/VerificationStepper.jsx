@@ -221,7 +221,7 @@ export default function VerificationStepper({ onVerificationComplete, mode = "ve
               <div className="text-gray-400">
                 <IdCard size={36} className="mx-auto mb-2" aria-hidden="true" />
                 <p className="text-sm">Click to upload</p>
-                <p className="text-xs text-gray-400">JPG, PNG — max 4MB</p>
+                <p className="text-xs text-gray-400">JPG, PNG — max 5 MB</p>
               </div>
             )}
             <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleIdUpload} />

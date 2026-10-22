@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "evaluationDate": "2026-10-20",
+  "scope": "Existing advisory TD3 MRZ function; published fictional example plus derived regression controls. No image OCR or issuer authentication tested.",
+  "references": [
+    "icao-part-3",
+    "icao-part-4"
+  ],
+  "publishedExample": [
+    "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<",
+    "L898902C36UTO7408122F1204159ZE184226B<<<<<10"
+  ],
+  "authenticityAccuracy": null,
+  "cases": [
+    {
+      "id": "published-fictional-example",
+      "expected": "consistent",
+      "actual": "consistent"
+    },
+    {
+      "id": "changed-document-number",
+      "expected": "inconsistent",
+      "actual": "inconsistent"
+    },
+    {
+      "id": "low-confidence",
+      "expected": "unreadable",
+      "actual": "unreadable"
+    },
+    {
+      "id": "rows-on-different-pages",
+      "expected": "unreadable",
+      "actual": "unreadable"
+    },
+    {
+      "id": "duplicate-rows",
+      "expected": "ambiguous",
+      "actual": "ambiguous"
+    },
+    {
+      "id": "no-mrz",
+      "expected": "not_observed",
+      "actual": "not_observed"
+    },
+    {
+      "id": "fictional-country-is-not-philippines",
+      "expected": "inconsistent",
+      "expectedCountry": "PHL",
+      "actual": "inconsistent"
+    }
+  ]
+}

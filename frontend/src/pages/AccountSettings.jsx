@@ -926,7 +926,7 @@ const AccountSettings = ({
         onLogout={onLogout}
       />
 
-      <div className="min-h-screen bg-transparent pt-24">
+      <div className="rp-account-main min-h-screen bg-transparent pt-24">
         <div className="rp-page-shell mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:flex-row">
           <aside className="rp-account-sidebar w-full lg:w-72 space-y-6 lg:sticky top-24 self-start mt-4">
             <label className="rp-account-selector">

@@ -30,6 +30,7 @@ Object.assign(DRAFT_MESSAGES, {
   saved: { title: "Progress saved", description: "Your latest details and step were saved. Passwords and consent remain only on this page." },
   unsaved: { title: "Changes waiting to save", description: "Keep this page open until progress is saved." },
   conflict: { title: "Progress changed in another tab", description: "Recover the latest saved draft before editing. Recovery replaces the details shown here." },
+  busy: { title: "Verification is still running", description: "Wait for verification to finish or cancel its document check, then recover your saved progress." },
 });
 
 export default function RegistrationDraftNotice({ draft, busy: working, onNavigateToSignIn, onNavigateToHome }) {
@@ -97,7 +98,7 @@ export default function RegistrationDraftNotice({ draft, busy: working, onNaviga
           {draft.message && <p className="mt-1 break-words text-amber-800">{draft.message}</p>}
           {draft.savedAt && ["saved", "restored"].includes(noticeState) && <p className="mt-1 text-slate-600">Saved at {new Date(draft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>}
         </div>
-        {["unavailable", "conflict"].includes(noticeState) && <button type="button" disabled={busy} onClick={draft.retry} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">{noticeState === "conflict" ? "Recover saved progress" : "Retry saving and recovery"}</button>}
+        {["unavailable", "conflict", "busy"].includes(noticeState) && <button type="button" disabled={busy} onClick={draft.retry} className="min-h-11 font-semibold text-blue-700 underline underline-offset-2 disabled:opacity-50">{["conflict", "busy"].includes(noticeState) ? "Recover saved progress" : "Retry saving and recovery"}</button>}
         <button ref={cancelRef} type="button" disabled={busy || noticeState === "loading"} onClick={() => setConfirmReset(true)} className="shrink-0 min-h-11 font-semibold text-rose-800 underline underline-offset-2 disabled:opacity-50 focus-visible:outline focus-visible:outline-2">Cancel registration</button>
       </div>}
       {draft.warning && createPortal(

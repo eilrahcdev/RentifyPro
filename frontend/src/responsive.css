@@ -106,11 +106,44 @@
 .rp-reports-page > div > header { flex-wrap: wrap; }
 .rp-site-navbar {
   padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-bottom: 0.75rem;
   padding-left: max(0.75rem, env(safe-area-inset-left));
   padding-right: max(0.75rem, env(safe-area-inset-right));
 }
+
+/* Keep the scrolling surface below the fixed navbar. Body remains the scroll
+   container so existing modal and mobile-menu scroll locks still apply. */
+html.rp-fixed-navbar-layout {
+  overflow: hidden;
+  background: var(--rp-surface-soft);
+}
+html.rp-fixed-navbar-layout body {
+  position: fixed;
+  inset: var(--rp-navbar-height) 0 0;
+  min-height: 0;
+  height: calc(100dvh - var(--rp-navbar-height));
+  overflow-y: auto;
+  scroll-padding-block: 1rem;
+}
+.rp-fixed-navbar-layout :is(.rp-renter-home, .rp-renter-page, .rp-policy-page, .rp-account-main) {
+  min-height: calc(100dvh - var(--rp-navbar-height));
+}
+.rp-fixed-navbar-layout .rp-renter-page > :is(.rp-page-shell, .rp-renter-main, .rp-account-main, .rp-about-page-content),
+.rp-fixed-navbar-layout .rp-policy-page > main {
+  padding-top: 1.5rem;
+}
+.rp-fixed-navbar-layout .rp-renter-home > section:first-of-type {
+  padding-top: 2rem;
+}
+.rp-fixed-navbar-layout .rp-account-sidebar {
+  top: 1rem;
+}
+.rp-fixed-navbar-layout :is(.rp-vehicle-booking, #account-content-title, .rp-policy-section, #policy-top) {
+  scroll-margin-top: 1rem;
+}
 @media (min-width: 640px) {
   .rp-site-navbar { padding-inline: max(1.25rem, env(safe-area-inset-left)) max(1.25rem, env(safe-area-inset-right)); }
+  .rp-fixed-navbar-layout .rp-renter-home > section:first-of-type { padding-top: 3rem; }
 }
 @media (min-width: 640px) {
   .rp-booking-detail-grid { gap: 0.75rem; }
@@ -120,12 +153,17 @@
 @media (min-width: 768px) {
   .rp-vehicle-details-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    grid-template-areas: "gallery booking" "information booking";
+    grid-template-areas: "gallery booking" "specifications information";
     gap: 1rem;
+    align-items: stretch;
   }
-  .rp-detail-gallery { grid-area: gallery; }
+  .rp-detail-gallery { grid-area: gallery; display: flex; flex-direction: column; }
+  .rp-detail-gallery > .relative { flex: 1; min-height: 16rem; }
+  .rp-detail-gallery .rp-detail-cover { position: absolute; inset: 0; height: 100%; }
   .rp-vehicle-booking { grid-area: booking; }
+  .rp-detail-specifications { grid-area: specifications; }
   .rp-detail-information { grid-area: information; }
+  .rp-vehicle-details > .rp-renter-main { padding-bottom: 2rem; }
 }
 @media (min-width: 1024px) {
   .rp-vehicle-details-layout { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.5rem; }
@@ -196,7 +234,9 @@
 .rp-registration-actions-space { display: none; }
 .rp-registration-signin button { min-height: 2.75rem; padding-inline: 0.25rem; color: #075eb9; }
 
-.rp-detail-back { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; margin-bottom: 0.75rem; padding: 0; background: transparent; color: #334155; font-size: 0.875rem; touch-action: manipulation; }
+.rp-detail-back { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; margin-bottom: 0.75rem; padding: 0.5rem 1rem; border: 1px solid #64748b; border-radius: var(--rp-radius-control); background: #fff; color: #075eb9; font-size: 0.875rem; touch-action: manipulation; }
+.rp-detail-back:hover { border-color: #075eb9; background: #eff6ff; }
+.rp-detail-back:focus-visible { outline: 2px solid #075eb9; outline-offset: 2px; }
 .rp-detail-vehicle-summary { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(40%); align-items: start; gap: 0.75rem; margin-bottom: 0.75rem; }
 .rp-vehicle-details .rp-detail-meta { gap: 0.25rem; font-size: 0.8125rem; color: #475569; }
 .rp-detail-vehicle-name { margin-top: 0.25rem; font-size: 1.125rem; font-weight: 700; line-height: 1.35; letter-spacing: -0.025em; color: #0f172a; overflow-wrap: anywhere; }

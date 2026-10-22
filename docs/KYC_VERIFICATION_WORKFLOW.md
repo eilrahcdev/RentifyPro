@@ -24,6 +24,118 @@ IDs cannot enter selfie verification. A matched ID may continue to the selfie wh
 its authenticity review remains `pending_review`. A successful selfie produces
 `challenge_passed`, and the user becomes `approved` only after the ID is approved.
 
+## Document photos during registration
+
+Renter IDs, owner IDs and owner business documents offer **Take photo** alongside
+file upload. The document camera prefers the rear camera, keeps text unmirrored,
+and presents **Use photo**, **Retake** and **Cancel** before changing the selected
+file. A confirmed photo uses the existing document-selection validation and is not
+uploaded until the existing **Upload and check** action. Permission failures and
+cancellation preserve the previous selection. Camera tracks stop after capture,
+on backgrounding and on close; late permission results are stopped too.
+
+ID photos accept JPG/PNG up to 5 MiB. Business documents accept JPG/PNG/PDF up to
+5 MiB, with the existing five-page PDF limit. Captures stay in temporary UI state
+and do not enter browser draft storage. ID replacement still invalidates the
+previous selfie; business-document replacement retains the unaffected ID/selfie.
+The selfie image limit remains 4 MiB.
+
+Release the frontend, Node backend and private OCR service together. Change any
+explicit `KYC_DOC_MAX_BYTES=4194304` deployment setting to `5242880`, keep
+`KYC_JSON_BODY_LIMIT=8mb`, and retain the separate selfie `KYC_IMAGE_MAX_BYTES`.
+The private OCR request limit is 8 MiB because Base64 increases payload size.
+Synchronize the private reader used by the admin backend too; a stale 4 MiB reader
+would reject otherwise valid documents during recovery or manual review.
+
+Camera behavior requires checks on physical Android Chrome and iPhone Safari over
+HTTPS. Synthetic browser tests cover state transitions and cleanup, not physical
+rear-camera selection, autofocus, or real-document accuracy.
+
+Implementation files for this change:
+
+- `frontend/src/components/DocumentCapture.jsx` owns document camera lifecycle,
+  temporary preview, confirmation and accessible dismissal. `RegisterPage.jsx` and
+  `pages/RegisterOwnerPage.jsx` connect it to their existing selection handlers.
+- `frontend/src/utils/fileValidation.js` changes document size checks;
+  `components/BecomeVehicleOwner.jsx` and `verification/VerificationStepper.jsx`
+  keep labels aligned with those shared checks.
+- `backend/controllers/kyc.controller.js` separates document and selfie limits;
+  `services/geminiDocument.service.js` measures decoded bytes at the boundary;
+  `services/privateKycReviewContext.js` accepts bounded 5 MiB private evidence while
+  preserving path/hash checks. The admin checkout's copy of that reader is kept
+  identical at `backend/data/private-kyc/services/privateKycReviewContext.js`.
+- `kyc-ocr-service/main.py` updates file/request ceilings. `backend/.env.example`,
+  `backend/ENVIRONMENT.md` and `kyc-ocr-service/README.md` document the matching
+  settings and service limits.
+- `backend/tests/registrationDraft.test.js`,
+  `backend/tests/documentUploadLimits.test.js`,
+  `kyc-ocr-service/tests/test_service.py`,
+  `scripts/document-upload-limits.test.mjs` and
+  `scripts/private-document-checker-browser-check.mjs` cover boundaries, private
+  recovery, unchanged selfie limits, capture-to-request encoding and simulated
+  camera behavior.
+
+## Saved-progress recovery and cancelling document checks
+
+**Recover saved progress** loads the backend's saved version without replaying
+conflicting pending edits. A failed recovery keeps the local pending cache until
+the backend confirms recovery. Going online does not discard conflicted edits.
+Autosaving pauses while registration verification is busy; required saves before
+uploads and submission still run. An active evidence lease has a separate
+`REGISTRATION_BUSY` response instead of claiming another tab changed the draft.
+
+Renter IDs, owner IDs and owner business documents have a secondary **Cancel
+upload** / **Cancel check** button immediately left of the upload action. Controls
+wrap their text within a two-column row and retain a minimum 44-pixel touch target.
+The existing typography, blue primary action and neutral secondary action are
+preserved. The active action row scrolls clear of the mobile footer when needed;
+only the document being uploaded shows upload progress. Other form controls remain locked during an upload. Successful
+cancellation returns focus to the upload action and keeps entered details and the
+selected local file. Cancellation failures show an error without claiming success.
+
+`POST /api/kyc/pre/documents/:docType/prepare` reserves an upload attempt before
+sending file bytes. The reservation does not replace a current valid document.
+Uploads include the optional `upload_attempt_id`; existing clients retain their
+API contract. `POST /api/kyc/pre/documents/:docType/cancel` requires the current
+attempt or saved document revision. Both routes enforce the signed registration
+session, verified email, role, draft ownership and independent control rate limits.
+The existing upload/verification rate limits remain unchanged.
+
+Cancellation atomically marks the attempt on its own document. A matching saved
+revision becomes `reupload_required` with `DOCUMENT_CHECK_CANCELLED`, a new review
+version and cleared verification results. The private file remains available for
+retry under the existing retention rules. The cancelled upload cannot commit
+later; queued work cannot claim it and existing workers cannot overwrite its new
+status/version. Only that attempt's evidence lease can be released. Cancelling a
+business document preserves the independent ID/selfie. Created accounts, other
+registrations and completed manual decisions cannot be cancelled through this API.
+
+An OCR/native inference call already running may finish computing. Its cancelled
+result is not accepted; cancellation does not promise to stop native computation
+immediately. Frontend and Node backend changes must be released together. No OCR
+service or production-setting changes are needed for cancellation itself.
+
+Implementation files:
+
+- `hooks/useRegistrationDraft.js` and `components/RegistrationDraftNotice.jsx`
+  handle recovery state, pending edits and the busy message.
+- `hooks/useRegistrationDocumentUpload.js`,
+  `components/RegistrationDocumentActions.jsx`, `utils/kycApi.js`,
+  `components/RegisterPage.jsx` and `pages/RegisterOwnerPage.jsx` connect attempt
+  preparation, abortable requests, cancellation feedback and responsive controls.
+- `controllers/registrationDocument.controller.js`, `controllers/kyc.controller.js`,
+  `controllers/registrationDraft.controller.js` and `routes/kyc.routes.js` enforce
+  attempt ownership, atomic cancellation, guarded upload commits and busy saves.
+- `models/PreKycDocument.js`, `models/RegistrationDraft.js`,
+  `middleware/registrationEvidence.middleware.js` and
+  `middleware/security.middleware.js` store additive attempt metadata, release only
+  the matching lease and rate-limit document controls independently.
+- `backend/tests/registrationDocumentCancellation.test.js`,
+  `backend/tests/registrationEvidence.test.js`, `backend/tests/geminiDocumentProcessing.test.js` and
+  `scripts/registration-recovery-browser-check.mjs --document-cancel-only` cover
+  ownership, Mongoose pipeline compatibility, late results, recovery, keyboard
+  controls, cancellation failures, retries and simulated responsive behavior.
+
 ## Selfie capture and liveness boundary
 
 Renter registration, owner registration, and logged-in account verification use the

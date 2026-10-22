@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   CarFront,
   CircleCheck,
   CircleX,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle,
@@ -38,6 +39,8 @@ import { formatVehicleTypeLabel } from "../../utils/vehicleText";
 import ModalPortal from "../../components/ModalPortal";
 import { showActionToast } from "../../utils/actionToast";
 import ReturnReviewModal from "../components/ReturnReviewModal";
+import WalkInRejectionModal from "../components/WalkInRejectionModal";
+import CalendarDayPreview from "../components/CalendarDayPreview";
 import { getBookingLateReturnInfo as getLateReturnInfo } from "../../utils/bookingPolicy";
 
 const money = (value) =>
@@ -270,8 +273,11 @@ const getBookingDayFlags = (booking, day) => {
   const bookingStatus = String(booking?.status || "").trim().toLowerCase();
   const pickupAt = toDate(booking?.pickupAt);
   const returnAt = toDate(booking?.returnAt);
-  const extension = getExtensionRequestInfo(booking);
   const lateReturn = getLateReturnInfo(booking);
+
+  if (bookingStatus === "completed") {
+    return ["completed", ...(pickupAt && sameDay(pickupAt, day) ? ["pickup"] : []), ...(returnAt && sameDay(returnAt, day) ? ["return"] : [])];
+  }
 
   if (pickupAt && sameDay(pickupAt, day) && activeBookingStatuses.has(bookingStatus)) {
     flags.push("pickup");
@@ -284,21 +290,13 @@ const getBookingDayFlags = (booking, day) => {
   if (
     pickupAt &&
     returnAt &&
-    bookingStatus === "confirmed" &&
+    activeBookingStatuses.has(bookingStatus) &&
     !sameDay(pickupAt, day) &&
     !sameDay(returnAt, day) &&
     startOfDay(day) >= startOfDay(pickupAt) &&
     startOfDay(day) <= startOfDay(returnAt)
   ) {
     flags.push("active");
-  }
-
-  if (
-    extension.status === "requested" &&
-    extension.requestedReturnAt &&
-    sameDay(extension.requestedReturnAt, day)
-  ) {
-    flags.push("extension");
   }
 
   if (
@@ -327,7 +325,6 @@ const getBookingDayFlags = (booking, day) => {
 const getBookingDayPriority = (booking, day) => {
   const flags = getBookingDayFlags(booking, day);
   if (flags.includes("overdue")) return 0;
-  if (flags.includes("extension")) return 1;
   if (flags.includes("pickup")) return 2;
   if (flags.includes("return")) return 3;
   if (flags.includes("active")) return 4;
@@ -341,13 +338,13 @@ const getBookingStatusTone = (booking) => {
   const cancellation = isCancellationRequested(booking);
   const status = String(booking?.status || "").trim().toLowerCase();
 
+  if (status === "completed") return { label: "Completed", className: "bg-emerald-100 text-emerald-700", icon: BadgeCheck };
   if (lateReturn.isOverdue) return { label: "Overdue", className: "bg-rose-100 text-rose-700", icon: Flame };
   if (extension.status === "requested") return { label: "Extension Request", className: "bg-violet-100 text-violet-700", icon: CircleDot };
   if (cancellation) return { label: "Cancellation Request", className: "bg-slate-200 text-slate-700", icon: Ban };
   if (status === "pending") return { label: "Pending", className: "bg-amber-100 text-amber-700", icon: Circle };
   if (status === "confirmed") return { label: "Active Rental", className: "bg-blue-100 text-blue-700", icon: CircleDot };
   if (status === "extended") return { label: "Extended", className: "bg-indigo-100 text-indigo-700", icon: CalendarRange };
-  if (status === "completed") return { label: "Completed", className: "bg-emerald-100 text-emerald-700", icon: BadgeCheck };
   if (status === "cancelled" || status === "rejected") return { label: "Cancelled", className: "bg-slate-200 text-slate-700", icon: Ban };
   return { label: status || "Scheduled", className: "bg-slate-100 text-slate-600", icon: CalendarDays };
 };
@@ -605,10 +602,13 @@ const getDateSummary = (date, bookings) => {
     .filter((booking) => {
       const pickupAt = toDate(booking?.pickupAt);
       const returnAt = toDate(booking?.returnAt);
-      const extension = getExtensionRequestInfo(booking);
       const lateReturn = getLateReturnInfo(booking);
       const status = String(booking?.status || "").trim().toLowerCase();
 
+      if (status === "completed") {
+        return pickupAt && returnAt && startOfDay(date) >= startOfDay(pickupAt) && startOfDay(date) <= startOfDay(returnAt);
+      }
+      if (["cancelled", "rejected"].includes(status)) return false;
       if (pickupAt && sameDay(pickupAt, date) && activeBookingStatuses.has(status)) return true;
       if (returnAt && sameDay(returnAt, date) && activeBookingStatuses.has(status)) return true;
       if (
@@ -618,9 +618,6 @@ const getDateSummary = (date, bookings) => {
         startOfDay(date) >= startOfDay(pickupAt) &&
         startOfDay(date) <= startOfDay(returnAt)
       ) {
-        return true;
-      }
-      if (extension.status === "requested" && extension.requestedReturnAt && sameDay(extension.requestedReturnAt, date)) {
         return true;
       }
       if (lateReturn.isOverdue && sameDay(date, new Date())) return true;
@@ -633,12 +630,12 @@ const getDateSummary = (date, bookings) => {
 const getTodayDate = () => new Date();
 
 const itemColorMap = {
-  pickup: "bg-emerald-500",
-  return: "bg-rose-500",
-  active: "bg-blue-500",
-  extension: "bg-violet-500",
+  completed: "bg-slate-500",
+  pickup: "bg-emerald-700",
+  return: "bg-orange-700",
+  active: "bg-blue-700",
   cancelled: "bg-slate-500",
-  overdue: "bg-amber-500",
+  overdue: "bg-red-700",
 };
 
 const taskIconOverrides = {
@@ -650,25 +647,38 @@ const taskIconOverrides = {
 
 const getScheduleEventInfo = (booking, date) => {
   const flags = getBookingDayFlags(booking, date);
+  if (flags.includes("completed")) {
+    return { label: "Completed rental", time: null, Icon: BadgeCheck, tone: "text-slate-700 bg-slate-100" };
+  }
   if (flags.includes("overdue")) {
-    return { label: "Overdue Vehicle", time: null, Icon: Flame, tone: "text-rose-600 bg-rose-100" };
+    return { label: "Overdue Vehicle", time: null, Icon: Flame, tone: "text-red-700 bg-red-100" };
   }
   if (flags.includes("cancelled")) {
     return { label: "Cancelled Booking", time: null, Icon: Ban, tone: "text-slate-600 bg-slate-200" };
   }
-  if (flags.includes("extension")) {
-    return { label: "Extension Request", time: null, Icon: Clock3, tone: "text-violet-600 bg-violet-100" };
-  }
   if (flags.includes("pickup")) {
-    return { label: "Pickup", time: formatShortTime(booking.pickupAt), Icon: ArrowUp, tone: "text-emerald-600 bg-emerald-100" };
+    return { label: "Pickup", time: formatShortTime(booking.pickupAt), Icon: ArrowUp, tone: "text-emerald-700 bg-emerald-100" };
   }
   if (flags.includes("return")) {
-    return { label: "Return", time: formatShortTime(booking.returnAt), Icon: ArrowDown, tone: "text-rose-600 bg-rose-100" };
+    return { label: "Return", time: formatShortTime(booking.returnAt), Icon: ArrowDown, tone: "text-orange-700 bg-orange-100" };
   }
   if (flags.includes("active")) {
-    return { label: "Active Rental", time: null, Icon: CarFront, tone: "text-blue-600 bg-blue-100" };
+    return { label: "Active Rental", time: null, Icon: CarFront, tone: "text-blue-700 bg-blue-100" };
   }
   return { label: "Scheduled", time: null, Icon: CarFront, tone: "text-slate-600 bg-slate-100" };
+};
+
+const getCalendarPreviewEvents = (booking, date) => {
+  const labels = {
+    completed: "Completed rental",
+    pickup: `Pickup · ${formatShortTime(booking.pickupAt)}`,
+    return: `Return · ${formatShortTime(booking.returnAt)}`,
+    active: "Active rental",
+    overdue: `Overdue return · Due ${formatShortDate(booking.returnAt)}, ${formatShortTime(booking.returnAt)}`,
+    cancelled: isCancellationRequested(booking) ? "Cancellation request" : "Cancelled booking",
+  };
+  const events = getBookingDayFlags(booking, date).map((flag) => labels[flag]).filter(Boolean);
+  return events.length ? events : [getScheduleEventInfo(booking, date).label];
 };
 
 const formatExtensionFee = (booking, extension) => {
@@ -710,14 +720,24 @@ export default function Dashboard() {
   });
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [dayModalOpen, setDayModalOpen] = useState(false);
+  const [calendarPreviewAnchor, setCalendarPreviewAnchor] = useState(null);
+  const calendarPreviewId = useId();
+  const closeCalendarPreview = useCallback(() => setCalendarPreviewAnchor(null), []);
+  const openDayDetails = useCallback(() => {
+    setCalendarPreviewAnchor(null);
+    setDayModalOpen(true);
+  }, []);
   const [extensionReviewBooking, setExtensionReviewBooking] = useState(null);
   const [reviewingExtensionId, setReviewingExtensionId] = useState("");
   const [renterRequestReview, setRenterRequestReview] = useState(null);
   const [returnDeclineRequest, setReturnDeclineRequest] = useState(null);
+  const [walkInRejectionRequest, setWalkInRejectionRequest] = useState(null);
   const [returnReviewNote, setReturnReviewNote] = useState("");
   const [reviewingRenterRequestKey, setReviewingRenterRequestKey] = useState("");
   const [reviewError, setReviewError] = useState("");
   const [viewAllModal, setViewAllModal] = useState("");
+  const [completedCalendar, setCompletedCalendar] = useState({ key: "", bookings: [], loading: false, error: false });
+  const [historyReload, setHistoryReload] = useState(0);
 
   const loadDashboard = useCallback(async ({ silent = false } = {}) => {
     if (silent) {
@@ -798,10 +818,53 @@ export default function Dashboard() {
   );
 
   const calendarCells = useMemo(() => getCalendarCells(visibleMonth), [visibleMonth]);
+  const calendarStart = calendarCells[0].toISOString();
+  const lastCalendarDate = calendarCells[calendarCells.length - 1];
+  const calendarEnd = new Date(lastCalendarDate.getFullYear(), lastCalendarDate.getMonth(), lastCalendarDate.getDate() + 1).toISOString();
+  const historyKey = `${calendarStart}/${calendarEnd}/${lastUpdated}/${historyReload}`;
+  const historyMatches = completedCalendar.key === historyKey;
+  const historyLoading = !historyMatches || completedCalendar.loading;
+  const historyError = historyMatches && completedCalendar.error;
+  const historyNotice = historyError ? "Completed bookings could not be loaded. Use Retry on the calendar." : "";
+  const selectedHistoryNotice = !calendarCells.some(date => sameDay(date, selectedDate))
+    ? "Select a date in the displayed month to view completed bookings."
+    : historyNotice;
+
+  useEffect(() => {
+    if (loading) return undefined;
+    let current = true;
+    async function loadCompletedBookings() {
+      setCompletedCalendar({ key: historyKey, bookings: [], loading: true, error: false });
+      try {
+        const rows = [];
+        const cursors = new Set();
+        let cursor;
+        do {
+          const result = await API.getOwnerBookings({ view: "calendar", calendarStart, calendarEnd, limit: 100, cursor });
+          if (!current) return;
+          rows.push(...(result.bookings || []).filter(booking => booking.status === "completed"));
+          if (!result.page?.hasMore) break;
+          cursor = result.page.nextCursor;
+          if (typeof cursor !== "string" || !cursor || cursors.has(cursor)) throw new Error("Invalid calendar pagination");
+          cursors.add(cursor);
+        } while (current);
+        if (current) setCompletedCalendar({ key: historyKey, bookings: Array.from(new Map(rows.map(booking => [booking._id, booking])).values()), loading: false, error: false });
+      } catch {
+        if (current) setCompletedCalendar({ key: historyKey, bookings: [], loading: false, error: true });
+      }
+    }
+    loadCompletedBookings();
+    return () => { current = false; };
+  }, [loading, calendarStart, calendarEnd, historyKey]);
+
+  const calendarBookings = useMemo(() => {
+    if (!historyMatches || completedCalendar.loading || completedCalendar.error) return bookings;
+    return Array.from(new Map([...bookings, ...completedCalendar.bookings].map(booking => [booking._id, booking])).values());
+  }, [bookings, historyMatches, completedCalendar]);
   const today = useMemo(() => getTodayDate(), []);
   const todayTasks = useMemo(() => getActionableTasks(bookings), [bookings]);
   const recentActivity = useMemo(() => getRecentActivity(bookings), [bookings]);
-  const selectedDateBookings = useMemo(() => getDateSummary(selectedDate, bookings), [selectedDate, bookings]);
+  const selectedDateBookings = useMemo(() => getDateSummary(selectedDate, calendarBookings), [selectedDate, calendarBookings]);
   const monthTitle = visibleMonth.toLocaleDateString([], { month: "long", year: "numeric" });
   const renterRequests = useMemo(() => getRenterRequests(bookings), [bookings]);
 
@@ -816,9 +879,9 @@ export default function Dashboard() {
   const visibleMonthTasks = useMemo(() => {
     return calendarCells.map((date) => ({
       date,
-      summary: getDateSummary(date, bookings),
+      summary: getDateSummary(date, calendarBookings),
     }));
-  }, [bookings, calendarCells]);
+  }, [calendarBookings, calendarCells]);
 
   const updateBookingStatus = async (bookingId, nextStatus) => {
     setUpdatingBookingId(bookingId);
@@ -900,7 +963,7 @@ export default function Dashboard() {
       } else if (request.type === "cancellation") {
         response = await API.reviewOwnerBookingCancellationRequest(request.booking._id, action, { expectedRequestedAt: getCancellationRequestInfo(request.booking).requestedAt });
       } else if (request.type === "walk-in") {
-        response = await API.reviewOwnerWalkInPaymentRequest(request.booking._id, action);
+        response = await API.reviewOwnerWalkInPaymentRequest(request.booking._id, action, { note });
       } else if (request.type === "return") {
         response = await API.reviewOwnerVehicleReturnRequest(
           request.booking._id,
@@ -919,6 +982,7 @@ export default function Dashboard() {
         return prev.map((booking) => (booking._id === request.booking._id ? updated : booking));
       });
       setRenterRequestReview(null);
+      setWalkInRejectionRequest(null);
       setReturnDeclineRequest(null);
       setReturnReviewNote("");
       setLastUpdated(new Date().toISOString());
@@ -1082,22 +1146,25 @@ export default function Dashboard() {
           </Panel>
         </aside>
         {/* Calendar */}
-        <Panel className="rp-dashboard-calendar overflow-hidden">
+        <Panel className="rp-dashboard-calendar">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-slate-200/80 pb-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <CalendarDays size={20} strokeWidth={2} className="text-[#017FE6]" aria-hidden="true" />
               Rental Calendar
             </div>
             <p className="ml-auto max-w-md text-right text-xs leading-5 text-slate-500">
-              Tip: Click any date on the calendar to see schedules and manage bookings easily.
+              Tip: Click a date to preview its booking events.
             </p>
           </div>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-            <div className="flex items-center gap-2">
+          <div data-calendar-toolbar className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
+            <div className="col-span-full flex items-center gap-2 sm:col-span-1">
               <button
                 type="button"
-                onClick={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                onClick={() => {
+                  closeCalendarPreview();
+                  setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+                }}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-[#017FE6]"
                 aria-label="Previous month"
               >
@@ -1105,7 +1172,10 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                onClick={() => {
+                  closeCalendarPreview();
+                  setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+                }}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-[#017FE6]"
                 aria-label="Next month"
               >
@@ -1115,6 +1185,7 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => {
                   const now = new Date();
+                  closeCalendarPreview();
                   setVisibleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
                   setSelectedDate(now);
                 }}
@@ -1124,17 +1195,20 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <span className="text-sm font-semibold text-slate-800 lg:justify-self-center">
+            <span data-calendar-month className="text-sm font-semibold text-slate-800 sm:justify-self-center">
               {monthTitle}
             </span>
 
-            <div className="flex flex-wrap gap-3 text-xs text-slate-600 lg:justify-self-end">
-              <LegendDot color="bg-emerald-500" label="Pickup" />
-              <LegendDot color="bg-rose-500" label="Return" />
-              <LegendDot color="bg-blue-500" label="Active" />
-              <LegendDot color="bg-violet-500" label="Extension" />
-            </div>
+            <CalendarLegend />
           </div>
+
+          {historyLoading && <p role="status" className="mt-1 text-xs text-slate-600">Loading completed bookings...</p>}
+          {historyError && (
+            <div role="alert" className="mt-2 flex flex-wrap items-center gap-x-3 rounded-xl bg-rose-50 px-3 py-1 text-xs text-rose-800">
+              <span>Completed bookings could not be loaded.</span>
+              <button type="button" onClick={() => setHistoryReload(value => value + 1)} className="min-h-11 rounded-lg px-2 font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-800">Retry</button>
+            </div>
+          )}
 
           <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
@@ -1153,7 +1227,7 @@ export default function Dashboard() {
 
                 const bookingDots = summary.slice(0, 4).map((booking) => {
                   const flags = getBookingDayFlags(booking, date);
-                  const primaryFlag = flags[0] || "active";
+                  const primaryFlag = ["overdue", "completed", "pickup", "return", "active", "cancelled"].find(flag => flags.includes(flag)) || "active";
                   return { id: booking._id, color: itemColorMap[primaryFlag] || "bg-slate-400" };
                 });
 
@@ -1161,12 +1235,19 @@ export default function Dashboard() {
                   <button
                     type="button"
                     key={toDayKey(date)}
-                    onClick={() => {
+                    data-owner-calendar-date={toDayKey(date)}
+                    aria-label={`${formatLongDate(date)}, ${summary.length} booking${summary.length === 1 ? "" : "s"}`}
+                    aria-haspopup="dialog"
+                    aria-expanded={selected && Boolean(calendarPreviewAnchor)}
+                    aria-controls={selected && calendarPreviewAnchor ? calendarPreviewId : undefined}
+                    aria-current={todayMatch ? "date" : undefined}
+                    onClick={(event) => {
                       setSelectedDate(date);
                       setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
                       setExtensionReviewBooking(null);
+                      setCalendarPreviewAnchor(calendarPreviewAnchor === event.currentTarget ? null : event.currentTarget);
                     }}
-                    className={`min-h-[52px] border-r border-b border-slate-100 p-1.5 text-left transition hover:bg-blue-50/40 sm:min-h-[58px] sm:p-2 xl:h-[2.75cm] xl:min-h-[2.75cm] ${
+                    className={`min-h-[52px] border-r border-b border-slate-100 p-1.5 text-left transition hover:bg-blue-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-700 sm:min-h-[58px] sm:p-2 xl:h-[2.75cm] xl:min-h-[2.75cm] ${
                       selected ? "ring-2 ring-inset ring-[#017FE6] rounded-lg" : ""
                     } ${inCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"}`}
                   >
@@ -1203,14 +1284,16 @@ export default function Dashboard() {
           </div>
 
           <div className="mt-4 space-y-2">
+            {selectedHistoryNotice && <p role="status" className="text-sm text-slate-600">{selectedHistoryNotice}</p>}
             {selectedDateBookings.length === 0 ? (
-              <EmptyState message="No schedules found for this date." icon={CalendarRange} compact />
+              historyLoading ? <p role="status" className="text-sm text-slate-600">Loading completed bookings...</p> : !selectedHistoryNotice && <EmptyState message="No schedules found for this date." icon={CalendarRange} compact />
             ) : (
               selectedDateBookings.map((booking) => {
                 const renter = getRenterProfile(booking.renter);
                 const extension = getExtensionRequestInfo(booking);
                 const event = getScheduleEventInfo(booking, selectedDate);
-                const showExtensionActions = extension.status === "requested";
+                const completed = booking.status === "completed";
+                const showExtensionActions = activeBookingStatuses.has(booking.status) && extension.status === "requested";
 
                 return (
                   <div
@@ -1247,8 +1330,8 @@ export default function Dashboard() {
                           </button>
                         </>
                       ) : (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                          Confirmed
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${completed ? "bg-slate-100 text-slate-700" : "bg-emerald-100 text-emerald-700"}`}>
+                          {completed ? "Completed" : "Confirmed"}
                         </span>
                       )}
                     </div>
@@ -1260,7 +1343,7 @@ export default function Dashboard() {
 
           <SectionViewAllFooter
             label="View full day details"
-            onClick={() => setDayModalOpen(true)}
+            onClick={openDayDetails}
             pushToBottom
           />
         </Panel>
@@ -1319,6 +1402,27 @@ export default function Dashboard() {
         />
       )}
 
+      {calendarPreviewAnchor && (
+        <CalendarDayPreview
+          key={toDayKey(selectedDate)}
+          id={calendarPreviewId}
+          anchor={calendarPreviewAnchor}
+          dateLabel={formatLongDate(selectedDate)}
+          entries={selectedDateBookings.map((booking) => ({
+            id: booking._id,
+            vehicle: booking.vehicle?.name || "Vehicle",
+            renter: getRenterProfile(booking.renter).displayName,
+            status: booking.status === "confirmed" ? "Confirmed" : booking.status === "extended" ? "Extended" : getBookingStatusTone(booking).label,
+            events: getCalendarPreviewEvents(booking, selectedDate),
+          }))}
+          refreshing={syncing || historyLoading}
+          error={Boolean(error)}
+          notice={selectedHistoryNotice}
+          onClose={closeCalendarPreview}
+          onViewDetails={openDayDetails}
+        />
+      )}
+
       {dayModalOpen && (
         <Modal onClose={() => setDayModalOpen(false)} title={formatLongDate(selectedDate)}>
           <div className="space-y-4">
@@ -1337,8 +1441,9 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-3">
+              {selectedHistoryNotice && <p role="status" className="text-sm text-slate-600">{selectedHistoryNotice}</p>}
               {selectedDateBookings.length === 0 ? (
-                <EmptyState message="No schedules found for this date." icon={CalendarDays} compact />
+                historyLoading ? <p role="status" className="text-sm text-slate-600">Loading completed bookings...</p> : !selectedHistoryNotice && <EmptyState message="No schedules found for this date." icon={CalendarDays} compact />
               ) : (
                 selectedDateBookings.map((booking) => {
                   const renter = getRenterProfile(booking.renter);
@@ -1366,7 +1471,7 @@ export default function Dashboard() {
                             <InfoLine label="Status" value={tone.label} />
                           </div>
 
-                          {extension.status === "requested" && (
+                          {activeBookingStatuses.has(booking.status) && extension.status === "requested" && (
                             <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
                               <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
                                 <InfoLine label="Current Return Date" value={formatShortDate(extension.currentReturnAt)} />
@@ -1400,7 +1505,7 @@ export default function Dashboard() {
                             </div>
                           )}
 
-                          {lateReturn.isOverdue && (
+                          {activeBookingStatuses.has(booking.status) && lateReturn.isOverdue && (
                             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                               This vehicle is overdue by {Math.max(1, Math.ceil(lateReturn.overdueMinutes / (24 * 60)))} day(s).
                             </div>
@@ -1549,6 +1654,10 @@ export default function Dashboard() {
                     setReviewError("");
                     setReturnDeclineRequest(renterRequestReview);
                     setRenterRequestReview(null);
+                  } else if (renterRequestReview.type === "walk-in") {
+                    setReviewError("");
+                    setWalkInRejectionRequest(renterRequestReview);
+                    setRenterRequestReview(null);
                   } else {
                     reviewRenterRequest(renterRequestReview, "reject");
                   }
@@ -1581,6 +1690,20 @@ export default function Dashboard() {
         }}
         onSubmit={(details) => reviewRenterRequest(returnDeclineRequest, returnDeclineRequest.action === "confirm" ? "approve" : "reject", returnReviewNote, details)}
       />
+      {walkInRejectionRequest && (
+        <WalkInRejectionModal
+          key={walkInRejectionRequest.key}
+          booking={walkInRejectionRequest.booking}
+          loading={reviewingRenterRequestKey === walkInRejectionRequest.key}
+          error={reviewError}
+          onClose={() => {
+            if (reviewingRenterRequestKey === walkInRejectionRequest.key) return;
+            setWalkInRejectionRequest(null);
+            setReviewError("");
+          }}
+          onSubmit={(note) => reviewRenterRequest(walkInRejectionRequest, "reject", note)}
+        />
+      )}
     </div>
   );
 }
@@ -1704,10 +1827,66 @@ function DashboardActionRow({
   );
 }
 
+function CalendarLegend() {
+  const [isOpen, setIsOpen] = useState(false);
+  const legendRef = useRef(null);
+  const legendId = useId();
+  const buttonId = `${legendId}-button`;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOutside = (event) => {
+      if (!legendRef.current?.contains(event.target)) setIsOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setIsOpen(false);
+      legendRef.current?.querySelector("button")?.focus({ preventScroll: true });
+    };
+
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("focusin", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("focusin", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={legendRef} className="contents sm:relative sm:block sm:justify-self-end">
+      <button
+        id={buttonId}
+        type="button"
+        aria-label="Calendar legend"
+        aria-expanded={isOpen}
+        aria-controls={legendId}
+        onClick={() => setIsOpen((value) => !value)}
+        className="inline-flex min-h-11 items-center justify-self-end gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-blue-200 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+      >
+        Legend
+        <ChevronDown size={16} aria-hidden="true" className={isOpen ? "rotate-180" : ""} />
+      </button>
+      {isOpen && (
+        <ul id={legendId} aria-labelledby={buttonId} className="col-span-full space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600 sm:absolute sm:right-0 sm:top-full sm:z-20 sm:mt-2 sm:w-44 sm:shadow-lg">
+          <li><LegendDot color={itemColorMap.pickup} label="Pickup" /></li>
+          <li><LegendDot color={itemColorMap.return} label="Return" /></li>
+          <li><LegendDot color={itemColorMap.active} label="Active rental" /></li>
+          <li><LegendDot color={itemColorMap.completed} label="Completed" /></li>
+          <li><LegendDot color={itemColorMap.overdue} label="Overdue" /></li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function LegendDot({ color, label }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+      <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
       {label}
     </span>
   );

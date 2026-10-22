@@ -11,6 +11,9 @@ import { securityHeaders } from "../middleware/security.middleware.js";
 import { createOriginChecker } from "../utils/corsOrigins.js";
 import { mountFrontendDist } from "../utils/mountFrontendDist.js";
 import { getAvatarUploadDir, getPublicUploadsDir } from "../utils/storagePaths.js";
+import { serveSharedVehicleImage } from "../middleware/sharedVehicleImage.middleware.js";
+import { BlobServiceClient } from "@azure/storage-blob";
+import { Readable } from "node:stream";
 
 const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
 const between = (start, end) => {
@@ -31,7 +34,7 @@ const publicCache = "public, max-age=31536000, immutable";
 const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=", "base64");
 const legacyImage = Buffer.concat([image, Buffer.from("legacy fixture")]);
 
-async function startServer(t, { fallback = true, publicOverride = false } = {}) {
+async function startServer(t, { fallback = true, publicOverride = false, shared = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "rentifypro-vehicle-cache-"));
   const values = {
     STORAGE_ROOT: path.join(root, "azure-files"),
@@ -40,6 +43,9 @@ async function startServer(t, { fallback = true, publicOverride = false } = {}) 
     NODE_ENV: "production",
     FRONTEND_URL: origin,
     ALLOW_VERCEL_PREVIEW_ORIGINS: "false",
+    VEHICLE_IMAGE_STORAGE: shared ? "azure" : "local",
+    VEHICLE_IMAGE_AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=fixture;AccountKey=ZmFrZQ==;EndpointSuffix=core.windows.net",
+    VEHICLE_IMAGE_AZURE_CONTAINER: "vehicle-images",
   };
   const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
   for (const [key, value] of Object.entries(values)) {
@@ -75,7 +81,7 @@ async function startServer(t, { fallback = true, publicOverride = false } = {}) 
   app.use(securityHeaders);
   // Exercise the server's declarations without starting jobs or connecting to MongoDB.
   vm.runInNewContext(`${corsHandler}\n${corsMiddleware}\n${mediaHeaders}\n${mediaRoutes}`, {
-    app, express, cors, path, backendUploadsDir, cwdUploadsDir, getAvatarUploadDir,
+    app, express, cors, path, backendUploadsDir, cwdUploadsDir, getAvatarUploadDir, serveSharedVehicleImage,
     isAllowedOrigin: createOriginChecker().isAllowedOrigin,
   });
   app.get("/api/fixture", (_req, res) => res.json({ success: true }));
@@ -197,4 +203,24 @@ test("avatar caching, unrelated routes and CORS restrictions stay unchanged", as
   assert.equal(denied.headers.get("access-control-allow-origin"), null);
   assert.equal(denied.headers.get("cache-control"), null);
   await denied.arrayBuffer();
+});
+
+test("shared fallback follows both local directories and preserves CORS and public media headers", async t => {
+  const calls = [];
+  t.mock.method(BlobServiceClient, "fromConnectionString", () => ({ getContainerClient: () => ({
+    getBlockBlobClient(name) { calls.push(name); return { download: async () => ({ contentLength: image.length, readableStreamBody: Readable.from([image]) }) }; },
+  }) }));
+  const { base } = await startServer(t, { shared: true });
+  for (const name of ["configured.png", "legacy.png"]) {
+    const local = await fetch(`${base}/uploads/vehicles/${name}`);
+    assert.equal(local.status, 200); await local.arrayBuffer();
+  }
+  assert.deepEqual(calls, []);
+  const shared = await fetch(`${base}/uploads/vehicles/only-shared.png`, { headers: { Origin: origin } });
+  assert.equal(shared.status, 200); assertMediaHeaders(shared, publicCache);
+  assert.deepEqual(Buffer.from(await shared.arrayBuffer()), image);
+  assert.deepEqual(calls, ["only-shared.png"]);
+  const denied = await fetch(`${base}/uploads/vehicles/private.png`, { headers: { Origin: "https://attacker.example" } });
+  assert.equal(denied.status, 403); await denied.arrayBuffer();
+  assert.deepEqual(calls, ["only-shared.png"]);
 });

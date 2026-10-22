@@ -1,5 +1,6 @@
 import path from "node:path";
 import { isPrivateKycServiceUrl, KYC_SCREENING_PROVIDERS } from "./kycScreeningProvider.js";
+import { getVehicleImageStorageErrors } from "../services/vehicleImageStorage.service.js";
 
 const publicHttpsUrl = (value) => {
   try {
@@ -13,7 +14,7 @@ const within = (root, directory) => {
   return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 };
 export function getProductionConfigurationErrors(env = process.env) {
-  const errors = [];
+  const errors = getVehicleImageStorageErrors(env);
   if (env.NODE_ENV !== "production") errors.push("NODE_ENV must be production.");
   for (const key of ["JWT_SECRET", "INTERNAL_API_KEY"]) {
     if (String(env[key] || "").length < 32 || /changeme|example|<|>/i.test(env[key])) errors.push(`${key} must contain a private, random secret of at least 32 characters.`);

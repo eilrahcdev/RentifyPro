@@ -207,7 +207,7 @@ The original example had 38 variables. Those remain documented alongside the add
 | Authentication: auth controller, pre-KYC session helper, audit logger | `PRE_KYC_SESSION_SECRET`, `PRE_KYC_SESSION_TTL`, `PRE_KYC_SESSION_MAX_RENEWAL_HOURS`, `OTP_RESEND_COOLDOWN_SECONDS`, `LOGIN_CHALLENGE_TTL_MINUTES`, `LOGIN_CHALLENGE_MAX_ATTEMPTS`, `AVATAR_MAX_BYTES`, `LOG_HASH_SECRET` |
 | Face Service manager / local subprocess | `FACE_SERVICE_ENTRY`, `FACE_SERVICE_PYTHON_BIN`, `FACE_SERVICE_STARTUP_TIMEOUT_MS`, `FACE_SERVICE_HEALTH_TIMEOUT_MS`, `FACE_SERVICE_HEALTH_POLL_MS`, `TF_ENABLE_ONEDNN_OPTS`, `TF_CPP_MIN_LOG_LEVEL` |
 | Chatbot Service manager | `CHATBOT_SERVICE_PYTHON_BIN`, `CHATBOT_SERVICE_RELOAD`, `CHATBOT_SERVICE_STARTUP_TIMEOUT_MS`, `CHATBOT_SERVICE_HEALTH_TIMEOUT_MS`, `CHATBOT_SERVICE_HEALTH_POLL_MS` |
-| KYC screening: document worker, validation, Gemini and vehicle-photo services | `GEMINI_VEHICLE_PHOTO_MODEL`, `KYC_ALLOW_RULE_BASED_AUTO_VERIFY`, `KYC_DOCUMENT_AUTO_VERIFY_MIN_CONFIDENCE`, `KYC_DOCUMENT_AUTO_APPROVE_MIN_CONFIDENCE`, `KYC_DOCUMENT_CLASSIFICATION_MIN_CONFIDENCE`, `KYC_DOCUMENT_FINGERPRINT_SECRET`, `KYC_GEMINI_MAX_ATTEMPTS`, `KYC_GEMINI_REQUESTS_PER_MINUTE`, `KYC_DOCUMENT_QUEUE_POLL_MS`, `KYC_PROCESSING_LOCK_TIMEOUT_MS`, `KYC_DOC_MAX_BYTES`, `KYC_IMAGE_MAX_BYTES` |
+| KYC screening: document worker, validation, Gemini and vehicle-photo services | `GEMINI_VEHICLE_PHOTO_MODEL`, `KYC_ALLOW_RULE_BASED_AUTO_VERIFY`, `KYC_DOCUMENT_AUTO_VERIFY_MIN_CONFIDENCE`, `KYC_DOCUMENT_AUTO_APPROVE_MIN_CONFIDENCE`, `KYC_DOCUMENT_CLASSIFICATION_MIN_CONFIDENCE`, `KYC_DOCUMENT_FINGERPRINT_SECRET`, `KYC_GEMINI_MAX_ATTEMPTS`, `KYC_GEMINI_REQUESTS_PER_MINUTE`, `KYC_DOCUMENT_QUEUE_POLL_MS`, `KYC_PROCESSING_LOCK_TIMEOUT_MS`, `KYC_DOC_MAX_BYTES` (default and maximum `5242880` for ID/business documents), `KYC_IMAGE_MAX_BYTES` (unchanged `4194304` default for face/selfie images) |
 | KYC lifetime: KYC/auth controllers, file-cleanup job | `PREKYC_DOC_TTL_HOURS`, `PREKYC_FACE_TTL_HOURS`, `PREKYC_CLEAR_ON_REGISTER`, `KYC_FILE_RETENTION_HOURS`, `KYC_PENDING_REVIEW_RETENTION_HOURS`, `KYC_FILE_CLEANUP_INTERVAL_MS` |
 | Storage helper, production validator, admin routes | `PUBLIC_UPLOAD_DIR`, `AVATAR_UPLOAD_DIR`, `KYC_UPLOAD_DIR`, `REPORT_EVIDENCE_DIR`, `WEBSITE_BACKEND_DIR` |
 | Payment methods: PayMongo helper | `PAYMONGO_PAYMENT_METHODS` |
@@ -263,6 +263,37 @@ Earlier local environment checks found unresolved runtime, secret, database, URL
 The environment audit does not establish mounted-volume persistence, SMTP delivery, signed webhook delivery, provider quotas, or hosted workflow correctness. Those still need verification against the deployment.
 
 ## Validation commands
+
+### Shared vehicle photos between localhost and deployment
+
+MongoDB contains vehicle image references, while the image bytes normally live in each backend's `uploads/vehicles` directory. Sharing MongoDB alone does not share those files.
+
+The optional Azure Blob integration retains the existing `uploads/vehicles/<filename>` database references and API image URLs. Each backend serves its existing local files first and reads a missing public vehicle image from the same private Blob container. Approved new photos must upload successfully before listing publication continues. A failed storage upload stops publication and cleans successfully uploaded photos from that attempt. Retained-photo category review can read shared photos; existing owner/approval/category/exterior-cover checks remain in place. Cloud errors return an uncached 503, and missing images remain uncached 404s.
+
+Configure the following only on the backends, using the same dedicated container in both environments:
+
+```dotenv
+VEHICLE_IMAGE_STORAGE=azure
+VEHICLE_IMAGE_AZURE_CONNECTION_STRING=
+VEHICLE_IMAGE_AZURE_CONTAINER=vehicle-images
+```
+
+Supply the real HTTPS connection string privately through each backend's environment. A container-scoped SAS connection string with read/create/write/delete permissions is sufficient; no list permission is needed by the application. Never put the connection string or SAS in frontend variables or database image URLs. The backend retrieves the photos; anonymous container access is unnecessary. The application does not create accounts/containers or change Azure settings. Keep `VEHICLE_IMAGE_STORAGE=local` (the default) until configuration and migration are ready. An Azure configuration error stops startup instead of silently publishing files only locally.
+
+Before enabling the integration for users, create the dedicated private container and migrate the existing public files from every backend storage location, including the production mounted volume. From `backend/`, with the Azure variables configured:
+
+```powershell
+npm.cmd run media:sync:azure
+npm.cmd run media:sync:azure -- --apply
+```
+
+The first command only checks local public image files and reports a dry run. `--apply` uploads valid JPG/PNG/WEBP files under their original filenames, without deleting local files or changing MongoDB. Configured storage takes precedence over the legacy working-directory upload path. Existing blobs are never overwritten; matching files are skipped, and differing bytes under the same name stop the migration. Repeating an interrupted migration is safe. A file missing from every source must be restored from a backup or re-uploaded through the ordinary approved-photo flow.
+
+After migration, enable the same Azure settings on both backends and restart/redeploy them through the normal release process. Verify an image uploaded through each environment from the other environment, including owner/renter/admin views, and verify missing-file 404 versus storage-outage 503 behavior. Local copies are retained for compatibility and are not a synchronized cache; deleting a shared image does not erase another machine's existing local copy or browser cache. Existing unique image keys must not be reused.
+
+This integration covers published public vehicle photos only. Avatars, unapproved/private vehicle-photo sources, KYC documents, and report evidence continue to use their existing storage. Production still requires the durable `STORAGE_ROOT` mount and the current public/private directory separation. Shared public photos do not make unfinished private photo-review uploads portable between backends.
+
+### Existing checks
 
 Run from `backend/` (use `npm.cmd` instead of `npm` if PowerShell blocks `npm.ps1`):
 

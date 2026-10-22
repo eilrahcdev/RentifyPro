@@ -235,9 +235,11 @@ export async function verifyPhilippinesDocument({
   const cleanBase64 = String(base64).includes("base64,")
     ? String(base64).split("base64,")[1]
     : String(base64);
-  const approxBytes = Math.floor(cleanBase64.length * 0.75);
-  const maxBytes = Number(process.env.KYC_DOC_MAX_BYTES || 4 * 1024 * 1024);
-  if (approxBytes > maxBytes) {
+  const documentBytes = Buffer.from(cleanBase64, "base64").length;
+  const configuredBytes = Number(process.env.KYC_DOC_MAX_BYTES);
+  const maxBytes = Number.isSafeInteger(configuredBytes) && configuredBytes > 0
+    ? Math.min(configuredBytes, 5 * 1024 * 1024) : 5 * 1024 * 1024;
+  if (documentBytes > maxBytes) {
     const error = new Error("The document is too large to process.");
     error.status = 413;
     error.permanent = true;

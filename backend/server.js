@@ -46,6 +46,8 @@ import { createOriginChecker } from "./utils/corsOrigins.js";
 import { mountFrontendDist } from "./utils/mountFrontendDist.js";
 import { getAvatarUploadDir, getPublicUploadsDir } from "./utils/storagePaths.js";
 import { assertProductionConfiguration } from "./utils/productionConfig.js";
+import { assertVehicleImageStorageConfiguration } from "./services/vehicleImageStorage.service.js";
+import { serveSharedVehicleImage } from "./middleware/sharedVehicleImage.middleware.js";
 import {
   startNotificationCleanupJob,
   stopNotificationCleanupJob,
@@ -143,6 +145,7 @@ if (backendUploadsDir.toLowerCase() !== cwdUploadsDir.toLowerCase()) {
   app.use("/uploads/vehicles", allowPublicVehicleMedia, express.static(path.join(cwdUploadsDir, "vehicles"), vehicleMediaStaticOptions));
   app.use("/uploads/avatars", allowPublicAvatarMedia, express.static(path.join(cwdUploadsDir, "avatars")));
 }
+app.use("/uploads/vehicles", serveSharedVehicleImage);
 app.use("/uploads/vehicles", (error, _req, res, next) => {
   if (!res.headersSent && res.getHeader("Cache-Control") === "public, max-age=31536000, immutable") {
     res.setHeader("Cache-Control", "no-store");
@@ -224,6 +227,7 @@ httpServer.on("error", (error) => {
 
 const startServer = async () => {
   assertProductionConfiguration();
+  assertVehicleImageStorageConfiguration();
   await connectDB();
 
   server = httpServer.listen(PORT, () => {

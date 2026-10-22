@@ -3,7 +3,7 @@ import BookingDetails, { BookingInfo as Info } from "../components/BookingDetail
 import BookingRequestModal from "../components/BookingRequestModal";
 import BookingPolicyDetails from "../components/BookingPolicyDetails";
 import { formatHandoverInput, getBookingExtensionQuote, getBookingLateReturnInfo as getLateReturnInfo } from "../utils/bookingPolicy";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import RequestFeedback from "../components/RequestFeedback";
 import RefreshButton from "../components/RefreshButton";
 import { BookingListSkeleton } from "../components/LoadingSkeletons";
@@ -325,10 +325,12 @@ const getWalkInStatusMessage = (booking) => {
 export default function BookingsPage({
   isLoggedIn,
   user,
+  initialBookingId = "",
   onNavigateToHome,
   onNavigateToSignIn,
   onNavigateToRegister,
   onNavigateToVehicles,
+  onBookAgain,
   onNavigateToAbout,
   onNavigateToContacts,
   onNavigateToChat,
@@ -345,7 +347,13 @@ export default function BookingsPage({
   const [refreshing, setRefreshing] = useState(false);
   const requestSequence = useRef(0);
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState(getInitialBookingView);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const initialView = getInitialBookingView();
+    return initialBookingId ? "all" : initialView;
+  });
+  const [highlightedBookingId, setHighlightedBookingId] = useState(initialBookingId);
+  const highlightedBookingRef = useRef(null);
+  const focusedBookingId = useRef("");
   const [bookingClock, setBookingClock] = useState(() => Date.now());
   const [bookingPage, setBookingPage] = useState({ hasMore: false, nextCursor: null });
   const [loadingMore, setLoadingMore] = useState(false);
@@ -373,6 +381,8 @@ export default function BookingsPage({
   const [paymentRecovery, setPaymentRecovery] = useState(null);
   const [paymentRetrySignal, setPaymentRetrySignal] = useState(0);
   const [paymentErrors, setPaymentErrors] = useState({});
+  const [bookAgainState, setBookAgainState] = useState(null);
+  const bookAgainRequest = useRef(null);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(null);
   const arrivedFromPayment = useRef(Boolean(new URLSearchParams(window.location.search).get("payment")));
   const toastedCheckoutIds = useRef(new Set());
@@ -400,6 +410,42 @@ export default function BookingsPage({
   });
   const [showAI, setShowAI] = useState(false);
   const currentUserId = user?._id || getSessionUser()?._id || "";
+
+  useLayoutEffect(() => () => {
+    bookAgainRequest.current = null;
+    setBookAgainState(null);
+  }, [isLoggedIn, currentUserId]);
+
+  const bookAgain = async (booking) => {
+    if (!isLoggedIn || !onBookAgain || bookAgainRequest.current || !["completed", "cancelled"].includes(booking.status)) return;
+    const vehicleId = booking.vehicle?._id || booking.vehicle?.id;
+    if (!vehicleId) return;
+    const request = {};
+    bookAgainRequest.current = request;
+    const update = (status, message = "") => setBookAgainState({ bookingId: booking._id, userId: currentUserId, status, message });
+    update("loading");
+    try {
+      const response = await API.getPublicVehicleById(vehicleId);
+      if (bookAgainRequest.current !== request) return;
+      const vehicle = response?.vehicle;
+      if (response?.success === false || String(vehicle?._id || vehicle?.id || "") !== String(vehicleId) || !vehicle?.name || typeof vehicle.availabilityStatus !== "string") {
+        throw new Error("Incomplete vehicle details.");
+      }
+      if (vehicle.availabilityStatus !== "available" || ![undefined, null, "none"].includes(vehicle.availabilityHoldReason)) {
+        update("unavailable", "This vehicle is currently unavailable. Check again later or browse other vehicles.");
+        showActionToast("This vehicle is currently unavailable.", { id: `renter-vehicle-unavailable-${vehicleId}`, tone: "info" });
+        return;
+      }
+      onBookAgain(vehicle);
+    } catch (error) {
+      if (bookAgainRequest.current !== request) return;
+      update(error.status === 404 ? "missing" : "error", error.status === 404
+        ? "This vehicle is no longer listed. Browse other vehicles to make a new booking."
+        : "Could not check this vehicle's availability. Please retry or browse other vehicles.");
+    } finally {
+      if (bookAgainRequest.current === request) bookAgainRequest.current = null;
+    }
+  };
 
   const hasSeenReviewPrompt = useCallback((bookingId) => {
     const key = reviewPromptKey(currentUserId, bookingId);
@@ -431,8 +477,22 @@ export default function BookingsPage({
         ...(cursor ? { cursor } : {}),
       });
       if (sequence !== requestSequence.current) return;
-      const normalized = bookingResponse.bookings || [];
-      setBookings((previous) => (append ? [...previous, ...normalized] : normalized));
+      let normalized = bookingResponse.bookings || [];
+      if (!append && statusFilter === "all" && initialBookingId && !normalized.some((booking) => booking._id === initialBookingId)) {
+        try {
+          const response = await API.getBookingById(initialBookingId);
+          if (response.booking?._id !== initialBookingId) throw new Error("Booking request unavailable.");
+          normalized = [response.booking, ...normalized];
+        } catch {
+          if (sequence === requestSequence.current) {
+            setLoadError("Your booking request could not be opened. Retry to open it, or use the booking views below.");
+          }
+        }
+      }
+      if (sequence !== requestSequence.current) return;
+      setBookings((previous) => append
+        ? [...previous, ...normalized.filter((booking) => !previous.some((item) => item._id === booking._id))]
+        : normalized);
       setBookingPage(bookingResponse.page || { hasMore: false, nextCursor: null });
       requestLiveCountersRefresh();
     } catch (err) {
@@ -444,7 +504,7 @@ export default function BookingsPage({
         setRefreshing(false);
       }
     }
-  }, [statusFilter]);
+  }, [statusFilter, initialBookingId]);
 
   useEffect(() => {
     if (!isLoggedIn || !currentUserId) return undefined;
@@ -561,10 +621,22 @@ export default function BookingsPage({
   }, [isLoggedIn, chatBooking]);
 
   const filteredBookings = useMemo(
-    () =>
-      bookings.filter((booking) => bookingMatchesView(booking, statusFilter)),
-    [bookings, statusFilter]
+    () => {
+      const filtered = bookings.filter((booking) => bookingMatchesView(booking, statusFilter));
+      const highlighted = statusFilter === "all" && filtered.find((booking) => booking._id === highlightedBookingId);
+      return highlighted ? [highlighted, ...filtered.filter((booking) => booking._id !== highlightedBookingId)] : filtered;
+    },
+    [bookings, statusFilter, highlightedBookingId]
   );
+
+  useEffect(() => {
+    if (loading || statusFilter !== "all" || !highlightedBookingId || focusedBookingId.current === highlightedBookingId) return;
+    const card = highlightedBookingRef.current;
+    if (!card) return;
+    focusedBookingId.current = highlightedBookingId;
+    card.focus({ preventScroll: true });
+    card.scrollIntoView({ behavior: "instant", block: "start" });
+  }, [loading, statusFilter, highlightedBookingId, filteredBookings]);
   const recoveryBookingPaid = Boolean(
     paymentRecovery && bookings.some((booking) =>
       booking._id === paymentRecovery.bookingId &&
@@ -1272,6 +1344,10 @@ export default function BookingsPage({
 
         {!loading && <div className="space-y-4">
           {filteredBookings.map((booking) => {
+            const highlighted = statusFilter === "all" && booking._id === highlightedBookingId;
+            const canBookAgain = ["completed", "cancelled"].includes(booking.status) && Boolean(onBookAgain);
+            const bookAgainFeedback = bookAgainState?.userId === currentUserId && bookAgainState.bookingId === booking._id ? bookAgainState : null;
+            const bookAgainVehicleMissing = (!booking.vehicle?._id && !booking.vehicle?.id) || bookAgainFeedback?.status === "missing";
             const lateReturnInfo = getLateReturnInfo(booking, bookingClock);
             const isEstimatedLatePenalty = lateReturnInfo.penaltyFee <= 0 && lateReturnInfo.estimatedPenaltyFee > 0;
             const displayedLatePenalty =
@@ -1306,7 +1382,24 @@ export default function BookingsPage({
               ["none", "declined"].includes(returnRequestInfo.status);
 
             return (
-            <article key={booking._id} className="rp-booking-card group overflow-hidden p-4 sm:p-5">
+            <article
+              key={booking._id}
+              id={`booking-${booking._id}`}
+              ref={highlighted ? highlightedBookingRef : null}
+              tabIndex={-1}
+              data-highlighted={highlighted || undefined}
+              aria-label={highlighted ? `Your submitted booking for ${booking.vehicle?.name || "Vehicle"}` : undefined}
+              className={`rp-booking-card group scroll-mt-24 overflow-hidden p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:p-5 ${highlighted ? "!border-blue-500" : ""}`}
+            >
+              {highlighted && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  <p role="status" className="font-semibold">{booking.status === "pending" ? "Booking request sent. Awaiting owner approval." : "Your submitted booking"}</p>
+                  <button type="button" onClick={() => {
+                    highlightedBookingRef.current?.focus({ preventScroll: true });
+                    setHighlightedBookingId("");
+                  }} className="min-h-11 rounded-lg px-3 py-2 font-semibold hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Dismiss highlight</button>
+                </div>
+              )}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 gap-4">
                   <VehicleThumbnail vehicle={booking.vehicle} className="rp-booking-thumbnail h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 shadow-inner sm:h-24 sm:w-32" imageClassName="transition duration-300 group-hover:scale-105" />
@@ -1501,6 +1594,27 @@ export default function BookingsPage({
                     >
                       {returnRequestSubmittingId === booking._id ? "Requesting..." : "Request Vehicle Return"}
                     </button>
+                )}
+
+                {canBookAgain && !bookAgainVehicleMissing && (
+                  <button
+                    type="button"
+                    onClick={() => bookAgain(booking)}
+                    disabled={bookAgainState?.userId === currentUserId && bookAgainState.status === "loading"}
+                    aria-busy={bookAgainFeedback?.status === "loading"}
+                    aria-describedby={bookAgainFeedback?.message ? `book-again-${booking._id}` : undefined}
+                    className="inline-flex min-h-11 items-center rounded-xl border border-blue-700 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {bookAgainFeedback?.status === "loading" ? "Checking availability..." : bookAgainFeedback?.status === "error" ? "Retry availability" : bookAgainFeedback?.status === "unavailable" ? "Check availability" : "Book again"}
+                  </button>
+                )}
+                {canBookAgain && (bookAgainVehicleMissing || bookAgainFeedback?.message) && (
+                  <div className="w-full text-sm text-slate-700">
+                    <p id={`book-again-${booking._id}`} role={bookAgainFeedback?.status === "error" ? "alert" : "status"}>
+                      {bookAgainVehicleMissing ? "This vehicle is no longer listed. Browse other vehicles to make a new booking." : bookAgainFeedback.message}
+                    </p>
+                    <button type="button" onClick={onNavigateToVehicles} className="mt-1 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-blue-700 underline underline-offset-2 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">Browse vehicles</button>
+                  </div>
                 )}
 
                 {booking.status === "completed" && !booking.reviewRating && (

@@ -207,13 +207,11 @@ export default function NotificationsPage({
     await deleteNotification(action.notificationId);
   };
 
-  const openNotificationDetails = async (notification) => {
-    let notificationToShow = notification;
+  const openNotificationDetails = (notification) => {
+    setSelectedNotification(notification);
     if (!showArchived && !isNotificationRead(notification)) {
-      const updatedNotification = await markAsRead(notification._id);
-      if (updatedNotification) notificationToShow = updatedNotification;
+      void markAsRead(notification._id);
     }
-    setSelectedNotification(notificationToShow);
   };
 
   const openSelectedBooking = () => {
@@ -309,14 +307,20 @@ export default function NotificationsPage({
             return (
               <article
                 key={notification._id}
-                className={`rp-minimal-card p-4 ${isUnread ? "border-[#017FE6]/40 bg-blue-50/45" : ""}`}
+                className={`rp-minimal-card relative p-4 has-[[aria-expanded=true]]:z-10 ${isUnread ? "border-[#017FE6]/40 bg-blue-50/45" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold">{notification.title}</p>
-                    <p className="text-sm text-gray-700 mt-1">{notification.message}</p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <p className="text-xs text-gray-500">{formatDateTime(notification.lastOccurredAt || notification.createdAt)}</p>
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-label={`View notification: ${notification.title}`}
+                    onClick={() => openNotificationDetails(notification)}
+                    className="min-w-0 flex-1 cursor-pointer rounded-lg text-left hover:bg-slate-100/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+                  >
+                    <span className="block break-words text-sm font-semibold">{notification.title}</span>
+                    <span className="mt-1 block whitespace-pre-line break-words text-sm text-gray-700">{notification.message}</span>
+                    <span className="mt-2 flex flex-wrap items-center gap-3">
+                      <span className="text-xs text-gray-500">{formatDateTime(notification.lastOccurredAt || notification.createdAt)}</span>
                       {showArchived ? (
                         <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                           archived
@@ -330,14 +334,13 @@ export default function NotificationsPage({
                           read
                         </span>
                       )}
-                    </div>
-                  </div>
+                    </span>
+                  </button>
 
                   <div className="flex items-start gap-2">
                     <NotificationActionMenu
                       isUnread={isUnread}
                       isArchived={showArchived}
-                      onViewDetails={() => openNotificationDetails(notification)}
                       onMarkAsRead={() => markAsRead(notification._id)}
                       onArchive={() => archiveNotification(notification._id)}
                       onRestore={() => restoreNotification(notification._id)}

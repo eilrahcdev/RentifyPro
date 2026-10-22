@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 export default function NotificationActionMenu({
   isUnread,
   isArchived,
-  onViewDetails,
   onMarkAsRead,
   onArchive,
   onRestore,
@@ -51,11 +50,6 @@ export default function NotificationActionMenu({
           role="menu"
           className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
-          {onViewDetails && (
-            <button type="button" role="menuitem" onClick={() => runAction(onViewDetails)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
-              View details
-            </button>
-          )}
           {isArchived ? (
             <>
               <button type="button" role="menuitem" onClick={() => runAction(onRestore)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">

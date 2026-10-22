@@ -102,5 +102,9 @@ test("a restarted worker can recheck an abandoned private upload without approvi
   assert.equal(saved.verifiedAt, null);
   assert.equal(saved.detailsMatched, false);
   assert.equal(saved.privateScreening.automatedCheck.outcome, "passed");
+  assert.equal(saved.privateScreening.referenceAssessment.mode, "shadow");
+  assert.equal(saved.privateScreening.referenceAssessment.fileHash, document.fileHash);
+  assert.equal(saved.privateScreening.referenceAssessment.reviewVersion, document.reviewVersion);
+  assert.equal(saved.privateScreening.referenceAssessment.issuerAuthentication.status, "not_performed");
   assert.equal(isIdentityReadyForSelfie({ ...document, ...saved }), true);
 });

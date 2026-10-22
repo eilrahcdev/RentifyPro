@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const base = "http://127.0.0.1:4176";
 const tab = await (await fetch("http://127.0.0.1:9236/json/new?about:blank", { method: "PUT" })).json();
@@ -56,6 +57,9 @@ async function route(event) {
   }
   if (url.hostname !== "psgc.gitlab.io" && url.pathname.startsWith("/api/")) {
     if (event.request.method === "OPTIONS") return fulfill(event, {});
+    if (/\/pre\/documents\/(id|supporting)\/prepare$/.test(url.pathname)) {
+      return fulfill(event, { success: true, uploadAttemptId: crypto.randomUUID() });
+    }
     if (url.pathname.endsWith("/pre/draft")) {
       if (event.request.method === "POST") {
         const body = JSON.parse(event.request.postData);
@@ -70,6 +74,8 @@ async function route(event) {
       idUploads++; idReads = 0;
       const body = JSON.parse(event.request.postData);
       assert.equal(body.user_profile.first_name, "Sample");
+      assert.equal(body.id_image_mime, "image/jpeg");
+      assert.equal(Buffer.from(body.id_image_base64, "base64").subarray(0, 3).toString("hex"), "ffd8ff");
       assert.equal(body.id_type, idUploads === 1 ? "Philippine Passport" : "PRC ID");
       return fulfill(event, { success: true, documentStatus: "queued", documentRevision: `id-${idUploads}` });
     }
@@ -77,6 +83,8 @@ async function route(event) {
       supportingUploads++;
       const body = JSON.parse(event.request.postData);
       assert.equal(body.user_profile.business_name, "Sample Rentals");
+      assert.equal(body.doc_image_mime, "image/jpeg");
+      assert.equal(Buffer.from(body.doc_image_base64, "base64").subarray(0, 3).toString("hex"), "ffd8ff");
       assert.equal(body.supporting_doc_type, "DTI Business Name Registration");
       return fulfill(event, { success: true, documentStatus: "queued", documentRevision: `supporting-${supportingUploads}` });
     }
@@ -129,7 +137,7 @@ const input = async (selector, value) => {
   await pause(100);
   assert.equal(await evaluate(`document.querySelector(${JSON.stringify(selector)}).value`), value);
 };
-const click = async (text) => { await evaluate("window.clockOffset+=2100"); await evaluate(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e||e.disabled)throw Error('Missing/disabled button: '+${JSON.stringify(text)});e.click();})()`); await pause(100); };
+const click = async (text) => { await evaluate("window.clockOffset+=2100"); await evaluate(`(()=>{const root=document.querySelector('dialog[open]')||document;const e=[...root.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e||e.disabled)throw Error('Missing/disabled button: '+${JSON.stringify(text)});e.click();})()`); await pause(100); };
 async function pickFile(index = 0) {
   await evaluate(`(async()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=650;const context=canvas.getContext('2d');
     context.fillStyle='#c5cbd2';context.fillRect(0,0,1000,650);context.fillStyle='#273340';
@@ -139,11 +147,80 @@ async function pickFile(index = 0) {
     const input=document.querySelectorAll('input[type=file]')[${index}];input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await pause(150);
 }
+
+async function checkDocumentCamera(label, kind) {
+  const before = { idUploads, supportingUploads };
+  await evaluate(`(()=>{window.originalDocumentCamera=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    window.documentCameraCalls=[];window.documentCameraTracks=[];
+    navigator.mediaDevices.getUserMedia=async constraints=>{window.documentCameraCalls.push(constraints);
+      if(window.denyDocumentCamera)throw new DOMException('Fixture permission denied','NotAllowedError');
+      const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=650;const ctx=canvas.getContext('2d');
+      ctx.fillStyle='white';ctx.fillRect(0,0,1000,650);ctx.fillStyle='black';
+      for(let y=20;y<650;y+=35)for(let x=20;x<1000;x+=45)ctx.fillRect(x,y,15,12);
+      const stream=canvas.captureStream(10);window.documentCameraTracks.push(...stream.getTracks());
+      if(window.delayDocumentCamera)return await new Promise(resolve=>window.finishDocumentCamera=()=>resolve(stream));
+      return stream;};})()`);
+  const open = async () => {
+    await evaluate(`(()=>{const button=document.querySelector('button[aria-label="Take photo of ${label}"]');button.focus();button.click();})()`);
+    await until("document.querySelector('dialog[open]')");
+  };
+  try {
+    await evaluate("window.denyDocumentCamera=true");
+    await open();
+    await until("document.querySelector('dialog [role=alert]')?.innerText.includes('Camera access is blocked')");
+    await evaluate("document.querySelector('button[aria-label=\"Close document camera\"]').click()");
+    await until("!document.querySelector('dialog[open]')");
+    assert.equal(await evaluate("document.body.innerText.includes('synthetic-test.png')"), true);
+    await evaluate("window.denyDocumentCamera=false;window.delayDocumentCamera=true");
+    await open();
+    await until("window.finishDocumentCamera");
+    await click("Cancel");
+    await evaluate("window.finishDocumentCamera();window.delayDocumentCamera=false");
+    await until("window.documentCameraTracks.every(track=>track.readyState==='ended')");
+    assert.equal(await evaluate("document.body.innerText.includes('synthetic-test.png')"), true);
+    await open();
+    await until("document.querySelector('dialog video')?.videoWidth>0 && [...document.querySelectorAll('dialog button')].some(b=>b.textContent.trim()==='Take photo'&&!b.disabled)");
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+    await until("!document.querySelector('dialog[open]')");
+    assert.equal(await evaluate("window.documentCameraTracks.every(track=>track.readyState==='ended')"), true);
+    assert.equal(await evaluate(`document.activeElement?.getAttribute('aria-label')==='Take photo of ${label}'`), true);
+    await open();
+    await until("document.querySelector('dialog video')?.videoWidth>0 && [...document.querySelectorAll('dialog button')].some(b=>b.textContent.trim()==='Take photo'&&!b.disabled)");
+    await evaluate("Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));delete document.hidden");
+    await until("window.documentCameraTracks.every(track=>track.readyState==='ended')");
+    await click("Open camera");
+    await until("document.querySelector('dialog video')?.videoWidth>0 && [...document.querySelectorAll('dialog button')].some(b=>b.textContent.trim()==='Take photo'&&!b.disabled)");
+    assert.equal(await evaluate("window.documentCameraCalls.every(c=>c.audio===false&&c.video.facingMode.ideal==='environment')"), true);
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('dialog video')).transform"), "none");
+    await captures(`camera-${role}-${kind}`);
+    await click("Take photo");
+    await until("document.querySelector('dialog img') && [...document.querySelectorAll('dialog button')].some(b=>b.textContent.trim()==='Use photo')");
+    assert.equal(await evaluate("window.documentCameraTracks.every(track=>track.readyState==='ended')"), true);
+    await click("Retake");
+    await until("document.querySelector('dialog video')?.videoWidth>0 && [...document.querySelectorAll('dialog button')].some(b=>b.textContent.trim()==='Take photo'&&!b.disabled)");
+    await click("Take photo");
+    await until("document.querySelector('dialog img')");
+    await click("Use photo");
+    await until("!document.querySelector('dialog[open]')");
+    assert.equal(await evaluate(`document.body.innerText.includes('${kind}-photo-')`), true);
+    assert.deepEqual({ idUploads, supportingUploads }, before, "Confirming a capture must not submit it");
+    assert.equal(await evaluate("window.documentCameraTracks.every(track=>track.readyState==='ended')"), true);
+    checks.push(`${role} ${kind}: rear camera request, denied/late permission, Escape/focus return, background cleanup, Retake and explicit photo selection`);
+  } finally {
+    await evaluate("navigator.mediaDevices.getUserMedia=window.originalDocumentCamera");
+  }
+}
 async function captures(name) {
-  for (const width of [1440, 390]) {
-    await send("Emulation.setDeviceMetricsOverride", { width, height: width === 390 ? 844 : 1000, deviceScaleFactor: 1, mobile: width === 390 });
+  const sizes = name.startsWith("camera-") ? [[1440, 1000], [768, 1024], [844, 390], [390, 844]] : [[1440, 1000], [390, 844]];
+  for (const [width, height] of sizes) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 1024 });
     await pause(100);
     assert.equal(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"), true);
+    if (name.startsWith("camera-")) {
+      assert.equal(await evaluate("(()=>{const box=document.querySelector('dialog footer').getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight+1})()"), true);
+      assert.equal(await evaluate("(()=>{const frame=document.querySelector('dialog video').getBoundingClientRect();const area=document.querySelector('dialog .rp-modal-scroll').getBoundingClientRect();return frame.top>=area.top&&frame.bottom<=area.bottom+1})()"), true, "The whole camera frame must fit without scrolling");
+    }
     const metrics = await send("Page.getLayoutMetrics");
     const png = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true,
       clip: { x: 0, y: 0, width, height: Math.ceil(metrics.cssContentSize.height), scale: 1 } });
@@ -168,6 +245,7 @@ try {
       await input('select[name="supportingDocType"]', "DTI Business Name Registration");
       await input('input[name="permitNumber"]', "TEST123"); await click("Next");
       await until("document.querySelector('input[type=file]')"); await pickFile();
+      await checkDocumentCamera("business document", "supporting");
       await click("Upload and check document");
       await until("document.body.innerText.includes('Business document details checked. You can continue registration. Final approval is pending.')");
       assert.equal(await evaluate("document.body.innerText.includes('Step 4')"), true);
@@ -177,7 +255,9 @@ try {
     }
     await until("[...document.querySelectorAll('select')].some(e=>[...e.options].some(o=>o.value==='Philippine Passport'))");
     await evaluate(`(()=>{const e=[...document.querySelectorAll('select')].find(e=>[...e.options].some(o=>o.value==='Philippine Passport'));e.value='Philippine Passport';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-    await pickFile(role === "owner" ? 1 : 0); await click("Upload and check ID");
+    await pickFile(role === "owner" ? 1 : 0);
+    await checkDocumentCamera("government ID", "id");
+    await click("Upload and check ID");
     await until("document.body.innerText.includes('Checking your ID type and registration details...')");
     assert.equal(await evaluate("Boolean(document.querySelector('[data-identity-view=id]'))"), true);
     assert.equal(await evaluate("document.body.innerText.includes('Open camera')"), false);
@@ -200,7 +280,7 @@ try {
     assert.equal(await evaluate("window.fixtureCameraTracks.every(track=>track.readyState==='ended')"), true);
     assert.equal(await evaluate("Boolean(document.querySelector('[data-identity-view=id]'))"), true);
     assert.equal(await evaluate("Boolean(document.querySelector('input[type=file]'))"), true);
-    assert.equal(await evaluate("document.body.innerText.includes('synthetic-test.png')"), true);
+    assert.equal(await evaluate("document.body.innerText.includes('id-photo-')"), true);
     assert.equal(await evaluate("document.body.innerText.includes('Open camera')"), false);
     assert.equal(await evaluate("document.querySelector('[data-document-result=id]').querySelectorAll('p').length"), 1);
     await click("Next");

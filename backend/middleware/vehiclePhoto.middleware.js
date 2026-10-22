@@ -6,7 +6,8 @@ import multer from "multer";
 import Vehicle from "../models/Vehicle.js";
 import VehiclePhoto from "../models/VehiclePhoto.js";
 import { getOrCreateVehiclePhotoReview, photoPath } from "../services/vehiclePhoto.service.js";
-import { getVehicleImagePath, getVehicleUploadDir, normalizeVehicleImageReference, cleanupUploadedVehicleFiles } from "../utils/localMedia.js";
+import { readManagedVehicleImage, getVehicleUploadDir, normalizeVehicleImageReference, cleanupUploadedVehicleFiles } from "../utils/localMedia.js";
+import { publishSharedVehicleImage } from "../services/vehicleImageStorage.service.js";
 import { validateListingFields } from "../utils/vehicleListingValidation.js";
 
 const parse = multer({ limits: { fields: 30, fieldSize: 16384 } }).none();
@@ -38,11 +39,9 @@ export async function prepareApprovedVehicleImages(req, res, next) {
           nextReviews.push(review);
           continue;
         }
-        const localPath = getVehicleImagePath(image);
-        if (!localPath) return fail("Re-upload this listing's photos so they can be reviewed for the new vehicle type.");
         let imageBuffer;
         try {
-          imageBuffer = await fs.readFile(localPath);
+          imageBuffer = await readManagedVehicleImage(image);
         } catch {
           return fail("Re-upload this listing's photos so they can be reviewed for the new vehicle type.");
         }
@@ -79,7 +78,9 @@ export async function prepareApprovedVehicleImages(req, res, next) {
       const filename = `vehicle-${randomUUID()}.webp`;
       const target = path.join(getVehicleUploadDir(), filename);
       await fs.copyFile(photoPath(photo.key), target);
-      req.files.push({ filename, path: target, mimetype: "image/webp" });
+      const file = { filename, path: target, mimetype: "image/webp", sharedImageUploaded: false };
+      req.files.push(file);
+      file.sharedImageUploaded = await publishSharedVehicleImage(filename, target);
       req.approvedPhotoMetadata.push({ path: `uploads/vehicles/${filename}`, exterior: photo.exterior, vehicleType: photo.vehicleType, sourceId: photo._id });
     }
     next();

@@ -52,12 +52,13 @@ const tokenNeedsRenewal = (token) => {
   }
 };
 
-async function postJson(url, body, headers = {}) {
+async function postJson(url, body, headers = {}, { signal } = {}) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     credentials: "include",
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const { response: res, data } = await readApiResponse(response);
   if (!res.ok) {
@@ -68,7 +69,7 @@ async function postJson(url, body, headers = {}) {
   return data;
 }
 
-export async function getPreKycSessionToken(email, role = "user", { refresh = false } = {}) {
+export async function getPreKycSessionToken(email, role = "user", { refresh = false, signal } = {}) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const normalizedRole = normalizeRole(role);
   const key = sessionKey(normalizedEmail, normalizedRole);
@@ -81,22 +82,24 @@ export async function getPreKycSessionToken(email, role = "user", { refresh = fa
     email: normalizedEmail,
     role: normalizedRole,
     ...(previousToken ? { previousToken } : {}),
-  });
+  }, {}, { signal });
   const token = String(result?.preKycToken || "").trim();
   if (!token) throw new Error("Could not start a secure verification session.");
   writeSessionToken(key, token);
   return token;
 }
 
-async function postPreKyc(path, email, role, body) {
+async function postPreKyc(path, email, role, body, options = {}) {
   const normalizedRole = normalizeRole(role);
-  let token = await getPreKycSessionToken(email, normalizedRole);
+  let token = await getPreKycSessionToken(email, normalizedRole, { signal: options.signal });
   try {
-    return await postJson(`${API_BASE_URL}${path}`, body, { "x-pre-kyc-token": token });
+    options.signal?.throwIfAborted();
+    return await postJson(`${API_BASE_URL}${path}`, body, { "x-pre-kyc-token": token }, options);
   } catch (error) {
     if (error?.status !== 401) throw error;
-    token = await getPreKycSessionToken(email, normalizedRole, { refresh: true });
-    return postJson(`${API_BASE_URL}${path}`, body, { "x-pre-kyc-token": token });
+    token = await getPreKycSessionToken(email, normalizedRole, { refresh: true, signal: options.signal });
+    options.signal?.throwIfAborted();
+    return postJson(`${API_BASE_URL}${path}`, body, { "x-pre-kyc-token": token }, options);
   }
 }
 
@@ -131,6 +134,13 @@ export function requestManualIdReview(email, role, documentRevision) {
   return postPreKyc("/kyc/pre/manual-review", email, role, { documentRevision });
 }
 
+export function prepareRegistrationDocument(email, role, docType) {
+  return postPreKyc(`/kyc/pre/documents/${docType}/prepare`, email, role, {}, { signal: AbortSignal.timeout(20000) });
+}
+export function cancelRegistrationDocument(email, role, docType, uploadAttemptId) {
+  return postPreKyc(`/kyc/pre/documents/${docType}/cancel`, email, role, { uploadAttemptId }, { signal: AbortSignal.timeout(20000) });
+}
+
 // Step 1: save the ID face
 export async function preRegisterIdFace(
   email,
@@ -150,7 +160,8 @@ export async function preRegisterIdFace(
     id_type: idType,
     user_profile: userProfile,
     document_revision: documentRevision,
-  });
+    ...(options.uploadAttemptId ? { upload_attempt_id: options.uploadAttemptId } : {}),
+  }, { signal: options.signal });
 }
 
 // Step 2: match one captured selfie with the ID
@@ -179,5 +190,6 @@ export async function preVerifySupportingDocument(
     supporting_doc_type: documentType,
     user_profile: userProfile,
     document_revision: documentRevision,
-  });
+    ...(options.uploadAttemptId ? { upload_attempt_id: options.uploadAttemptId } : {}),
+  }, { signal: options.signal });
 }

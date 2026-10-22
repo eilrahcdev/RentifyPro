@@ -27,8 +27,8 @@ import numpy as np
 from PIL import Image
 import pypdfium2 as pdfium
 
-MAX_FILE_BYTES = 4 * 1024 * 1024
-MAX_REQUEST_BYTES = 6 * 1024 * 1024
+MAX_FILE_BYTES = 5 * 1024 * 1024
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 MAX_PAGES = 5
 MAX_LINES = 1200

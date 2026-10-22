@@ -22,13 +22,13 @@ export const FILE_UPLOAD_RULES = Object.freeze({
   kycImage: Object.freeze({
     allowedTypes: Object.freeze(["image/jpeg", "image/png"]),
     typeDescription: "JPG or PNG",
-    maxSizeBytes: 4 * MEBIBYTE,
+    maxSizeBytes: 5 * MEBIBYTE,
     maxFiles: 1,
   }),
   supportingDocument: Object.freeze({
     allowedTypes: Object.freeze(["image/jpeg", "image/png", "application/pdf"]),
     typeDescription: "JPG, PNG, or PDF",
-    maxSizeBytes: 4 * MEBIBYTE,
+    maxSizeBytes: 5 * MEBIBYTE,
     maxFiles: 1,
   }),
 });

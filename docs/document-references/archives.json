@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "sourceId": "prcGuide",
+      "file": "prc-verification-guide.pdf",
+      "url": "https://www.prc.gov.ph/sites/default/files/Annex%20B%20-%20Step%20by%20Step%20Procedure.pdf",
+      "status": "downloaded",
+      "retrievedAt": "2026-10-20T12:15:34.129Z",
+      "bytes": 233586,
+      "sha256": "6492e50d9b7ab9d34b1178d5f058b20cfec740d953a05163461ce49bd1b31249"
+    },
+    {
+      "sourceId": "philhealth",
+      "file": "philhealth-2016-027.pdf",
+      "url": "https://www.philhealth.gov.ph/circulars/2016/circ2016-027.pdf",
+      "status": "downloaded",
+      "retrievedAt": "2026-10-20T12:15:34.441Z",
+      "bytes": 530016,
+      "sha256": "4c2b9912d9d4ec1dfef2024b1a636495ffb74f7150473a74ad750d1d92f6dc60"
+    },
+    {
+      "sourceId": "philhealthPvc",
+      "file": "philhealth-pvc-advisory.pdf",
+      "url": "https://www.philhealth.gov.ph/advisories/2016/adv2016-0012.pdf",
+      "status": "downloaded",
+      "retrievedAt": "2026-10-20T12:15:34.494Z",
+      "bytes": 134070,
+      "sha256": "ef0eb0501b8e056d2cda54083b6d512f1b17a23133319a092384c6dd239cdd29"
+    },
+    {
+      "sourceId": "birNotice",
+      "file": "bir-niri-43-2022-digest.pdf",
+      "url": "https://bir-cdn.bir.gov.ph/local/pdf/RMO%20No.%2043-2022%20Digest%20RGA.pdf",
+      "status": "downloaded",
+      "retrievedAt": "2026-10-20T12:15:34.734Z",
+      "bytes": 12840,
+      "sha256": "231e1e8f1789e12e0584d9138a3a7e07d6675d249a7ad619baf81ab266c2c437"
+    }
+  ]
+}

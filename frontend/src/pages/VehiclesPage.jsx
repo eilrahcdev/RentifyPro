@@ -1,6 +1,6 @@
 import useResponsiveList from "../hooks/useResponsiveList";
 import ListRevealControls from "../components/ListRevealControls";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CarFront,
   X,
@@ -125,6 +125,9 @@ export default function VehiclesPage({
   const [error, setError] = useState("");
   const [loadedQueryKey, setLoadedQueryKey] = useState(null);
   const loadedQueryRef = useRef({ key: null, count: 0 });
+  const toolbarRef = useRef(null);
+  const resultsRef = useRef(null);
+  const scrollToResultsRef = useRef(false);
   const [showAI, setShowAI] = useState(false);
   const [showBookingAccessModal, setShowBookingAccessModal] = useState(false);
   const [bookingVehicle, setBookingVehicle] = useState(null);
@@ -161,6 +164,37 @@ export default function VehiclesPage({
   );
   const showingCurrentResults = loadedQueryKey === queryKey;
   const visibleVehicles = useResponsiveList(vehicles, queryKey);
+
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    const section = toolbar.closest(".rp-fleet-results");
+    const viewport = window.visualViewport;
+    const updateMeasurements = () => {
+      section.style.setProperty("--rp-fleet-toolbar-height", `${Math.ceil(toolbar.getBoundingClientRect().height)}px`);
+      section.style.setProperty("--rp-fleet-viewport-height", `${viewport?.height || window.innerHeight}px`);
+    };
+    updateMeasurements();
+    const observer = new ResizeObserver(updateMeasurements);
+    observer.observe(toolbar);
+    viewport?.addEventListener("resize", updateMeasurements);
+    return () => {
+      observer.disconnect();
+      viewport?.removeEventListener("resize", updateMeasurements);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!scrollToResultsRef.current || loading || (!showingCurrentResults && !error)) return;
+    resultsRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    scrollToResultsRef.current = false;
+  }, [loading, showingCurrentResults, error]);
+
+  const prepareResultsScroll = () => {
+    if (resultsRef.current && toolbarRef.current &&
+      resultsRef.current.getBoundingClientRect().top < toolbarRef.current.getBoundingClientRect().bottom) {
+      scrollToResultsRef.current = true;
+    }
+  };
 
   useEffect(() => {
     const refreshExisting = reloadSignal > 0 &&
@@ -216,6 +250,7 @@ export default function VehiclesPage({
   }, [combinedSearch, locationFilter, queryKey, searchValidationError, vehicleTypeFilter, reloadSignal]);
 
   const clearLocationFilter = () => {
+    prepareResultsScroll();
     setLocationFilter("");
     setBookingData((prev) => ({ ...prev, location: "" }));
   };
@@ -347,7 +382,7 @@ export default function VehiclesPage({
                   />
               </header>
 
-              <div className="rp-results-toolbar">
+              <div ref={toolbarRef} className="rp-results-toolbar">
                 <div className="rp-quick-filters" role="group" aria-label="Quick vehicle type filters">
                   {VEHICLE_TYPE_FILTERS.map((filter) => (
                     <button
@@ -356,7 +391,10 @@ export default function VehiclesPage({
                       aria-pressed={vehicleTypeFilter === filter.value}
                       className={vehicleTypeFilter === filter.value ? "is-active" : ""}
                       onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
-                      onClick={() => setVehicleTypeFilter(filter.value)}
+                      onClick={() => {
+                        if (vehicleTypeFilter !== filter.value) prepareResultsScroll();
+                        setVehicleTypeFilter(filter.value);
+                      }}
                     >
                       {filter.label}
                     </button>
@@ -364,7 +402,11 @@ export default function VehiclesPage({
                 </div>
                 <VehicleSearchInput
                   value={searchQuery}
-                  onChange={(value) => setSearchQuery(filterVehicleSearch(value))}
+                  onChange={(value) => {
+                    const nextSearch = filterVehicleSearch(value);
+                    if (searchQuery !== nextSearch) prepareResultsScroll();
+                    setSearchQuery(nextSearch);
+                  }}
                   onSelectVehicle={openSuggestedVehicle}
                   location={locationFilter}
                   vehicleType={vehicleTypeFilter}
@@ -394,11 +436,11 @@ export default function VehiclesPage({
               {refreshing && showingCurrentResults && <p role="status" className="mb-3 text-sm text-slate-600">Updating listings...</p>}
 
               {!loading && error && (
-                <div role="alert" className="rp-results-status rp-results-status--error"><span>{error}</span><button type="button" onClick={() => setReloadSignal((value) => value + 1)} className="rounded-lg border border-current px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2">Retry</button></div>
+                <div ref={resultsRef} role="alert" className="rp-results-status rp-results-status--error"><span>{error}</span><button type="button" onClick={() => setReloadSignal((value) => value + 1)} className="rounded-lg border border-current px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2">Retry</button></div>
               )}
 
               {!loading && !error && showingCurrentResults && vehicles.length === 0 && (
-                <div className="rp-results-status">
+                <div ref={resultsRef} className="rp-results-status">
                   <CarFront size={24} />
                   <strong>{locationFilter ? `No available vehicles found in ${locationFilter}` : "No vehicles match your search"}</strong>
                   <span>Try another location, search term, or vehicle type.</span>
@@ -409,7 +451,7 @@ export default function VehiclesPage({
               )}
 
               {!loading && !error && showingCurrentResults && vehicles.length > 0 && (
-                <div className="rp-market-grid">
+                <div ref={resultsRef} className="rp-market-grid">
                   {visibleVehicles.items.map((vehicle) => (
                     <VehicleCard
                       key={vehicle.id}

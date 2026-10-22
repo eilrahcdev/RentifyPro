@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { WalletCards, X } from "lucide-react";
 import ModalPortal from "./ModalPortal";
 
@@ -47,6 +48,37 @@ function DetailLine({ label, value, strong = false }) {
 }
 
 export default function NotificationDetailsModal({ notification, viewerRole = "user", onClose, onOpenBookings }) {
+  const dialogRef = useRef(null);
+  const titleRef = useRef(null);
+  const isOpen = Boolean(notification);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    dialog.showModal();
+    titleRef.current?.focus({ preventScroll: true });
+    return () => {
+      dialog.close();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [isOpen]);
+
+  const trapFocus = (event) => {
+    if (event.key !== "Tab") return;
+    const controls = [...dialogRef.current.querySelectorAll('.rp-modal-panel button:not(:disabled), .rp-modal-panel a[href]')]
+      .filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleRef.current)) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  };
+
   if (!notification) return null;
 
   const data = notification.data || {};
@@ -65,13 +97,16 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
 
   return (
     <ModalPortal>
-      <div
-        className="rp-modal-layer"
+      <dialog
+        ref={dialogRef}
+        className="rp-modal-layer m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-0 text-slate-900 backdrop:bg-transparent"
         role="dialog"
         aria-modal="true"
         aria-labelledby="notification-details-title"
+        onCancel={(event) => { event.preventDefault(); onClose(); }}
+        onKeyDown={trapFocus}
       >
-        <button type="button" className="rp-modal-backdrop" onClick={onClose} aria-label="Close notification details" />
+        <button type="button" tabIndex={-1} className="rp-modal-backdrop" onClick={onClose} aria-label="Close notification details" />
         <section className="rp-modal-panel relative z-10 flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)] sm:max-h-[90dvh] sm:rounded-3xl">
           <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
@@ -83,7 +118,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#017FE6]">
                     {isLateReturn ? (isFinalFee ? "Late-return payment" : "Late-return estimate") : "Notification"}
                   </p>
-                  <h2 id="notification-details-title" className="mt-0.5 text-lg font-bold text-slate-900">
+                  <h2 ref={titleRef} tabIndex={-1} id="notification-details-title" className="mt-0.5 text-lg font-bold text-slate-900">
                     {isLateReturn ? (isFinalFee ? "Review late-return fee" : "Late-return fee details") : "Notification details"}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -165,7 +200,7 @@ export default function NotificationDetailsModal({ notification, viewerRole = "u
             {isVerification && <a href={isRenter ? "/account-settings#verification-status" : "/owner-dashboard?tab=Profile#verification-status"} className="rp-btn-primary px-4 py-2.5 text-center text-sm">View Verification Status</a>}
           </footer>
         </section>
-      </div>
+      </dialog>
     </ModalPortal>
   );
 }

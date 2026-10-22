@@ -10,6 +10,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import { scrollPageToTop } from "../utils/pageScroll";
 import ChatWidget from "../components/ChatWidget";
 import VehiclePreviewModal from "../components/VehiclePreviewModal";
 import API from "../utils/api";
@@ -722,7 +723,7 @@ export default function RentifyPro({
               <h4 className="font-bold mb-3">Quick Links</h4>
               <ul className="space-y-2 text-blue-100 text-sm">
                 <li>
-                  <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                  <button onClick={() => scrollPageToTop()}>
                     Home
                   </button>
                 </li>

@@ -75,6 +75,14 @@ class ServiceTests(unittest.TestCase):
         response = self.client.post("/inspect", content=b"a" * (main.MAX_REQUEST_BYTES + 1), headers={"x-internal-key": "i" * 32})
         self.assertEqual(response.status_code, 413)
 
+    def test_five_mb_document_fits_encoded_request_and_next_byte_is_rejected(self):
+        limit = 5 * 1024 * 1024
+        original = image_bytes()
+        data = original + b"\x00" * (limit - len(original))
+        response = self.request(base64=base64.b64encode(data).decode())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.request(base64=base64.b64encode(data + b"\x00").decode()).status_code, 422)
+
     def test_unreadable_image_and_pdf(self):
         self.assertEqual(self.request(base64=base64.b64encode(b"invalid image").decode()).status_code, 422)
         self.assertEqual(self.request(base64=base64.b64encode(b"%PDF-invalid").decode(), mime_type="application/pdf").status_code, 422)

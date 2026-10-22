@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Users, Wrench, ShieldCheck, X } from "lucide-react";
 import Navbar from "../components/Navbar";
+import { scrollPageToTop } from "../utils/pageScroll";
 
   const AboutPage = ({
   onNavigateToHome,
@@ -176,7 +177,7 @@ import Navbar from "../components/Navbar";
               <ul className="space-y-3">
                 <li>
                   <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                    onClick={() => scrollPageToTop()}
                     className="text-blue-100 hover:text-white transition"
                   >
                     <span className="text-white font-semibold cursor-default">
@@ -201,7 +202,7 @@ import Navbar from "../components/Navbar";
                 </li>
 
                 <li>
-                  <a href="#" className="text-blue-100 hover:text-white transition">
+                  <a href="#" onClick={() => scrollPageToTop()} className="text-blue-100 hover:text-white transition">
                     About Us
                   </a>
                 </li>
@@ -212,10 +213,10 @@ import Navbar from "../components/Navbar";
             <div>
               <h4 className="font-bold mb-4">Vehicle Categories</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-blue-100 hover:text-white">Cars</a></li>
-                <li><a href="#" className="text-blue-100 hover:text-white">Motorcycles</a></li>
-                <li><a href="#" className="text-blue-100 hover:text-white">Vans</a></li>
-                <li><a href="#" className="text-blue-100 hover:text-white">Trucks</a></li>
+                <li><a href="#" onClick={() => scrollPageToTop()} className="text-blue-100 hover:text-white">Cars</a></li>
+                <li><a href="#" onClick={() => scrollPageToTop()} className="text-blue-100 hover:text-white">Motorcycles</a></li>
+                <li><a href="#" onClick={() => scrollPageToTop()} className="text-blue-100 hover:text-white">Vans</a></li>
+                <li><a href="#" onClick={() => scrollPageToTop()} className="text-blue-100 hover:text-white">Trucks</a></li>
               </ul>
             </div>
 

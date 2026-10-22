@@ -2666,6 +2666,45 @@ select:not([multiple]):disabled {
   min-width: 0;
 }
 
+#root:has(.rp-fleet-results) {
+  overflow-x: clip;
+}
+
+.rp-fleet-results > .rp-results-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid transparent;
+  padding-block: 0.75rem;
+}
+
+.rp-fleet-results > .rp-results-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 calc(50% - 50vw) -1px;
+  z-index: -1;
+  background: #f8fbff;
+  pointer-events: none;
+}
+
+.rp-fleet-results :is(.rp-market-grid, .rp-results-status, .rp-list-reveal),
+.rp-fleet-results :is(.rp-market-grid, .rp-results-status, .rp-list-reveal) :is(a, button) {
+  scroll-margin-block-start: var(--rp-fleet-toolbar-height, 0px);
+}
+
+.rp-fleet-results .rp-vehicle-search__options {
+  max-height: max(4rem, calc(var(--rp-fleet-viewport-height, 100dvh) - var(--rp-navbar-height, 0px) - var(--rp-fleet-toolbar-height, 0px) - 1rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 767px) {
+  .rp-fleet-results > .rp-results-toolbar {
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+  }
+}
+
 .rp-results-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2682,6 +2721,27 @@ select:not([multiple]):disabled {
 @media (min-width: 768px) {
   .rp-results-toolbar {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    grid-template-rows: auto auto auto;
+    align-items: stretch;
+    row-gap: 0.3rem;
+  }
+
+  .rp-results-toolbar .rp-quick-filters {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .rp-results-toolbar .rp-vehicle-search {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+  }
+
+  .rp-results-toolbar .rp-vehicle-search__control,
+  .rp-results-toolbar .rp-vehicle-search__control input {
+    height: 100%;
   }
 }
 

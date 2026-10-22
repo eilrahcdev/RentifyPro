@@ -212,6 +212,8 @@ export async function saveRegistrationDraft(req, res) {
       if (current.registeredUser || (current.submissionDocuments && !sameFields) || new Date(current.submissionUntil || 0) > now)
         throw fail(409, "Account creation is in progress or complete. Recover your saved registration.", "REGISTRATION_SUBMITTED");
       if (req.body?.revision !== current.revision) throw fail(409, "Progress changed in another tab. Recover the latest draft before saving.", "DRAFT_CONFLICT");
+      if (new Date(current.evidenceUntil || 0) > now) throw fail(409,
+        "A verification is still running. Wait for it to finish or cancel its document check before saving.", "REGISTRATION_BUSY");
       const emailChanged = draftEmail(role, current.fields) !== draftEmail(role, fields);
       const hasOwnedEvidence = emailChanged && await PreKycDocument.exists({ sessionId: current.sessionId, role,
         expiresAt: { $gt: now } });

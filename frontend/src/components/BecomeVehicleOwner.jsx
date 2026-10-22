@@ -174,7 +174,7 @@ export default function BecomeVehicleOwner({ profile, onUpgraded, onOpenDashboar
     </div>
     <div className="rp-settings-card space-y-4 p-6">
       <h4 className="text-lg font-semibold">Supporting Document</h4>
-      <p id="upgrade-upload-help" className="text-sm text-gray-600">Choose one Philippine business document: JPG, PNG, or PDF, up to 4 MB.</p>
+      <p id="upgrade-upload-help" className="text-sm text-gray-600">Choose one Philippine business document: JPG, PNG, or PDF, up to 5 MB.</p>
       <fieldset disabled={busy || !identityApproved} className="min-w-0 space-y-4">
         <label htmlFor="upgrade-document-type" className="block space-y-1 text-sm font-medium text-gray-700"><span className="block">Document type *</span>
           <select id="upgrade-document-type" value={documentType} onChange={(event) => {

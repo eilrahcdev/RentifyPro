@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentTime, getTodayDate, getTomorrowDate } from "./utils/dateUtils";
+import { scrollPageToTop } from "./utils/pageScroll";
 
 // Main pages
 import RentifyPro from "./pages/RentifyPro";
@@ -266,6 +267,7 @@ const App = () => {
   const bookingReturnRef = useRef(readBookingReturn());
   const [pendingScrollTarget, setPendingScrollTarget] = useState("");
   const [chatNavigationContext, setChatNavigationContext] = useState(null);
+  const [bookingNavigationContext, setBookingNavigationContext] = useState(null);
 
   const beginBookingSignIn = (vehicle) => {
     const vehicleId = String(vehicle?._id || vehicle?.id || "").trim();
@@ -810,6 +812,7 @@ const App = () => {
     IDLE_ACTIVITY_EVENTS.forEach((eventName) => {
       window.addEventListener(eventName, markActivity, { passive: true });
     });
+    document.body.addEventListener("scroll", markActivity, { passive: true });
 
     tickIdleState();
     const idleTimer = window.setInterval(tickIdleState, 1000);
@@ -819,10 +822,14 @@ const App = () => {
       IDLE_ACTIVITY_EVENTS.forEach((eventName) => {
         window.removeEventListener(eventName, markActivity);
       });
+      document.body.removeEventListener("scroll", markActivity);
     };
   }, [isLoggedIn, isOwnerLoggedIn, keepSessionActive, performLogout, logoutState.status]);
 
-  const goToBookingHistory = () => {
+  const goToBookingHistory = (context) => {
+    setBookingNavigationContext(typeof context?.bookingId === "string"
+      ? { bookingId: context.bookingId.trim(), userId: user?._id }
+      : null);
     setCurrentPage("booking-history");
   };
 
@@ -920,7 +927,7 @@ const App = () => {
     }
 
     if (currentPage === "about") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollPageToTop();
       return;
     }
 
@@ -941,12 +948,12 @@ const App = () => {
     setHelpGuideSlug(safeSlug);
     setHelpAudience(safeAudience);
     setCurrentPage("help");
-    window.scrollTo(0, 0);
+    scrollPageToTop({ behavior: "instant" });
   };
 
   const goToPrivacyPolicy = () => {
     if (currentPage === "privacy-policy") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollPageToTop();
       return;
     }
     setCurrentPage("privacy-policy");
@@ -954,7 +961,7 @@ const App = () => {
 
   const goToTermsAndConditions = () => {
     if (currentPage === "terms-and-conditions") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollPageToTop();
       return;
     }
     setCurrentPage("terms-and-conditions");
@@ -1045,12 +1052,13 @@ const App = () => {
         onSignOut={() => performLogout({ redirectPage: "signin" })}
       />
 
-      <RenterNotificationsModal
+      {showRenterNotificationsModal && <RenterNotificationsModal
         isOpen={showRenterNotificationsModal}
         isLoggedIn={isLoggedIn && !isOwnerLoggedIn}
         onClose={closeRenterNotificationsModal}
         onViewAllNotifications={handleViewAllRenterNotifications}
-      />
+        onOpenBookings={goToBookingHistory}
+      />}
 
       {helpPanelGuideSlug !== null && (
         <HelpPanel
@@ -1362,6 +1370,12 @@ const App = () => {
         <BookingsPage
           isLoggedIn={isLoggedIn}
           user={user}
+          initialBookingId={bookingNavigationContext?.userId === user?._id ? bookingNavigationContext?.bookingId : ""}
+          onBookAgain={(vehicle) => {
+            setBookingData(getDefaultBookingData());
+            setSelectedVehicle(vehicle);
+            setCurrentPage("vehicle-details");
+          }}
           onNavigateToHome={() => setCurrentPage("home")}
           onNavigateToSignIn={() => setCurrentPage("signin")}
           onNavigateToRegister={() => setCurrentPage("register")}

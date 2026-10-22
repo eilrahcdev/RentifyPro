@@ -36,7 +36,11 @@ export async function readPrivateKycEvidence(document, directory) {
   try {
     const actual = await fs.realpath(file);
     const info = await fs.stat(actual);
-    if (path.dirname(actual) !== await fs.realpath(root) || !info.isFile() || info.size > 4 * 1024 * 1024) {
+    const configuredBytes = Number(process.env.KYC_DOC_MAX_BYTES);
+    const maxBytes = Number.isSafeInteger(configuredBytes) && configuredBytes > 0
+      ? Math.min(configuredBytes, 5 * 1024 * 1024) : 5 * 1024 * 1024;
+    if (path.dirname(actual) !== await fs.realpath(root) || !info.isFile()
+      || info.size > maxBytes) {
       throw fail("The private document file cannot be reviewed securely.");
     }
     const bytes = await fs.readFile(actual);

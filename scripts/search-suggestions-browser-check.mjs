@@ -152,6 +152,33 @@ try {
   assert.equal(await evaluate("document.getElementById('home-search-location').value"), "Dagupan City, Pangasinan");
   await evaluate("[...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Find vehicles').click()");
   await wait("document.getElementById('vehicle-market-search')");
+  for (const width of [320, 390, 640, 767, 768, 1024, 1440, 1920]) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });
+    const layout = await evaluate(`(() => {
+      const filters = document.querySelector('.rp-quick-filters').getBoundingClientRect();
+      const search = document.getElementById('vehicle-market-search').getBoundingClientRect();
+      const label = document.querySelector('label[for="vehicle-market-search"]').getBoundingClientRect();
+      const help = document.getElementById('vehicle-search-help').getBoundingClientRect();
+      return {
+        filters: { top: filters.top, bottom: filters.bottom, right: filters.right },
+        search: { top: search.top, bottom: search.bottom, left: search.left },
+        labelBottom: label.bottom,
+        helpTop: help.top,
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    })()`);
+    assert.equal(layout.overflow, false, `Toolbar overflow at ${width}px`);
+    assert.ok(layout.labelBottom <= layout.search.top, `Search label overlaps the field at ${width}px`);
+    assert.ok(layout.helpTop >= layout.search.bottom, `Search help overlaps the field at ${width}px`);
+    if (width >= 768) {
+      assert.ok(Math.abs(layout.filters.top - layout.search.top) <= 1, `Filter/search top alignment at ${width}px: ${JSON.stringify(layout)}`);
+      assert.ok(Math.abs(layout.filters.bottom - layout.search.bottom) <= 1, `Filter/search bottom alignment at ${width}px`);
+      assert.ok(layout.filters.right < layout.search.left, `Filter/search horizontal spacing at ${width}px`);
+    } else {
+      assert.ok(layout.filters.bottom < layout.search.top, `Stacked toolbar spacing at ${width}px`);
+    }
+  }
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await wait("document.querySelector('.rp-vehicle-search__control .rp-search-hint')");
   assert.equal(await evaluate("document.querySelector('.rp-vehicle-search__control .rp-search-hint').textContent"), "Toyota Vios 1.3");
   await wait("document.querySelector('.rp-vehicle-search__control .rp-search-hint').dataset.phase === 'delete' && document.querySelector('.rp-vehicle-search__control .rp-search-hint').textContent.length < 15");

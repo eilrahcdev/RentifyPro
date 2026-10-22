@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getPublicUploadsDir } from "./storagePaths.js";
+import { readSharedVehicleImage, removeSharedVehicleImage } from "../services/vehicleImageStorage.service.js";
 
 const publicUploadsDir = getPublicUploadsDir();
 const vehicleUploadDir = path.join(publicUploadsDir, "vehicles");
@@ -57,26 +58,41 @@ export const getVehicleImagePath = (value = "") => {
   return target;
 };
 
-export const removeLocalVehicleImage = async (value = "") => {
+export const readManagedVehicleImage = async (value = "") => {
   const target = getVehicleImagePath(value);
-  if (!target) return false;
+  if (!target) throw new Error("Invalid managed vehicle image reference.");
   try {
-    await fs.unlink(target);
-    return true;
+    return await fs.readFile(target);
   } catch (error) {
-    if (error?.code === "ENOENT") return false;
+    if (error?.code !== "ENOENT") throw error;
+    const bytes = await readSharedVehicleImage(path.basename(target));
+    if (bytes) return bytes;
     throw error;
   }
 };
 
+export const removeLocalVehicleImage = async (value = "", { shared = true } = {}) => {
+  const target = getVehicleImagePath(value);
+  if (!target) return false;
+  let removed = false;
+  try {
+    await fs.unlink(target);
+    removed = true;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const sharedRemoved = shared && await removeSharedVehicleImage(path.basename(target));
+  return removed || sharedRemoved;
+};
+
 export const removeLocalVehicleImages = async (values = []) => {
   const unique = [...new Set((Array.isArray(values) ? values : []).map(normalizeVehicleImageReference).filter(Boolean))];
-  await Promise.allSettled(unique.map((value) => removeLocalVehicleImage(value)));
+  const results = await Promise.allSettled(unique.map((value) => removeLocalVehicleImage(value)));
+  if (results.some(result => result.status === "rejected")) console.warn("Vehicle image cleanup could not remove one or more managed photos.");
 };
 
 export const cleanupUploadedVehicleFiles = async (files = []) => {
-  const keys = (Array.isArray(files) ? files : [])
-    .map((file) => getUploadedVehicleImageReference(file))
-    .filter(Boolean);
-  await removeLocalVehicleImages(keys);
+  const results = await Promise.allSettled((Array.isArray(files) ? files : []).map(file =>
+    removeLocalVehicleImage(getUploadedVehicleImageReference(file), { shared: file.sharedImageUploaded !== false })));
+  if (results.some(result => result.status === "rejected")) console.warn("Vehicle image upload cleanup could not remove one or more managed photos.");
 };

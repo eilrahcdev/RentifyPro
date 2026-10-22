@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import { selectRegistrationFields, validRegistrationStep, validRegistrationPhase } from "../backend/utils/registrationDraft.js";
 import { supportingDocumentCanContinue } from "../backend/utils/registrationReview.js";
 
 const base = "http://127.0.0.1:4176";
+const documentCancelOnly = process.argv.includes("--document-cancel-only");
 const uxOnly = process.argv.includes("--ux-only");
 const authUiOnly = process.argv.includes("--auth-ui-only");
 const lifecycleOnly = process.argv.includes("--lifecycle-only");
@@ -33,6 +35,7 @@ const accounts = [];
 const registrationRequests = [];
 let failure = "", uploadInterrupted = false, selfieInterrupted = false, otpInterrupted = false, accountInterrupted = false, registrationInvalid = false, sequence = 0, canceledRequests = 0;
 let verificationFailure = "";
+let uploadDelay = 0, prepareDelay = 0, cancelFailure = false;
 const target = await (await fetch("http://127.0.0.1:9236/json/new?about:blank", { method: "PUT" })).json();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
@@ -66,6 +69,20 @@ async function handle({ requestId, request }) {
     if (url.pathname === "/api/auth/me") return reply(requestId, 401, { message: "Synthetic signed-out session" });
     if (url.pathname === "/api/auth/login-challenge") return reply(requestId, 200, { challengeId: "fixture-challenge", question: "What is 7 + 48?" });
     if (url.pathname === "/api/auth/check-registration-email") return reply(requestId, 200, { success: true, available: true });
+    if (/\/pre\/documents\/(id|supporting)\/prepare$/.test(url.pathname)) {
+      if (prepareDelay) await pause(prepareDelay);
+      return reply(requestId, 200, { success: true, uploadAttemptId: crypto.randomUUID() });
+    }
+    if (/\/pre\/documents\/(id|supporting)\/cancel$/.test(url.pathname)) {
+      if (cancelFailure) return reply(requestId, 503, { success: false, message: "Synthetic cancellation unavailable. Please retry." });
+      const body = JSON.parse(request.postData || "{}");
+      const docType = url.pathname.split("/").at(-2);
+      const document = drafts.get(currentRole)?.documents.find(doc => doc.docType === docType && doc.documentRevision === body.uploadAttemptId);
+      if (document) Object.assign(document, { status: "reupload_required", identityReadyForSelfie: false, documentRevision: crypto.randomUUID(),
+        reasonCode: "DOCUMENT_CHECK_CANCELLED", reason: "Document check cancelled." });
+      if (docType === "id") drafts.get(currentRole).selfieVerified = false;
+      return reply(requestId, 200, { success: true, cancelled: true, uploadAttemptId: body.uploadAttemptId, documentRevision: document?.documentRevision || "" });
+    }
     if (url.pathname.startsWith("/api/kyc/pre/draft/otp/")) {
       const draft = drafts.get(url.searchParams.get("role"));
       const body = JSON.parse(request.postData || "{}");
@@ -129,9 +146,23 @@ async function handle({ requestId, request }) {
       uploads.push({ role: currentRole, body: JSON.parse(request.postData || "{}") });
       const draft = drafts.get(currentRole); draft.documents = documentsFor(currentRole).map(document => document.docType === "id"
         ? { ...document, selectedDocCategory: uploads.at(-1).body.id_type } : document); draft.selfieVerified = false;
+      if (documentCancelOnly) {
+        const document = draft.documents.find(doc => doc.docType === "id");
+        Object.assign(document, { documentRevision: uploads.at(-1).body.upload_attempt_id, status: "queued", identityReadyForSelfie: false });
+        if (uploadDelay) await pause(uploadDelay);
+        return reply(requestId, 200, { success: true, documentStatus: "queued", documentRevision: document.documentRevision });
+      }
       if (uploadInterrupted) { uploadInterrupted = false; return send("Fetch.failRequest", { requestId, errorReason: "ConnectionReset" }); }
       if (verificationFailure === "id") return reply(requestId, 500, { success: false, message: "We couldn't verify your ID right now. Please try again." });
       return reply(requestId, 200, { success: true, documentStatus: "verified", documentRevision: "fixture-id-revision" });
+    }
+    if (url.pathname === "/api/kyc/pre/supporting-doc/verify") {
+      const body = JSON.parse(request.postData || "{}"); uploads.push({ role: currentRole, body });
+      const draft = drafts.get(currentRole);
+      draft.documents = [...draft.documents.filter(doc => doc.docType !== "supporting"),
+        { ...documentsFor("owner").find(doc => doc.docType === "supporting"), status: "queued", documentRevision: body.upload_attempt_id }];
+      if (uploadDelay) await pause(uploadDelay);
+      return reply(requestId, 200, { success: true, documentStatus: "queued", documentRevision: body.upload_attempt_id });
     }
     if (url.pathname === "/api/kyc/pre/selfie/verify") {
       if (verificationFailure === "selfie") return reply(requestId, 503, { success: false, message: "We couldn't verify your selfie right now. Please try again." });
@@ -209,7 +240,137 @@ const confirmCancel = () => evaluate("document.querySelector('[aria-label=\"Conf
 try {
   await send("Page.enable"); await send("Runtime.enable"); await send("Fetch.enable", { patterns: [{ urlPattern: "http*" }] });
   await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.registrationDocument = Math.random();" });
-  if (authUiOnly) {
+  if (documentCancelOnly) {
+    const selectFile = async docType => evaluate(`(async () => {
+      const canvas=document.createElement('canvas'); canvas.width=1000; canvas.height=650;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,1000,650);
+      ctx.fillStyle='black';for(let y=20;y<650;y+=35)for(let x=20;x<1000;x+=45)ctx.fillRect(x,y,15,12);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      const file=new File([blob],'synthetic-${docType}.png',{type:'image/png'});const data=new DataTransfer();data.items.add(file);
+      const el=${docType === "id" ? "[...document.querySelectorAll('input[type=file]')].find(el=>!el.name)" : "document.querySelector('input[name=supportingDocument]')"};
+      el.files=data.files;el.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    const cancelButton = type => `document.querySelector('[data-document-actions=${type}] button')`;
+    for (const role of ["user", "owner"]) {
+      await seed(role,role === "user" ? 2 : 1,{documents:[],selfieVerified:false});
+      await wait("['restored','saved'].includes(document.querySelector('[data-registration-draft]')?.dataset.draftState)");
+      await pause(1000);
+      const draft = drafts.get(role);
+      const cached = { version:1, fields:{...draft.fields,firstName:"Unsaved"},expiresAt:Date.now()+3500000,
+        pending:{step:draft.step,phase:"email",revision:draft.revision,sentFields:draft.fields,blocked:false} };
+      await evaluate(`sessionStorage.setItem('rentifypro.registrationDraft.v1.${role}',${JSON.stringify(JSON.stringify(cached))})`);
+      failure="conflict"; await send("Page.reload",{ignoreCache:true});
+      await wait("document.querySelector('[data-registration-draft]')?.dataset.draftState==='conflict'");
+      failure="recovery"; await click("Recover saved progress");
+      await wait("document.querySelector('[data-registration-draft]')?.dataset.draftState==='unavailable'");
+      assert.equal(await evaluate(`Boolean(JSON.parse(sessionStorage.getItem('rentifypro.registrationDraft.v1.${role}'))?.pending)`),true);
+      failure="conflict"; const before=saves.length; await click("Retry saving and recovery");
+      await wait("document.querySelector('[data-registration-draft]')?.dataset.draftState==='restored'");
+      assert.equal(saves.length,before,"Explicit recovery must not replay a blocked save");
+      assert.equal(drafts.get(role).fields.firstName,"Alice");
+      checks.push(`${role} failed recovery keeps cached edits; explicit recovery loads saved details without a conflicting POST`);
+      failure="";
+    }
+    for (const role of ["user","owner"]) {
+      await seed(role,4,{documents:[],selfieVerified:false,verificationPhase:"documents"});
+      await selectFile("id"); prepareDelay=400;
+      const before=uploads.length; await click("Upload and check ID");
+      await wait(`${cancelButton("id")}?.textContent==='Cancel upload'`);
+      await evaluate(`${cancelButton("id")}.click()`);
+      await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+      assert.equal(uploads.length,before,"Cancellation during preparation must never send document bytes");
+      prepareDelay=0;
+      checks.push(`${role} cancellation before file transfer finishes cleanly without an upload or a stuck form`);
+    }
+    for (const width of [320,390,768,844,1200]) for (const role of ["user","owner"]) {
+      await send("Emulation.setDeviceMetricsOverride",{width,height:width===844?390:900,deviceScaleFactor:1,mobile:width<1024});
+      await seed(role,4,{documents:[],selfieVerified:false,verificationPhase:"documents"});
+      await selectFile("id"); uploadDelay=900;
+      const beforeUpload=uploads.length;
+      await click("Upload and check ID");
+      await wait(`${cancelButton("id")}?.textContent==='Cancel upload'&&!${cancelButton("id")}.matches(':disabled')`);
+      const uploadDeadline=Date.now()+5000;
+      while(uploads.length===beforeUpload&&Date.now()<uploadDeadline) await pause(40);
+      assert.equal(uploads.length,beforeUpload+1);
+      assert.equal(await evaluate(`(() => {const [cancel,upload]=document.querySelector('[data-document-actions=id]').querySelectorAll('button');
+        const a=cancel.getBoundingClientRect(),b=upload.getBoundingClientRect();return a.right<=b.left&&a.height>=44&&b.right<=innerWidth;})()`),true);
+      assert.equal(await evaluate(`(() => {const row=document.querySelector('[data-document-actions=id]').getBoundingClientRect(),footer=document.querySelector('.rp-registration-actions');
+        const bottom=footer&&getComputedStyle(footer).position==='fixed'?footer.getBoundingClientRect().top:innerHeight;return row.top>=0&&row.bottom<=bottom;})()`),true,"The active ID action row must stay clear of the mobile footer");
+      assert.equal(await evaluate(`([...document.querySelectorAll('form input,form select,form button')].filter(el=>el.getClientRects().length&&!el.closest('[data-document-actions]')).every(el=>el.matches(':disabled')||el.closest('[inert]')))`),true,"Other registration controls stay locked while uploading");
+      if ([320,1200].includes(width)) await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:true}).then(result=>fs.writeFile(path.join(os.tmpdir(),`rentifypro-cancel-${role}-id-${width}.png`),Buffer.from(result.data,"base64")));
+      await evaluate(`${cancelButton("id")}.focus()`);
+      await send("Page.bringToFront");
+      assert.equal(await evaluate(`document.activeElement===${cancelButton("id")}`),true);
+      await send("Input.dispatchKeyEvent",{type:"keyDown",key:"Enter",code:"Enter",text:"\r",windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+      await send("Input.dispatchKeyEvent",{type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+      await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+      await pause(1050);
+      assert.equal(await evaluate("document.body.innerText.includes('synthetic-id.png')"),true);
+      assert.equal(await evaluate("document.activeElement===document.querySelector('[data-document-actions=id] .rp-btn-primary')"),true,"Focus returns to the upload action after cancellation");
+      assert.equal(await evaluate("Boolean(document.querySelector('[data-identity-view=id]'))"),true);
+      assert.equal(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"),true);
+      uploadDelay=0; await pause(2100); await click("Upload and check ID");
+      await wait(`${cancelButton("id")}?.textContent==='Cancel check'`);
+      await reload(4); await wait(`${cancelButton("id")}?.textContent==='Cancel check'`);
+      await evaluate(`${cancelButton("id")}.click()`);
+      await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+      if (width===320) {
+        const savedRevision=drafts.get(role).documents.find(doc=>doc.docType==='id').documentRevision;
+        await click("Upload and check ID"); await wait(`${cancelButton("id")}?.textContent==='Cancel check'`);
+        assert.equal(uploads.at(-1).body.document_revision,savedRevision,"A saved-file retry uses the revision returned by cancellation");
+        assert.equal(uploads.at(-1).body.id_image_base64,"");
+        await evaluate(`${cancelButton("id")}.click()`);
+        await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+      }
+      await reload(4);
+      assert.equal(await evaluate("[...document.querySelectorAll('button')].find(el=>el.textContent.trim()==='Upload and check ID')?.disabled"),false);
+      checks.push(`${role} ${width}px: left Cancel, keyboard cancellation, retained file, ignored late reply, retry and cancellation after refresh`);
+    }
+    for (const width of [320,390,768,844,1200]) {
+      await send("Emulation.setDeviceMetricsOverride",{width,height:width===844?390:900,deviceScaleFactor:1,mobile:width<1024});
+      await seed("owner",4,{verificationPhase:"documents",selfieVerified:true,
+        documents:documentsFor("owner").filter(doc=>doc.docType==='id')});
+      const idBefore=JSON.stringify(drafts.get("owner").documents[0]);
+      await selectFile("supporting"); uploadDelay=900;
+      const beforeUpload=uploads.length; await click("Upload and check document");
+      const deadline=Date.now()+5000;while(uploads.length===beforeUpload&&Date.now()<deadline)await pause(40);
+      assert.equal(uploads.length,beforeUpload+1);
+      assert.equal(await evaluate(`(() => {const [cancel,upload]=document.querySelector('[data-document-actions=supporting]').querySelectorAll('button');
+        const a=cancel.getBoundingClientRect(),b=upload.getBoundingClientRect();return a.right<=b.left&&a.height>=44&&b.height>=44&&b.right<=innerWidth&&document.documentElement.scrollWidth<=innerWidth+1;})()`),true);
+      assert.equal(await evaluate(`(() => {const row=document.querySelector('[data-document-actions=supporting]').getBoundingClientRect(),footer=document.querySelector('.rp-registration-actions');
+        const bottom=footer&&getComputedStyle(footer).position==='fixed'?footer.getBoundingClientRect().top:innerHeight;return row.top>=0&&row.bottom<=bottom;})()`),true,"The active business-document row must stay clear of the mobile footer");
+      assert.equal(await evaluate("document.querySelector('[data-document-actions=id]').textContent.includes('Uploading ID')"),false);
+      if ([320,1200].includes(width)) await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:true}).then(result=>fs.writeFile(path.join(os.tmpdir(),`rentifypro-cancel-owner-supporting-${width}.png`),Buffer.from(result.data,"base64")));
+      await evaluate(`${cancelButton("supporting")}.click()`);
+      await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+      await pause(1000);
+      assert.equal(JSON.stringify(drafts.get("owner").documents.find(doc=>doc.docType==='id')),idBefore);
+      assert.equal(drafts.get("owner").selfieVerified,true);
+      assert.equal(await evaluate("document.body.innerText.includes('synthetic-supporting.png')"),true);
+      checks.push(`owner business document ${width}px: responsive left Cancel preserves selected file, existing ID and independent selfie`);
+    }
+    await seed("owner",4,{verificationPhase:"documents",selfieVerified:true,
+      documents:documentsFor("owner").filter(doc=>doc.docType==='id')});
+    await selectFile("supporting"); uploadDelay=900;
+    const beforeBusinessUpload=uploads.length; await click("Upload and check document");
+    await wait(`${cancelButton("supporting")}?.textContent==='Cancel upload'`);
+    const businessUploadDeadline=Date.now()+5000;
+    while(uploads.length===beforeBusinessUpload&&Date.now()<businessUploadDeadline) await pause(40);
+    assert.equal(uploads.length,beforeBusinessUpload+1);
+    cancelFailure=true; await evaluate(`${cancelButton("supporting")}.click()`);
+    await wait("document.body.innerText.includes('Synthetic cancellation unavailable')");
+    assert.equal(await evaluate("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')"),false);
+    cancelFailure=false; uploadDelay=0;
+    await wait(`${cancelButton("supporting")}?.textContent==='Cancel check'`);
+    const idBefore=JSON.stringify(drafts.get("owner").documents.find(doc=>doc.docType==='id'));
+    drafts.get("owner").selfieVerified=true;
+    await evaluate(`${cancelButton("supporting")}.click()`);
+    await wait("document.body.innerText.includes('Document check cancelled. Your details and selected file are kept.')");
+    assert.equal(JSON.stringify(drafts.get("owner").documents.find(doc=>doc.docType==='id')),idBefore);
+    assert.equal(drafts.get("owner").selfieVerified,true);
+    assert.equal(await evaluate("document.body.innerText.includes('synthetic-supporting.png')"),true);
+    checks.push("owner business cancellation failure is truthful and retry preserves its selected file, ID and independent selfie");
+  } else if (authUiOnly) {
     const emailIcon = () => evaluate(`(() => { const icon = document.querySelector('input[type=email]').parentElement.querySelector('svg.lucide-mail');
       const style = getComputedStyle(icon), frame = getComputedStyle(icon.parentElement);
       return { width: icon.getBoundingClientRect().width, height: icon.getBoundingClientRect().height, stroke: icon.getAttribute('stroke-width'),

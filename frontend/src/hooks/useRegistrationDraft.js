@@ -52,20 +52,19 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
     if (recovering.current) return recovering.current;
     const operation = (async () => {
     if (pending.current) await pending.current;
-    if (discardPending) clearRegistrationDraft(getStorage(), role);
     if (mounted.current) { setStatus("loading"); setMessage(""); }
     try {
       let result = await registrationDraftRequest(role);
       if (!mounted.current || stopped.current) return;
       const cached = readRegistrationDraft(getStorage(), role);
       let imported = false;
-      if (!result.draft && Object.entries(cached.fields).some(([key, value]) => value && key !== "ownerType")) {
+      if (!discardPending && !result.draft && Object.entries(cached.fields).some(([key, value]) => value && key !== "ownerType")) {
         const previousToken = readPreKycSessionToken(emailOf(role, cached.fields), role);
         result = await registrationDraftRequest(role, "POST", { fields: cached.fields,
           step: cached.pending?.step || 5, phase: cached.pending?.phase, revision: null, ...(previousToken ? { previousToken } : {}) });
         imported = true;
       }
-      if (!imported && result.draft && cached.pending) {
+      if (!discardPending && !imported && result.draft && cached.pending) {
         const same = JSON.stringify(selectDraftFields(role, result.draft.fields)) === JSON.stringify(cached.fields)
           && result.draft.step === cached.pending.step;
         const samePhase = !cached.pending.phase || result.draft.verificationPhase === cached.pending.phase;
@@ -99,7 +98,7 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
         setStatus("restored");
       } else {
         // Legacy fields carry no trusted progress or verification claims.
-        const legacy = readRegistrationDraft(getStorage(), role);
+        const legacy = discardPending ? { fields: {} } : readRegistrationDraft(getStorage(), role);
         setForm({ ...defaults, ...legacy.fields });
         clearRegistrationDraft(getStorage(), role);
         setStatus(resetReason || "new");
@@ -108,8 +107,9 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
       return result.draft || null;
     } catch (error) {
       if (!mounted.current) return;
+      conflict.current ||= [409, 410, 401, 403].includes(error.status);
       setMessage(error.message);
-      setStatus(error.status === 410 ? "expired" : error.status === 409 ? "conflict" : "unavailable");
+      setStatus(error.code === "REGISTRATION_BUSY" ? "busy" : error.status === 410 ? "expired" : error.status === 409 ? "conflict" : "unavailable");
       setReady(false);
     }
     })();
@@ -127,7 +127,7 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
 
   const flush = useCallback(async function save({ force = false, keepalive = false } = {}) {
     if (pending.current) { await pending.current; return save({ force, keepalive }); }
-    if (stopped.current || !ready || conflict.current) return false;
+    if (stopped.current || !ready || conflict.current || recovering.current || (busy && !force)) return false;
     const value = JSON.stringify(snapshot.current);
     if (!force && value === saved.current && !activity.current) return true;
     activity.current = false;
@@ -153,7 +153,7 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
       } catch (error) {
         if (mounted.current) {
           setMessage(error.message);
-          setStatus(error.status === 410 ? "expired" : error.status === 409 ? "conflict" : "unavailable");
+          setStatus(error.code === "REGISTRATION_BUSY" ? "busy" : error.status === 410 ? "expired" : error.status === 409 ? "conflict" : "unavailable");
         }
         conflict.current = [409, 410, 401, 403].includes(error.status);
         cachePending();
@@ -162,7 +162,7 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
     })();
     pending.current = operation;
     return operation;
-  }, [ready, role, accept, cachePending]);
+  }, [ready, role, accept, cachePending, busy]);
 
   const trackProgress = useCallback((step, metadata, phase) => {
     const next = { fields: selectDraftFields(role, { ...form, ...metadata }), step, phase };
@@ -176,17 +176,18 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
   }, [form, role, ready, cachePending]);
 
   useEffect(() => {
-    if (!ready || stopped.current) return;
+    if (!ready || stopped.current || conflict.current || busy) return;
     if (JSON.stringify(snapshot.current) !== saved.current) setStatus("unsaved");
     else setStatus(previous => previous === "unsaved" ? "restored" : previous);
     const timer = window.setTimeout(() => void flush(), Math.max(800, 4000 - (Date.now() - lastRequest.current)));
     return () => window.clearTimeout(timer);
-  }, [change, ready, flush]);
+  }, [change, ready, flush, busy]);
 
   const onLeave = useEffectEvent(() => { void flush({ keepalive: true }); });
   const retry = useCallback(() => {
-    if (conflict.current || !ready) void recover({ discardPending: conflict.current }); else void flush({ force: true });
-  }, [ready, recover, flush]);
+    if (status === "conflict" || status === "busy" || conflict.current || !ready) void recover({ discardPending: status === "conflict" || conflict.current });
+    else void flush({ force: true });
+  }, [status, ready, recover, flush]);
   const onClock = useEffectEvent(() => {
     if (!ready || stopped.current) return;
     const left = Math.max(0, deadline.current - Date.now());
@@ -210,8 +211,9 @@ export default function useRegistrationDraft(role, defaults, { busy, onReset, re
     };
   }, []);
   useEffect(() => {
-    window.addEventListener("online", retry);
-    return () => window.removeEventListener("online", retry);
+    const online = () => { if (!conflict.current) retry(); };
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
   }, [retry]);
 
   const clear = useCallback(async reason => {
