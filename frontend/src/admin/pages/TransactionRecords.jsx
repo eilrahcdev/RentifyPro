@@ -5,6 +5,7 @@ import { percentage } from "../adminAnalytics";
 import { currentMonthKey, monthLabel, monthOptions } from "../analyticsPeriods";
 import { AnalyticsPanel, DistributionList, MetricTile, ProgressRing, TrendBars } from "../components/AdminAnalytics";
 import { FilterSelect, StatCard } from "../components/AdminUI";
+import { transactionFilterQuery } from "../../../../shared/adminApiContract.js";
 
 const EMPTY_PAGE = { hasMore: false, nextCursor: null };
 const summaryFields = ["totalRecords", "paidBookings", "partialPayments", "unpaidBookings", "refundedBookings", "totalCollected", "totalOutstanding", "totalPayable", "totalTransactionFees"];
@@ -13,6 +14,7 @@ const recordedAmount = value => typeof value === "number" && Number.isFinite(val
 
 const filters = [
   { id: "all", label: "All Records" },
+  { id: "outstanding", label: "Outstanding" },
   { id: "paid", label: "Paid" },
   { id: "partial", label: "Partial" },
   { id: "unpaid", label: "Unpaid" },
@@ -62,11 +64,11 @@ const bookingStyles = {
   rejected: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
-export default function TransactionRecords({ visible = true, refreshSignal = 0, onRefreshStateChange }) {
+export default function TransactionRecords({ visible = true, refreshSignal = 0, onRefreshStateChange, initialFilter = "all" }) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [page, setPage] = useState(EMPTY_PAGE);
-  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState(() => filters.some(filter => filter.id === initialFilter) ? initialFilter : "all");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -96,7 +98,7 @@ export default function TransactionRecords({ visible = true, refreshSignal = 0, 
 
       try {
         const response = await adminDataApi.getTransactions({
-          paymentStatus: paymentFilter,
+          ...transactionFilterQuery(paymentFilter),
           search: searchQuery,
           limit: 50,
           ...(cursor ? { cursor } : {}),
@@ -104,6 +106,9 @@ export default function TransactionRecords({ visible = true, refreshSignal = 0, 
         if (sequence !== requestSequence.current) return;
 
         const incoming = response?.transactions;
+        if (paymentFilter === "outstanding" && response?.filters?.outstandingOnly !== true) {
+          throw new Error("Outstanding balance records could not be verified. Refresh and try again.");
+        }
         if (!Array.isArray(incoming) || !response?.page || !summaryFields.every(field => recordedAmount(response?.summary?.[field]))
           || !incoming.every(record => record?._id && amountFields.every(field => recordedAmount(record[field])))) {
           throw new Error("Transaction data is incomplete or invalid. Refresh to try again.");
@@ -210,16 +215,16 @@ export default function TransactionRecords({ visible = true, refreshSignal = 0, 
       <section aria-label="Transaction statistics" className="grid gap-4 sm:grid-cols-2 min-[1720px]:grid-cols-4">
         <StatCard label="Transaction Records" value={Number(summary.totalRecords || 0).toLocaleString()} description="Every booking payment record" icon={ReceiptText} />
         <StatCard label="Recorded Payments" value={money(summary.totalCollected)} description="Paid amounts recorded on bookings" icon={PhilippinePeso} tone="green" />
-        <StatCard label="Outstanding Balance" value={money(summary.totalOutstanding)} description="Balances recorded on bookings" icon={WalletCards} tone={summary.totalOutstanding ? "amber" : "slate"} />
+        <StatCard label="Outstanding Balance" value={recordedAmount(summary.totalActionableOutstanding) ? money(summary.totalActionableOutstanding) : "Unavailable"} description="Excludes cancelled, rejected and refunded bookings" icon={WalletCards} tone={summary.totalActionableOutstanding ? "amber" : "slate"} />
         <StatCard label="Transaction Fees" value={money(summary.totalTransactionFees)} description="Fees represented in booking totals" icon={CreditCard} tone="slate" />
       </section>
 
       <section aria-label="Payment performance" className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(350px,.75fr)]">
         <AnalyticsPanel eyebrow="Payment tracker" title="Booking payment history" description={`Recorded payments and balances grouped by booking creation month (UTC), for the six months ending ${monthLabel(cashFlowPeriod)}.`} icon={PhilippinePeso} action={<FilterSelect label="Month / Year" aria-label="Booking payment reporting month and year" value={cashFlowPeriod} onChange={selectCashFlowPeriod} options={cashFlowOptions} className="w-full sm:w-48" />}>
           <div aria-busy={cashFlowPending}>
-            {cashFlowPending ? <p role="status" className="flex min-h-44 items-center justify-center text-sm text-slate-500">Loading booking payment history...</p> : cashFlowError ? <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center"><p className="text-sm text-rose-700">{cashFlowError}</p><button type="button" onClick={() => void loadCashFlow()} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Retry payment history</button></div> : <TrendBars data={cashFlowTrend} primaryKey="collected" secondaryKey="outstanding" primaryLabel="Recorded (PHP)" secondaryLabel="Outstanding (PHP)" formatValue={money} emptyLabel="No recorded amounts for bookings created in this six-month period." />}
+            {cashFlowPending ? <p role="status" className="flex min-h-44 items-center justify-center text-sm text-slate-500">Loading booking payment history...</p> : cashFlowError ? <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center"><p className="text-sm text-rose-700">{cashFlowError}</p><button type="button" onClick={() => void loadCashFlow()} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Retry payment history</button></div> : <TrendBars data={cashFlowTrend} primaryKey="collected" secondaryKey="outstanding" primaryLabel="Recorded (PHP)" secondaryLabel="Recorded balances (PHP)" formatValue={money} emptyLabel="No recorded amounts for bookings created in this six-month period." />}
           </div>
-          <div className="mt-5 border-t border-slate-100 pt-5"><p className="mb-3 text-xs font-medium text-slate-500">Current totals across all transaction records</p><div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))]"><MetricTile label="Total payable" value={money(summary.totalPayable)} tone="blue" /><MetricTile label="Still outstanding" value={money(summary.totalOutstanding)} tone={summary.totalOutstanding ? "amber" : "slate"} /></div></div>
+          <div className="mt-5 border-t border-slate-100 pt-5"><p className="mb-3 text-xs font-medium text-slate-500">Historical totals across all transaction records, including closed bookings</p><div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))]"><MetricTile label="Recorded payable" value={money(summary.totalPayable)} tone="blue" /><MetricTile label="Recorded balances" value={money(summary.totalOutstanding)} tone="slate" /></div></div>
         </AnalyticsPanel>
         <AnalyticsPanel eyebrow="Payment health" title="Collection and status mix" description="Recorded payment totals and payment statuses across all bookings." icon={WalletCards}>
           <ProgressRing value={percentage(summary.totalCollected, summary.totalPayable)} label="Recorded" detail={`${money(summary.totalCollected)} recorded against ${money(summary.totalPayable)} in booking totals.`} tone={percentage(summary.totalCollected, summary.totalPayable) >= 75 ? "emerald" : "amber"} />

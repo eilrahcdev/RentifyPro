@@ -1,6 +1,7 @@
 import { compareDocumentRegistration, createDocumentFingerprint, isBirSupportingDocumentType, ID_DOCUMENT_TYPES, SUPPORTING_DOCUMENT_TYPES, resolveSupportedDocumentType,
   DOCUMENT_REASON_CODES } from "./documentValidation.service.js";
 import { PRIVATE_AUTOMATED_CHECK_VERSION, privateScreeningBinding, strictPrivateBusinessNameMatch, strictPrivateIdentityNameMatch } from "./privateDocumentLayout.service.js";
+import { assessDocumentReference } from "./documentReference.service.js";
 
 export const PRIVATE_DOCUMENT_TYPE_CHECK_VERSION = 1;
 const TYPE_RULES = {
@@ -387,6 +388,9 @@ export function evaluatePrivateDocumentInspection({ inspection, docType, selecte
     reasonCode = unreadable ? DOCUMENT_REASON_CODES.EXTRACTION_UNCERTAIN : DOCUMENT_REASON_CODES.REGISTRATION_DATA_INCOMPLETE;
     outcome = unreadable ? "review_needed" : "correction_needed";
   }
+  const profileBinding = privateScreeningBinding({ profile, sessionId, role, docType, selectedDocType: selected });
+  const referenceAssessment = assessDocumentReference({ inspection, docType, selectedDocType: selected,
+    detectedType: candidateType, classificationConfident, fields: data, fileHash, reviewVersion, profileBinding });
   return {
     status, reasonCode, reviewReason,
     confidence,
@@ -400,6 +404,7 @@ export function evaluatePrivateDocumentInspection({ inspection, docType, selecte
       ? `${data.tax_identification_number}-${data.branch_code}` : docType === "supporting"
         ? data.permit_number || data.document_number : data.document_number) : "",
     privateScreening: {
+      referenceAssessment,
       candidateType, confidence, fieldsDetected: Object.keys(data).filter((key) => data[key]),
       typeCheck: { version: PRIVATE_DOCUMENT_TYPE_CHECK_VERSION, selectedType: selected,
         detectedTypes: typeEvidence.map((match) => match.type), classificationConfidence, classificationConfident,
@@ -410,7 +415,7 @@ export function evaluatePrivateDocumentInspection({ inspection, docType, selecte
         permitNumberMatches: comparison?.permitNumberMatches ?? null,
       },
       automatedCheck: { version: PRIVATE_AUTOMATED_CHECK_VERSION, fileHash, reviewVersion, outcome, checks: screeningChecks,
-        profileBinding: privateScreeningBinding({ profile, sessionId, role, docType, selectedDocType: selected }),
+        profileBinding,
         mismatchFields: outcome === "correction_needed" ? comparison?.mismatchFields || [] : [],
         fieldConfidence: Object.fromEntries(required.map((key) => [key, Math.round((fields[key]?.confidence || 0) * 100)])) },
     },

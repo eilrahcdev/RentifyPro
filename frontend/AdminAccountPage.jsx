@@ -10,6 +10,7 @@ import {
 } from "./src/admin/components/AdminUI";
 import { monthOptions } from "./src/admin/analyticsPeriods";
 import { adminDataApi } from "./src/admin/adminDataApi";
+import { startOverviewRefresh } from "./src/admin/overviewRefresh";
 import BookingsView from "./src/admin/pages/BookingsView";
 import CustomersView from "./src/admin/pages/CustomersView";
 import DashboardView from "./src/admin/pages/DashboardView";
@@ -113,11 +114,13 @@ export default function AdminAccountPage({ user, onLogout }) {
   }, []);
 
   const overviewRequest = useRef(0);
+  const overviewInFlight = useRef(0);
+  const invalidateOverview = useCallback(() => { overviewRequest.current++; }, []);
   const loadAdminData = useCallback(async ({ background = false, notify = true } = {}) => {
     const requestId = ++overviewRequest.current;
+    overviewInFlight.current++;
     if (background) setRefreshing(true);
     else setLoadState("loading");
-    setLoadError("");
 
     try {
       const payload = await adminDataApi.getOverview();
@@ -128,25 +131,37 @@ export default function AdminAccountPage({ user, onLogout }) {
       setBookings(Array.isArray(payload.bookings) ? payload.bookings : []);
       setOperationalAlerts(Array.isArray(payload.operationalAlerts) ? payload.operationalAlerts : []);
       setSyncedAt(payload.syncedAt || new Date().toISOString());
+      setLoadError("");
       setLoadState("ready");
       if (background && notify) showFeedback("Dashboard data refreshed from RentifyPro.");
       return payload;
     } catch (error) {
       if (requestId !== overviewRequest.current) return;
-      if (background) showFeedback(error.message, "error");
+      setLoadError(error.message);
+      if (background) { if (notify) showFeedback(error.message, "error"); }
       else {
         setLoadError(error.message);
         setLoadState("error");
       }
     } finally {
+      overviewInFlight.current--;
       if (requestId === overviewRequest.current) setRefreshing(false);
     }
   }, [showFeedback]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadAdminData(), 0);
-    return () => window.clearTimeout(initialLoad);
-  }, [loadAdminData]);
+    return () => { window.clearTimeout(initialLoad); invalidateOverview(); };
+  }, [loadAdminData, invalidateOverview]);
+
+  useEffect(() => {
+    if (loadState !== "ready" || ["transactions", "reports", "audit", "security"].includes(activeView)) return;
+    return startOverviewRefresh({
+      refresh: () => loadAdminData({ background: true, notify: false }),
+      isBusy: () => overviewInFlight.current > 0,
+      isPaused: () => Boolean(viewerItem || reviewDocument || confirmation || actionLoading),
+    });
+  }, [activeView, loadState, viewerItem, reviewDocument, confirmation, actionLoading, loadAdminData]);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -385,12 +400,13 @@ export default function AdminAccountPage({ user, onLogout }) {
           />
 
           <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-7">
-            {activeView === "transactions" ? <div id="transaction-records-content"><TransactionRecords visible={transactionsVisible} refreshSignal={transactionRefreshSignal} onRefreshStateChange={setTransactionRefreshing} /></div> : null}
+            {activeView === "transactions" ? <div id="transaction-records-content"><TransactionRecords key={`transactions-${viewContext.outstandingOnly ? "outstanding" : "all"}`} initialFilter={viewContext.outstandingOnly ? "outstanding" : "all"} visible={transactionsVisible} refreshSignal={transactionRefreshSignal} onRefreshStateChange={setTransactionRefreshing} /></div> : null}
             {activeView === "reports" ? <ReportsView key={`reports-${viewContext.status || "all"}`} initialStatus={viewContext.status || "all"} onFeedback={showFeedback} /> : null}
             {activeView === "audit" ? <AuditLogsView key={`audit-${viewContext.outcome || "all"}`} initialOutcome={viewContext.outcome || "all"} /> : null}
             {activeView === "security" ? <SecurityView onCurrentSessionRevoked={onLogout} /> : null}
             {!["transactions", "reports", "audit", "security"].includes(activeView) && loadState === "loading" ? <DataLoadingState /> : null}
             {!["transactions", "reports", "audit", "security"].includes(activeView) && loadState === "error" ? <DataErrorState message={loadError} onRetry={() => void loadAdminData()} onLogout={onLogout} /> : null}
+            {!["transactions", "reports", "audit", "security"].includes(activeView) && loadState === "ready" && loadError ? <p role="status" className="mb-4 text-sm text-amber-800">Data may be outdated. {loadError} Use Refresh to retry.</p> : null}
             {loadState === "ready" && activeView === "dashboard" ? <DashboardView vehicles={vehicles} customers={customers} documents={documents} bookings={bookings} alerts={operationalAlerts} period={dashboardPeriod} periodControl={<DashboardPeriodSelect value={dashboardPeriod} options={dashboardPeriodOptions} onChange={setDashboardPeriod} />} onSelect={selectView} onViewBooking={viewBooking} /> : null}
             {loadState === "ready" && activeView === "bookings" ? <BookingsView key={`bookings-${viewContext.status || "all"}`} bookings={bookings} initialStatus={viewContext.status} onView={viewBooking} /> : null}
             {loadState === "ready" && activeView === "vehicles" ? <VehiclesView vehicles={vehicles} onView={viewVehicle} /> : null}

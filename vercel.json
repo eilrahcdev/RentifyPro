@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "rentifypro-admin-api-fhfwcjczhqand8d7.westus3-01.azurewebsites.net/api/:path*"
+      "destination": "https://rentifypro-admin-api-fhfwcjczhqand8d7.westus3-01.azurewebsites.net/api/:path*"
     },
     {
       "source": "/(.*)",

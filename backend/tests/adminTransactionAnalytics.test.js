@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import { createAdminDataRouter, mapTransaction, transactionMonthlyTrend, transactionMatchesSearch } from "../routes/adminData.routes.js";
+import { isOutstandingBooking } from "../../shared/adminApiContract.js";
 
 const id = (value) => String(value).padStart(24, "0");
 const renterId = id(901);
@@ -62,15 +63,16 @@ async function requestTransactions(bookings, query = {}) {
           const all = bookings.map(item => mapTransaction(item, users, vehicles));
           const sums = Object.fromEntries([['totalCollected','paymentAmountPaid'], ['totalOutstanding','paymentAmountDue'],
             ['totalPayable','amountPayable'], ['totalTransactionFees','transactionFee']].map(([key, field]) => [key, all.reduce((sum, item) => sum + item[field], 0)]));
-          const totals = { ...sums, totalRecords: all.length,
+          const totals = { ...sums, totalActionableOutstanding: all.filter(isOutstandingBooking).reduce((sum, item) => sum + item.paymentAmountDue, 0), totalRecords: all.length,
             ...Object.fromEntries([['paidBookings','paid'], ['partialPayments','partial'], ['unpaidBookings','unpaid'], ['refundedBookings','refunded']]
               .map(([key, status]) => [key, all.filter(item => item.paymentStatus === status).length])),
             trendStartDate: all.filter(item => item.createdAt).map(item => item.createdAt).sort()[0] || null };
           const end = new Date(facet.monthlyTrend[0].$match._adminCreated.$lt); end.setUTCMonth(end.getUTCMonth() - 1);
           const monthlyTrend = transactionMonthlyTrend(all, 6, end.toISOString().slice(0, 7)).map(month => ({ ...month, _id: month.key }));
           const match = facet.rows.find(stage => stage.$match?._adminPaymentStatus)?.$match._adminPaymentStatus;
+          const outstanding = facet.rows.some(stage => stage.$match?._adminActionableDue);
           const search = query.search || "";
-          const matched = bookings.filter((item, index) => (!match || all[index].paymentStatus === match) && transactionMatchesSearch(all[index], search))
+          const matched = bookings.filter((item, index) => (!match || all[index].paymentStatus === match) && (!outstanding || isOutstandingBooking(all[index])) && transactionMatchesSearch(all[index], search))
             .sort((first, second) => (new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()) || String(second._id).localeCompare(String(first._id)))
             .slice(skip, skip + pageLimit).map(item => ({ ...item,
               _adminRenter: [users.get(String(item.renter))].filter(Boolean), _adminOwner: [users.get(String(item.owner))].filter(Boolean),
@@ -143,6 +145,7 @@ test("selected historical cash-flow cohorts retain UTC creation dates, zero gaps
   assert.deepEqual(allTimeSummary(body.summary), {
     totalRecords: 8, paidBookings: 3, partialPayments: 3, unpaidBookings: 1, refundedBookings: 1,
     totalCollected: 214.12, totalOutstanding: 172.45, totalPayable: 386.57, totalTransactionFees: 13.56,
+    totalActionableOutstanding: 172.45,
     trendStartMonth: "2023-12",
   });
   const roundedRecord = body.transactions.find((record) => record._id === id(1));
@@ -229,5 +232,35 @@ test("missing or invalid creation dates yield no history boundary and intentiona
     assert.equal(result.body.summary.totalRecords, records.length);
     assert.equal(result.body.summary.monthlyTrend.length, 6);
     assert.ok(result.body.summary.monthlyTrend.every((month) => month.records === 0 && month.collected === 0 && month.outstanding === 0 && month.fees === 0));
+  }
+});
+
+test("outstanding balance navigation includes partial and completed debts, excludes terminal history, and retains old totals", async t => {
+  freezeClock(t);
+  const records = [
+    booking(1, "2024-01-01", { totalAmount: 100, paymentAmountDue: 70, paymentAmountPaid: 30 }),
+    booking(2, "2024-01-02", { totalAmount: 100, status: "completed", paymentStatus: "unpaid", paymentAmountDue: 100 }),
+    booking(3, "2024-01-03", { totalAmount: 100, status: "cancelled", paymentAmountDue: 90 }),
+    booking(4, "2024-01-04", { totalAmount: 100, status: "rejected", paymentAmountDue: 80 }),
+    booking(5, "2024-01-05", { totalAmount: 100, paymentStatus: "refunded", paymentAmountDue: 60 }),
+  ];
+  const snapshot = structuredClone(records);
+  const all = await requestTransactions(records);
+  const filtered = await requestTransactions(records, { outstandingOnly: "true", limit: "1" });
+  assert.equal(filtered.statusCode, 200);
+  assert.equal(filtered.body.filters.outstandingOnly, true);
+  assert.equal(filtered.body.transactions[0]._id, id(2));
+  assert.equal(filtered.body.page.hasMore, true);
+  assert.equal(filtered.body.summary.totalOutstanding, 400);
+  assert.equal(filtered.body.summary.totalActionableOutstanding, 170);
+  assert.deepEqual(filtered.body.summary, all.body.summary);
+  const second = await requestTransactions(records, { outstandingOnly: "true", cursor: filtered.body.page.nextCursor, limit: "1" });
+  assert.equal(second.body.transactions[0]._id, id(1));
+  assert.equal(second.body.page.hasMore, false);
+  assert.deepEqual(records, snapshot);
+  for (const outstandingOnly of ["yes", "", true, ["true"], {}, null]) {
+    const rejected = await requestTransactions(records, { outstandingOnly });
+    assert.equal(rejected.statusCode, 400);
+    assert.deepEqual(rejected.collectionReads, []);
   }
 });

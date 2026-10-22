@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { resolveSupportedDocumentType } from "./documentValidation.service.js";
+import { publicDocumentReferenceAssessment } from "./documentReference.service.js";
 
 export const PRIVATE_AUTOMATED_CHECK_VERSION = 3;
 const PROFILE_FIELDS = ["full_name", "first_name", "last_name", "date_of_birth", "birth_date", "business_name", "permit_number", "tax_identification_number", "branch_code"];
@@ -81,7 +82,10 @@ export function publicPrivateScreening(document) {
   const checks = {};
   for (const name of ["documentType", "issuingCountry", "layout", "requiredFields", "validity", "registrationDetails"])
     checks[name] = typeof screening.checks?.[name] === "boolean" ? screening.checks[name] : null;
+  const referenceAssessment = publicDocumentReferenceAssessment(document, privateScreeningBinding({ profile: document.profileSnapshot,
+    sessionId: document.sessionId, role: document.role, docType: document.docType, selectedDocType: document.selectedDocCategory }));
   return { outcome: screening.outcome, checks,
+    ...(referenceAssessment ? { referenceAssessment } : {}),
     mismatchFields: (Array.isArray(screening.mismatchFields) ? screening.mismatchFields : [])
       .filter((field) => ["Name", "Date of birth", "Registered name", "Permit or registration number", "TIN or branch code"].includes(field)),
   };

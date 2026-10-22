@@ -1,3 +1,5 @@
+import { isOutstandingBooking } from "../../../shared/adminApiContract.js";
+
 export async function collectOverviewPages(fetchPage) {
   const fields = ["customers", "vehicles", "documents", "bookings"];
   const rows = Object.fromEntries(fields.map(field => [field, new Map()]));
@@ -22,7 +24,7 @@ export async function collectOverviewPages(fetchPage) {
   const counts = { "overdue-returns": combined.bookings.filter(row => row.isOverdue).length,
     "pending-documents": combined.documents.filter(row => row.approval === "Pending" && row.reviewPurpose !== "Registration assistance").length,
     "registration-assistance": combined.documents.filter(row => row.approval === "Pending" && row.reviewPurpose === "Registration assistance").length,
-    "outstanding-payments": combined.bookings.filter(row => row.paymentAmountDue > 0 && !["Cancelled", "Rejected"].includes(row.status)).length,
+    "outstanding-payments": combined.bookings.filter(isOutstandingBooking).length,
     "suspended-customers": combined.customers.filter(row => row.disabled).length,
     "unavailable-vehicles": combined.vehicles.filter(row => row.status !== "Available").length };
   return { ...payload, ...combined, operationalAlerts: [...alerts.values()].map(alert => ({ ...alert, count: counts[alert.id] ?? alert.count })).filter(alert => alert.count > 0) };

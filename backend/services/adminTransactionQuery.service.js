@@ -5,8 +5,9 @@ const sumIf = status => ({ $sum: { $cond: [{ $eq: ["$_adminPaymentStatus", statu
 const join = (collection, field, target, projection) => ({ $lookup: { from: collection, localField: field,
   foreignField: "_id", pipeline: [{ $project: projection }], as: target } });
 
-export function buildTransactionPipeline({ paymentStatus, search, offset, limit, months }) {
+export function buildTransactionPipeline({ paymentStatus, search, offset, limit, months, outstandingOnly = false }) {
   const page = [];
+  if (outstandingOnly) page.push({ $match: { _adminActionableDue: { $gt: 0 } } });
   if (paymentStatus !== "all") page.push({ $match: { _adminPaymentStatus: paymentStatus } });
   page.push(join("users", "renter", "_adminRenter", { name: 1, email: 1 }),
     join("users", "owner", "_adminOwner", { name: 1, email: 1 }),
@@ -32,6 +33,7 @@ export function buildTransactionPipeline({ paymentStatus, search, offset, limit,
       _adminFeeValue: number("$transactionFee"), _adminId: { $toString: "$_id" },
       _adminPaymentStatus: { $let: { vars: { status: { $trim: { input: { $ifNull: ["$paymentStatus", ""] } } } },
         in: { $toLower: { $cond: [{ $eq: ["$$status", ""] }, "unpaid", "$$status"] } } } },
+      _adminBookingStatus: { $toLower: { $trim: { input: { $ifNull: ["$status", ""] } } } },
       _adminCreated: { $convert: { input: "$createdAt", to: "date", onError: null, onNull: null } } } },
     { $set: { _adminInferredFee: { $subtract: [{ $add: ["$_adminPaidValue", "$_adminDueValue"] }, "$_adminRental"] } } },
     { $set: { _adminFee: money({ $cond: [{ $gt: ["$_adminFeeValue", 0] }, "$_adminFeeValue", { $max: ["$_adminInferredFee", 0] }] }) } },
@@ -40,11 +42,16 @@ export function buildTransactionPipeline({ paymentStatus, search, offset, limit,
       { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$_adminPayable", 0] }] }) } },
     { $set: { _adminDue: money({ $cond: [{ $and: [{ $ne: ["$_adminPersistedDue", null] }, { $gte: ["$_adminPersistedDue", 0] }] },
       "$_adminPersistedDue", { $max: [{ $subtract: ["$_adminPayable", "$_adminPaid"] }, 0] }] }) } },
+    { $set: { _adminActionableDue: { $cond: [{ $and: [
+      { $not: [{ $in: ["$_adminBookingStatus", ["cancelled", "rejected"]] }] },
+      { $ne: ["$_adminPaymentStatus", "refunded"] },
+    ] }, "$_adminDue", 0] } } },
     { $facet: {
       rows: page,
       totals: [{ $group: { _id: null, totalRecords: { $sum: 1 }, paidBookings: sumIf("paid"), partialPayments: sumIf("partial"),
         unpaidBookings: sumIf("unpaid"), refundedBookings: sumIf("refunded"), totalCollected: { $sum: "$_adminPaid" },
         totalOutstanding: { $sum: "$_adminDue" }, totalPayable: { $sum: "$_adminPayable" }, totalTransactionFees: { $sum: "$_adminFee" },
+        totalActionableOutstanding: { $sum: "$_adminActionableDue" },
         trendStartDate: { $min: "$_adminCreated" } } }],
       monthlyTrend: [{ $match: { _adminCreated: { $gte: firstMonth, $lt: nextMonth } } },
         { $group: { _id: { $dateToString: { date: "$_adminCreated", format: "%Y-%m", timezone: "UTC" } },

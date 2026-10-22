@@ -20,7 +20,7 @@ import { createAdminReportsRouter } from "./adminReports.routes.js";
 import { compareAdminKycDocument, validateAdminKycDecision, reconcileAdminAccountDocuments, isRepeatedAdminDecision, finishAdminKycDecision, assertCurrentDocument } from "../services/privateKycReview.service.js";
 import { getPrivateKycReviewContext } from "../data/private-kyc/services/privateKycReviewContext.js";
 import { canManuallyCompareDocument, hasCurrentManualDocumentComparison } from "../data/private-kyc/services/manualDocumentComparison.js";
-import { ADMIN_API_CONTRACT_VERSION, ADMIN_API_ROUTES } from "../../shared/adminApiContract.js";
+import { ADMIN_API_CONTRACT_VERSION, ADMIN_API_ROUTES, isOutstandingBooking } from "../../shared/adminApiContract.js";
 import {
   sendCustomerAccountChangeAlert,
   sendCustomerEmailVerificationCode,
@@ -580,6 +580,10 @@ export function createAdminDataRouter({ requireAdminSession }) {
   router.get("/transactions", async (request, response, next) => {
     try {
       const requestedStatus = asText(request.query.paymentStatus, "all").toLowerCase();
+      if (request.query.outstandingOnly !== undefined && !["true", "false"].includes(request.query.outstandingOnly)) {
+        return response.status(400).json({ message: "Invalid outstanding balance filter." });
+      }
+      const outstandingOnly = request.query.outstandingOnly === "true";
       if (requestedStatus !== "all" && !PAYMENT_STATUSES.has(requestedStatus)) {
         return response.status(400).json({ message: "Invalid payment status filter." });
       }
@@ -604,7 +608,7 @@ export function createAdminDataRouter({ requireAdminSession }) {
       const database = mongoose.connection.db;
       const months = transactionMonthlyTrend([], 6, trendEndMonth);
       const [result] = await database.collection("bookings").aggregate(buildTransactionPipeline({
-        paymentStatus: requestedStatus, search: asText(request.query.search).slice(0, 100), offset, limit, months,
+        paymentStatus: requestedStatus, search: asText(request.query.search).slice(0, 100), offset, limit, months, outstandingOnly,
       }), { maxTimeMS: 20_000, allowDiskUse: true }).toArray();
       const rows = result?.rows || [];
       const transactions = rows.slice(0, limit).map(booking => mapTransaction(booking,
@@ -619,10 +623,11 @@ export function createAdminDataRouter({ requireAdminSession }) {
         transactions,
         summary: {
           ...Object.fromEntries(["totalRecords", "paidBookings", "partialPayments", "unpaidBookings", "refundedBookings"].map(key => [key, totals[key] || 0])),
-          ...Object.fromEntries(["totalCollected", "totalOutstanding", "totalPayable", "totalTransactionFees"].map(key => [key, roundCurrency(totals[key])])),
+          ...Object.fromEntries(["totalCollected", "totalOutstanding", "totalPayable", "totalTransactionFees", "totalActionableOutstanding"].map(key => [key, roundCurrency(totals[key])])),
           monthlyTrend: months.map(month => ({ ...month, ...Object.fromEntries(["collected", "outstanding", "fees", "records"].map(key => [key, roundCurrency(trend.get(month.key)?.[key])])) })),
           trendStartMonth: asTimestamp(totals.trendStartDate).slice(0, 7) || null,
         },
+        filters: { outstandingOnly },
         page: {
           hasMore: rows.length > limit,
           nextCursor: rows.length > limit ? transactionCursor(nextOffset) : null,
@@ -968,7 +973,7 @@ export function createAdminDataRouter({ requireAdminSession }) {
       const pendingDocumentCount = mappedDocuments.filter((document) => document.approval === "Pending" && document.reviewPurpose === "Final approval").length;
       const assistanceCount = mappedDocuments.filter((document) => document.approval === "Pending" && document.reviewPurpose === "Registration assistance").length;
       const suspendedCustomerCount = mappedCustomers.filter((customer) => customer.disabled).length;
-      const outstandingPaymentCount = mappedBookings.filter((booking) => booking.paymentAmountDue > 0 && !["Cancelled", "Rejected"].includes(booking.status)).length;
+      const outstandingPaymentCount = mappedBookings.filter(isOutstandingBooking).length;
       const unavailableVehicleCount = mappedVehicles.filter((vehicle) => vehicle.status !== "Available").length;
       const operationalAlerts = [
         pendingNotifications ? { id: "pending-verification-notices", severity: "info", title: "Verification notifications pending", description: "Document decisions are saved; customer notification delivery is pending.", count: pendingNotifications, view: "documents", context: {} } : null,
@@ -976,7 +981,7 @@ export function createAdminDataRouter({ requireAdminSession }) {
         overdueCount ? { id: "overdue-returns", severity: "critical", title: "Overdue vehicle returns", description: "Bookings have passed their scheduled return time.", count: overdueCount, view: "bookings", context: { status: "Overdue" } } : null,
         pendingDocumentCount ? { id: "pending-documents", severity: "warning", title: "Documents awaiting review", description: "Identity or permit documents need a Super Admin decision.", count: pendingDocumentCount, view: "documents", context: { status: "Pending Review" } } : null,
         assistanceCount ? { id: "registration-assistance", severity: "info", title: "Registration assistance requested", description: "Applicants requested an ID comparison before submitting their accounts. Final approval remains unavailable.", count: assistanceCount, view: "documents", context: { status: "Pending Review", purpose: "Registration assistance" } } : null,
-        outstandingPaymentCount ? { id: "outstanding-payments", severity: "warning", title: "Outstanding booking balances", description: "Bookings have an unpaid or partially paid balance.", count: outstandingPaymentCount, view: "transactions", context: { paymentStatus: "unpaid" } } : null,
+        outstandingPaymentCount ? { id: "outstanding-payments", severity: "warning", title: "Outstanding booking balances", description: "Bookings have an unpaid or partially paid balance.", count: outstandingPaymentCount, view: "transactions", context: { outstandingOnly: true } } : null,
         failedAdminLogins ? { id: "failed-admin-access", severity: "critical", title: "Failed admin security checks", description: "Login, MFA, or password confirmations failed in the last 24 hours.", count: failedAdminLogins, view: "audit", context: { outcome: "failure" } } : null,
         suspendedCustomerCount ? { id: "suspended-customers", severity: "info", title: "Suspended customer accounts", description: "Accounts remain blocked from RentifyPro access.", count: suspendedCustomerCount, view: "customers", context: { status: "Suspended" } } : null,
         unavailableVehicleCount ? { id: "unavailable-vehicles", severity: "info", title: "Unavailable vehicles", description: "Fleet units are currently unavailable for rental.", count: unavailableVehicleCount, view: "vehicles", context: {} } : null,

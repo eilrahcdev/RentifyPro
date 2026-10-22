@@ -30,3 +30,19 @@ test("overview pages keep assistance counts separate from final approvals and re
   assert.equal(assistance.count, 1);
   assert.equal(assistance.context.purpose, "Registration assistance");
 });
+
+test("dashboard balance alerts count actionable records and preserve the dedicated outstanding filter", async () => {
+  const result = await collectOverviewPages(async () => ({
+    bookings: [
+      { id: "partial", status: "Confirmed", paymentStatus: "partial", paymentAmountDue: 70 },
+      { id: "returned", status: "Completed", paymentStatus: "unpaid", paymentAmountDue: 100 },
+      { id: "cancelled", status: "Cancelled", paymentStatus: "partial", paymentAmountDue: 90 },
+      { id: "refunded", status: "Completed", paymentStatus: "refunded", paymentAmountDue: 60 },
+    ],
+    operationalAlerts: [{ id: "outstanding-payments", count: 4, context: { outstandingOnly: true } }],
+    page: { hasMore: false },
+  }));
+  const alert = result.operationalAlerts.find(row => row.id === "outstanding-payments");
+  assert.equal(alert.count, 2);
+  assert.equal(alert.context.outstandingOnly, true);
+});
