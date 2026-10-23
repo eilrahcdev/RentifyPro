@@ -350,6 +350,8 @@ const API = {
   archiveNotification: (id) => request(`/notifications/${id}/archive`, { method: "PATCH" }),
   restoreNotification: (id) => request(`/notifications/${id}/restore`, { method: "PATCH" }),
   deleteNotification: (id) => request(`/notifications/${id}`, { method: "DELETE" }),
+  archiveNotifications: (ids) => request("/notifications/bulk/archive", { method: "PATCH", body: JSON.stringify({ ids }) }),
+  deleteNotifications: (ids, { archived = false } = {}) => request("/notifications/bulk", { method: "DELETE", body: JSON.stringify({ ids, archived }) }),
 };
 
 export default API;

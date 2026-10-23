@@ -8,6 +8,8 @@ import {
   archiveNotification,
   restoreNotification,
   deleteNotification,
+  archiveNotifications,
+  deleteNotifications,
 } from "../controllers/notification.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
@@ -22,6 +24,8 @@ router.get("/", protect, authorize("user", "owner", "admin"), getMyNotifications
 router.get("/unread-count", protect, authorize("user", "owner", "admin"), getUnreadNotificationCount);
 router.patch("/read-all", protect, authorize("user", "owner", "admin"), markAllNotificationsAsRead);
 router.delete("/read-all", protect, authorize("user", "owner", "admin"), deleteAllReadNotifications);
+router.patch("/bulk/archive", protect, authorize("user", "owner", "admin"), archiveNotifications);
+router.delete("/bulk", protect, authorize("user", "owner", "admin"), deleteNotifications);
 router.patch("/:id/archive", protect, authorize("user", "owner", "admin"), archiveNotification);
 router.patch("/:id/restore", protect, authorize("user", "owner", "admin"), restoreNotification);
 router.patch("/:id/read", protect, authorize("user", "owner", "admin"), markNotificationAsRead);

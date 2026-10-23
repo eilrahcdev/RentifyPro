@@ -4,13 +4,13 @@ export const FLOATING_ALERT_MS = 3000;
 
 const sessionToastTimers = new Map();
 
-export function showFloatingAlert(message, { id, tone = "success", duration = FLOATING_ALERT_MS } = {}) {
+export function showFloatingAlert(message, { id, tone = "success", duration = FLOATING_ALERT_MS, interactive = true } = {}) {
   return toast.custom((item) => (
     <div
       role={tone === "error" ? "alert" : "status"}
       aria-live={tone === "error" ? "assertive" : "polite"}
       aria-atomic="true"
-      className={`rp-floating-alert transition-opacity duration-200 motion-reduce:transition-none ${item.visible ? "opacity-100" : "opacity-0"}`}
+      className={`rp-floating-alert transition-opacity duration-200 motion-reduce:transition-none ${interactive ? "" : "!pointer-events-none"} ${item.visible ? "opacity-100" : "opacity-0"}`}
     >
       <span className="min-w-0 break-words">{message}</span>
     </div>

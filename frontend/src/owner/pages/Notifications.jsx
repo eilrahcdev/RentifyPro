@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import NotificationActionMenu from "../../components/NotificationActionMenu";
+import { ArchiveRestore } from "lucide-react";
+import NotificationToolbarButton from "../../components/NotificationToolbarButton";
 import NotificationDetailsModal from "../../components/NotificationDetailsModal";
+import NotificationBulkActions from "../../components/NotificationBulkActions";
 import API from "../../utils/api";
 import { getSocket } from "../../utils/socket";
 import { requestLiveCountersRefresh } from "../../utils/liveCounters";
-import ModalPortal from "../../components/ModalPortal";
+import { showActionToast } from "../../utils/actionToast";
 import OwnerPageHeader from "../components/OwnerPageHeader";
 import { ActivityListSkeleton } from "../../components/LoadingSkeletons";
 
@@ -21,26 +23,23 @@ const formatDateTime = (value) =>
 const isNotificationRead = (notification) =>
   Boolean(notification?.readAt);
 
-const DELETE_ALL_CONFIRMATION_MESSAGE =
-  "\u201cAre you sure you want to delete all read messages? This action can\u2019t be undone.\u201d";
-const DELETE_NOTIFICATION_CONFIRMATION_MESSAGE =
-  "\u201cAre you sure you want to permanently delete this notification? This action can\u2019t be undone.\u201d";
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState("");
-  const [confirmationAction, setConfirmationAction] = useState(null);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [selection, setSelection] = useState({ ids: [] });
+  const visibleSelectedCount = selection.ids.filter(id => notifications.some(notification => notification._id === id)).length;
+  const toggleSelection = (notificationId) => setSelection(previous => {
+    const ids = previous.ids.filter(id => notifications.some(notification => notification._id === id));
+    return { ...previous, ids: ids.includes(notificationId) ? ids.filter(id => id !== notificationId) : ids.length < 100 ? [...ids, notificationId] : ids };
+  });
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !isNotificationRead(notification)).length,
-    [notifications]
-  );
-  const readCount = useMemo(
-    () => notifications.filter((notification) => isNotificationRead(notification)).length,
     [notifications]
   );
 
@@ -53,6 +52,7 @@ export default function Notifications() {
       requestLiveCountersRefresh();
     } catch (err) {
       setError(err.message || "Failed to load notifications.");
+      showActionToast(err.message || "Failed to load notifications.", { interactive: false, id: "notification-action", tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -90,9 +90,11 @@ export default function Notifications() {
         previous?._id === notificationId ? response.notification : previous
       );
       requestLiveCountersRefresh();
+      showActionToast("Notification marked as read.", { interactive: false, id: "notification-action" });
       return response.notification;
     } catch (err) {
       setError(err.message || "Failed to update notification.");
+      showActionToast(err.message || "Failed to update notification.", { interactive: false, id: "notification-action", tone: "error" });
       return null;
     }
   };
@@ -118,37 +120,10 @@ export default function Notifications() {
         )
       );
       requestLiveCountersRefresh();
+      showActionToast("Notifications marked as read.", { interactive: false, id: "notification-action" });
     } catch (err) {
       setError(err.message || "Failed to update notifications.");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const deleteAllRead = async () => {
-    setUpdating(true);
-    setError("");
-    try {
-      await API.deleteAllReadNotifications();
-      setNotifications((prev) => prev.filter((notification) => !isNotificationRead(notification)));
-      requestLiveCountersRefresh();
-    } catch (err) {
-      setError(err.message || "Failed to delete read notifications.");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const archiveNotification = async (notificationId) => {
-    setUpdating(true);
-    setError("");
-    try {
-      await API.archiveNotification(notificationId);
-      setNotifications((previous) => previous.filter((notification) => notification._id !== notificationId));
-      setSelectedNotification((previous) => (previous?._id === notificationId ? null : previous));
-      requestLiveCountersRefresh();
-    } catch (err) {
-      setError(err.message || "Failed to archive notification.");
+      showActionToast(err.message || "Failed to update notifications.", { interactive: false, id: "notification-action", tone: "error" });
     } finally {
       setUpdating(false);
     }
@@ -162,37 +137,13 @@ export default function Notifications() {
       setNotifications((previous) => previous.filter((notification) => notification._id !== notificationId));
       setSelectedNotification((previous) => (previous?._id === notificationId ? null : previous));
       requestLiveCountersRefresh();
+      showActionToast("Notification restored.", { interactive: false, id: "notification-action" });
     } catch (err) {
       setError(err.message || "Failed to restore notification.");
+      showActionToast(err.message || "Failed to restore notification.", { interactive: false, id: "notification-action", tone: "error" });
     } finally {
       setUpdating(false);
     }
-  };
-
-  const deleteNotification = async (notificationId) => {
-    setUpdating(true);
-    setError("");
-    try {
-      await API.deleteNotification(notificationId);
-      setNotifications((previous) => previous.filter((notification) => notification._id !== notificationId));
-      setSelectedNotification((previous) => (previous?._id === notificationId ? null : previous));
-      requestLiveCountersRefresh();
-    } catch (err) {
-      setError(err.message || "Failed to delete notification.");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const confirmAction = async () => {
-    const action = confirmationAction;
-    setConfirmationAction(null);
-    if (!action || updating) return;
-    if (action.type === "delete-all") {
-      if (readCount) await deleteAllRead();
-      return;
-    }
-    await deleteNotification(action.notificationId);
   };
 
   return (
@@ -201,27 +152,30 @@ export default function Notifications() {
         title="Notifications"
         description={`${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}.`}
         actions={(
-          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-          <button onClick={() => setShowArchived((value) => !value)} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm">
-            {showArchived ? "Active" : "Archive"}
-          </button>
-          {!showArchived && <>
-          <button
-            onClick={() => setConfirmationAction({ type: "delete-all" })}
-            disabled={!readCount || updating}
-            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm disabled:opacity-50"
-          >
-            Delete All
-          </button>
-          <button
-            onClick={markAllAsRead}
-            disabled={!unreadCount || updating}
-            className="px-4 py-2 rounded-lg bg-[#017FE6] text-white text-sm disabled:opacity-50"
-          >
-            Mark all as read
-          </button>
-          </>}
-          </div>
+          <NotificationBulkActions
+            key={showArchived ? "archived" : "active"}
+            notifications={notifications}
+            archived={showArchived}
+            selection={selection}
+            onSelectionChange={setSelection}
+            disabled={loading || updating}
+            onBusyChange={setUpdating}
+            onProcessed={(ids) => {
+              setNotifications(previous => previous.filter(notification => !ids.includes(notification._id)));
+              setSelectedNotification(previous => ids.includes(previous?._id) ? null : previous);
+            }}
+            onMarkedRead={(ids, readAt) => {
+              setNotifications(previous => previous.map(notification => ids.includes(notification._id) ? { ...notification, readAt } : notification));
+              setSelectedNotification(previous => ids.includes(previous?._id) ? { ...previous, readAt } : previous);
+            }}
+            onToggleArchive={() => {
+              setSelection({ ids: [] });
+              setShowArchived(value => !value);
+              showActionToast(showArchived ? "Active view selected." : "Archive view selected.", { interactive: false, id: "notification-action", tone: "info" });
+            }}
+            onMarkAllAsRead={markAllAsRead}
+            unreadCount={unreadCount}
+          />
         )}
       />
 
@@ -240,15 +194,25 @@ export default function Notifications() {
           return (
             <article
               key={notification._id}
-              className={`bg-white border rounded-xl p-4 ${isUnread ? "border-[#017FE6]/40" : ""}`}
+              className={`bg-white border rounded-xl p-4 hover:outline hover:outline-2 hover:outline-offset-2 hover:outline-[#017FE6] ${isUnread ? "border-[#017FE6]/40" : ""}`}
             >
               <div className="flex items-start justify-between gap-4">
+                <label className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select notification: ${notification.title}`}
+                    checked={selection.ids.includes(notification._id)}
+                    disabled={updating || (!selection.ids.includes(notification._id) && visibleSelectedCount >= 100)}
+                    onChange={() => toggleSelection(notification._id)}
+                    className="h-4 w-4 accent-[#017FE6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                  />
+                </label>
                 <button
                   type="button"
                   aria-haspopup="dialog"
                   aria-label={`View notification: ${notification.title}`}
                   onClick={() => openNotificationDetails(notification)}
-                  className="min-w-0 flex-1 cursor-pointer rounded-lg text-left hover:bg-slate-100/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+                  className="min-w-0 flex-1 cursor-pointer rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
                 >
                   <span className="block break-words text-sm font-semibold">{notification.title}</span>
                   <span className="mt-1 block whitespace-pre-line break-words text-sm text-gray-700">{notification.message}</span>
@@ -272,52 +236,12 @@ export default function Notifications() {
                   </span>
                 </button>
 
-                <NotificationActionMenu
-                  isUnread={isUnread}
-                  isArchived={showArchived}
-                  onMarkAsRead={() => markAsRead(notification._id)}
-                  onArchive={() => archiveNotification(notification._id)}
-                  onRestore={() => restoreNotification(notification._id)}
-                  onDelete={() => setConfirmationAction({ type: "delete-one", notificationId: notification._id })}
-                />
+                {showArchived && <NotificationToolbarButton icon={ArchiveRestore} label="Restore notification" tooltip="Restore" disabled={updating} onClick={() => restoreNotification(notification._id)} />}
               </div>
             </article>
           );
         })}
       </div>}
-
-      {confirmationAction && (
-        <ModalPortal>
-        <div className="rp-modal-layer">
-          <button type="button" className="rp-modal-backdrop" onClick={() => setConfirmationAction(null)} aria-label="Cancel notification action" />
-          <div
-            className="relative w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-[0_25px_80px_rgba(15,23,42,0.25)] p-5"
-          >
-            <h2 className="text-lg font-bold text-slate-900 mb-2">Confirm Action</h2>
-            <p className="text-sm text-slate-700">
-              {confirmationAction.type === "delete-all"
-                ? DELETE_ALL_CONFIRMATION_MESSAGE
-                : DELETE_NOTIFICATION_CONFIRMATION_MESSAGE}
-            </p>
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setConfirmationAction(null)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmAction}
-                disabled={updating}
-                className="px-4 py-2 rounded-lg bg-[#017FE6] text-white text-sm disabled:opacity-50"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
 
       <NotificationDetailsModal
         notification={selectedNotification}

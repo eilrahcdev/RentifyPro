@@ -44,6 +44,63 @@ const parseIds = (ids) => {
   return unique.map((id) => new mongoose.Types.ObjectId(id));
 };
 
+const parseBulkIds = (ids) => {
+  if (!Array.isArray(ids) || !ids.length || ids.length > MAX_LIMIT ||
+      ids.some((id) => typeof id !== "string" || !/^[a-f\d]{24}$/i.test(id.trim()))) return null;
+  return [...new Set(ids.map((id) => id.trim().toLowerCase()))];
+};
+
+const processBulkNotifications = async (req, res, action) => {
+  const ids = parseBulkIds(req.body?.ids);
+  if (!ids) return res.status(400).json({ success: false, message: "Select between 1 and 100 valid notification IDs." });
+  if (action === "delete" && typeof req.body?.archived !== "boolean") {
+    return res.status(400).json({ success: false, message: "Specify the notification view." });
+  }
+  const archived = action === "delete" && req.body.archived;
+  const scope = archived ? archivedUserNotificationScope(req.user._id) : activeUserNotificationScope(req.user._id);
+  try {
+    const selected = await Notification.find({ ...scope, _id: { $in: ids } }).select("_id readAt").lean();
+    if (selected.length !== ids.length) {
+      return res.status(409).json({ success: false, message: "Some selected notifications are unavailable. Refresh the list and select them again." });
+    }
+    if (action === "delete" && !archived && selected.some((notification) => !notification.readAt)) {
+      return res.status(409).json({ success: false, message: "Read active notifications before deleting them." });
+    }
+
+    const processedIds = [], failedIds = [];
+    for (const id of ids) {
+      try {
+        const itemScope = { ...scope, _id: id, ...(action === "delete" && !archived ? { readAt: { $ne: null } } : {}) };
+        let notification;
+        if (action === "archive") {
+          notification = await Notification.findOneAndUpdate(itemScope, { $set: { archived_at: new Date() } }, { returnDocument: "after" });
+        } else {
+          // Keep the notification available for retry if delivery cleanup fails.
+          await NotificationDelivery.deleteMany({ user: req.user._id, notification: id });
+          notification = await Notification.findOneAndDelete(itemScope);
+        }
+        if (notification) processedIds.push(id);
+        else failedIds.push(id);
+      } catch {
+        failedIds.push(id);
+      }
+    }
+    return res.json({
+      success: failedIds.length === 0,
+      processedIds,
+      failedIds,
+      processedCount: processedIds.length,
+      failedCount: failedIds.length,
+      message: failedIds.length ? "Some notifications could not be updated. Please retry the remaining selection." : "Selected notifications updated.",
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Failed to update selected notifications. Please refresh the list before retrying." });
+  }
+};
+
+export const archiveNotifications = (req, res) => processBulkNotifications(req, res, "archive");
+export const deleteNotifications = (req, res) => processBulkNotifications(req, res, "delete");
+
 export const getMyNotifications = async (req, res) => {
   try {
     const archived = String(req.query.archived || "").toLowerCase() === "true";
